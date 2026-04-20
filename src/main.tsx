@@ -1,0 +1,25 @@
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { MediaProvider } from './contexts/MediaContext';
+import { Layout } from './components/Layout';
+import { Dashboard } from './pages/Dashboard';
+import { MediaLibrary } from './pages/MediaLibrary';
+import { Statistics } from './pages/Statistics';
+import './index.css';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <MediaProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="library/:mediaType" element={<MediaLibrary />} />
+            <Route path="stats" element={<Statistics />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </MediaProvider>
+  </StrictMode>
+);

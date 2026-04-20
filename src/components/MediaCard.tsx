@@ -1,0 +1,148 @@
+import React from 'react';
+import { MediaItem, getMetricForType, MEDIA_COLORS } from '../types/schema';
+import { Play, PlayCircle, Plus, Edit2, Popcorn, BookOpen, Star, StarHalf } from 'lucide-react';
+import { cn } from '../lib/utils';
+
+interface MediaCardProps {
+  key?: string | number;
+  item: MediaItem;
+  onEdit: (item: MediaItem) => void;
+  onLogProgress: (item: MediaItem) => void;
+}
+
+export function MediaCard({ item, onEdit, onLogProgress }: MediaCardProps) {
+  const metricType = getMetricForType(item.mediaType);
+  const colors = MEDIA_COLORS[item.mediaType];
+  
+  const renderStars = (rating: number, isUser: boolean) => {
+    const stars = [];
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 !== 0; // Accommodate .5 ratings
+    
+    // Fill active stars
+    for (let i = 0; i < fullStars; i++) {
+        stars.push(<Star key={`full-${i}`} className={cn("w-[14px] h-[14px]", isUser ? "fill-black text-black" : "fill-white text-white")} />);
+    }
+    
+    // Add half star if applicable
+    if (hasHalfStar) {
+        // We use lucide's StarHalf and simulate solid fill with text/fill color props correctly
+        stars.push(<StarHalf key="half" className={cn("w-[14px] h-[14px]", isUser ? "fill-black text-black" : "fill-white text-white")} />);
+    }
+    
+    // Add remaining empty slots
+    const emptyStarsCount = 5 - stars.length;
+    for (let i = 0; i < emptyStarsCount; i++) {
+        stars.push(<Star key={`empty-${i}`} className={cn("w-[14px] h-[14px]", isUser ? "text-black/20" : "text-white/20")} />);
+    }
+    
+    return <div className="flex gap-[1px]">{stars}</div>;
+  };
+  
+  // Build a display string for progress
+  let progressText = '';
+  let progressPercent = 0;
+  
+  switch(item.mediaType) {
+    case 'Game':
+    case 'Visual Novel':
+      progressText = `${item.playtimeHours || 0} hrs`;
+      if (item.averagePlaytime && item.averagePlaytime > 0) {
+        progressText += ` / ${item.averagePlaytime} hrs`;
+        progressPercent = ((item.playtimeHours || 0) / item.averagePlaytime) * 100;
+      } else {
+        progressPercent = 0; // Usually no total for games unless we add it
+      }
+      break;
+    case 'Book':
+      progressText = `${item.pagesRead || 0} / ${item.totalPages || '?'} pgs`;
+      if (item.totalPages) progressPercent = ((item.pagesRead || 0) / item.totalPages) * 100;
+      break;
+    case 'Manga':
+      progressText = `${item.chaptersRead || 0} / ${item.totalChapters || '?'} ch`;
+      if (item.totalChapters) progressPercent = ((item.chaptersRead || 0) / item.totalChapters) * 100;
+      break;
+    case 'Series':
+      progressText = `${item.episodesWatched || 0} / ${item.totalEpisodes || '?'} ep`;
+      if (item.totalEpisodes) progressPercent = ((item.episodesWatched || 0) / item.totalEpisodes) * 100;
+      break;
+    case 'Movie':
+      progressText = item.watched ? 'Watched' : 'Not Watched';
+      progressPercent = item.watched ? 100 : 0;
+      break;
+    case 'Comic':
+      progressText = `${item.issuesRead || 0} / ${item.totalIssues || '?'} iss`;
+      if (item.totalIssues) progressPercent = ((item.issuesRead || 0) / item.totalIssues) * 100;
+      break;
+  }
+
+  const coverFallback = "https://images.unsplash.com/photo-1618519764611-bd0823006228?auto=format&fit=crop&q=80&w=400"; // Generic glowing neon background for tech/media vibe
+
+  return (
+    <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6 flex flex-col group transition-all hover:bg-white/[0.02] shadow-sm relative overflow-hidden">
+      <span className={cn("text-[10px] font-bold uppercase tracking-wider mb-1 line-clamp-1 mt-1", colors.text)}>
+        {item.status} • {item.mediaType} {item.season ? `• S${item.season}` : ''} {item.year ? `• ${item.year}` : ''}
+      </span>
+      <h3 className="text-xl font-bold mb-1 line-clamp-2 min-h-[3.5rem] pr-2" title={item.title}>{item.title}</h3>
+      <p className="text-zinc-500 text-xs mb-4 italic line-clamp-1">{item.creator || 'Unknown Creator'}</p>
+      
+      <div className="aspect-[2/3] bg-zinc-800 rounded-xl relative w-full overflow-hidden shadow-xl shrink-0 mb-4">
+        <div className="absolute top-0 right-0 z-20 flex flex-col items-end">
+          {item.userRating !== undefined && (
+            <div className="bg-amber-500 text-black px-2.5 py-1.5 text-xs rounded-bl-2xl shadow-xl flex flex-col items-end gap-1 min-w-[3rem]">
+              <span className="text-[8px] uppercase tracking-widest font-black opacity-60 leading-none mr-0.5">Your Rating</span>
+              {renderStars(item.userRating, true)}
+            </div>
+          )}
+          {item.reviewScore !== undefined && (
+            <div className={cn("px-2.5 py-1.5 flex flex-col items-end gap-1 min-w-[3rem] shadow-xl", item.userRating !== undefined ? "bg-black/80 backdrop-blur-md border-l border-b border-white/10 text-zinc-300 rounded-bl-2xl" : cn("rounded-bl-2xl text-white", colors.bg))}>
+              <span className="text-[8px] uppercase tracking-widest font-black opacity-60 leading-none mr-0.5">{item.userRating !== undefined ? "Critic" : "Critic Rating"}</span>
+              <div className={cn(item.userRating !== undefined ? "opacity-60 saturate-50" : "")}>
+                {renderStars(item.reviewScore, false)}
+              </div>
+            </div>
+          )}
+        </div>
+        <img 
+          src={item.coverImageUrl || coverFallback} 
+          alt={item.title} 
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          referrerPolicy="no-referrer"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+      </div>
+
+      <div className="mt-auto">
+        <div className="flex justify-between text-xs mb-2 font-mono">
+          <span className="text-zinc-300">{progressText}</span>
+          {progressPercent > 0 && <span className={colors.text}>{progressPercent.toFixed(0)}%</span>}
+        </div>
+        <div className="h-1.5 bg-zinc-800 rounded-full mb-4">
+          {progressPercent > 0 ? (
+            <div 
+              className={cn("h-full rounded-full transition-all duration-500", colors.progress, colors.shadow)} 
+              style={{ width: `${Math.min(progressPercent, 100)}%` }} 
+            />
+          ) : item.mediaType === 'Game' || item.mediaType === 'Visual Novel' ? (
+            <div className={cn("h-full w-full animate-pulse rounded-full", colors.glow)} />
+          ) : null}
+        </div>
+        
+        <div className="flex gap-2">
+          <button 
+            onClick={() => onLogProgress(item)}
+            className="flex-1 bg-white/5 hover:bg-white/10 text-white py-2 rounded-xl text-xs font-medium transition-colors flex justify-center items-center gap-1.5"
+          >
+            <Plus className="w-3 h-3" /> Log
+          </button>
+          <button 
+            onClick={() => onEdit(item)}
+            className="px-3 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white py-2 rounded-xl text-xs font-medium transition-colors flex justify-center items-center"
+          >
+            <Edit2 className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,57 @@
+import { useState, useMemo } from 'react';
+import { MediaItem, Status } from '../types/schema';
+
+export type SortOption = 'updatedAt' | 'createdAt' | 'titleAsc' | 'titleDesc' | 'rating';
+
+export function useMediaFilterSort(mediaElements: MediaItem[], defaultStatus: Status | 'All' = 'All') {
+  const [statusFilter, setStatusFilter] = useState<Status | 'All'>(defaultStatus);
+  const [sortBy, setSortBy] = useState<SortOption>('updatedAt');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredAndSortedMedia = useMemo(() => {
+    let result = [...mediaElements];
+
+    // 1. Status Filter
+    if (statusFilter !== 'All') {
+      result = result.filter(m => m.status === statusFilter);
+    }
+
+    // 2. Search Filter
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(m => m.title.toLowerCase().includes(q));
+    }
+
+    // 3. Sorting
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case 'updatedAt':
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        case 'createdAt':
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case 'titleAsc':
+          return a.title.localeCompare(b.title);
+        case 'titleDesc':
+          return b.title.localeCompare(a.title);
+        case 'rating':
+          const aRating = a.userRating ?? a.reviewScore ?? 0;
+          const bRating = b.userRating ?? b.reviewScore ?? 0;
+          return bRating - aRating;
+        default:
+          return 0;
+      }
+    });
+
+    return result;
+  }, [mediaElements, statusFilter, sortBy, searchQuery]);
+
+  return {
+    statusFilter,
+    setStatusFilter,
+    sortBy,
+    setSortBy,
+    searchQuery,
+    setSearchQuery,
+    filteredAndSortedMedia,
+  };
+}
