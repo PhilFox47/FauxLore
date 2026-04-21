@@ -2,6 +2,7 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import * as dotenv from "dotenv";
+import Database from "better-sqlite3";
 
 dotenv.config();
 
@@ -42,6 +43,184 @@ async function startServer() {
 
   // Middleware to parse JSON bodies
   app.use(express.json());
+
+  // Initialize SQLite Database
+  const dbPath = path.join(process.cwd(), 'fauxlore.db');
+  const db = new Database(dbPath);
+  
+  // Create Tables
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS media (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL DEFAULT 'default_user',
+      title TEXT NOT NULL,
+      mediaType TEXT NOT NULL,
+      coverImageUrl TEXT,
+      description TEXT,
+      creator TEXT,
+      publisher TEXT,
+      year INTEGER,
+      reviewScore INTEGER,
+      averagePlaytime REAL,
+      status TEXT NOT NULL,
+      userRating INTEGER,
+      genres TEXT,
+      tags TEXT,
+      tropes TEXT,
+      playtimeHours REAL,
+      pagesRead INTEGER,
+      totalPages INTEGER,
+      chaptersRead INTEGER,
+      totalChapters INTEGER,
+      season INTEGER,
+      episodesWatched INTEGER,
+      totalEpisodes INTEGER,
+      watched INTEGER,
+      watchCount INTEGER,
+      runtimeMinutes INTEGER,
+      issuesRead INTEGER,
+      totalIssues INTEGER,
+      createdAt TEXT,
+      updatedAt TEXT
+    );
+  
+    CREATE TABLE IF NOT EXISTS logs (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL DEFAULT 'default_user',
+      mediaId TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      metricType TEXT NOT NULL,
+      delta REAL NOT NULL,
+      note TEXT,
+      FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
+    );
+  `);
+
+  // Migration step: Add userId to existing tables if missing
+  try {
+    db.prepare("ALTER TABLE media ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run();
+    console.log("Migration: Added userId to media table");
+  } catch (e) {
+    // Column already exists or table issue, ignore safely
+  }
+  try {
+    db.prepare("ALTER TABLE logs ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run();
+    console.log("Migration: Added userId to logs table");
+  } catch (e) {
+    // Column already exists
+  }
+  
+  const normalizeMedia = (row: any) => ({
+    ...row,
+    genres: row.genres ? JSON.parse(row.genres) : [],
+    tags: row.tags ? JSON.parse(row.tags) : [],
+    tropes: row.tropes ? JSON.parse(row.tropes) : [],
+    watched: row.watched === 1
+  });
+
+  // Local DB API Routes
+  app.get("/api/media", (req, res) => {
+    try {
+      const userId = req.query.userId || 'default_user';
+      const rows = db.prepare('SELECT * FROM media WHERE userId = ? ORDER BY updatedAt DESC').all(userId);
+      res.json(rows.map(normalizeMedia));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.get("/api/media/:id", (req, res) => {
+    try {
+      const userId = req.query.userId || 'default_user';
+      const row = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(req.params.id, userId);
+      if (!row) return res.status(404).json({ error: 'Not found' });
+      res.json(normalizeMedia(row));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/media", (req, res) => {
+    try {
+      const item = req.body;
+      const userId = item.userId || 'default_user';
+      const stmt = db.prepare(`
+        INSERT INTO media (
+          id, userId, title, mediaType, coverImageUrl, description, creator, publisher, year, 
+          reviewScore, averagePlaytime, status, userRating, genres, tags, tropes,
+          playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
+          season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
+          issuesRead, totalIssues, createdAt, updatedAt
+        ) VALUES (
+          @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
+          @reviewScore, @averagePlaytime, @status, @userRating, @genres, @tags, @tropes,
+          @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
+          @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
+          @issuesRead, @totalIssues, @createdAt, @updatedAt
+        )
+        ON CONFLICT(id) DO UPDATE SET
+          userId=excluded.userId, title=excluded.title, mediaType=excluded.mediaType, coverImageUrl=excluded.coverImageUrl,
+          description=excluded.description, creator=excluded.creator, publisher=excluded.publisher,
+          year=excluded.year, reviewScore=excluded.reviewScore, averagePlaytime=excluded.averagePlaytime,
+          status=excluded.status, userRating=excluded.userRating, genres=excluded.genres,
+          tags=excluded.tags, tropes=excluded.tropes, playtimeHours=excluded.playtimeHours,
+          pagesRead=excluded.pagesRead, totalPages=excluded.totalPages, chaptersRead=excluded.chaptersRead,
+          totalChapters=excluded.totalChapters, season=excluded.season, episodesWatched=excluded.episodesWatched,
+          totalEpisodes=excluded.totalEpisodes, watched=excluded.watched, watchCount=excluded.watchCount,
+          runtimeMinutes=excluded.runtimeMinutes, issuesRead=excluded.issuesRead, totalIssues=excluded.totalIssues,
+          updatedAt=excluded.updatedAt
+      `);
+
+      stmt.run({
+        ...item,
+        userId: userId,
+        genres: JSON.stringify(item.genres || []),
+        tags: JSON.stringify(item.tags || []),
+        tropes: JSON.stringify(item.tropes || []),
+        watched: item.watched ? 1 : 0,
+      });
+      const saved = db.prepare('SELECT * FROM media WHERE id = ?').get(item.id);
+      res.json(normalizeMedia(saved));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.delete("/api/media/:id", (req, res) => {
+    try {
+      const userId = req.query.userId || 'default_user';
+      const row = db.prepare('SELECT id FROM media WHERE id = ? AND userId = ?').get(req.params.id, userId);
+      if (!row) return res.status(404).json({ error: 'Not found or unauthorized' });
+
+      db.prepare('DELETE FROM media WHERE id = ? AND userId = ?').run(req.params.id, userId);
+      // SQLite CASCADE will handle deleting the logs attached to this mediaId, 
+      // but just incase PRAGMA is off, we manually delete:
+      db.prepare('DELETE FROM logs WHERE mediaId = ? AND userId = ?').run(req.params.id, userId);
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.get("/api/logs", (req, res) => {
+    try {
+      const userId = req.query.userId || 'default_user';
+      const rows = db.prepare('SELECT * FROM logs WHERE userId = ? ORDER BY timestamp DESC').all(userId);
+      res.json(rows);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/logs", (req, res) => {
+    try {
+      const log = req.body;
+      const userId = log.userId || 'default_user';
+      db.prepare(\`
+        INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note)
+        VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note)
+      \`).run({...log, userId: userId});
+      
+      const mediaRow = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(log.mediaId, userId);
+      if (mediaRow) {
+        const type = log.metricType;
+        if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {
+          db.prepare(\`UPDATE media SET \${type} = IFNULL(\${type}, 0) + ? WHERE id = ?\`).run(log.delta, log.mediaId);
+        }
+      }
+      res.json(db.prepare('SELECT * FROM logs WHERE id = ?').get(log.id));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
 
   // API Routes
   app.get("/api/health", (req, res) => {

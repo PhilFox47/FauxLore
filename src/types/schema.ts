@@ -55,6 +55,7 @@ export interface MediaItem {
 
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
+  userId?: string; // Optional user identifier for future multi-user support
 }
 
 export type MetricType = 
@@ -68,6 +69,7 @@ export type MetricType =
 export interface ProgressLog {
   id: string;
   mediaId: string;
+  userId?: string; // Optional user identifier for future multi-user support
   timestamp: string; // ISO string
   metricType: MetricType;
   delta: number; // e.g., +2
