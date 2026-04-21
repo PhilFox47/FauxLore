@@ -168,16 +168,44 @@ async function startServer() {
       `);
 
       stmt.run({
-        ...item,
+        id: item.id,
         userId: userId,
+        title: item.title,
+        mediaType: item.mediaType,
+        coverImageUrl: item.coverImageUrl || null,
+        description: item.description || null,
+        creator: item.creator || null,
+        publisher: item.publisher || null,
+        year: item.year || null,
+        reviewScore: item.reviewScore || null,
+        averagePlaytime: item.averagePlaytime || null,
+        status: item.status,
+        userRating: item.userRating || null,
         genres: JSON.stringify(item.genres || []),
         tags: JSON.stringify(item.tags || []),
         tropes: JSON.stringify(item.tropes || []),
+        playtimeHours: item.playtimeHours || null,
+        pagesRead: item.pagesRead || null,
+        totalPages: item.totalPages || null,
+        chaptersRead: item.chaptersRead || null,
+        totalChapters: item.totalChapters || null,
+        season: item.season || null,
+        episodesWatched: item.episodesWatched || null,
+        totalEpisodes: item.totalEpisodes || null,
         watched: item.watched ? 1 : 0,
+        watchCount: item.watchCount || null,
+        runtimeMinutes: item.runtimeMinutes || null,
+        issuesRead: item.issuesRead || null,
+        totalIssues: item.totalIssues || null,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt
       });
       const saved = db.prepare('SELECT * FROM media WHERE id = ?').get(item.id);
       res.json(normalizeMedia(saved));
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { 
+      console.error("DB Save Error:", e);
+      res.status(500).json({ error: String(e) }); 
+    }
   });
 
   app.delete("/api/media/:id", (req, res) => {
@@ -209,7 +237,15 @@ async function startServer() {
       db.prepare(`
         INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note)
         VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note)
-      `).run({...log, userId: userId});
+      `).run({
+        id: log.id,
+        userId: userId,
+        mediaId: log.mediaId,
+        timestamp: log.timestamp,
+        metricType: log.metricType,
+        delta: log.delta,
+        note: log.note || null
+      });
       
       const mediaRow = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(log.mediaId, userId);
       if (mediaRow) {

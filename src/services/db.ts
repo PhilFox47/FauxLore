@@ -34,7 +34,11 @@ export const DatabaseService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error('Failed to save media');
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      console.error("Server save error:", errorData);
+      throw new Error(`Failed to save media: ${errorData.error || res.statusText}`);
+    }
     return res.json();
   },
 

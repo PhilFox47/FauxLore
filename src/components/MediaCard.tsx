@@ -21,19 +21,19 @@ export function MediaCard({ item, onEdit, onLogProgress }: MediaCardProps) {
     
     // Fill active stars
     for (let i = 0; i < fullStars; i++) {
-        stars.push(<Star key={`full-${i}`} className={cn("w-3 h-3 md:w-[14px] md:h-[14px]", isUser ? "fill-black text-black" : "fill-white text-white")} />);
+        stars.push(<Star key={`full-${i}`} className={cn("w-2 h-2 md:w-[10px] md:h-[10px]", isUser ? "fill-black/80 text-black" : "fill-white/90 text-white")} />);
     }
     
     // Add half star if applicable
     if (hasHalfStar) {
         // We use lucide's StarHalf and simulate solid fill with text/fill color props correctly
-        stars.push(<StarHalf key="half" className={cn("w-3 h-3 md:w-[14px] md:h-[14px]", isUser ? "fill-black text-black" : "fill-white text-white")} />);
+        stars.push(<StarHalf key="half" className={cn("w-2 h-2 md:w-[10px] md:h-[10px]", isUser ? "fill-black/80 text-black" : "fill-white/90 text-white")} />);
     }
     
     // Add remaining empty slots
     const emptyStarsCount = 5 - stars.length;
     for (let i = 0; i < emptyStarsCount; i++) {
-        stars.push(<Star key={`empty-${i}`} className={cn("w-3 h-3 md:w-[14px] md:h-[14px]", isUser ? "text-black/20" : "text-white/20")} />);
+        stars.push(<Star key={`empty-${i}`} className={cn("w-2 h-2 md:w-[10px] md:h-[10px]", isUser ? "text-black/20" : "text-white/20")} />);
     }
     
     return <div className="flex gap-[1px]">{stars}</div>;
@@ -87,17 +87,17 @@ export function MediaCard({ item, onEdit, onLogProgress }: MediaCardProps) {
       <p className="text-zinc-500 text-[10px] md:text-xs mb-3 md:mb-4 italic line-clamp-1">{item.creator || 'Unknown Creator'}</p>
       
       <div className="aspect-[2/3] bg-zinc-800 rounded-lg md:rounded-xl relative w-full overflow-hidden shadow-xl shrink-0 mb-3 md:mb-4">
-        <div className="absolute top-0 right-0 z-20 flex flex-col items-end">
-          {item.userRating !== undefined && (
-            <div className="bg-amber-500 text-black px-1.5 md:px-2.5 py-1 md:py-1.5 text-xs rounded-bl-xl md:rounded-bl-2xl shadow-xl flex flex-col items-end gap-1 min-w-[2.5rem] md:min-w-[3rem]">
-              <span className="text-[6px] md:text-[8px] uppercase tracking-widest font-black opacity-60 leading-none mr-0.5">Your Rating</span>
+        <div className="absolute top-0 right-0 z-20 flex flex-col items-end opacity-90 hover:opacity-100 transition-opacity">
+          {item.userRating != null && (
+            <div className="bg-amber-500/80 backdrop-blur-sm text-black px-1.5 md:px-2 py-0.5 md:py-1 text-xs rounded-bl-lg md:rounded-bl-xl shadow-lg flex flex-col items-end gap-0.5 min-w-[2rem] md:min-w-[2.5rem]">
+              <span className="text-[5px] md:text-[6px] uppercase tracking-widest font-black opacity-60 leading-none mr-0.5">Your Rating</span>
               {renderStars(item.userRating, true)}
             </div>
           )}
-          {item.reviewScore !== undefined && (
-            <div className={cn("px-1.5 md:px-2.5 py-1 md:py-1.5 flex flex-col items-end gap-1 min-w-[2.5rem] md:min-w-[3rem] shadow-xl", item.userRating !== undefined ? "bg-black/80 backdrop-blur-md border-l border-b border-white/10 text-zinc-300 rounded-bl-xl md:rounded-bl-2xl" : cn("rounded-bl-xl md:rounded-bl-2xl text-white", colors.bg))}>
-              <span className="text-[6px] md:text-[8px] uppercase tracking-widest font-black opacity-60 leading-none mr-0.5">{item.userRating !== undefined ? "Critic" : "Critic Rating"}</span>
-              <div className={cn(item.userRating !== undefined ? "opacity-60 saturate-50" : "")}>
+          {item.reviewScore != null && (
+            <div className={cn("px-1.5 md:px-2 py-0.5 md:py-1 flex flex-col items-end gap-0.5 min-w-[2rem] md:min-w-[2.5rem] shadow-lg", item.userRating != null ? "bg-black/60 backdrop-blur-md border-l border-b border-white/10 text-zinc-300 rounded-bl-lg md:rounded-bl-xl" : cn("rounded-bl-lg md:rounded-bl-xl text-white/90 backdrop-blur-sm", colors.bg))}>
+              <span className="text-[5px] md:text-[6px] uppercase tracking-widest font-black opacity-60 leading-none mr-0.5">{item.userRating != null ? "Critic" : "Critic Rating"}</span>
+              <div className={cn(item.userRating != null ? "opacity-60 saturate-50" : "")}>
                 {renderStars(item.reviewScore, false)}
               </div>
             </div>

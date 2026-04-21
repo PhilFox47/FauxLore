@@ -317,10 +317,13 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   step="0.5"
                   min="0"
                   max="5"
-                  value={formData.reviewScore || ''}
-                  onChange={handleChange}
+                  value={formData.reviewScore === undefined ? '' : formData.reviewScore}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData(p => ({...p, reviewScore: val === '' ? undefined : Number(val) }));
+                  }} 
                   className="input-field" 
-                  placeholder="4.5"
+                  placeholder="Leave unrated"
                 />
               </div>
               <div>
@@ -387,10 +390,13 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   step="0.5"
                   min="0"
                   max="5"
-                  value={formData.reviewScore || ''}
-                  onChange={handleChange}
+                  value={formData.reviewScore === undefined ? '' : formData.reviewScore}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData(p => ({...p, reviewScore: val === '' ? undefined : Number(val) }));
+                  }} 
                   className="input-field" 
-                  placeholder="4.5"
+                  placeholder="Leave unrated"
                 />
               </div>
               <div className="col-span-2">
@@ -437,7 +443,20 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-amber-500/80 mb-1">Your Rating (0-5)</label>
-                <input type="number" name="userRating" step="0.5" min="0" max="5" value={formData.userRating || ''} onChange={handleChange} className="input-field border-amber-500/20 focus:border-amber-500/50" placeholder="5" />
+                <input 
+                  type="number" 
+                  name="userRating" 
+                  step="0.5" 
+                  min="0" 
+                  max="5" 
+                  value={formData.userRating === undefined ? '' : formData.userRating} 
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData(p => ({...p, userRating: val === '' ? undefined : Number(val) }));
+                  }} 
+                  className="input-field border-amber-500/20 focus:border-amber-500/50" 
+                  placeholder="Leave blank for unrated" 
+                />
               </div>
             </div>
 
