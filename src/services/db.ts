@@ -79,5 +79,29 @@ export const DatabaseService = {
      });
      if (!res.ok) throw new Error('Failed to add log');
      return res.json();
+  },
+
+  async getSettings(): Promise<any> {
+    try {
+      const res = await fetch('/api/settings');
+      if (!res.ok) return {};
+      return res.json();
+    } catch (e) {
+      console.error(e);
+      return {};
+    }
+  },
+
+  async saveSettings(settings: any): Promise<any> {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings)
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(`Failed to save settings: ${errorData.error || res.statusText}`);
+    }
+    return res.json();
   }
 };

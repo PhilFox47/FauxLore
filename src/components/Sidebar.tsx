@@ -1,11 +1,11 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, Settings, X } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Settings, X, Presentation } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
 import { MEDIA_COLORS } from '../types/schema';
 
-export function Sidebar({ onCloseMobile }: { onCloseMobile?: () => void }) {
+export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () => void, onOpenSettings?: () => void }) {
   const { media } = useMediaContext();
 
   const getCount = (type: string) => media.filter(m => m.mediaType === type).length;
@@ -13,6 +13,7 @@ export function Sidebar({ onCloseMobile }: { onCloseMobile?: () => void }) {
   const mainItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Statistics', path: '/stats', icon: BarChart3 },
+    { name: 'Recaps', path: '/recaps', icon: Presentation },
   ];
 
   const libraryItems = [
@@ -88,7 +89,7 @@ export function Sidebar({ onCloseMobile }: { onCloseMobile?: () => void }) {
         </div>
       </nav>
 
-      <button className="mt-auto flex items-center justify-center gap-2 w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium transition-all shadow-lg shadow-indigo-900/20">
+      <button onClick={onOpenSettings} className="mt-auto flex items-center justify-center gap-2 w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium transition-all shadow-lg shadow-indigo-900/20">
         <Settings className="w-4 h-4" />
         Settings
       </button>

@@ -5,7 +5,7 @@ async function check() {
     method: 'GET'
   });
   const data = await r.json();
-  const fields = data.data?.__type?.fields || [];
+  const fields = (data as any).data?.__type?.fields || [];
   console.log(JSON.stringify(fields, null, 2));
 }
 check();

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { MediaCard } from '../components/MediaCard';
 import { MediaFormModal } from '../components/MediaFormModal';
@@ -6,10 +6,11 @@ import { ProgressModal } from '../components/ProgressModal';
 import { FilterSortBar } from '../components/FilterSortBar';
 import { useMediaFilterSort } from '../hooks/useMediaFilterSort';
 import { MediaItem } from '../types/schema';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Flame } from 'lucide-react';
+import { format, parseISO, differenceInDays } from 'date-fns';
 
 export function Dashboard() {
-  const { media, saveMediaItem, addLog, deleteMediaItem } = useMediaContext();
+  const { media, logs, saveMediaItem, addLog, deleteMediaItem } = useMediaContext();
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MediaItem | undefined>(undefined);
@@ -26,6 +27,41 @@ export function Dashboard() {
     setSearchQuery,
     filteredAndSortedMedia: activeMedia,
   } = useMediaFilterSort(media, 'All');
+
+  const currentStreak = useMemo(() => {
+    const historicalFilteredLogs = logs.filter(l => !l.timestamp.startsWith('1970-01-01'));
+    if (historicalFilteredLogs.length === 0) return 0;
+    
+    // Get unique dates sorted descending
+    const uniqueDates = Array.from(new Set<string>(historicalFilteredLogs.map(l => format(parseISO(l.timestamp), 'yyyy-MM-dd'))));
+    uniqueDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    
+    if (uniqueDates.length === 0) return 0;
+
+    const todayDateStr = format(new Date(), 'yyyy-MM-dd');
+    let streak = 0;
+    
+    // Check if the streak is active today or yesterday
+    let currentDateToCheck = new Date(uniqueDates[0]);
+    const daysSinceMostRecentLog = differenceInDays(new Date(todayDateStr), currentDateToCheck);
+    
+    if (daysSinceMostRecentLog > 1) {
+       return 0; // Streak broken
+    }
+
+    streak = 1;
+    for (let i = 1; i < uniqueDates.length; i++) {
+       const prevDate = new Date(uniqueDates[i]);
+       if (differenceInDays(currentDateToCheck, prevDate) === 1) {
+          streak++;
+          currentDateToCheck = prevDate;
+       } else {
+          break;
+       }
+    }
+    
+    return streak;
+  }, [logs]);
 
   const handleEdit = (item: MediaItem) => {
     setEditingItem(item);
@@ -44,9 +80,17 @@ export function Dashboard() {
 
   return (
     <>
-      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-2">
+      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-4">
         <div>
-          <h2 className="text-2xl font-semibold">Overview</h2>
+          <div className="flex items-center gap-3 mb-1">
+             <h2 className="text-2xl font-semibold">Overview</h2>
+             {currentStreak > 0 && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-500/10 border border-orange-500/20 rounded-full text-orange-400">
+                   <Flame className="w-3.5 h-3.5 fill-current" />
+                   <span className="text-xs font-bold">{currentStreak} Day Streak</span>
+                </div>
+             )}
+          </div>
           <p className="text-zinc-500 text-sm">Tracked across all media types</p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">

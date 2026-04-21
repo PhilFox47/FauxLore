@@ -1,47 +1,50 @@
-import { MediaItem } from '../types/schema';
+import { MediaItem, Settings } from '../types/schema';
 
 /**
  * Calculates a scaled normalized metric called "Master Pages".
  * The mathematical base is 1 Book Page equals 1 Normalized Page.
  *
- * For Books: 1 Page equals 1 Page
- * For Games: 5 minutes of Playtime equals 1 Page (1 hr = 12 Pages)
- * Visual Novels: 2.5 minutes of Playtime equals 1 Page (1 hr = 24 Pages)
- * Manga: 1 Chapter equals 5 Pages
- * Series: Preference: 2.5 minutes equals 1 Page. Fallback: 1 Episode equals 30 Pages.
- * Movies: Preference: 2.5 minutes equals 1 Page. Fallback: 1 Movie equals 100 Pages.
- * Comic: 1 Issue equals 20 Pages (Fallback logic)
- * 
  * @param item - The MediaItem to extract progress/time from.
+ * @param settings - The user settings containing Master Page multipliers.
  * @returns The scaled number of "pages" representing time invested.
  */
-export function calculateScaledPages(item: MediaItem): number {
+export function calculateScaledPages(item: MediaItem, settings?: Settings | null): number {
+  const defaults = {
+    gamePagesPerHour: 12,
+    vnPagesPerHour: 24,
+    mangaPagesPerChapter: 5,
+    comicPagesPerIssue: 20,
+    episodesWatchedMultiplier: 30,
+    moviePagesPerMovie: 100,
+    runtimeMinutesPerPage: 2.5
+  };
+  
+  const multipliers = { ...defaults, ...settings?.masterPageConfig };
+
   switch (item.mediaType) {
     case 'Book':
       return item.pagesRead || 0;
       
     case 'Game': {
-      const minutesPlayed = (item.playtimeHours || 0) * 60;
-      return Math.round(minutesPlayed / 5);
+      const hoursPlayed = (item.playtimeHours || 0);
+      return Math.round(hoursPlayed * multipliers.gamePagesPerHour);
     }
-    
+
     case 'Visual Novel': {
-      const minutesPlayed = (item.playtimeHours || 0) * 60;
-      return Math.round(minutesPlayed / 2.5);
+      const hoursPlayed = (item.playtimeHours || 0);
+      return Math.round(hoursPlayed * multipliers.vnPagesPerHour);
     }
     
     case 'Manga':
-      return (item.chaptersRead || 0) * 5;
+      return (item.chaptersRead || 0) * multipliers.mangaPagesPerChapter;
       
     case 'Series': {
       const episodes = item.episodesWatched || 0;
       if (item.runtimeMinutes && item.runtimeMinutes > 0) {
-        // Preferred: 2.5 minutes = 1 Page
         const totalMinutes = episodes * item.runtimeMinutes;
-        return Math.round(totalMinutes / 2.5);
+        return Math.round(totalMinutes / multipliers.runtimeMinutesPerPage);
       } else {
-        // Fallback: 1 Episode = 30 Pages
-        return episodes * 30;
+        return episodes * multipliers.episodesWatchedMultiplier;
       }
     }
     
@@ -52,17 +55,15 @@ export function calculateScaledPages(item: MediaItem): number {
         : (isWatched ? 1 : 0);
 
       if (item.runtimeMinutes && item.runtimeMinutes > 0) {
-        // Preferred: 2.5 minutes = 1 Page
         const totalMinutes = count * item.runtimeMinutes;
-        return Math.round(totalMinutes / 2.5);
+        return Math.round(totalMinutes / multipliers.runtimeMinutesPerPage);
       } else {
-        // Fallback: 1 Movie = 100 Pages
-        return count * 100;
+        return count * multipliers.moviePagesPerMovie;
       }
     }
     
     case 'Comic':
-      return (item.issuesRead || 0) * 20;
+      return (item.issuesRead || 0) * multipliers.comicPagesPerIssue;
 
     default:
       return 0;
@@ -74,33 +75,43 @@ export function calculateScaledPages(item: MediaItem): number {
  * For time series processing where only isolated deltas exist on progress logs.
  * We must locate the corresponding item to calculate scale.
  */
-export function calculateScaledDelta(delta: number, item: MediaItem): number {
+export function calculateScaledDelta(delta: number, item: MediaItem, settings?: Settings | null): number {
   if (!item) return delta; // Graceful failure if media is entirely missing
+
+  const defaults = {
+    gamePagesPerHour: 12,
+    vnPagesPerHour: 24,
+    mangaPagesPerChapter: 5,
+    comicPagesPerIssue: 20,
+    episodesWatchedMultiplier: 30,
+    moviePagesPerMovie: 100,
+    runtimeMinutesPerPage: 2.5
+  };
+  
+  const multipliers = { ...defaults, ...settings?.masterPageConfig };
 
   switch (item.mediaType) {
     case 'Book':
       return delta;
       
     case 'Game': {
-      const minutesPlayed = delta * 60; // Delta is in hours
-      return Math.round(minutesPlayed / 5);
+      return Math.round(delta * multipliers.gamePagesPerHour); // Delta is in hours
     }
-    
+
     case 'Visual Novel': {
-      const minutesPlayed = delta * 60; // Delta is in hours
-      return Math.round(minutesPlayed / 2.5);
+      return Math.round(delta * multipliers.vnPagesPerHour); // Delta is in hours
     }
     
     case 'Manga':
-      return delta * 5; // Delta is chapters
+      return delta * multipliers.mangaPagesPerChapter; // Delta is chapters
       
     case 'Series': {
       // Delta is episodes
       if (item.runtimeMinutes && item.runtimeMinutes > 0) {
         const totalMinutes = delta * item.runtimeMinutes;
-        return Math.round(totalMinutes / 2.5);
+        return Math.round(totalMinutes / multipliers.runtimeMinutesPerPage);
       } else {
-        return delta * 30;
+        return delta * multipliers.episodesWatchedMultiplier;
       }
     }
     
@@ -108,14 +119,14 @@ export function calculateScaledDelta(delta: number, item: MediaItem): number {
       // Delta is watchCount increments
       if (item.runtimeMinutes && item.runtimeMinutes > 0) {
         const totalMinutes = delta * item.runtimeMinutes;
-        return Math.round(totalMinutes / 2.5);
+        return Math.round(totalMinutes / multipliers.runtimeMinutesPerPage);
       } else {
-        return delta * 100;
+        return delta * multipliers.moviePagesPerMovie;
       }
     }
     
     case 'Comic':
-      return delta * 20; // Delta is issues
+      return delta * multipliers.comicPagesPerIssue; // Delta is issues
 
     default:
       return delta;

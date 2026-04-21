@@ -170,6 +170,14 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                 name="title"
                 value={formData.title}
                 onChange={handleChange}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault(); // Prevent form submission
+                    if (formData.title && !isSearching) {
+                      handleSearchMetadata();
+                    }
+                  }
+                }}
                 className="input-field" 
                 placeholder="E.g., The Witcher 3"
               />

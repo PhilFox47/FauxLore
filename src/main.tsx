@@ -6,6 +6,7 @@ import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { MediaLibrary } from './pages/MediaLibrary';
 import { Statistics } from './pages/Statistics';
+import { Recaps } from './pages/Recaps';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -17,6 +18,7 @@ createRoot(document.getElementById('root')!).render(
             <Route index element={<Dashboard />} />
             <Route path="library/:mediaType" element={<MediaLibrary />} />
             <Route path="stats" element={<Statistics />} />
+            <Route path="recaps" element={<Recaps />} />
           </Route>
         </Routes>
       </BrowserRouter>

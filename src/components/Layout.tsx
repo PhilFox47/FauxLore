@@ -3,9 +3,11 @@ import { Sidebar } from './Sidebar';
 import { Outlet } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { SettingsModal } from './SettingsModal';
 
 export function Layout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   return (
     <div className="flex bg-[#09090B] text-[#FAFAFA] min-h-screen font-sans overflow-hidden">
@@ -24,7 +26,10 @@ export function Layout() {
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <Sidebar onCloseMobile={() => setIsMobileMenuOpen(false)} />
+        <Sidebar 
+          onCloseMobile={() => setIsMobileMenuOpen(false)} 
+          onOpenSettings={() => setIsSettingsOpen(true)}
+        />
       </div>
 
       <main className="flex-1 md:ml-60 flex flex-col h-screen overflow-hidden">
@@ -48,6 +53,10 @@ export function Layout() {
           </div>
         </div>
       </main>
+      
+      {isSettingsOpen && (
+        <SettingsModal onClose={() => setIsSettingsOpen(false)} />
+      )}
     </div>
   );
 }

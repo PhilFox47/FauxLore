@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { MediaItem, ProgressLog, MetricType, MediaType } from '../types/schema';
+import { MediaItem, ProgressLog, MetricType, MediaType, Settings } from '../types/schema';
 import { DatabaseService } from '../services/db';
 
 interface MediaContextType {
   media: MediaItem[];
   logs: ProgressLog[];
+  settings: Settings | null;
   refreshData: () => Promise<void>;
   saveMediaItem: (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => Promise<void>;
   deleteMediaItem: (id: string) => Promise<void>;
@@ -17,17 +18,20 @@ const MediaContext = createContext<MediaContextType | undefined>(undefined);
 export const MediaProvider = ({ children }: { children: ReactNode }) => {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [logs, setLogs] = useState<ProgressLog[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [mediaData, logsData] = await Promise.all([
+      const [mediaData, logsData, settingsData] = await Promise.all([
         DatabaseService.getAllMedia(),
-        DatabaseService.getAllLogs()
+        DatabaseService.getAllLogs(),
+        DatabaseService.getSettings()
       ]);
       setMedia(mediaData);
       setLogs(logsData);
+      setSettings(settingsData);
     } catch (error) {
       console.error("Failed to load data from server:", error);
     } finally {
@@ -55,7 +59,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [refreshData]);
 
   return (
-    <MediaContext.Provider value={{ media, logs, refreshData, saveMediaItem, deleteMediaItem, addLog, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, refreshData, saveMediaItem, deleteMediaItem, addLog, isLoading }}>
       {children}
     </MediaContext.Provider>
   );

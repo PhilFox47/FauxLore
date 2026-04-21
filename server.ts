@@ -7,12 +7,9 @@ import Database from "better-sqlite3";
 dotenv.config();
 
 let igdbToken: { access_token: string, expires_at: number } | null = null;
-async function getIgdbToken() {
-  const clientId = process.env.IGDB_CLIENT_ID;
-  const clientSecret = process.env.IGDB_CLIENT_SECRET;
-  
+async function getIgdbToken(clientId: string, clientSecret: string) {
   if (!clientId || !clientSecret) {
-    throw new Error("IGDB_CLIENT_ID or IGDB_CLIENT_SECRET environment variable is missing.");
+    throw new Error("IGDB_CLIENT_ID or IGDB_CLIENT_SECRET missing. Please configure them in Settings.");
   }
 
   if (igdbToken && Date.now() < igdbToken.expires_at) {
@@ -93,6 +90,16 @@ async function startServer() {
       delta REAL NOT NULL,
       note TEXT,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      userId TEXT PRIMARY KEY,
+      igdbClientId TEXT,
+      igdbClientSecret TEXT,
+      tmdbApiKey TEXT,
+      hardcoverApiKey TEXT,
+      timezone TEXT,
+      masterPageConfig TEXT
     );
   `);
 
@@ -258,6 +265,51 @@ async function startServer() {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  app.get("/api/settings", (req, res) => {
+    try {
+      const userId = req.query.userId || 'default_user';
+      const row: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId);
+      if (!row) return res.json({ userId });
+      res.json({
+        ...row,
+        masterPageConfig: row.masterPageConfig ? JSON.parse(row.masterPageConfig) : undefined
+      });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/settings", (req, res) => {
+    try {
+      const settings = req.body;
+      const userId = settings.userId || 'default_user';
+      
+      db.prepare(`
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, timezone, masterPageConfig)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @timezone, @masterPageConfig)
+        ON CONFLICT(userId) DO UPDATE SET
+          igdbClientId=excluded.igdbClientId,
+          igdbClientSecret=excluded.igdbClientSecret,
+          tmdbApiKey=excluded.tmdbApiKey,
+          hardcoverApiKey=excluded.hardcoverApiKey,
+          timezone=excluded.timezone,
+          masterPageConfig=excluded.masterPageConfig
+      `).run({
+        userId: userId,
+        igdbClientId: settings.igdbClientId || null,
+        igdbClientSecret: settings.igdbClientSecret || null,
+        tmdbApiKey: settings.tmdbApiKey || null,
+        hardcoverApiKey: settings.hardcoverApiKey || null,
+        timezone: settings.timezone || null,
+        masterPageConfig: settings.masterPageConfig ? JSON.stringify(settings.masterPageConfig) : null
+      });
+      
+      const saved: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId);
+      res.json({
+        ...saved,
+        masterPageConfig: saved.masterPageConfig ? JSON.parse(saved.masterPageConfig) : undefined
+      });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   // API Routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
@@ -267,13 +319,16 @@ async function startServer() {
   app.get("/api/games/search", async (req, res) => {
     try {
       const query = req.query.q as string;
-      const clientId = process.env.IGDB_CLIENT_ID;
+      const userId = req.query.userId as string || 'default_user';
+      const settings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId) || {};
+      const clientId = settings.igdbClientId || process.env.IGDB_CLIENT_ID;
+      const clientSecret = settings.igdbClientSecret || process.env.IGDB_CLIENT_SECRET;
 
       if (!query) {
         return res.status(400).json({ error: "Missing search query" });
       }
 
-      const token = await getIgdbToken();
+      const token = await getIgdbToken(clientId, clientSecret);
 
       // We use Apicalypse to query IGDB
       // We grab standard fields + involved companies (for developers/publishers) + genres
@@ -335,9 +390,12 @@ async function startServer() {
   // TMDB proxy integration for Movies and Series
   app.get("/api/tmdb/search", async (req, res) => {
     try {
-      const apiKey = process.env.TMDB_API_KEY;
+      const userId = req.query.userId as string || 'default_user';
+      const settings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId) || {};
+      const apiKey = settings.tmdbApiKey || process.env.TMDB_API_KEY;
+      
       if (!apiKey) {
-        return res.status(500).json({ error: "Missing TMDB_API_KEY environment variable. Please configure it in AI Studio settings." });
+        return res.status(500).json({ error: "Missing TMDB API KEY. Please configure it in Settings." });
       }
 
       const query = req.query.q as string;
@@ -472,8 +530,10 @@ async function startServer() {
   // Hardcover API endpoints...
   app.post("/api/books/introspect", async (req, res) => {
     try {
-      const apiKey = process.env.HARDCOVER_API_KEY;
-      if (!apiKey) return res.status(500).json({error: "No key"});
+      const userId = req.query.userId as string || 'default_user';
+      const settings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId) || {};
+      const apiKey = settings.hardcoverApiKey || process.env.HARDCOVER_API_KEY;
+      if (!apiKey) return res.status(500).json({error: "No key configured"});
       
       const query = req.body.query || `
         query {
@@ -504,13 +564,15 @@ async function startServer() {
   app.get("/api/books/search", async (req, res) => {
     try {
       const query = req.query.q as string;
-      const apiKey = process.env.HARDCOVER_API_KEY;
+      const userId = req.query.userId as string || 'default_user';
+      const settings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId) || {};
+      const apiKey = settings.hardcoverApiKey || process.env.HARDCOVER_API_KEY;
 
       if (!query) {
         return res.status(400).json({ error: "Missing search query" });
       }
       if (!apiKey) {
-        return res.status(500).json({ error: "HARDCOVER_API_KEY environment variable is missing." });
+        return res.status(500).json({ error: "HARDCOVER_API_KEY is missing. Please configure it in Settings." });
       }
 
       // Hardcover's Hasura instance blocks _ilike due to performance queries.

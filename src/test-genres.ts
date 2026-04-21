@@ -22,6 +22,6 @@ async function check() {
     body: JSON.stringify({ query })
   });
   const data = await r.json();
-  console.log(JSON.stringify(data.data.books, null, 2));
+  console.log(JSON.stringify((data as any).data.books, null, 2));
 }
 check();

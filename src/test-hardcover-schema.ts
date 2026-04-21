@@ -31,7 +31,7 @@ async function introspect() {
   });
 
   const data = await res.json();
-  const fields = data.data.__schema.queryType.fields;
+  const fields = (data as any).data.__schema.queryType.fields;
   
   // Find fields related to books or search
   const bookQueries = fields.filter((f: any) => f.name.toLowerCase().includes('book') || f.name.toLowerCase().includes('search'));

@@ -6,11 +6,11 @@ import { BarChart3, DatabaseZap } from 'lucide-react';
 import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
 
 export function Statistics() {
-  const { logs, media } = useMediaContext();
+  const { logs, media, settings } = useMediaContext();
 
   const totalMasterPages = useMemo(() => {
-    return media.reduce((acc, current) => acc + calculateScaledPages(current), 0);
-  }, [media]);
+    return media.reduce((acc, current) => acc + calculateScaledPages(current, settings), 0);
+  }, [media, settings]);
 
   const activityData = useMemo(() => {
     // Generate last 7 days
@@ -32,7 +32,7 @@ export function Statistics() {
         if (day) {
           const item = media.find(m => m.id === log.mediaId);
           if (item) {
-            day.count += calculateScaledDelta(log.delta || 1, item);
+            day.count += calculateScaledDelta(log.delta || 1, item, settings);
           } else {
             day.count += log.delta || 1;
           }
@@ -41,18 +41,18 @@ export function Statistics() {
     });
 
     return days;
-  }, [logs, media]);
+  }, [logs, media, settings]);
 
   const typeDistribution = useMemo(() => {
     // Changed this to aggregate Master Pages instead of pure media count
     const counts = media.reduce((acc, current) => {
-      const pages = calculateScaledPages(current);
+      const pages = calculateScaledPages(current, settings);
       acc[current.mediaType] = (acc[current.mediaType] || 0) + pages;
       return acc;
     }, {} as Record<string, number>);
     
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [media]);
+  }, [media, settings]);
 
   return (
     <>

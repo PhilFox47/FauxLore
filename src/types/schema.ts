@@ -76,6 +76,24 @@ export interface ProgressLog {
   note?: string;
 }
 
+export interface Settings {
+  userId: string;
+  igdbClientId?: string;
+  igdbClientSecret?: string;
+  tmdbApiKey?: string;
+  hardcoverApiKey?: string;
+  timezone?: string;
+  masterPageConfig?: {
+    gamePagesPerHour?: number; // 5 mins = 1 page -> 12 pages per hr
+    vnPagesPerHour?: number; // 2.5 mins = 1 page -> 24 pages per hr
+    mangaPagesPerChapter?: number; // 5
+    comicPagesPerIssue?: number; // 20
+    episodesWatchedMultiplier?: number; // fallback: 30 pages per episode
+    moviePagesPerMovie?: number; // fallback: 100 pages per movie
+    runtimeMinutesPerPage?: number; // 2.5 mins = 1 page
+  };
+}
+
 // Helper specific tracking info mapping for UI and Logic
 export const getMetricForType = (type: MediaType): MetricType | null => {
   switch (type) {
