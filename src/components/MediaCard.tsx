@@ -21,19 +21,19 @@ export function MediaCard({ item, onEdit, onLogProgress }: MediaCardProps) {
     
     // Fill active stars
     for (let i = 0; i < fullStars; i++) {
-        stars.push(<Star key={`full-${i}`} className={cn("w-[14px] h-[14px]", isUser ? "fill-black text-black" : "fill-white text-white")} />);
+        stars.push(<Star key={`full-${i}`} className={cn("w-3 h-3 md:w-[14px] md:h-[14px]", isUser ? "fill-black text-black" : "fill-white text-white")} />);
     }
     
     // Add half star if applicable
     if (hasHalfStar) {
         // We use lucide's StarHalf and simulate solid fill with text/fill color props correctly
-        stars.push(<StarHalf key="half" className={cn("w-[14px] h-[14px]", isUser ? "fill-black text-black" : "fill-white text-white")} />);
+        stars.push(<StarHalf key="half" className={cn("w-3 h-3 md:w-[14px] md:h-[14px]", isUser ? "fill-black text-black" : "fill-white text-white")} />);
     }
     
     // Add remaining empty slots
     const emptyStarsCount = 5 - stars.length;
     for (let i = 0; i < emptyStarsCount; i++) {
-        stars.push(<Star key={`empty-${i}`} className={cn("w-[14px] h-[14px]", isUser ? "text-black/20" : "text-white/20")} />);
+        stars.push(<Star key={`empty-${i}`} className={cn("w-3 h-3 md:w-[14px] md:h-[14px]", isUser ? "text-black/20" : "text-white/20")} />);
     }
     
     return <div className="flex gap-[1px]">{stars}</div>;
@@ -79,24 +79,24 @@ export function MediaCard({ item, onEdit, onLogProgress }: MediaCardProps) {
   const coverFallback = "https://images.unsplash.com/photo-1618519764611-bd0823006228?auto=format&fit=crop&q=80&w=400"; // Generic glowing neon background for tech/media vibe
 
   return (
-    <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6 flex flex-col group transition-all hover:bg-white/[0.02] shadow-sm relative overflow-hidden">
-      <span className={cn("text-[10px] font-bold uppercase tracking-wider mb-1 line-clamp-1 mt-1", colors.text)}>
+    <div className="bg-zinc-900/50 border border-white/5 rounded-2xl md:rounded-3xl p-4 md:p-6 flex flex-col group transition-all hover:bg-white/[0.02] shadow-sm relative overflow-hidden">
+      <span className={cn("text-[8px] md:text-[10px] font-bold uppercase tracking-wider mb-1 line-clamp-1 mt-1", colors.text)}>
         {item.status} • {item.mediaType} {item.season ? `• S${item.season}` : ''} {item.year ? `• ${item.year}` : ''}
       </span>
-      <h3 className="text-xl font-bold mb-1 line-clamp-2 min-h-[3.5rem] pr-2" title={item.title}>{item.title}</h3>
-      <p className="text-zinc-500 text-xs mb-4 italic line-clamp-1">{item.creator || 'Unknown Creator'}</p>
+      <h3 className="text-base md:text-xl font-bold mb-1 line-clamp-2 min-h-[2.5rem] md:min-h-[3.5rem] pr-2" title={item.title}>{item.title}</h3>
+      <p className="text-zinc-500 text-[10px] md:text-xs mb-3 md:mb-4 italic line-clamp-1">{item.creator || 'Unknown Creator'}</p>
       
-      <div className="aspect-[2/3] bg-zinc-800 rounded-xl relative w-full overflow-hidden shadow-xl shrink-0 mb-4">
+      <div className="aspect-[2/3] bg-zinc-800 rounded-lg md:rounded-xl relative w-full overflow-hidden shadow-xl shrink-0 mb-3 md:mb-4">
         <div className="absolute top-0 right-0 z-20 flex flex-col items-end">
           {item.userRating !== undefined && (
-            <div className="bg-amber-500 text-black px-2.5 py-1.5 text-xs rounded-bl-2xl shadow-xl flex flex-col items-end gap-1 min-w-[3rem]">
-              <span className="text-[8px] uppercase tracking-widest font-black opacity-60 leading-none mr-0.5">Your Rating</span>
+            <div className="bg-amber-500 text-black px-1.5 md:px-2.5 py-1 md:py-1.5 text-xs rounded-bl-xl md:rounded-bl-2xl shadow-xl flex flex-col items-end gap-1 min-w-[2.5rem] md:min-w-[3rem]">
+              <span className="text-[6px] md:text-[8px] uppercase tracking-widest font-black opacity-60 leading-none mr-0.5">Your Rating</span>
               {renderStars(item.userRating, true)}
             </div>
           )}
           {item.reviewScore !== undefined && (
-            <div className={cn("px-2.5 py-1.5 flex flex-col items-end gap-1 min-w-[3rem] shadow-xl", item.userRating !== undefined ? "bg-black/80 backdrop-blur-md border-l border-b border-white/10 text-zinc-300 rounded-bl-2xl" : cn("rounded-bl-2xl text-white", colors.bg))}>
-              <span className="text-[8px] uppercase tracking-widest font-black opacity-60 leading-none mr-0.5">{item.userRating !== undefined ? "Critic" : "Critic Rating"}</span>
+            <div className={cn("px-1.5 md:px-2.5 py-1 md:py-1.5 flex flex-col items-end gap-1 min-w-[2.5rem] md:min-w-[3rem] shadow-xl", item.userRating !== undefined ? "bg-black/80 backdrop-blur-md border-l border-b border-white/10 text-zinc-300 rounded-bl-xl md:rounded-bl-2xl" : cn("rounded-bl-xl md:rounded-bl-2xl text-white", colors.bg))}>
+              <span className="text-[6px] md:text-[8px] uppercase tracking-widest font-black opacity-60 leading-none mr-0.5">{item.userRating !== undefined ? "Critic" : "Critic Rating"}</span>
               <div className={cn(item.userRating !== undefined ? "opacity-60 saturate-50" : "")}>
                 {renderStars(item.reviewScore, false)}
               </div>
@@ -113,11 +113,11 @@ export function MediaCard({ item, onEdit, onLogProgress }: MediaCardProps) {
       </div>
 
       <div className="mt-auto">
-        <div className="flex justify-between text-xs mb-2 font-mono">
+        <div className="flex justify-between text-[10px] md:text-xs mb-2 font-mono">
           <span className="text-zinc-300">{progressText}</span>
           {progressPercent > 0 && <span className={colors.text}>{progressPercent.toFixed(0)}%</span>}
         </div>
-        <div className="h-1.5 bg-zinc-800 rounded-full mb-4">
+        <div className="h-1 md:h-1.5 bg-zinc-800 rounded-full mb-3 md:mb-4">
           {progressPercent > 0 ? (
             <div 
               className={cn("h-full rounded-full transition-all duration-500", colors.progress, colors.shadow)} 
@@ -128,18 +128,18 @@ export function MediaCard({ item, onEdit, onLogProgress }: MediaCardProps) {
           ) : null}
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 md:gap-2">
           <button 
             onClick={() => onLogProgress(item)}
-            className="flex-1 bg-white/5 hover:bg-white/10 text-white py-2 rounded-xl text-xs font-medium transition-colors flex justify-center items-center gap-1.5"
+            className="flex-1 bg-white/5 hover:bg-white/10 text-white py-1.5 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-xs font-medium transition-colors flex justify-center items-center gap-1"
           >
-            <Plus className="w-3 h-3" /> Log
+            <Plus className="w-2.5 h-2.5 md:w-3 md:h-3" /> Log
           </button>
           <button 
             onClick={() => onEdit(item)}
-            className="px-3 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white py-2 rounded-xl text-xs font-medium transition-colors flex justify-center items-center"
+            className="px-2 md:px-3 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white py-1.5 md:py-2 rounded-lg md:rounded-xl text-xs font-medium transition-colors flex justify-center items-center"
           >
-            <Edit2 className="w-3 h-3" />
+            <Edit2 className="w-2.5 h-2.5 md:w-3 md:h-3" />
           </button>
         </div>
       </div>
