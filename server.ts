@@ -206,16 +206,16 @@ async function startServer() {
     try {
       const log = req.body;
       const userId = log.userId || 'default_user';
-      db.prepare(\`
+      db.prepare(`
         INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note)
         VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note)
-      \`).run({...log, userId: userId});
+      `).run({...log, userId: userId});
       
       const mediaRow = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(log.mediaId, userId);
       if (mediaRow) {
         const type = log.metricType;
         if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {
-          db.prepare(\`UPDATE media SET \${type} = IFNULL(\${type}, 0) + ? WHERE id = ?\`).run(log.delta, log.mediaId);
+          db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ? WHERE id = ?`).run(log.delta, log.mediaId);
         }
       }
       res.json(db.prepare('SELECT * FROM logs WHERE id = ?').get(log.id));
