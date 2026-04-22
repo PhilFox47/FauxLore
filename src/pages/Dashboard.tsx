@@ -92,7 +92,7 @@ export function Dashboard() {
 
   return (
     <>
-      <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 mb-8 relative overflow-hidden w-full">
+      <div className="shrink-0 bg-zinc-900 border border-white/5 rounded-3xl p-6 mb-8 relative overflow-hidden w-full">
         {/* Glow behind RPG */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-[80px] pointer-events-none" />
         

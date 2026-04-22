@@ -23,8 +23,8 @@ export function Lorekeeper() {
       </header>
 
       {/* Hero Overview */}
-      <section className="bg-zinc-900 border border-white/5 rounded-3xl p-8 relative overflow-hidden flex flex-col md:flex-row items-center gap-8">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-[100px]" />
+      <section className="shrink-0 bg-zinc-900 border border-white/5 rounded-3xl p-8 relative overflow-hidden flex flex-col md:flex-row items-center gap-8">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none" />
         
         <div className="shrink-0 relative">
           <div className="w-32 h-32 bg-zinc-950 rounded-3xl flex items-center justify-center border-4 border-indigo-500/50 shadow-[0_0_30px_rgba(99,102,241,0.3)] z-10 relative">

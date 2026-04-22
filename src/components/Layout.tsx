@@ -48,7 +48,7 @@ export function Layout() {
         </div>
 
         <div className="flex-1 p-4 md:p-8 bg-gradient-to-br from-[#09090B] to-[#121214] overflow-y-auto">
-          <div className="flex flex-col gap-6 w-full h-full max-w-7xl mx-auto">
+          <div className="flex flex-col gap-6 w-full min-h-full max-w-7xl mx-auto">
             <Outlet />
           </div>
         </div>
