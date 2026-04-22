@@ -35,9 +35,8 @@ export function Layout() {
       <main className="flex-1 md:ml-60 flex flex-col h-screen overflow-hidden">
         {/* Mobile Header */}
         <div className="md:hidden flex items-center justify-between p-4 border-b border-white/5 bg-[#09090B] z-30">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-xl text-white">F</div>
-            <h1 className="text-xl font-bold tracking-tight text-white">FauxLore</h1>
+          <div className="flex items-center">
+            <img src="/logo.png" alt="FauxLore" className="h-8 w-auto object-contain" />
           </div>
           <button 
             onClick={() => setIsMobileMenuOpen(true)}

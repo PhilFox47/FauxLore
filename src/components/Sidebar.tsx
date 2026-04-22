@@ -32,9 +32,8 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
   return (
     <aside className="w-60 border-r border-white/10 flex flex-col p-6 h-full bg-[#09090B] text-zinc-400">
       <div className="flex items-center justify-between mb-10">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-xl text-white">F</div>
-          <h1 className="text-xl font-bold tracking-tight text-white line-clamp-1">FauxLore</h1>
+        <div className="flex items-center group cursor-pointer transition-opacity hover:opacity-80">
+          <img src="/logo.png" alt="FauxLore" className="h-8 w-auto object-contain" />
         </div>
         {onCloseMobile && (
           <button onClick={onCloseMobile} className="md:hidden p-1 text-zinc-400 hover:text-white rounded-lg">
