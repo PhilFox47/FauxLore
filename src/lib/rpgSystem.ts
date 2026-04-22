@@ -61,7 +61,7 @@ export function calculateRPGState(media: MediaItem[], logs: ProgressLog[], setti
   validLogs.forEach(log => {
     const item = media.find(m => m.id === log.mediaId);
     if (item) {
-      baseExp += calculateScaledDelta(log.delta, item, settings) * 5;
+      baseExp += calculateScaledDelta(log.delta, item, settings); // 1 Master Page = 1 EXP (removed the * 5)
     }
   });
 
@@ -232,7 +232,7 @@ function generateYearlyQuests(quests: Quest[], logs: ProgressLog[], media: Media
       description: `${verb} ${target} ${NATIVE_UNIT_LABELS[type]} this year.`,
       targetAmount: target,
       currentAmount: Math.floor(currentAmount),
-      expReward: mpTarget * 2, // dynamic exp
+      expReward: 10000, // Fixed 10,000 for completing a specific Yearly Quest
       metric: 'pages',
       isCompleted: currentAmount >= target,
       isFailed: false
@@ -246,7 +246,7 @@ function generateYearlyQuests(quests: Quest[], logs: ProgressLog[], media: Media
     description: `Consume ${totalGoal} Master Pages across all formats this year.`,
     targetAmount: totalGoal,
     currentAmount: Math.floor(currentTotalAmount),
-    expReward: totalGoal * 5,
+    expReward: 50000, // Fixed 50,000 for completing the ultimate total Yearly Quest
     metric: 'pages',
     isCompleted: currentTotalAmount >= totalGoal,
     isFailed: false
@@ -261,7 +261,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
   });
   
   const divisor = timeframe === 'monthly' ? 12 : 52;
-  const baseReward = timeframe === 'monthly' ? 5000 : 1000;
+  const baseReward = timeframe === 'monthly' ? 500 : 100; // Monthly yields 500-1000, Weekly yields 100-200.
 
   const validMedia = new Set(logs.map(l => media.find(m => m.id === l.mediaId)?.mediaType).filter(Boolean));
 

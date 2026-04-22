@@ -160,11 +160,11 @@ export function Statistics() {
           <p className="text-zinc-500 text-sm">Deep analysis of your media consumption habits.</p>
         </div>
         
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
           <select 
             value={dateRange}
             onChange={(e) => setDateRange(e.target.value as DateRange)}
-            className="bg-[#18181b] border border-white/10 text-sm font-medium text-white rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+            className="w-full sm:w-auto bg-[#18181b] border border-white/10 text-sm font-medium text-white rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 transition-colors cursor-pointer"
           >
             <option value="7days">Last 7 Days</option>
             <option value="30days">Last 30 Days</option>
@@ -175,7 +175,7 @@ export function Statistics() {
           <select 
             value={mediaTypeFilter}
             onChange={(e) => setMediaTypeFilter(e.target.value)}
-            className="bg-[#18181b] border border-white/10 text-sm font-medium text-white rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+            className="w-full sm:w-auto bg-[#18181b] border border-white/10 text-sm font-medium text-white rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 transition-colors cursor-pointer"
           >
             {MEDIA_TYPES.map(t => (
               <option key={t} value={t}>{t === 'All' ? 'All Media Types' : t}</option>

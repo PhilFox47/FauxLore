@@ -31,6 +31,22 @@ body {
   background: #3f3f46; /* zinc-700 */
 }
 
+/* Common UI Utilities */
+.input-field {
+  width: 100%;
+  background-color: #18181b; /* zinc-900 */
+  border-width: 1px;
+  border-color: rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: #fafafa;
+}
+.input-field:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  border-color: #6366f1; /* indigo-500 */
+}
+
 /* Hide number input arrows */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {

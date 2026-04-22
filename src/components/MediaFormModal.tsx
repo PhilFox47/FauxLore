@@ -562,24 +562,6 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
               </div>
             )}
           </div>
-          
-          <style>{`
-            .input-field {
-              width: 100%;
-              background-color: #18181b; /* zinc-900 */
-              border-width: 1px;
-              border-color: rgba(255, 255, 255, 0.1); /* white/10 */
-              border-radius: 0.5rem;
-              padding: 0.5rem 0.75rem;
-              color: #fafafa;
-            }
-            .input-field:focus {
-              outline: 2px solid transparent;
-              outline-offset: 2px;
-              border-color: #6366f1; /* indigo-500 */
-            }
-          `}</style>
-
         </form>
 
         <div className="p-6 border-t border-white/5 flex justify-between items-center bg-[#09090B] relative z-20">
