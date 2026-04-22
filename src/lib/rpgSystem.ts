@@ -1,0 +1,368 @@
+import { MediaItem, ProgressLog, getMetricForType } from '../types/schema';
+import { calculateScaledDelta } from './scaling';
+import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, differenceInDays } from 'date-fns';
+
+export interface Quest {
+  id: string;
+  type: 'weekly' | 'monthly' | 'yearly';
+  title: string;
+  description: string;
+  targetAmount: number;
+  currentAmount: number;
+  expReward: number;
+  metric: string;
+  isCompleted: boolean;
+  isFailed: boolean; // For past quests that were not completed
+}
+
+export interface RPGState {
+  currentExp: number;
+  level: number;
+  nextLevelExp: number;
+  currentLevelExp: number;
+  expProgress: number; // 0 to 1
+  className: string;
+  quests: Quest[];
+  expBreakdown: {
+    baseExp: number;
+    questExp: number;
+    decayExp: number;
+    penaltyExp: number;
+  };
+}
+
+// Exp threshold curve
+export function getLevelForExp(exp: number): number {
+  if (exp <= 0) return 1;
+  let level = Math.floor(Math.sqrt(exp / 1000)) + 1;
+  return Math.min(level, 100);
+}
+
+export function getExpForLevel(level: number): number {
+  if (level <= 1) return 0;
+  return 1000 * Math.pow(level - 1, 2);
+}
+
+// Seeded PRNG
+function mulberry32(a: number) {
+  return function() {
+    var t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+export function calculateRPGState(media: MediaItem[], logs: ProgressLog[], settings: any): RPGState {
+  // Filter historical
+  const validLogs = logs.filter(l => !l.timestamp.startsWith('1970-01-01'));
+  
+  let baseExp = 0;
+  validLogs.forEach(log => {
+    const item = media.find(m => m.id === log.mediaId);
+    if (item) {
+      baseExp += calculateScaledDelta(log.delta, item, settings) * 5;
+    }
+  });
+
+  let penaltyExp = 0;
+  media.forEach(m => {
+    if (m.status === 'Dropped') penaltyExp -= 500;
+  });
+
+  let decayExp = 0;
+  if (validLogs.length > 0) {
+    const dates = validLogs.map(l => parseISO(l.timestamp).getTime()).sort();
+    for (let i = 1; i < dates.length; i++) {
+      const days = differenceInDays(dates[i], dates[i-1]);
+      if (days > 3) decayExp -= (days - 3) * 50;
+    }
+    const daysSinceLast = differenceInDays(new Date(), dates[dates.length - 1]);
+    if (daysSinceLast > 3) decayExp -= (daysSinceLast - 3) * 50;
+  }
+
+  let questExp = 0;
+  
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentWeekInfo = format(now, "RRRR-II");
+  const currentMonthInfo = format(now, "yyyy-MM");
+  
+  const currentWeekLogs = validLogs.filter(l => isWithinInterval(parseISO(l.timestamp), { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) }));
+  const currentMonthLogs = validLogs.filter(l => isWithinInterval(parseISO(l.timestamp), { start: startOfMonth(now), end: endOfMonth(now) }));
+  const currentYearLogs = validLogs.filter(l => isWithinInterval(parseISO(l.timestamp), { start: startOfYear(now), end: endOfYear(now) }));
+
+  const quests: Quest[] = [];
+
+  const rngWeek = mulberry32(parseInt(currentWeekInfo.replace('-', '')));
+  const rngMonth = mulberry32(parseInt(currentMonthInfo.replace('-', '')));
+  const rngYear = mulberry32(currentYear);
+
+  // Generate 8 Yearly (1 per media + 1 total)
+  generateYearlyQuests(quests, currentYearLogs, media, settings, currentYear.toString());
+  
+  // Generate 4 Monthly
+  generateIntervalQuests(quests, currentMonthLogs, media, settings, 'monthly', currentMonthInfo, 4, rngMonth);
+  
+  // Generate 2 Weekly
+  generateIntervalQuests(quests, currentWeekLogs, media, settings, 'weekly', currentWeekInfo, 2, rngWeek);
+
+  quests.forEach(q => {
+    if (q.isCompleted) questExp += q.expReward;
+  });
+
+  const totalExp = Math.max(0, baseExp + questExp + decayExp + penaltyExp);
+  const level = getLevelForExp(totalExp);
+  
+  const currentLevelExp = getExpForLevel(level);
+  const nextLevelExp = getExpForLevel(level + 1);
+  const expProgress = level === 100 ? 1 : ((totalExp - currentLevelExp) / (nextLevelExp - currentLevelExp));
+
+  const classNames = [
+    "The Initiate", "Novice Tracker", "Apprentice Reader", "Journeyman Gamer", 
+    "Adept Watcher", "Lore Seeker", "Dungeon Diver", "Page Turner", 
+    "Media Scholar", "Binge Archmage", "Master of Backlogs", "Grandmaster",
+    "Omniscient Observer", "The Legend", "Mythic Lorekeeper"
+  ];
+  let classIdx = Math.floor(level / 7);
+  if (classIdx >= classNames.length) classIdx = classNames.length - 1;
+
+  let gameCount = media.filter(m => m.mediaType === 'Game').length;
+  let bookCount = media.filter(m => m.mediaType === 'Book').length;
+  let prefix = "";
+  if (gameCount > bookCount * 2) prefix = "Digital ";
+  if (bookCount > gameCount * 2) prefix = "Literary ";
+
+  return {
+    currentExp: totalExp,
+    level,
+    nextLevelExp,
+    currentLevelExp,
+    expProgress,
+    className: prefix + classNames[classIdx],
+    quests,
+    expBreakdown: { baseExp, questExp, decayExp, penaltyExp }
+  };
+}
+
+const DEFAULT_YEARLY_GOALS: Record<MediaType, number> = {
+  'Game': 100, 'Book': 5000, 'Visual Novel': 50, 'Manga': 200, 'Series': 100, 'Movie': 20, 'Comic': 100
+};
+export const NATIVE_UNIT_LABELS: Record<MediaType, string> = {
+  'Game': 'Hours Played',
+  'Book': 'Pages Read',
+  'Visual Novel': 'Hours Played',
+  'Manga': 'Chapters Read',
+  'Series': 'Episodes Watched',
+  'Movie': 'Movies Watched',
+  'Comic': 'Issues Read'
+};
+const PRIMARY_METRICS: Record<MediaType, string> = {
+  'Game': 'playtimeHours',
+  'Visual Novel': 'playtimeHours',
+  'Book': 'pagesRead',
+  'Manga': 'chaptersRead',
+  'Series': 'episodesWatched',
+  'Movie': 'watchCount',
+  'Comic': 'issuesRead'
+};
+
+const MEDIA_TYPES: MediaType[] = ['Game', 'Book', 'Visual Novel', 'Manga', 'Series', 'Movie', 'Comic'];
+
+function getYearlyGoals(settings: any) {
+  return { ...DEFAULT_YEARLY_GOALS, ...(settings?.yearlyGoals || {}) };
+}
+
+export function getMasterPagesForNativeUnit(amount: number, mediaType: MediaType, settings: any) {
+   const mpConfig = settings?.masterPageConfig || {};
+   switch (mediaType) {
+     case 'Book': return amount;
+     case 'Game': return amount * (mpConfig.gamePagesPerHour ?? 12);
+     case 'Visual Novel': return amount * (mpConfig.vnPagesPerHour ?? 24);
+     case 'Manga': return amount * (mpConfig.mangaPagesPerChapter ?? 5);
+     case 'Comic': return amount * (mpConfig.comicPagesPerIssue ?? 20);
+     case 'Series': return amount * (mpConfig.episodesWatchedMultiplier ?? 30);
+     case 'Movie': return amount * (mpConfig.moviePagesPerMovie ?? 100);
+     default: return amount;
+   }
+}
+
+export function calculateNativeUnits(logs: ProgressLog[], media: MediaItem[], mediaType: MediaType) {
+   const primaryMetric = PRIMARY_METRICS[mediaType];
+   
+   return logs.reduce((acc, log) => {
+     const item = media.find(m => m.id === log.mediaId);
+     if (item && item.mediaType === mediaType && log.metricType === primaryMetric) {
+        return acc + log.delta;
+     }
+     return acc;
+   }, 0);
+}
+
+function calculateMasterPages(logs: ProgressLog[], media: ReturnType<typeof getMediaItem>[], settings: any, specificType: MediaType | null = null) {
+  return logs.reduce((acc, log) => {
+    const item = media.find(m => m.id === log.mediaId);
+    if (!item || (specificType && item.mediaType !== specificType)) return acc;
+    return acc + calculateScaledDelta(log.delta, item, settings);
+  }, 0);
+}
+
+function generateYearlyQuests(quests: Quest[], logs: ProgressLog[], media: MediaItem[], settings: any, timeId: string) {
+  const goals = getYearlyGoals(settings);
+  let totalGoal = 0;
+  let currentTotalAmount = 0;
+
+  MEDIA_TYPES.forEach((type, idx) => {
+    const target = goals[type];
+    const mpTarget = getMasterPagesForNativeUnit(target, type, settings);
+    totalGoal += mpTarget;
+    
+    currentTotalAmount += calculateMasterPages(logs, media, settings, type);
+    const currentAmount = calculateNativeUnits(logs, media, type);
+
+    let verb = "Consume";
+    if (type === 'Game') verb = "Play";
+    else if (['Book', 'Manga', 'Comic', 'Visual Novel'].includes(type)) verb = "Read";
+    else verb = "Watch";
+
+    quests.push({
+      id: `${timeId}-yearly-${idx}`,
+      type: 'yearly',
+      title: `${type} Mastery`,
+      description: `${verb} ${target} ${NATIVE_UNIT_LABELS[type]} this year.`,
+      targetAmount: target,
+      currentAmount: Math.floor(currentAmount),
+      expReward: mpTarget * 2, // dynamic exp
+      metric: 'pages',
+      isCompleted: currentAmount >= target,
+      isFailed: false
+    });
+  });
+
+  quests.push({
+    id: `${timeId}-yearly-total`,
+    type: 'yearly',
+    title: 'Grandmaster of Media',
+    description: `Consume ${totalGoal} Master Pages across all formats this year.`,
+    targetAmount: totalGoal,
+    currentAmount: Math.floor(currentTotalAmount),
+    expReward: totalGoal * 5,
+    metric: 'pages',
+    isCompleted: currentTotalAmount >= totalGoal,
+    isFailed: false
+  });
+}
+
+function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: MediaItem[], settings: any, timeframe: 'monthly' | 'weekly', timeId: string, count: number, rng: () => number) {
+  const goals = getYearlyGoals(settings);
+  let totalMasterPagesGoal = 0;
+  MEDIA_TYPES.forEach(t => {
+     totalMasterPagesGoal += getMasterPagesForNativeUnit(goals[t], t, settings);
+  });
+  
+  const divisor = timeframe === 'monthly' ? 12 : 52;
+  const baseReward = timeframe === 'monthly' ? 5000 : 1000;
+
+  const validMedia = new Set(logs.map(l => media.find(m => m.id === l.mediaId)?.mediaType).filter(Boolean));
+
+  // Fun Challenge Templates
+  const templates = [
+    () => {
+      const target = Math.max(10, Math.floor(totalMasterPagesGoal / divisor));
+      const current = calculateMasterPages(logs, media, settings);
+      return {
+        title: "The Great Consumer",
+        desc: `Consume ${target} Master Pages across your collection`,
+        target, current, type: 'pages' as const, reward: baseReward * 1.5
+      };
+    },
+    () => {
+      // Pick random media type
+      const possibleTypes = MEDIA_TYPES.filter(t => goals[t] > 0);
+      const chosenType = possibleTypes[Math.floor(rng() * possibleTypes.length)] || 'Book';
+      const target = Math.max(1, Math.floor(goals[chosenType] / divisor)); // use native target
+      const current = calculateNativeUnits(logs, media, chosenType);
+      
+      let verb = "Consume";
+      if (chosenType === 'Game') verb = "Play";
+      else if (['Book', 'Manga', 'Comic', 'Visual Novel'].includes(chosenType)) verb = "Read";
+      else verb = "Watch";
+
+      return {
+        title: `${chosenType} Enthusiast`,
+        desc: `${verb} ${target} ${NATIVE_UNIT_LABELS[chosenType]}`,
+        target, current, type: 'pages' as const, reward: baseReward
+      };
+    },
+    () => {
+      // The Scribe
+      const target = timeframe === 'monthly' ? 10 : 3;
+      const current = logs.filter(l => l.note && l.note.trim().length >= 10).length;
+      return {
+        title: "The Scribe",
+        desc: `Write ${target} meaningful journal entries (10+ characters) attaching to progress logs`,
+        target, current, type: 'entries' as const, reward: baseReward * 2
+      };
+    },
+    () => {
+      // The Explorer
+      const target = timeframe === 'monthly' ? 4 : 2;
+      const typesSet = new Set();
+      logs.forEach(l => {
+        const m = media.find(x => x.id === l.mediaId);
+        if (m) typesSet.add(m.mediaType);
+      });
+      const current = typesSet.size;
+      return {
+        title: "The Explorer",
+        desc: `Log progress in ${target} distinctly different media types`,
+        target, current, type: 'entries' as const, reward: baseReward * 1.2
+      };
+    },
+    () => {
+      // Night Owl
+      const target = timeframe === 'monthly' ? 5 : 2;
+      let current = 0;
+      logs.forEach(l => {
+        const h = parseISO(l.timestamp).getHours();
+        if (h >= 0 && h <= 5) current++;
+      });
+      return {
+        title: "Night Owl",
+        desc: `Log progress ${target} times during late night hours (Midnight - 5AM)`,
+        target, current, type: 'entries' as const, reward: baseReward * 1.5
+      };
+    },
+    () => {
+      // Consistent Consumer
+      const target = timeframe === 'monthly' ? 15 : 4;
+      const days = new Set(logs.map(l => format(parseISO(l.timestamp), "yyyy-MM-dd"))).size;
+      return {
+        title: "Consistent Consumer",
+        desc: `Log progress on ${target} different days`,
+        target, current: days, type: 'entries' as const, reward: baseReward * 2
+      };
+    }
+  ];
+
+  // Shuffle templates array based on RNG
+  const shuffled = [...templates].sort(() => rng() - 0.5);
+  
+  for (let i = 0; i < count; i++) {
+    const generator = shuffled[i % shuffled.length];
+    const data = generator();
+    
+    quests.push({
+      id: `${timeId}-${i}`,
+      type: timeframe,
+      title: data.title,
+      description: data.desc + ` this ${timeframe.replace('ly', '')}.`,
+      targetAmount: data.target,
+      currentAmount: Math.floor(data.current),
+      expReward: Math.floor(data.reward),
+      metric: data.type,
+      isCompleted: Math.floor(data.current) >= data.target,
+      isFailed: false
+    });
+  }
+}

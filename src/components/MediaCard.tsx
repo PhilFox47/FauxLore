@@ -8,9 +8,10 @@ interface MediaCardProps {
   item: MediaItem;
   onEdit: (item: MediaItem) => void;
   onLogProgress: (item: MediaItem) => void;
+  onViewDetails?: (item: MediaItem) => void;
 }
 
-export function MediaCard({ item, onEdit, onLogProgress }: MediaCardProps) {
+export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaCardProps) {
   const metricType = getMetricForType(item.mediaType);
   const colors = MEDIA_COLORS[item.mediaType];
   
@@ -83,10 +84,19 @@ export function MediaCard({ item, onEdit, onLogProgress }: MediaCardProps) {
       <span className={cn("text-[8px] md:text-[10px] font-bold uppercase tracking-wider mb-1 line-clamp-1 mt-1", colors.text)}>
         {item.status} • {item.mediaType} {item.season ? `• S${item.season}` : ''} {item.year ? `• ${item.year}` : ''}
       </span>
-      <h3 className="text-base md:text-xl font-bold mb-1 line-clamp-2 min-h-[2.5rem] md:min-h-[3.5rem] pr-2" title={item.title}>{item.title}</h3>
+      <h3 
+        className="text-base md:text-xl font-bold mb-1 line-clamp-2 min-h-[2.5rem] md:min-h-[3.5rem] pr-2 cursor-pointer hover:text-indigo-400 transition-colors" 
+        title={item.title}
+        onClick={() => onViewDetails?.(item)}
+      >
+        {item.title}
+      </h3>
       <p className="text-zinc-500 text-[10px] md:text-xs mb-3 md:mb-4 italic line-clamp-1">{item.creator || 'Unknown Creator'}</p>
       
-      <div className="aspect-[2/3] bg-zinc-800 rounded-lg md:rounded-xl relative w-full overflow-hidden shadow-xl shrink-0 mb-3 md:mb-4">
+      <div 
+        className="aspect-[2/3] bg-zinc-800 rounded-lg md:rounded-xl relative w-full overflow-hidden shadow-xl shrink-0 mb-3 md:mb-4 cursor-pointer"
+        onClick={() => onViewDetails?.(item)}
+      >
         <div className="absolute top-0 right-0 z-20 flex flex-col items-end opacity-90 hover:opacity-100 transition-opacity">
           {item.userRating != null && (
             <div className="bg-amber-500/80 backdrop-blur-sm text-black px-1.5 md:px-2 py-0.5 md:py-1 text-xs rounded-bl-lg md:rounded-bl-xl shadow-lg flex flex-col items-end gap-0.5 min-w-[2rem] md:min-w-[2.5rem]">

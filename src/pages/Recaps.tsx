@@ -23,7 +23,7 @@ type Timeframe = 'week' | 'month' | 'year';
 export function Recaps() {
   const { media, logs, settings } = useMediaContext();
   const [timeframe, setTimeframe] = useState<Timeframe>('week');
-  const [offsetOffset, setOffsetOffset] = useState(0); // 0 = current, 1 = previous, etc.
+  const [offsetOffset, setOffsetOffset] = useState(1); // 1 = previous, 2 = two ago, etc.
   
   // Filter out historical dummy dates (1970)
   const validLogs = useMemo(() => {
@@ -66,21 +66,18 @@ export function Recaps() {
   }, [activeLogs, media, settings]);
 
   const handlePrevious = () => setOffsetOffset(p => p + 1);
-  const handleNext = () => setOffsetOffset(p => Math.max(0, p - 1));
+  const handleNext = () => setOffsetOffset(p => Math.max(1, p - 1));
 
   const formatIntervalLabel = () => {
     if (timeframe === 'week') {
-      if (offsetOffset === 0) return 'This Week';
       if (offsetOffset === 1) return 'Last Week';
       return `${format(currentInterval.start, 'MMM d')} - ${format(currentInterval.end, 'MMM d, yyyy')}`;
     }
     if (timeframe === 'month') {
-      if (offsetOffset === 0) return 'This Month';
       if (offsetOffset === 1) return 'Last Month';
       return format(currentInterval.start, 'MMMM yyyy');
     }
     if (timeframe === 'year') {
-      if (offsetOffset === 0) return 'This Year';
       if (offsetOffset === 1) return 'Last Year';
       return format(currentInterval.start, 'yyyy');
     }
@@ -101,7 +98,7 @@ export function Recaps() {
               {(['week', 'month', 'year'] as Timeframe[]).map(t => (
                  <button
                    key={t}
-                   onClick={() => { setTimeframe(t); setOffsetOffset(0); }}
+                   onClick={() => { setTimeframe(t); setOffsetOffset(1); }}
                    className={`px-4 py-1.5 rounded-lg text-sm font-bold capitalize transition-all ${timeframe === t ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}
                  >
                    {t}
@@ -109,17 +106,37 @@ export function Recaps() {
               ))}
            </div>
            
-           <div className="flex items-center gap-3 bg-black/40 px-2 py-1 rounded-xl border border-white/5">
+           <div className="flex items-center gap-3 bg-black/40 px-2 py-1 rounded-xl border border-white/5 mr-4">
               <button onClick={handlePrevious} className="p-1 md:p-2 text-zinc-400 hover:text-white transition-colors"><ChevronLeft className="w-5 h-5"/></button>
               <span className="text-sm font-bold text-white min-w-[120px] text-center">{formatIntervalLabel()}</span>
               <button 
                 onClick={handleNext} 
-                disabled={offsetOffset === 0} 
-                className={`p-1 md:p-2 transition-colors ${offsetOffset === 0 ? 'text-zinc-800 cursor-not-allowed' : 'text-zinc-400 hover:text-white'}`}
+                disabled={offsetOffset === 1} 
+                className={`p-1 md:p-2 transition-colors ${offsetOffset === 1 ? 'text-zinc-800 cursor-not-allowed' : 'text-zinc-400 hover:text-white'}`}
               >
                 <ChevronRight className="w-5 h-5"/>
               </button>
            </div>
+
+           <button
+             onClick={() => {
+               // html2canvas wrapper
+               const element = document.getElementById('recap-canvas-target');
+               if (element) {
+                 import('html2canvas').then(html2canvas => {
+                   html2canvas.default(element, { backgroundColor: '#09090B' }).then(canvas => {
+                     const link = document.createElement('a');
+                     link.download = `FauxLore-${timeframe}-recap.png`;
+                     link.href = canvas.toDataURL();
+                     link.click();
+                   });
+                 });
+               }
+             }}
+             className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-xl font-medium transition-colors text-sm border border-white/10 hidden md:block whitespace-nowrap"
+           >
+             Get Canvas
+           </button>
         </div>
       </div>
 
@@ -127,6 +144,7 @@ export function Recaps() {
       <div className="flex-1 overflow-y-auto no-scrollbar relative p-4 md:p-8">
          <AnimatePresence mode="wait">
             <motion.div
+               id="recap-canvas-target"
                key={`${timeframe}-${offsetOffset}`}
                initial={{ opacity: 0, y: 20 }}
                animate={{ opacity: 1, y: 0 }}

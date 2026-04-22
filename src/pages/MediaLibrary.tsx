@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useMediaContext } from '../contexts/MediaContext';
 import { MediaCard } from '../components/MediaCard';
 import { MediaFormModal } from '../components/MediaFormModal';
+import { MediaDetailModal } from '../components/MediaDetailModal';
 import { ProgressModal } from '../components/ProgressModal';
 import { FilterSortBar } from '../components/FilterSortBar';
 import { useMediaFilterSort } from '../hooks/useMediaFilterSort';
@@ -11,10 +12,13 @@ import { Plus, Search } from 'lucide-react';
 
 export function MediaLibrary() {
   const { mediaType } = useParams<{ mediaType: string }>();
-  const { media, saveMediaItem, addLog, deleteMediaItem } = useMediaContext();
+  const { media, logs, saveMediaItem, addLog, deleteMediaItem } = useMediaContext();
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MediaItem | undefined>(undefined);
+  
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [detailItem, setDetailItem] = useState<MediaItem | null>(null);
   
   const [isProgressOpen, setIsProgressOpen] = useState(false);
   const [progressItem, setProgressItem] = useState<MediaItem | null>(null);
@@ -36,6 +40,11 @@ export function MediaLibrary() {
   const handleEdit = (item: MediaItem) => {
     setEditingItem(item);
     setIsFormOpen(true);
+  };
+
+  const handleViewDetails = (item: MediaItem) => {
+    setDetailItem(item);
+    setIsDetailOpen(true);
   };
 
   const handleAddNew = () => {
@@ -100,15 +109,28 @@ export function MediaLibrary() {
               item={item} 
               onEdit={handleEdit} 
               onLogProgress={handleLogProgress}
+              onViewDetails={handleViewDetails}
             />
           ))}
         </div>
       )}
 
       {/* Modals */}
+      <MediaDetailModal
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        item={detailItem}
+        logs={logs.filter(l => l.mediaId === detailItem?.id)}
+        onEdit={(item) => {
+          setIsDetailOpen(false);
+          handleEdit(item);
+        }}
+      />
+
       <MediaFormModal 
         isOpen={isFormOpen} 
         initialData={editingItem} 
+
         onClose={() => setIsFormOpen(false)} 
         onSave={saveMediaItem} 
         onDelete={deleteMediaItem}

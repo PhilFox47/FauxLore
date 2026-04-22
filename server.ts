@@ -99,23 +99,16 @@ async function startServer() {
       tmdbApiKey TEXT,
       hardcoverApiKey TEXT,
       timezone TEXT,
-      masterPageConfig TEXT
+      masterPageConfig TEXT,
+      yearlyGoals TEXT
     );
   `);
 
-  // Migration step: Add userId to existing tables if missing
-  try {
-    db.prepare("ALTER TABLE media ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run();
-    console.log("Migration: Added userId to media table");
-  } catch (e) {
-    // Column already exists or table issue, ignore safely
-  }
-  try {
-    db.prepare("ALTER TABLE logs ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run();
-    console.log("Migration: Added userId to logs table");
-  } catch (e) {
-    // Column already exists
-  }
+  // Migration steps
+  try { db.prepare("ALTER TABLE media ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE logs ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE settings ADD COLUMN questDifficulty REAL").run(); } catch (e) {} // old
+  try { db.prepare("ALTER TABLE settings ADD COLUMN yearlyGoals TEXT").run(); console.log("Migration: Added yearlyGoals"); } catch (e) {}
   
   const normalizeMedia = (row: any) => ({
     ...row,
@@ -257,8 +250,11 @@ async function startServer() {
       const mediaRow = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(log.mediaId, userId);
       if (mediaRow) {
         const type = log.metricType;
+        const now = new Date().toISOString();
         if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {
-          db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ? WHERE id = ?`).run(log.delta, log.mediaId);
+          db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, updatedAt = ? WHERE id = ? AND userId = ?`).run(log.delta, now, log.mediaId, userId);
+        } else {
+          db.prepare(`UPDATE media SET updatedAt = ? WHERE id = ? AND userId = ?`).run(now, log.mediaId, userId);
         }
       }
       res.json(db.prepare('SELECT * FROM logs WHERE id = ?').get(log.id));
@@ -272,7 +268,8 @@ async function startServer() {
       if (!row) return res.json({ userId });
       res.json({
         ...row,
-        masterPageConfig: row.masterPageConfig ? JSON.parse(row.masterPageConfig) : undefined
+        masterPageConfig: row.masterPageConfig ? JSON.parse(row.masterPageConfig) : undefined,
+        yearlyGoals: row.yearlyGoals ? JSON.parse(row.yearlyGoals) : undefined
       });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -283,15 +280,16 @@ async function startServer() {
       const userId = settings.userId || 'default_user';
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, timezone, masterPageConfig)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @timezone, @masterPageConfig)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, timezone, masterPageConfig, yearlyGoals)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @timezone, @masterPageConfig, @yearlyGoals)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
           tmdbApiKey=excluded.tmdbApiKey,
           hardcoverApiKey=excluded.hardcoverApiKey,
           timezone=excluded.timezone,
-          masterPageConfig=excluded.masterPageConfig
+          masterPageConfig=excluded.masterPageConfig,
+          yearlyGoals=excluded.yearlyGoals
       `).run({
         userId: userId,
         igdbClientId: settings.igdbClientId || null,
@@ -299,7 +297,8 @@ async function startServer() {
         tmdbApiKey: settings.tmdbApiKey || null,
         hardcoverApiKey: settings.hardcoverApiKey || null,
         timezone: settings.timezone || null,
-        masterPageConfig: settings.masterPageConfig ? JSON.stringify(settings.masterPageConfig) : null
+        masterPageConfig: settings.masterPageConfig ? JSON.stringify(settings.masterPageConfig) : null,
+        yearlyGoals: settings.yearlyGoals ? JSON.stringify(settings.yearlyGoals) : null
       });
       
       const saved: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId);

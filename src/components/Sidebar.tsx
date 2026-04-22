@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, Settings, X, Presentation } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Settings, X, Presentation, BookOpen, Dice5, Shield } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
 import { MEDIA_COLORS } from '../types/schema';
@@ -12,6 +12,9 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
 
   const mainItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: 'Lorekeeper', path: '/lorekeeper', icon: Shield },
+    { name: 'Lorebook', path: '/lorebook', icon: BookOpen },
+    { name: 'Roulette', path: '/roulette', icon: Dice5 },
     { name: 'Statistics', path: '/stats', icon: BarChart3 },
     { name: 'Recaps', path: '/recaps', icon: Presentation },
   ];

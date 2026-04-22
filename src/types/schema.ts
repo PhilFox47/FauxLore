@@ -83,6 +83,7 @@ export interface Settings {
   tmdbApiKey?: string;
   hardcoverApiKey?: string;
   timezone?: string;
+  yearlyGoals?: Partial<Record<MediaType, number>>;
   masterPageConfig?: {
     gamePagesPerHour?: number; // 5 mins = 1 page -> 12 pages per hr
     vnPagesPerHour?: number; // 2.5 mins = 1 page -> 24 pages per hr

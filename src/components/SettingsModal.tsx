@@ -15,6 +15,15 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     tmdbApiKey: '',
     hardcoverApiKey: '',
     timezone: '',
+    yearlyGoals: {
+      'Game': 100,
+      'Book': 5000,
+      'Visual Novel': 50,
+      'Manga': 200,
+      'Series': 100,
+      'Movie': 20,
+      'Comic': 100
+    } as Record<string, number>,
     gamePagesPerHour: 12,
     vnPagesPerHour: 24,
     mangaPagesPerChapter: 5,
@@ -38,6 +47,15 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           tmdbApiKey: settings.tmdbApiKey || '',
           hardcoverApiKey: settings.hardcoverApiKey || '',
           timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+          yearlyGoals: {
+            'Game': settings.yearlyGoals?.['Game'] ?? 100,
+            'Book': settings.yearlyGoals?.['Book'] ?? 5000,
+            'Visual Novel': settings.yearlyGoals?.['Visual Novel'] ?? 50,
+            'Manga': settings.yearlyGoals?.['Manga'] ?? 200,
+            'Series': settings.yearlyGoals?.['Series'] ?? 100,
+            'Movie': settings.yearlyGoals?.['Movie'] ?? 20,
+            'Comic': settings.yearlyGoals?.['Comic'] ?? 100
+          },
           gamePagesPerHour: settings.masterPageConfig?.gamePagesPerHour ?? 12,
           vnPagesPerHour: settings.masterPageConfig?.vnPagesPerHour ?? 24,
           mangaPagesPerChapter: settings.masterPageConfig?.mangaPagesPerChapter ?? 5,
@@ -58,10 +76,21 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, step } = e.target;
     // Allow float inputs for step decimals
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'number' ? (step ? parseFloat(value) : parseInt(value, 10)) : value
-    }));
+    if (name.startsWith('yearly__')) {
+       const key = name.replace('yearly__', '');
+       setFormData(prev => ({
+         ...prev,
+         yearlyGoals: {
+           ...prev.yearlyGoals,
+           [key]: type === 'number' ? (step ? parseFloat(value) : parseInt(value, 10)) : value
+         }
+       }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'number' ? (step ? parseFloat(value) : parseInt(value, 10)) : value
+      }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -84,7 +113,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           episodesWatchedMultiplier: formData.episodesWatchedMultiplier,
           moviePagesPerMovie: formData.moviePagesPerMovie,
           runtimeMinutesPerPage: formData.runtimeMinutesPerPage
-        }
+        },
+        yearlyGoals: formData.yearlyGoals
       });
       await refreshData();
       onClose();
@@ -133,6 +163,36 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     placeholder="e.g. America/Los_Angeles"
                   />
                   <p className="text-[10px] text-zinc-500 mt-1">Used for syncing logs to accurate local dates.</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                  <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">RPG Progression System</h3>
+                </div>
+                <p className="text-xs text-zinc-500 mb-2">Configure your Yearly goals per Media Type. These targets dynamically influence your weekly, monthly, and yearly quests.</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {Object.entries({
+                     'Game': { label: 'Games', unit: 'Hours Played' },
+                     'Book': { label: 'Books', unit: 'Pages Read' },
+                     'Visual Novel': { label: 'Visual Novels', unit: 'Hours Played' },
+                     'Manga': { label: 'Manga', unit: 'Chapters Read' },
+                     'Series': { label: 'Series', unit: 'Episodes Watched' },
+                     'Movie': { label: 'Movies', unit: 'Movies Watched' },
+                     'Comic': { label: 'Comics', unit: 'Issues Read' }
+                  }).map(([key, config]) => (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">{config.label} ({config.unit})</label>
+                      <input 
+                        type="number"
+                        name={`yearly__${key}`}
+                        value={formData.yearlyGoals[key as keyof typeof formData.yearlyGoals]}
+                        onChange={handleChange}
+                        className="input-field" 
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
 
