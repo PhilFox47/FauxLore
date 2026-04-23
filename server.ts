@@ -414,6 +414,18 @@ async function startServer() {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  app.delete("/api/ai-text", (req, res) => {
+    try {
+      const key = req.query.key as string;
+      if (key) {
+        db.prepare('DELETE FROM ai_text_cache WHERE key = ?').run(key);
+      } else {
+        db.prepare('DELETE FROM ai_text_cache').run();
+      }
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   // API Routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });

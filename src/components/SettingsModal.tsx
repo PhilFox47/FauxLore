@@ -84,11 +84,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     // Allow float inputs for step decimals
     if (name.startsWith('yearly__')) {
        const key = name.replace('yearly__', '');
+       const numValue = step ? parseFloat(value) : parseInt(value, 10);
        setFormData(prev => ({
          ...prev,
          yearlyGoals: {
            ...prev.yearlyGoals,
-           [key]: type === 'number' ? (step ? parseFloat(value) : parseInt(value, 10)) : value
+           [key]: isNaN(numValue) ? 0 : numValue
          }
        }));
     } else {
@@ -124,7 +125,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     }
   };
 
-  const handleFixFallbacks = async () => {
+  const handleFixFallbacks = async (isForce = false) => {
     if (!formData.nanoGptApiKey) {
       setError("Please save your Nano-GPT API Key first.");
       return;
@@ -134,18 +135,22 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setIsFixing(true);
 
     try {
+      if (isForce) {
+        // Option to fully clear but maybe just overwriting during loop is safer if we want to selectively force.
+        // Actually, let's just let it overwrite.
+      }
       // Must save settings first to ensure model/API key are fresh internally?
       // Actually we can pass formData.nanoGptApiKey and formData.nanoGptModel directly.
       const apiKey = formData.nanoGptApiKey;
       const model = formData.nanoGptModel || 'gpt-4o-mini';
 
       const rpgState = calculateRPGState(media, logs, settings);
-      const systemPrompt = "You are FauxLore, an RPG media tracking system. Bring life to the text you're asked to generate. Make it epic, quirky, or flavorful.";
+      const systemPrompt = "You are FauxLore, a helpful and natural media tracking assistant. Keep your tone conversational, friendly, and grounded. No epic RPG or fantasy roleplay unless explicitly asked.";
 
       // 1. RPG Title
       const titleKey = `rpg_title_${rpgState.level}`;
-      if (!aiTextCache[titleKey]) {
-        const prompt = `The user has reached Level ${rpgState.level} with the base title "${rpgState.className}". Generate a creative, singular title block for them. NO extra comments, just the title.`;
+      if (!aiTextCache[titleKey] || isForce) {
+        const prompt = `The user is Level ${rpgState.level} with the base title "${rpgState.className}". Generate a creative, punchy, and natural title for them. NO extra comments, just the title. 1-4 words. Avoid fantasy clichés.`;
         const result = await generateText(apiKey, model, systemPrompt, prompt);
         await saveAiText(titleKey, result);
       }
@@ -153,14 +158,14 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       // 2. Quests
       for (const quest of rpgState.quests) {
         const qTitleKey = `quest_title_${quest.id}`;
-        if (!aiTextCache[qTitleKey]) {
-          const result = await generateText(apiKey, model, systemPrompt, `Rewrite this RPG Quest Title to sound epic and fun: "${quest.title}". Give ONLY the title.`);
+        if (!aiTextCache[qTitleKey] || isForce) {
+          const result = await generateText(apiKey, model, systemPrompt, `Rewrite this Quest Title to sound natural, conversational and motivating. DON'T use RPG tropes like 'Saga', 'Undying', 'Eternal', 'Valor'. Keep it simple and human. Original: "${quest.title}". Give ONLY the title.`);
           await saveAiText(qTitleKey, result);
         }
 
         const qDescKey = `quest_desc_${quest.id}`;
-        if (!aiTextCache[qDescKey]) {
-          const result = await generateText(apiKey, model, systemPrompt, `Rewrite this RPG Quest Description to sound epic and fun: "${quest.description}". Give ONLY the description.`);
+        if (!aiTextCache[qDescKey] || isForce) {
+          const result = await generateText(apiKey, model, systemPrompt, `Rewrite this Quest Description to sound natural and friendly, like a helpful friend encouraging you to read or play. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Example: 'Time to read some good books! Read 100 pages this week.' Original: "${quest.description}". Give ONLY the description.`);
           await saveAiText(qDescKey, result);
         }
       }
@@ -494,15 +499,26 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   <p className="text-zinc-300 text-sm mb-3">
                     If Nano-GPT failed to generate dynamic text earlier, you can force it to attempt replacing fallback texts here.
                   </p>
-                  <button
-                    type="button"
-                    onClick={handleFixFallbacks}
-                    disabled={isFixing}
-                    className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-lg transition-colors border border-white/10 disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${isFixing ? 'animate-spin' : ''}`} />
-                    {isFixing ? 'Fixing Fallbacks...' : 'Fix Fallbacks'}
-                  </button>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleFixFallbacks(false)}
+                      disabled={isFixing}
+                      className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-lg transition-colors border border-white/10 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isFixing ? 'animate-spin' : ''}`} />
+                      {isFixing ? 'Generating...' : 'Fix Missing AI Text'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleFixFallbacks(true)}
+                      disabled={isFixing}
+                      className="flex items-center gap-2 px-4 py-2 bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 font-bold text-sm rounded-lg transition-colors border border-orange-500/30 disabled:opacity-50"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Force Rewrite All RPG Lore
+                    </button>
+                  </div>
                   {fixWarning && (
                     <p className={`mt-3 text-sm font-medium ${fixWarning.startsWith('Successfully') ? 'text-emerald-400' : 'text-red-400'}`}>
                       {fixWarning}

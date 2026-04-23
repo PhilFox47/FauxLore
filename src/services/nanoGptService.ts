@@ -10,7 +10,7 @@ export async function generateAiRecapText(apiKey: string, model: string, prompt:
     body: JSON.stringify({
       model: model || "gpt-4o-mini", // Cost efficient model fallback
       messages: [
-        { role: "system", content: "You are FauxLore's creative recap generator. Keep it engaging, flavorful, and match the 'Faux Brand' identity (quirky, tracking enthusiast, fun). Generate a succinct JSON response containing exactly two fields: 'title' (a creative title for the recap, string) and 'summary' (a highly detailed, Markdown-formatted narrative summarizing the data with multiple paragraphs, string)." },
+        { role: "system", content: "You are FauxLore's creative recap generator. Keep it engaging, flavorful, and match the 'Faux Brand' identity (quirky, tracking enthusiast, fun). Generate a succinct JSON response containing exactly two fields: 'title' (a punchy, creative title of 1-5 words maximum, string) and 'summary' (a highly detailed, Markdown-formatted narrative summarizing the data with multiple paragraphs, string)." },
         { role: "user", content: prompt }
       ],
       response_format: { type: "json_object" }

@@ -130,11 +130,12 @@ Total Logs: ${activeLogs.length}
       const aiResponse = await generateAiRecapText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', `Based on the following data, generate a title and a creative, highly detailed, and deeply flavorful summary of this ${timeframe}'s media consumption. 
       
 CRITICAL INSTRUCTIONS:
-1. Format your summary beautifully using Markdown (bolding, italics, blockquotes, horizontal rules, or bullet points).
-2. Write a detailed multi-paragraph narrative (Weekly: 3-4 paragraphs, Monthly/Yearly: 5-7 paragraphs) that feels like an epic RPG quest completion log.
-3. YOU MUST directly weave the SPECIFIC titles of the media consumed. 
-4. DO NOT assume a media item is completed unless it appears in the 'Media Completed' list. If it is only in 'Media In-Progress', describe the ongoing journey, not the conclusion.
-5. Ground every paragraph in the actual lore or theme of the titles provided!
+1. TITLE: Must be a punchy name (1-5 words max). DO NOT include descriptions, dashes, or full sentences in the title field. Example: 'The Crimson Chronicles' or 'Path of the Initiate'.
+2. SUMMARY FORMAT: Format your summary beautifully using Markdown (bolding, italics, blockquotes, horizontal rules, or bullet points).
+3. NARRATIVE: Write a detailed multi-paragraph narrative (Weekly: 3-4 paragraphs, Monthly/Yearly: 5-7 paragraphs) that feels like an epic RPG quest completion log.
+4. WEAVE TITLES: YOU MUST directly weave the SPECIFIC titles of the media consumed into the narrative. 
+5. ACCURACY: DO NOT assume a media item is completed unless it appears in the 'Media Completed' list. If it is only in 'Media In-Progress', describe the ongoing journey, not the conclusion.
+6. LORE: Ground every paragraph in the actual lore or theme of the titles provided!
 
 Context: ${promptContext}`);
       

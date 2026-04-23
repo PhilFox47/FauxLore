@@ -143,5 +143,11 @@ export const DatabaseService = {
       body: JSON.stringify({ key, value })
     });
     if (!res.ok) throw new Error('Failed to save AI text');
+  },
+  
+  async clearAiText(key?: string): Promise<void> {
+    const url = key ? `/api/ai-text?key=${encodeURIComponent(key)}` : '/api/ai-text';
+    const res = await fetch(url, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to clear AI text');
   }
 };

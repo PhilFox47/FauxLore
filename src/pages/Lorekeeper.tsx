@@ -1,11 +1,14 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { calculateRPGState } from '../lib/rpgSystem';
-import { Shield, Swords, Award, TrendingDown, CheckCircle2, CircleDashed, Flame } from 'lucide-react';
+import { Shield, Swords, Award, TrendingDown, CheckCircle2, CircleDashed, Flame, RefreshCw, Sparkles } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { generateText } from '../services/nanoGptService';
 
 export function Lorekeeper() {
-  const { media, logs, settings, aiTextCache } = useMediaContext();
+  const { media, logs, settings, aiTextCache, saveAiText, refreshData } = useMediaContext();
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  
   const rpgState = useMemo(() => calculateRPGState(media, logs, settings), [media, logs, settings]);
 
   const weeklyQuests = rpgState.quests.filter(q => q.type === 'weekly');
@@ -16,14 +19,69 @@ export function Lorekeeper() {
      return aiTextCache[`rpg_title_${rpgState.level}`] || rpgState.className;
   };
 
+  const handleRegenerate = async () => {
+    if (!settings?.nanoGptApiKey) {
+      alert("Please configure your Nano-GPT API Key in Settings first.");
+      return;
+    }
+    
+    setIsRegenerating(true);
+    try {
+      const apiKey = settings.nanoGptApiKey;
+      const model = settings.nanoGptModel || 'gpt-4o-mini';
+      const systemPrompt = "You are FauxLore, a helpful and natural media tracking assistant. Keep your tone conversational, friendly, and grounded. No epic RPG or fantasy roleplay unless explicitly asked.";
+
+      // 1. RPG Title
+      const titleKey = `rpg_title_${rpgState.level}`;
+      const titlePrompt = `The user is Level ${rpgState.level} with the base title "${rpgState.className}". Generate a creative, punchy, and natural title for them. NO extra comments, just the title. 1-4 words. Avoid fantasy clichés.`;
+      const titleRes = await generateText(apiKey, model, systemPrompt, titlePrompt);
+      await saveAiText(titleKey, titleRes);
+
+      // 2. Quests
+      for (const quest of rpgState.quests) {
+        // Title
+        const qTitleKey = `quest_title_${quest.id}`;
+        const qTitleRes = await generateText(apiKey, model, systemPrompt, `Rewrite this Quest Title to sound natural, conversational and motivating. DON'T use RPG tropes like 'Saga', 'Undying', 'Eternal', 'Valor'. Keep it simple and human. Original: "${quest.title}". Give ONLY the title.`);
+        await saveAiText(qTitleKey, qTitleRes);
+
+        // Description
+        const qDescKey = `quest_desc_${quest.id}`;
+        const qDescRes = await generateText(apiKey, model, systemPrompt, `Rewrite this Quest Description to sound natural and friendly, like a helpful friend encouraging you to read or play. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Example: 'Time to read some good books! Read 100 pages this week.' Original: "${quest.description}". Give ONLY the description.`);
+        await saveAiText(qDescKey, qDescRes);
+      }
+      
+      await refreshData();
+      alert("All Lore and Quests have been regenerated with a natural tone!");
+    } catch (e: any) {
+      alert("Error regenerating content: " + e.message);
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-12">
-      <header className="mb-8">
-        <h2 className="text-3xl font-bold text-white flex items-center gap-3 tracking-tight">
-          <Shield className="w-8 h-8 text-orange-500" />
-          The Lorekeeper
-        </h2>
-        <p className="text-zinc-400 mt-2">Your RPG progress, active quests, and lifetime experience breakdown.</p>
+      <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <h2 className="text-3xl font-bold text-white flex items-center gap-3 tracking-tight">
+            <Shield className="w-8 h-8 text-orange-500" />
+            The Lorekeeper
+          </h2>
+          <p className="text-zinc-400 mt-2">Your RPG progress, active quests, and lifetime experience breakdown.</p>
+        </div>
+        
+        <button
+          onClick={handleRegenerate}
+          disabled={isRegenerating}
+          className="flex items-center gap-2 px-6 py-3 bg-zinc-900 border border-white/10 hover:border-orange-500/50 hover:bg-zinc-800 text-white rounded-2xl transition-all shadow-xl disabled:opacity-50"
+        >
+          {isRegenerating ? (
+            <RefreshCw className="w-5 h-5 animate-spin text-orange-500" />
+          ) : (
+            <Sparkles className="w-5 h-5 text-orange-500" />
+          )}
+          <span className="font-bold text-sm">Regenerate Flavor Text</span>
+        </button>
       </header>
 
       {/* Hero Overview */}

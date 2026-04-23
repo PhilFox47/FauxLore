@@ -117,25 +117,41 @@ export function Statistics() {
     };
   }, [filteredLogs, media, settings, mediaTypeFilter]);
 
-  // Library Composition Data
+  // Library Composition Data (Filter based on timeframe activity)
   const typeDistribution = useMemo(() => {
-    const counts = media.reduce((acc, current) => {
+    // Only count media that was active in the filtered timeframe
+    const activeMediaIds = new Set(filteredLogs.map(l => l.mediaId));
+    const activeMediaInTimeframe = media.filter(m => activeMediaIds.has(m.id));
+
+    const counts = activeMediaInTimeframe.reduce((acc, current) => {
       if (mediaTypeFilter !== 'All' && current.mediaType !== mediaTypeFilter) return acc;
       
-      const pages = calculateScaledPages(current, settings);
-      acc[current.mediaType] = (acc[current.mediaType] || 0) + pages;
+      // We only count the pages logged in this period for "Volume"
+      const activityInPeriod = filteredLogs
+        .filter(l => l.mediaId === current.id)
+        .reduce((sum, l) => sum + calculateScaledDelta(l.delta, current, settings), 0);
+      
+      if (activityInPeriod > 0) {
+        acc[current.mediaType] = (acc[current.mediaType] || 0) + activityInPeriod;
+      }
       return acc;
     }, {} as Record<string, number>);
     
     return Object.entries(counts)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [media, settings, mediaTypeFilter]);
+  }, [media, filteredLogs, settings, mediaTypeFilter]);
 
-  // Status Distribution Data
+  // Status Distribution Data (Filter based on timeframe activity)
   const statusDistribution = useMemo(() => {
-    const counts = media.reduce((acc, current) => {
+    // Only count media that had logs in the filtered timeframe
+    const activeMediaIds = new Set(filteredLogs.map(l => l.mediaId));
+    const activeMediaInTimeframe = media.filter(m => activeMediaIds.has(m.id));
+
+    const counts = activeMediaInTimeframe.reduce((acc, current) => {
       if (mediaTypeFilter !== 'All' && current.mediaType !== mediaTypeFilter) return acc;
+      
+      // Determine what status the item had *during* this period or at least it was active
       acc[current.status] = (acc[current.status] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
@@ -143,7 +159,7 @@ export function Statistics() {
     return Object.entries(counts)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [media, mediaTypeFilter]);
+  }, [media, filteredLogs, mediaTypeFilter]);
 
   const STATUS_COLORS: Record<string, string> = {
     'Active': '#10b981', // Emerald

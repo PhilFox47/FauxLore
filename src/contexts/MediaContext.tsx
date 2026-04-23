@@ -14,6 +14,7 @@ interface MediaContextType {
   addLog: (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string) => Promise<void>;
   saveAiRecap: (recap: any) => Promise<void>;
   saveAiText: (key: string, value: string) => Promise<void>;
+  clearAiTextCache: (key?: string) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -78,8 +79,13 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     await refreshData();
   }, [refreshData]);
 
+  const clearAiTextCache = useCallback(async (key?: string) => {
+    await DatabaseService.clearAiText(key);
+    await refreshData();
+  }, [refreshData]);
+
   return (
-    <MediaContext.Provider value={{ media, logs, settings, aiRecaps, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, saveAiRecap, saveAiText, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, aiRecaps, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, saveAiRecap, saveAiText, clearAiTextCache, isLoading }}>
       {children}
     </MediaContext.Provider>
   );
