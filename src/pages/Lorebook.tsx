@@ -34,7 +34,7 @@ export function Lorebook() {
       <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <h2 className="text-3xl font-bold text-white flex items-center gap-3 tracking-tight">
-            <BookOpen className="w-8 h-8 text-indigo-400" />
+            <BookOpen className="w-8 h-8 text-orange-400" />
             The Lorebook
           </h2>
           <p className="text-zinc-400 mt-2">Your complete journal across all media and universes.</p>
@@ -44,7 +44,7 @@ export function Lorebook() {
           <select 
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="bg-zinc-900 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
+            className="bg-zinc-900 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-orange-500"
           >
             <option value="All">All Types</option>
             <option value="Game">Games</option>
@@ -63,7 +63,7 @@ export function Lorebook() {
               placeholder="Search thoughts, media..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-zinc-900 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-white focus:outline-none focus:border-indigo-500 w-full"
+              className="bg-zinc-900 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-white focus:outline-none focus:border-orange-500 w-full"
             />
           </div>
         </div>

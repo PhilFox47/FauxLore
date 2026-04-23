@@ -15,8 +15,8 @@ export function Roulette() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentActionItem, setCurrentActionItem] = useState<MediaItem | null>(null);
 
-  // Consider things in Backlog (Planned) or On Hold, or maybe even Active with no updates
-  const validBacklog = useMemo(() => media.filter(m => m.status === 'Planned' || m.status === 'On Hold'), [media]);
+  // Consider things in Backlog (Planning only)
+  const validBacklog = useMemo(() => media.filter(m => m.status === 'Planning'), [media]);
 
   const spinRoulette = () => {
     if (validBacklog.length === 0) return;
@@ -95,14 +95,14 @@ export function Roulette() {
         <button 
           onClick={spinRoulette}
           disabled={validBacklog.length === 0}
-          className="bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white px-8 py-4 rounded-full font-black text-xl tracking-wider uppercase transition-all shadow-[0_0_40px_rgba(236,72,153,0.3)] hover:shadow-[0_0_60px_rgba(236,72,153,0.5)] hover:scale-105 active:scale-95 disabled:opacity-50 disabled:grayscale mb-10 flex items-center gap-3"
+          className="bg-gradient-to-r from-pink-600 to-orange-600 hover:from-pink-500 hover:to-orange-500 text-white px-8 py-4 rounded-full font-black text-xl tracking-wider uppercase transition-all shadow-[0_0_40px_rgba(249,115,22,0.3)] hover:shadow-[0_0_60px_rgba(249,115,22,0.5)] hover:scale-105 active:scale-95 disabled:opacity-50 disabled:grayscale mb-10 flex items-center gap-3"
         >
           <RefreshCw className="w-6 h-6" />
           Spin The Roulette
         </button>
 
         {validBacklog.length === 0 && (
-          <p className="text-zinc-500 text-sm italic mt-[-20px] mb-8">Your backlog ("Planned" or "On Hold") is empty.</p>
+          <p className="text-zinc-500 text-sm italic mt-[-20px] mb-8">Your backlog (media in "Planning" status) is empty.</p>
         )}
 
         {selectedCard && (
@@ -142,7 +142,7 @@ export function Roulette() {
            </div>
         ) : smartSuggestions.length === 0 ? (
           <div className="bg-zinc-900/40 border border-white/5 rounded-3xl p-12 text-center text-zinc-500 flex justify-center">
-            <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6">

@@ -5,18 +5,22 @@ import { Shield, Swords, Award, TrendingDown, CheckCircle2, CircleDashed, Flame 
 import { cn } from '../lib/utils';
 
 export function Lorekeeper() {
-  const { media, logs, settings } = useMediaContext();
+  const { media, logs, settings, aiTextCache } = useMediaContext();
   const rpgState = useMemo(() => calculateRPGState(media, logs, settings), [media, logs, settings]);
 
   const weeklyQuests = rpgState.quests.filter(q => q.type === 'weekly');
   const monthlyQuests = rpgState.quests.filter(q => q.type === 'monthly');
   const yearlyQuests = rpgState.quests.filter(q => q.type === 'yearly');
 
+  const getDynamicTitle = () => {
+     return aiTextCache[`rpg_title_${rpgState.level}`] || rpgState.className;
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-12">
       <header className="mb-8">
         <h2 className="text-3xl font-bold text-white flex items-center gap-3 tracking-tight">
-          <Shield className="w-8 h-8 text-indigo-500" />
+          <Shield className="w-8 h-8 text-orange-500" />
           The Lorekeeper
         </h2>
         <p className="text-zinc-400 mt-2">Your RPG progress, active quests, and lifetime experience breakdown.</p>
@@ -24,30 +28,30 @@ export function Lorekeeper() {
 
       {/* Hero Overview */}
       <section className="shrink-0 bg-zinc-900 border border-white/5 rounded-3xl p-8 relative overflow-hidden flex flex-col md:flex-row items-center gap-8">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-orange-500/10 rounded-full blur-[100px] pointer-events-none" />
         
         <div className="shrink-0 relative">
-          <div className="w-32 h-32 bg-zinc-950 rounded-3xl flex items-center justify-center border-4 border-indigo-500/50 shadow-[0_0_30px_rgba(99,102,241,0.3)] z-10 relative">
-            <Swords className="w-16 h-16 text-indigo-400" />
-            <div className="absolute -bottom-4 -right-4 bg-indigo-600 text-white text-base font-black px-4 py-1 rounded-full border-4 border-zinc-900 shadow-xl shadow-indigo-900/50">
+          <div className="w-32 h-32 bg-zinc-950 rounded-3xl flex items-center justify-center border-4 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.3)] z-10 relative">
+            <Swords className="w-16 h-16 text-orange-400" />
+            <div className="absolute -bottom-4 -right-4 bg-orange-600 text-white text-base font-black px-4 py-1 rounded-full border-4 border-zinc-900 shadow-xl shadow-orange-900/50">
               Lvl {rpgState.level}
             </div>
           </div>
         </div>
 
         <div className="flex-1 w-full z-10 text-center md:text-left">
-          <h3 className="text-4xl font-black text-white italic tracking-tight mb-2">{rpgState.className}</h3>
+          <h3 className="text-4xl font-black text-white italic tracking-tight mb-2">{getDynamicTitle()}</h3>
           <p className="text-zinc-400 text-lg font-medium mb-6">{rpgState.currentExp.toLocaleString()} Total EXP</p>
 
           <div className="flex justify-between items-end mb-2">
-            <span className="text-sm text-indigo-400 font-bold tracking-wider uppercase">Progress to Level {rpgState.level + 1}</span>
+            <span className="text-sm text-orange-400 font-bold tracking-wider uppercase">Progress to Level {rpgState.level + 1}</span>
             <div className="text-sm text-zinc-500 font-mono">
               {(rpgState.currentExp - rpgState.currentLevelExp).toLocaleString()} / {(rpgState.nextLevelExp - rpgState.currentLevelExp).toLocaleString()} EXP
             </div>
           </div>
           <div className="h-4 bg-zinc-950 rounded-full overflow-hidden shadow-inner border border-white/5 relative">
             <div 
-              className="absolute top-0 left-0 h-full bg-gradient-to-r from-indigo-600 to-purple-500 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
+              className="absolute top-0 left-0 h-full bg-gradient-to-r from-orange-600 to-orange-500 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(249,115,22,0.5)]" 
               style={{ width: `${Math.max(2, rpgState.expProgress * 100)}%` }} 
             />
           </div>
@@ -121,8 +125,12 @@ export function Lorekeeper() {
 }
 
 function QuestCard({ quest }: { quest: any }) {
+  const { aiTextCache } = useMediaContext();
   const percentage = Math.min(100, Math.max(0, (quest.currentAmount / quest.targetAmount) * 100));
   
+  const dynTitle = aiTextCache[`quest_title_${quest.id}`] || quest.title;
+  const dynDesc = aiTextCache[`quest_desc_${quest.id}`] || quest.description;
+
   return (
     <div className={cn(
       "p-6 rounded-2xl border relative overflow-hidden transition-all",
@@ -137,18 +145,18 @@ function QuestCard({ quest }: { quest: any }) {
       <div className="flex justify-between items-start mb-4 relative z-10">
         <div className="flex items-center gap-3">
           {quest.isCompleted ? (
-            <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+            <CheckCircle2 className="w-8 h-8 text-emerald-400 shrink-0" />
           ) : (
-            <CircleDashed className="w-8 h-8 text-zinc-600" />
+            <CircleDashed className="w-8 h-8 text-zinc-600 shrink-0" />
           )}
           <div>
-            <h5 className="font-bold text-white text-lg">{quest.title}</h5>
-            <p className="text-sm text-zinc-400">{quest.description}</p>
+            <h5 className="font-bold text-white text-lg leading-tight mb-1">{dynTitle}</h5>
+            <p className="text-sm text-zinc-400">{dynDesc}</p>
           </div>
         </div>
         <div className={cn(
           "px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase flex-shrink-0",
-          quest.isCompleted ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
+          quest.isCompleted ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-orange-500/20 text-orange-400 border border-orange-500/30"
         )}>
           +{quest.expReward} EXP
         </div>
@@ -165,7 +173,7 @@ function QuestCard({ quest }: { quest: any }) {
           <div 
             className={cn(
               "h-full rounded-full transition-all duration-1000",
-              quest.isCompleted ? "bg-emerald-500" : "bg-indigo-500"
+              quest.isCompleted ? "bg-emerald-500" : "bg-orange-500"
             )}
             style={{ width: `${percentage}%` }}
           />

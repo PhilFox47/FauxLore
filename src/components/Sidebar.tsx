@@ -33,7 +33,7 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
     <aside className="w-60 border-r border-white/10 flex flex-col p-6 h-full bg-[#09090B] text-zinc-400">
       <div className="flex items-center justify-between mb-10">
         <div className="flex items-center group cursor-pointer transition-opacity hover:opacity-80">
-          <img src="/logo.png" alt="FauxLore" className="h-8 w-auto object-contain" />
+          <img src="https://i.imgur.com/ZgTImal.png" alt="FauxLore" className="h-8 w-auto object-contain" />
         </div>
         {onCloseMobile && (
           <button onClick={onCloseMobile} className="md:hidden p-1 text-zinc-400 hover:text-white rounded-lg">
@@ -91,7 +91,7 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
         </div>
       </nav>
 
-      <button onClick={onOpenSettings} className="mt-auto flex items-center justify-center gap-2 w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium transition-all shadow-lg shadow-indigo-900/20">
+      <button onClick={onOpenSettings} className="mt-auto flex items-center justify-center gap-2 w-full py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-medium transition-all shadow-lg shadow-orange-900/20">
         <Settings className="w-4 h-4" />
         Settings
       </button>

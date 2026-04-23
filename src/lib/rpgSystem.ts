@@ -1,4 +1,4 @@
-import { MediaItem, ProgressLog, getMetricForType } from '../types/schema';
+import { MediaItem, ProgressLog, getMetricForType, MediaType } from '../types/schema';
 import { calculateScaledDelta } from './scaling';
 import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, differenceInDays } from 'date-fns';
 
@@ -98,18 +98,53 @@ export function calculateRPGState(media: MediaItem[], logs: ProgressLog[], setti
   const rngMonth = mulberry32(parseInt(currentMonthInfo.replace('-', '')));
   const rngYear = mulberry32(currentYear);
 
-  // Generate 8 Yearly (1 per media + 1 total)
-  generateYearlyQuests(quests, currentYearLogs, media, settings, currentYear.toString());
-  
-  // Generate 4 Monthly
-  generateIntervalQuests(quests, currentMonthLogs, media, settings, 'monthly', currentMonthInfo, 4, rngMonth);
-  
-  // Generate 2 Weekly
-  generateIntervalQuests(quests, currentWeekLogs, media, settings, 'weekly', currentWeekInfo, 2, rngWeek);
+  // 1. Gather all unique time intervals across all logs
+  const allYears = new Set<string>();
+  const allMonths = new Set<string>();
+  const allWeeks = new Set<string>();
 
-  quests.forEach(q => {
-    if (q.isCompleted) questExp += q.expReward;
+  validLogs.forEach(l => {
+    const d = parseISO(l.timestamp);
+    allYears.add(format(d, "yyyy"));
+    allMonths.add(format(d, "yyyy-MM"));
+    allWeeks.add(format(startOfWeek(d, { weekStartsOn: 1 }), "RRRR-II"));
   });
+
+  // Make sure current intervals are always included, even if no logs yet
+  allYears.add(currentYear.toString());
+  allMonths.add(currentMonthInfo);
+  allWeeks.add(currentWeekInfo);
+
+  // Helper arrays
+  // quests already declared above on line 95, we just reuse it or clear it. Wait, the above is:
+  // `const quests: Quest[] = [];` Let's just remove this redundant declaration.
+
+  // 2. Iterate backwards or just normally and compute
+  for (const year of Array.from(allYears)) {
+    const yearLogs = validLogs.filter(l => format(parseISO(l.timestamp), "yyyy") === year);
+    const tempQuests: Quest[] = [];
+    generateYearlyQuests(tempQuests, yearLogs, media, settings, year);
+    tempQuests.forEach(q => { if (q.isCompleted) questExp += q.expReward; });
+    if (year === currentYear.toString()) quests.push(...tempQuests);
+  }
+
+  for (const month of Array.from(allMonths)) {
+    const monthLogs = validLogs.filter(l => format(parseISO(l.timestamp), "yyyy-MM") === month);
+    const tempQuests: Quest[] = [];
+    const rng = mulberry32(parseInt(month.replace('-', '')));
+    generateIntervalQuests(tempQuests, monthLogs, media, settings, 'monthly', month, 4, rng);
+    tempQuests.forEach(q => { if (q.isCompleted) questExp += q.expReward; });
+    if (month === currentMonthInfo) quests.push(...tempQuests);
+  }
+
+  for (const week of Array.from(allWeeks)) {
+    const weekLogs = validLogs.filter(l => format(startOfWeek(parseISO(l.timestamp), { weekStartsOn: 1 }), "RRRR-II") === week);
+    const tempQuests: Quest[] = [];
+    const rng = mulberry32(parseInt(week.replace('-', '')));
+    generateIntervalQuests(tempQuests, weekLogs, media, settings, 'weekly', week, 2, rng);
+    tempQuests.forEach(q => { if (q.isCompleted) questExp += q.expReward; });
+    if (week === currentWeekInfo) quests.push(...tempQuests);
+  }
 
   const totalExp = Math.max(0, baseExp + questExp + decayExp + penaltyExp);
   const level = getLevelForExp(totalExp);
@@ -199,7 +234,7 @@ export function calculateNativeUnits(logs: ProgressLog[], media: MediaItem[], me
    }, 0);
 }
 
-function calculateMasterPages(logs: ProgressLog[], media: ReturnType<typeof getMediaItem>[], settings: any, specificType: MediaType | null = null) {
+function calculateMasterPages(logs: ProgressLog[], media: MediaItem[], settings: any, specificType: MediaType | null = null) {
   return logs.reduce((acc, log) => {
     const item = media.find(m => m.id === log.mediaId);
     if (!item || (specificType && item.mediaType !== specificType)) return acc;

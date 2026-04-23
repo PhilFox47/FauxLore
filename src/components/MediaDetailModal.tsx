@@ -106,7 +106,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
               <h3 className="text-sm font-bold text-zinc-500 mb-3 tracking-wider uppercase">Genres & Tags</h3>
               <div className="flex flex-wrap gap-2">
                 {item.genres.map((g, i) => <span key={i} className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">{g}</span>)}
-                {item.tags?.map((t, i) => <span key={i} className="text-xs px-2 py-1 bg-purple-500/10 text-purple-400 rounded border border-purple-500/20">{t}</span>)}
+                {item.tags?.map((t, i) => <span key={i} className="text-xs px-2 py-1 bg-orange-500/10 text-orange-400 rounded border border-orange-500/20">{t}</span>)}
               </div>
             </div>
           )}
@@ -123,11 +123,11 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                     <div className="absolute top-0 bottom-0 left-4 w-px bg-zinc-700/50" />
                     
                     <div className="flex items-center gap-3 mb-2 relative z-10 pl-4">
-                      <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)] -ml-[21px]" />
+                      <div className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] -ml-[21px]" />
                       <span className="text-xs font-mono text-zinc-400">
                         {new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
-                      <span className="text-xs font-bold text-indigo-400 ml-auto bg-indigo-500/10 px-2 py-0.5 rounded">
+                      <span className="text-xs font-bold text-orange-400 ml-auto bg-orange-500/10 px-2 py-0.5 rounded">
                         +{log.delta} {log.metricType}
                       </span>
                     </div>

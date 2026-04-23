@@ -85,7 +85,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
         {item.status} • {item.mediaType} {item.season ? `• S${item.season}` : ''} {item.year ? `• ${item.year}` : ''}
       </span>
       <h3 
-        className="text-base md:text-xl font-bold mb-1 line-clamp-2 min-h-[2.5rem] md:min-h-[3.5rem] pr-2 cursor-pointer hover:text-indigo-400 transition-colors" 
+        className="text-base md:text-xl font-bold mb-1 line-clamp-2 min-h-[2.5rem] md:min-h-[3.5rem] pr-2 cursor-pointer hover:text-orange-400 transition-colors" 
         title={item.title}
         onClick={() => onViewDetails?.(item)}
       >

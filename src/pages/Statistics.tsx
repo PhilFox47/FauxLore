@@ -164,7 +164,7 @@ export function Statistics() {
           <select 
             value={dateRange}
             onChange={(e) => setDateRange(e.target.value as DateRange)}
-            className="w-full sm:w-auto bg-[#18181b] border border-white/10 text-sm font-medium text-white rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+            className="w-full sm:w-auto bg-[#18181b] border border-white/10 text-sm font-medium text-white rounded-xl px-4 py-2.5 outline-none focus:border-orange-500 transition-colors cursor-pointer"
           >
             <option value="7days">Last 7 Days</option>
             <option value="30days">Last 30 Days</option>
@@ -175,7 +175,7 @@ export function Statistics() {
           <select 
             value={mediaTypeFilter}
             onChange={(e) => setMediaTypeFilter(e.target.value)}
-            className="w-full sm:w-auto bg-[#18181b] border border-white/10 text-sm font-medium text-white rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+            className="w-full sm:w-auto bg-[#18181b] border border-white/10 text-sm font-medium text-white rounded-xl px-4 py-2.5 outline-none focus:border-orange-500 transition-colors cursor-pointer"
           >
             {MEDIA_TYPES.map(t => (
               <option key={t} value={t}>{t === 'All' ? 'All Media Types' : t}</option>
@@ -187,7 +187,7 @@ export function Statistics() {
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-zinc-900/50 border border-white/5 p-5 rounded-2xl flex items-center gap-4">
-          <div className="p-3 bg-indigo-500/20 text-indigo-400 rounded-xl">
+          <div className="p-3 bg-orange-500/20 text-orange-400 rounded-xl">
             <DatabaseZap className="w-6 h-6" />
           </div>
           <div>
@@ -244,7 +244,7 @@ export function Statistics() {
         {/* Activity Chart */}
         <div className="col-span-12 lg:col-span-8 bg-zinc-900/50 border border-white/5 rounded-3xl p-6 flex flex-col min-h-[350px]">
           <h4 className="text-sm font-bold text-zinc-400 mb-6 flex items-center gap-2">
-             <BarChart3 className="w-4 h-4 text-indigo-400" />
+             <BarChart3 className="w-4 h-4 text-orange-400" />
              Activity Over Time (Master Pages)
           </h4>
           <div className="w-full flex-1 min-h-[250px]">

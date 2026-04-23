@@ -82,6 +82,8 @@ export interface Settings {
   igdbClientSecret?: string;
   tmdbApiKey?: string;
   hardcoverApiKey?: string;
+  nanoGptApiKey?: string;
+  nanoGptModel?: string;
   timezone?: string;
   yearlyGoals?: Partial<Record<MediaType, number>>;
   masterPageConfig?: {

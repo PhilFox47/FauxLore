@@ -1,19 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save } from 'lucide-react';
+import { X, Save, Sparkles, RefreshCw } from 'lucide-react';
 import { DatabaseService } from '../services/db';
 import { useMediaContext } from '../contexts/MediaContext';
+import { calculateRPGState } from '../lib/rpgSystem';
+import { generateText } from '../services/nanoGptService';
 
 interface SettingsModalProps {
   onClose: () => void;
 }
 
 export function SettingsModal({ onClose }: SettingsModalProps) {
-  const { refreshData } = useMediaContext();
+  const { media, logs, settings, aiTextCache, saveAiText, refreshData } = useMediaContext();
   const [formData, setFormData] = useState({
     igdbClientId: '',
     igdbClientSecret: '',
     tmdbApiKey: '',
     hardcoverApiKey: '',
+    nanoGptApiKey: '',
+    nanoGptModel: '',
     timezone: '',
     yearlyGoals: {
       'Game': 100,
@@ -46,6 +50,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           igdbClientSecret: settings.igdbClientSecret || '',
           tmdbApiKey: settings.tmdbApiKey || '',
           hardcoverApiKey: settings.hardcoverApiKey || '',
+          nanoGptApiKey: settings.nanoGptApiKey || '',
+          nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
           timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
           yearlyGoals: {
             'Game': settings.yearlyGoals?.['Game'] ?? 100,
@@ -93,6 +99,80 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     }
   };
 
+  const [isFixing, setIsFixing] = useState(false);
+  const [fixWarning, setFixWarning] = useState('');
+
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{success: boolean, message: string} | null>(null);
+
+  const handleTestConnection = async () => {
+    if (!formData.nanoGptApiKey) {
+      setTestResult({ success: false, message: "API Key is required" });
+      return;
+    }
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const apiKey = formData.nanoGptApiKey;
+      const model = formData.nanoGptModel || 'gpt-4o-mini';
+      await generateText(apiKey, model, 'You are a lively connection testing bot. Write exactly 2 words saying "Test Passed", nothing else.', 'Ping');
+      setTestResult({ success: true, message: "Connection successful! Model exists." });
+    } catch (e: any) {
+      setTestResult({ success: false, message: e.message || "Connection failed" });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleFixFallbacks = async () => {
+    if (!formData.nanoGptApiKey) {
+      setError("Please save your Nano-GPT API Key first.");
+      return;
+    }
+    setError(null);
+    setFixWarning('');
+    setIsFixing(true);
+
+    try {
+      // Must save settings first to ensure model/API key are fresh internally?
+      // Actually we can pass formData.nanoGptApiKey and formData.nanoGptModel directly.
+      const apiKey = formData.nanoGptApiKey;
+      const model = formData.nanoGptModel || 'gpt-4o-mini';
+
+      const rpgState = calculateRPGState(media, logs, settings);
+      const systemPrompt = "You are FauxLore, an RPG media tracking system. Bring life to the text you're asked to generate. Make it epic, quirky, or flavorful.";
+
+      // 1. RPG Title
+      const titleKey = `rpg_title_${rpgState.level}`;
+      if (!aiTextCache[titleKey]) {
+        const prompt = `The user has reached Level ${rpgState.level} with the base title "${rpgState.className}". Generate a creative, singular title block for them. NO extra comments, just the title.`;
+        const result = await generateText(apiKey, model, systemPrompt, prompt);
+        await saveAiText(titleKey, result);
+      }
+
+      // 2. Quests
+      for (const quest of rpgState.quests) {
+        const qTitleKey = `quest_title_${quest.id}`;
+        if (!aiTextCache[qTitleKey]) {
+          const result = await generateText(apiKey, model, systemPrompt, `Rewrite this RPG Quest Title to sound epic and fun: "${quest.title}". Give ONLY the title.`);
+          await saveAiText(qTitleKey, result);
+        }
+
+        const qDescKey = `quest_desc_${quest.id}`;
+        if (!aiTextCache[qDescKey]) {
+          const result = await generateText(apiKey, model, systemPrompt, `Rewrite this RPG Quest Description to sound epic and fun: "${quest.description}". Give ONLY the description.`);
+          await saveAiText(qDescKey, result);
+        }
+      }
+
+      setFixWarning("Successfully generated all missing dynamic texts!");
+    } catch (e: any) {
+      setFixWarning(`Stopped due to an error: ${e.message}`);
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -104,6 +184,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         igdbClientSecret: formData.igdbClientSecret,
         tmdbApiKey: formData.tmdbApiKey,
         hardcoverApiKey: formData.hardcoverApiKey,
+        nanoGptApiKey: formData.nanoGptApiKey,
+        nanoGptModel: formData.nanoGptModel,
         timezone: formData.timezone,
         masterPageConfig: {
           gamePagesPerHour: formData.gamePagesPerHour,
@@ -144,7 +226,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
           {isLoading ? (
             <div className="flex justify-center items-center py-20 text-zinc-500">
-              <div className="animate-spin w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full" />
+              <div className="animate-spin w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full" />
             </div>
           ) : (
             <form id="settings-form" onSubmit={handleSubmit} className="space-y-8">
@@ -365,7 +447,69 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       placeholder="Bearer ..."
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Nano-GPT API Key (AI Features)</label>
+                    <input 
+                      type="password"
+                      name="nanoGptApiKey"
+                      value={formData.nanoGptApiKey}
+                      onChange={handleChange}
+                      className="input-field" 
+                      placeholder="..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Nano-GPT Model</label>
+                    <input
+                      type="text"
+                      name="nanoGptModel"
+                      value={formData.nanoGptModel}
+                      onChange={handleChange}
+                      className="input-field"
+                      placeholder="gpt-4o-mini"
+                    />
+                  </div>
                 </div>
+
+                <div className="mt-4 flex flex-col items-start bg-zinc-900/50 border border-white/5 p-4 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleTestConnection}
+                      disabled={isTesting}
+                      className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-lg transition-colors border border-white/10 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isTesting ? 'animate-spin' : ''}`} />
+                      {isTesting ? 'Testing...' : 'Test Connection'}
+                    </button>
+                    {testResult && (
+                      <p className={`text-sm font-medium ${testResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {testResult.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-6 flex flex-col items-start bg-orange-500/5 border border-orange-500/20 p-4 rounded-xl">
+                  <p className="text-zinc-300 text-sm mb-3">
+                    If Nano-GPT failed to generate dynamic text earlier, you can force it to attempt replacing fallback texts here.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleFixFallbacks}
+                    disabled={isFixing}
+                    className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-lg transition-colors border border-white/10 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isFixing ? 'animate-spin' : ''}`} />
+                    {isFixing ? 'Fixing Fallbacks...' : 'Fix Fallbacks'}
+                  </button>
+                  {fixWarning && (
+                    <p className={`mt-3 text-sm font-medium ${fixWarning.startsWith('Successfully') ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {fixWarning}
+                    </p>
+                  )}
+                </div>
+
               </div>
             </form>
           )}
@@ -383,7 +527,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             type="submit" 
             form="settings-form"
             disabled={isLoading || isSaving}
-            className="flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-lg shadow-indigo-900/20"
+            className="flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-lg shadow-orange-900/20"
           >
             {isSaving ? (
               <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />

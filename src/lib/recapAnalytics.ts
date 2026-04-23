@@ -52,9 +52,12 @@ export function analyzeHabits(data: RecapAnalyticsData) {
   if (data.logs.length === 0) return null;
   
   const hourCounts = Array(24).fill(0);
+  const dayCounts = Array(7).fill(0); // 0 = Sunday
+  
   data.logs.forEach(l => {
     const d = new Date(l.timestamp);
     hourCounts[d.getHours()]++;
+    dayCounts[d.getDay()]++;
   });
 
   // Calculate generic shifts
@@ -64,15 +67,46 @@ export function analyzeHabits(data: RecapAnalyticsData) {
   const evening = hourCounts.slice(17, 22).reduce((a,b)=>a+b, 0); // 5pm - 10pm
 
   const total = data.logs.length;
-  if ((night / total) > 0.4) return { profile: 'Night Owl', desc: 'You thrive in the dark.' };
-  if ((morning / total) > 0.4) return { profile: 'Early Bird', desc: 'Dawn is your domain.' };
-  if ((afternoon / total) > 0.4) return { profile: 'Daywalker', desc: 'Prime daytime consumer.' };
-  if ((evening / total) > 0.4) return { profile: 'Evening Wind-Down', desc: 'Prime evening consumer.' };
-  return { profile: 'Chaotic Neutral', desc: 'You consume media at literally any hour unpredictably.' };
+  let profile = 'Chaotic Neutral';
+  let desc = 'You consume media at literally any hour unpredictably.';
+  
+  if ((night / total) > 0.4) { profile = 'Night Owl'; desc = 'You thrive in the dark.'; }
+  else if ((morning / total) > 0.4) { profile = 'Early Bird'; desc = 'Dawn is your domain.'; }
+  else if ((afternoon / total) > 0.4) { profile = 'Daywalker'; desc = 'Prime daytime consumer.'; }
+  else if ((evening / total) > 0.4) { profile = 'Evening Wind-Down'; desc = 'Prime evening consumer.'; }
+
+  return { 
+    profile, 
+    desc, 
+    hourCounts, 
+    dayCounts,
+    timeSegments: { night, morning, afternoon, evening }
+  };
+}
+
+export function analyzeSessionVelocity(data: RecapAnalyticsData) {
+  if (data.logs.length === 0) return null;
+  
+  const sessions = data.logs.map(l => {
+    const m = data.allMedia.find(x => x.id === l.mediaId);
+    return calculateScaledDelta(l.delta, m || data.media[0], data.settings);
+  });
+  
+  const avg = sessions.reduce((a,b) => a+b, 0) / sessions.length;
+  const max = Math.max(...sessions);
+  
+  // Categorize
+  const snippets = sessions.filter(s => s < 10).length;
+  const standard = sessions.filter(s => s >= 10 && s < 50).length;
+  const binges = sessions.filter(s => s >= 50).length;
+  
+  return { avg, max, bins: { snippets, standard, binges }, total: sessions.length };
 }
 
 export function analyzeMediaDNA(data: RecapAnalyticsData) {
-  const dna: Record<string, number> = {};
+  const traitCounts: Record<string, number> = {};
+  const genreCounts: Record<string, number> = {};
+  
   data.logs.forEach(l => {
     const m = data.allMedia.find(x => x.id === l.mediaId);
     if (!m) return;
@@ -81,11 +115,20 @@ export function analyzeMediaDNA(data: RecapAnalyticsData) {
     // Mix tags and tropes to create "DNA"
     const traits = [...(m.tags || []), ...(m.tropes || [])];
     traits.forEach(t => {
-       dna[t] = (dna[t] || 0) + weight;
+       traitCounts[t] = (traitCounts[t] || 0) + weight;
     });
+
+    if (m.genres && m.genres.length > 0) {
+      m.genres.forEach(g => {
+        genreCounts[g] = (genreCounts[g] || 0) + weight;
+      });
+    }
   });
 
-  return Object.entries(dna).sort((a,b) => b[1] - a[1]).slice(0, 4);
+  return {
+    traits: Object.entries(traitCounts).sort((a,b) => b[1] - a[1]).slice(0, 10),
+    genres: Object.entries(genreCounts).sort((a,b) => b[1] - a[1]).slice(0, 5)
+  };
 }
 
 export function analyzeBingeFactor(data: RecapAnalyticsData) {

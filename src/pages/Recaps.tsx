@@ -1,36 +1,31 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   startOfWeek, endOfWeek, subWeeks, 
   startOfMonth, endOfMonth, subMonths, 
   startOfYear, endOfYear, subYears, 
-  format, isWithinInterval, parseISO,
-  isSameDay
+  format, isWithinInterval, parseISO
 } from 'date-fns';
 import { calculateScaledDelta } from '../lib/scaling';
 import { MediaItem, MEDIA_COLORS, ProgressLog } from '../types/schema';
-import { ChevronLeft, ChevronRight, Trophy, Star, Flame, Zap, Compass, Medal, Presentation, Library, Clock, AlertTriangle, BookOpen, Crown, Ghost, ThumbsDown, History, BarChart3, TrendingUp, Sparkles } from 'lucide-react';
-import { 
-  RecapAnalyticsData,
-  analyzeSunkCost, analyzeContrarian, analyzeHabits, analyzeMediaDNA, 
-  analyzeBingeFactor, analyzeGraveyard, analyzeBacklog, analyzeTimeTraveler, 
-  extractJournals, calculateLongestStreak, determineArchetypes 
-} from '../lib/recapAnalytics';
+import { generateAiRecapText } from '../services/nanoGptService';
+import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon } from 'lucide-react';
+import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog } from '../lib/recapAnalytics';
+import Markdown from 'react-markdown';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie } from 'recharts';
 
 type Timeframe = 'week' | 'month' | 'year';
 
 export function Recaps() {
-  const { media, logs, settings } = useMediaContext();
+  const { media, logs, settings, aiRecaps, saveAiRecap } = useMediaContext();
   const [timeframe, setTimeframe] = useState<Timeframe>('week');
-  const [offsetOffset, setOffsetOffset] = useState(1); // 1 = previous, 2 = two ago, etc.
-  
-  // Filter out historical dummy dates (1970)
-  const validLogs = useMemo(() => {
-    return logs.filter(log => !log.timestamp.startsWith('1970-01-01'));
-  }, [logs]);
+  const [offsetOffset, setOffsetOffset] = useState(1); 
+  const [isGenerating, setIsGenerating] = useState(false);
+  const attemptedGenRef = useRef<Set<string>>(new Set());
 
-  // Determine current interval
+  const validLogs = useMemo(() => logs.filter(log => !log.timestamp.startsWith('1970-01-01')), [logs]);
+
   const currentInterval = useMemo(() => {
     const now = new Date();
     if (timeframe === 'week') {
@@ -45,17 +40,26 @@ export function Recaps() {
     }
   }, [timeframe, offsetOffset]);
 
+  const timeId = useMemo(() => {
+    if (timeframe === 'week') return format(currentInterval.start, "yyyy-'W'ww");
+    if (timeframe === 'month') return format(currentInterval.start, "yyyy-MM");
+    return format(currentInterval.start, "yyyy");
+  }, [timeframe, currentInterval]);
+
   const activeLogs = useMemo(() => {
-    return validLogs.filter(log => {
-      const d = parseISO(log.timestamp);
-      return isWithinInterval(d, currentInterval);
-    });
+    return validLogs.filter(log => isWithinInterval(parseISO(log.timestamp), currentInterval));
   }, [validLogs, currentInterval]);
 
   const activeMedia = useMemo(() => {
     const mediaIds = new Set(activeLogs.map(l => l.mediaId));
+    // We want to include ALL media that have progress logs in this time interval,
+    // regardless of their current status (even if they were moved back to Planning, etc.)
     return media.filter(m => mediaIds.has(m.id));
   }, [activeLogs, media]);
+
+  const completedMedia = useMemo(() => {
+    return activeMedia.filter(m => m.status === 'Completed' && isWithinInterval(parseISO(m.updatedAt), currentInterval));
+  }, [activeMedia, currentInterval]);
 
   const totalMasterPages = useMemo(() => {
     return activeLogs.reduce((acc, log) => {
@@ -65,8 +69,9 @@ export function Recaps() {
     }, 0);
   }, [activeLogs, media, settings]);
 
-  const handlePrevious = () => setOffsetOffset(p => p + 1);
-  const handleNext = () => setOffsetOffset(p => Math.max(1, p - 1));
+  const currentRecap = useMemo(() => {
+    return aiRecaps.find(r => r.timeframe === timeframe && r.timeId === timeId);
+  }, [aiRecaps, timeframe, timeId]);
 
   const formatIntervalLabel = () => {
     if (timeframe === 'week') {
@@ -84,663 +89,763 @@ export function Recaps() {
     return '';
   };
 
+  const handlePrevious = () => setOffsetOffset(p => p + 1);
+  const handleNext = () => setOffsetOffset(p => Math.max(1, p - 1));
+
+  useEffect(() => {
+    if (!currentRecap && activeLogs.length > 0 && settings?.nanoGptApiKey && !isGenerating) {
+      if (!attemptedGenRef.current.has(timeId)) {
+        attemptedGenRef.current.add(timeId);
+        // Fire asynchronously to not block render
+        setTimeout(() => handleGenerateAI(), 100);
+      }
+    }
+  }, [currentRecap, activeLogs.length, settings?.nanoGptApiKey, isGenerating, timeId]);
+
+  const handleGenerateAI = async () => {
+    if (!settings?.nanoGptApiKey) {
+      alert("Please configure your Nano-GPT API Key in the Settings menu first.");
+      return;
+    }
+    
+    setIsGenerating(true);
+    try {
+      let rankingLimit = timeframe === 'week' ? 999 : (timeframe === 'month' ? 5 : 20);
+      
+      const mediaRanking = activeMedia.map(m => {
+        const mLogs = activeLogs.filter(l => l.mediaId === m.id);
+        const pages = mLogs.reduce((acc, l) => acc + calculateScaledDelta(l.delta, m, settings), 0);
+        return { title: m.title, type: m.mediaType, pages };
+      }).sort((a,b) => b.pages - a.pages).slice(0, rankingLimit);
+
+      const promptContext = `
+Timeframe: ${timeframe} (${formatIntervalLabel()})
+Total Master Pages (EXP): ${Math.round(totalMasterPages)}
+Media In-Progress (Still Active): ${activeMedia.filter(m => m.status !== 'Completed').map(m => m.title).join(', ') || 'None'}
+Media Completed (Finished): ${completedMedia.length > 0 ? completedMedia.map(m => m.title).join(', ') : 'None'}
+Top Ranked Media: ${mediaRanking.slice(0,5).map(m => `${m.title} (${Math.round(m.pages)} MP)`).join(', ')}
+Total Logs: ${activeLogs.length}
+`;
+
+      const aiResponse = await generateAiRecapText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', `Based on the following data, generate a title and a creative, highly detailed, and deeply flavorful summary of this ${timeframe}'s media consumption. 
+      
+CRITICAL INSTRUCTIONS:
+1. Format your summary beautifully using Markdown (bolding, italics, blockquotes, horizontal rules, or bullet points).
+2. Write a detailed multi-paragraph narrative (Weekly: 3-4 paragraphs, Monthly/Yearly: 5-7 paragraphs) that feels like an epic RPG quest completion log.
+3. YOU MUST directly weave the SPECIFIC titles of the media consumed. 
+4. DO NOT assume a media item is completed unless it appears in the 'Media Completed' list. If it is only in 'Media In-Progress', describe the ongoing journey, not the conclusion.
+5. Ground every paragraph in the actual lore or theme of the titles provided!
+
+Context: ${promptContext}`);
+      
+      await saveAiRecap({
+        timeframe,
+        timeId,
+        title: aiResponse.title,
+        summary: aiResponse.summary
+      });
+    } catch (e: any) {
+      alert("Failed to generate AI Recap: " + e.message);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const getTheme = () => {
+    switch(timeframe) {
+      case 'week': return { 
+        text: 'text-orange-500', 
+        bg: 'bg-orange-500/10', 
+        border: 'border-orange-500/20', 
+        glow: 'bg-orange-500/5', 
+        primary: 'orange',
+        label: 'Weekly Pulse',
+        icon: <Zap className="w-5 h-5" />
+      };
+      case 'month': return { 
+        text: 'text-indigo-400', 
+        bg: 'bg-indigo-400/10', 
+        border: 'border-indigo-400/20', 
+        glow: 'bg-indigo-400/5', 
+        primary: 'indigo',
+        label: 'Monthly Resonance',
+        icon: <Moon className="w-5 h-5" />
+      };
+      case 'year': return { 
+        text: 'text-emerald-400', 
+        bg: 'bg-emerald-400/10', 
+        border: 'border-emerald-400/20', 
+        glow: 'bg-emerald-400/5', 
+        primary: 'emerald',
+        label: 'Yearly Odyssey',
+        icon: <Compass className="w-5 h-5" />
+      };
+    }
+  };
+
+  const theme = getTheme();
+
+  const renderTopCreator = () => {
+     const creatorPages: Record<string, number> = {};
+     activeLogs.forEach(l => {
+        const m = activeMedia.find(x => x.id === l.mediaId);
+        if (m && m.creator) {
+           creatorPages[m.creator] = (creatorPages[m.creator] || 0) + calculateScaledDelta(l.delta, m, settings);
+        }
+     });
+     const sorted = Object.entries(creatorPages).sort((a,b) => b[1] - a[1]);
+     if (sorted.length === 0) return null;
+     const [name, amount] = sorted[0];
+
+     return (
+        <div className={`${theme.bg} ${theme.border} p-6 rounded-3xl relative overflow-hidden group`}>
+           <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 blur-3xl -mr-12 -mt-12 rounded-full" />
+           <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-2">Prime Architect</h4>
+           <div className="text-xl font-black text-white truncate mb-1">{name}</div>
+           <div className={`text-xs font-bold ${theme.text}`}>{Math.round(amount)} Master Pages Logged</div>
+        </div>
+     );
+  };
+
+  const renderTimeTraveler = () => {
+     const avgYear = analyzeTimeTraveler({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+     if (!avgYear) return null;
+
+     return (
+        <div className="bg-zinc-900/50 border border-white/5 p-6 rounded-3xl flex flex-col items-center justify-center text-center">
+           <History className="w-10 h-10 text-zinc-600 mb-4" />
+           <div className="text-3xl font-black text-white">{avgYear}</div>
+           <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black mt-2">Era of Focus</div>
+           <p className="text-[9px] text-zinc-600 mt-2 max-w-[120px]">Average publication year of consumed media.</p>
+        </div>
+     );
+  };
+
+  const renderBacklogHealth = () => {
+     const status = analyzeBacklog({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+     return (
+        <div className="bg-zinc-900/50 border border-white/5 p-6 rounded-3xl">
+           <h3 className="text-lg font-black text-white mb-6 flex items-center gap-3">
+             <Library className="w-5 h-5 text-zinc-400" />
+             Backlog Pulse
+           </h3>
+           <div className="grid grid-cols-2 gap-4">
+              <div className="text-center p-3 rounded-2xl bg-emerald-500/5 border border-emerald-500/10">
+                 <div className="text-xl font-black text-emerald-400">{status.completed}</div>
+                 <div className="text-[8px] font-black uppercase text-zinc-500">Conquered</div>
+              </div>
+              <div className="text-center p-3 rounded-2xl bg-orange-500/5 border border-orange-500/10">
+                 <div className="text-xl font-black text-orange-400">{status.planned}</div>
+                 <div className="text-[8px] font-black uppercase text-zinc-500">Planned</div>
+              </div>
+           </div>
+           <div className="mt-4 text-center">
+              <span className={`text-xs font-bold ${status.net > 0 ? 'text-orange-400' : 'text-emerald-400'}`}>
+                 {status.net > 0 ? `Net Growth: +${status.net} items` : `Efficient Burn: ${status.net} items`}
+              </span>
+           </div>
+        </div>
+     );
+  };
+
+  const renderBingeSpotlight = () => {
+     const binge = analyzeBingeFactor({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+     if (!binge) return null;
+
+     return (
+        <div className={`${theme.bg} ${theme.border} p-6 rounded-3xl relative overflow-hidden group`}>
+           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Flame className="w-16 h-16 text-white" />
+           </div>
+           <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-2">Binge Spotlight</h4>
+           <div className="text-lg font-black text-white truncate mb-1">{binge.media.title}</div>
+           <p className="text-xs text-zinc-400 leading-snug">You blazed through this in a record session period.</p>
+        </div>
+     );
+  };
+
+  const renderSunkCost = () => {
+     const sunk = analyzeSunkCost({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+     if (!sunk) return null;
+
+     return (
+        <div className="bg-red-500/5 border border-red-500/10 p-6 rounded-3xl overflow-hidden relative">
+           <div className="absolute -bottom-8 -right-8 opacity-5">
+              <Ghost className="w-32 h-32" />
+           </div>
+           <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-red-500/60 mb-2 font-black">Shadow Valley</h4>
+           <div className="text-lg font-black text-white truncate">{sunk.media.title}</div>
+           <p className="text-xs text-zinc-500 mt-2">High investment, but low resonance. A tough path to tread.</p>
+        </div>
+     );
+  };
+
+  const renderRanking = () => {
+    const limit = timeframe === 'week' ? 999 : (timeframe === 'month' ? 5 : 20);
+    let ranked = activeMedia.map(m => {
+        const mLogs = activeLogs.filter(l => l.mediaId === m.id);
+        const pages = mLogs.reduce((acc, l) => acc + calculateScaledDelta(l.delta, m, settings), 0);
+        return { item: m, pages };
+    }).filter(m => m.pages > 0).sort((a,b) => b.pages - a.pages);
+
+    if (timeframe === 'year') {
+        const byClass: Record<string, typeof ranked> = {};
+        ranked.forEach(r => {
+            if (!byClass[r.item.mediaType]) byClass[r.item.mediaType] = [];
+            byClass[r.item.mediaType].push(r);
+        });
+        const finalRanked: typeof ranked = [];
+        Object.values(byClass).forEach(arr => {
+            finalRanked.push(...arr.slice(0,3)); // top 3 per class
+        });
+        ranked = finalRanked.sort((a,b) => b.pages - a.pages).slice(0, limit);
+    } else {
+        ranked = ranked.slice(0, limit);
+    }
+
+    if (ranked.length === 0) return <p className="text-zinc-500 italic text-sm">No recorded progress.</p>;
+
+    return (
+      <div className="space-y-4">
+        {ranked.map((r, i) => (
+           <div key={`${r.item.id}-${i}`} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors relative overflow-hidden group">
+              {r.item.coverImageUrl && (
+                <div 
+                  className="absolute inset-0 opacity-20 bg-cover bg-center transition-opacity group-hover:opacity-30" 
+                  style={{ backgroundImage: `url(${r.item.coverImageUrl})` }} 
+                />
+              )}
+              <div className="absolute inset-0 bg-gradient-to-r from-zinc-900 via-zinc-900/80 to-transparent" />
+              
+              <div className="flex items-center gap-4 relative z-10">
+                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shrink-0 border-2 ${i === 0 ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.4)]' : (i === 1 ? 'bg-zinc-300/20 text-zinc-300 border-zinc-400/50' : (i === 2 ? 'bg-orange-700/20 text-orange-400 border-orange-700/50' : 'bg-black/50 text-zinc-500 border-white/5'))}`}>
+                   #{i+1}
+                 </div>
+                 {r.item.coverImageUrl && (
+                   <img src={r.item.coverImageUrl} className="w-10 h-14 object-cover rounded-md shadow-lg shrink-0 border border-white/10" alt="" />
+                 )}
+                 <div className="flex flex-col min-w-0">
+                    <span className="font-bold text-white text-base truncate">{r.item.title}</span>
+                    <span className={`text-xs uppercase tracking-widest font-bold mt-0.5 ${MEDIA_COLORS[r.item.mediaType]?.text || 'text-zinc-400'}`}>{r.item.mediaType}</span>
+                 </div>
+              </div>
+              <div className="text-right relative z-10 shrink-0 ml-4">
+                 <div className="text-orange-400 font-black text-lg tracking-widest bg-black/60 px-3 py-1 rounded-lg border border-orange-500/20 backdrop-blur-sm">{Math.round(r.pages)} MP</div>
+              </div>
+           </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderHabitsHeatmap = () => {
+    const habits = analyzeHabits({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+    if (!habits) return null;
+
+    const data = habits.hourCounts.map((count, hour) => ({
+      hour: `${hour}:00`,
+      count
+    }));
+
+    return (
+      <div className="bg-black/40 border border-white/5 p-8 rounded-3xl flex flex-col h-fit">
+        <h3 className="text-lg font-black text-white mb-8 flex items-center gap-3">
+          <Activity className={`w-5 h-5 ${theme.text}`} />
+          Chronological Intensity
+        </h3>
+        <div className="h-[240px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+              <XAxis dataKey="hour" hide />
+              <YAxis hide />
+              <Tooltip 
+                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                contentStyle={{ backgroundColor: '#09090b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}
+                itemStyle={{ color: timeframe === 'year' ? '#34d399' : '#818cf8' }}
+              />
+              <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                {data.map((_, index) => (
+                  <Cell key={`cell-${index}`} fill={index >= 20 || index <= 4 ? '#27272a' : (timeframe === 'year' ? '#10b981' : '#6366f1')} opacity={0.6 + (index / 24) * 0.4} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="flex justify-between mt-6 text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600">
+           <span>Midnight</span>
+           <span>Noon</span>
+           <span>Midnight</span>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDNADeepDive = () => {
+    const dna = analyzeMediaDNA({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+    if (!dna || dna.traits.length === 0) return null;
+
+    return (
+      <div className="bg-zinc-900/50 border border-white/5 p-6 md:p-8 rounded-3xl">
+        <h3 className="text-xl font-black text-white mb-1 flex items-center gap-3">
+          <BrainCircuit className="w-6 h-6 text-orange-500" />
+          Thematic DNA
+        </h3>
+        <p className="text-zinc-500 text-xs mb-6 uppercase tracking-widest font-bold">What your consumption says about you</p>
+        
+        <div className="space-y-6">
+           <div className="flex flex-wrap gap-2">
+              {dna.traits.map(([trait, val]) => (
+                 <div key={trait} className="px-4 py-2 bg-gradient-to-br from-zinc-800 to-black border border-white/5 rounded-2xl text-sm text-zinc-300 flex items-center gap-3 shadow-lg">
+                    <span className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]" />
+                    <span className="font-bold">{trait}</span>
+                    <span className="text-[10px] text-zinc-600 font-black">{Math.round(val)} MP</span>
+                 </div>
+              ))}
+           </div>
+
+           {dna.genres.length > 0 && (
+             <div className="pt-6 border-t border-white/5">
+                <h4 className="text-white font-bold text-sm mb-4 flex items-center gap-2">
+                  <LayoutGrid className="w-4 h-4 text-zinc-500" /> Domain Mastery
+                </h4>
+                <div className="space-y-3">
+                   {dna.genres.map(([genre, pages]) => (
+                     <div key={genre} className="space-y-1.5">
+                        <div className="flex justify-between text-xs font-bold">
+                           <span className="text-zinc-300">{genre}</span>
+                           <span className="text-orange-400">{Math.round(pages)} MP</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-black rounded-full overflow-hidden border border-white/5">
+                           <motion.div 
+                             initial={{ width: 0 }}
+                             animate={{ width: `${(pages / (dna.genres[0][1] as number)) * 100}%` }}
+                             className="h-full bg-orange-500"
+                           />
+                        </div>
+                     </div>
+                   ))}
+                </div>
+             </div>
+           )}
+        </div>
+      </div>
+    );
+  };
+
+   const renderVelocity = () => {
+    const velocity = analyzeSessionVelocity({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+    if (!velocity) return null;
+
+    const data = [
+      { name: 'Binges', value: velocity.bins.binges, color: timeframe === 'week' ? '#f97316' : (timeframe === 'month' ? '#4f46e5' : '#10b981') },
+      { name: 'Standard', value: velocity.bins.standard, color: timeframe === 'week' ? '#d97706' : (timeframe === 'month' ? '#6366f1' : '#059669') },
+      { name: 'Snippets', value: velocity.bins.snippets, color: timeframe === 'week' ? '#fbbf24' : (timeframe === 'month' ? '#818cf8' : '#047857') },
+    ].filter(d => d.value > 0);
+
+    return (
+      <div className={`bg-black/40 border border-white/5 p-6 rounded-3xl flex flex-col`}>
+        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-6 flex items-center gap-3">
+          <Zap className={`w-4 h-4 ${theme.text}`} />
+          {timeframe === 'week' ? 'Blast Radius' : 'Momentum'}
+        </h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+           <div className="w-full aspect-square max-w-[120px] mx-auto relative">
+              <ResponsiveContainer width="100%" height="100%">
+                 <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                    <Pie
+                      data={data}
+                      innerRadius="65%"
+                      outerRadius="95%"
+                      paddingAngle={5}
+                      dataKey="value"
+                      startAngle={90}
+                      endAngle={-270}
+                      stroke="none"
+                    >
+                      {data.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                 </PieChart>
+              </ResponsiveContainer>
+           </div>
+           <div className="flex flex-col gap-4">
+              <div className="space-y-4">
+                {data.map(d => (
+                  <div key={d.name} className="flex items-center justify-between group">
+                    <div className="flex items-center gap-3">
+                       <div className="w-3 h-3 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.5)]" style={{ backgroundColor: d.color }} />
+                       <span className="text-[11px] font-black text-zinc-400 uppercase tracking-[0.2em]">{d.name}</span>
+                    </div>
+                    <span className="text-base font-black text-white ml-2">{d.value}</span>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-2 pt-4 border-t border-white/5 grid grid-cols-2 gap-2">
+                 <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest leading-none">Avg</span>
+                    <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mt-1">Output</span>
+                 </div>
+                 <div className="flex flex-col items-end text-right">
+                    <span className={`text-lg font-black leading-none ${theme.text}`}>{Math.round(velocity.avg)}</span>
+                    <span className={`text-[9px] font-black uppercase tracking-tighter mt-1 ${theme.text} opacity-80`}>Master Pages</span>
+                 </div>
+              </div>
+           </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderArchetypesSection = () => {
+    const earned = determineArchetypes({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+    if (earned.length === 0) return null;
+
+    return (
+      <div className={`bg-gradient-to-br from-${theme.primary}-500/10 via-black to-black border ${theme.border} rounded-3xl p-6 md:p-10 relative overflow-hidden`}>
+         <div className={`absolute top-0 right-0 w-64 h-64 ${theme.glow} blur-[80px] rounded-full -mr-32 -mt-32`} />
+         <h3 className="text-2xl font-black text-white mb-8 flex items-center gap-4 relative z-10">
+            <Compass className={`w-8 h-8 ${theme.text}`} />
+            {timeframe === 'year' ? "Hall of Archetypes" : "Earned Mantles"}
+         </h3>
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
+            {earned.map(a => (
+               <div key={a.id} className="bg-white/5 border border-white/10 p-5 rounded-2xl flex items-center gap-5 group hover:bg-white/10 hover:border-white/20 transition-all cursor-default">
+                  <div className={`w-14 h-14 rounded-2xl ${theme.bg} flex items-center justify-center shrink-0 border ${theme.border} group-hover:scale-110 transition-transform shadow-xl`}>
+                     <Star className={`w-7 h-7 ${theme.text} fill-current opacity-30`} />
+                  </div>
+                  <div>
+                    <div className="text-white font-black text-lg tracking-tight leading-none mb-1">{a.name}</div>
+                    <div className={`text-[10px] ${theme.text} font-black uppercase tracking-widest opacity-70`}>Unlocked</div>
+                  </div>
+               </div>
+            ))}
+         </div>
+      </div>
+    );
+  };
+
+  const renderTypeBreakdown = () => {
+    const breakdown: Record<string, number> = {};
+    activeLogs.forEach(l => {
+      const m = activeMedia.find(x => x.id === l.mediaId);
+      if (m) {
+         breakdown[m.mediaType] = (breakdown[m.mediaType] || 0) + calculateScaledDelta(l.delta, m, settings);
+      }
+    });
+
+    const entries = Object.entries(breakdown).sort((a,b) => b[1] - a[1]);
+    if (entries.length === 0) return null;
+
+    return (
+       <div className={`grid grid-cols-2 sm:grid-cols-4 gap-4`}>
+          {entries.map(([type, amount]) => (
+            <div key={type} className="bg-black/30 border border-white/5 p-4 rounded-2xl flex flex-col items-center justify-center text-center group hover:border-white/20 transition-all shadow-inner relative overflow-hidden">
+               <div className={`absolute top-0 left-0 w-1 h-full ${MEDIA_COLORS[type as any]?.bg || 'bg-zinc-500'} opacity-30`} />
+               <span className={`text-[10px] font-black uppercase tracking-[0.2em] mb-2 ${MEDIA_COLORS[type as any]?.text || 'text-zinc-400'}`}>{type}</span>
+               <span className="text-2xl font-black text-white group-hover:scale-110 transition-transform">{Math.round(amount)}</span>
+               <span className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-tighter">Pages</span>
+            </div>
+          ))}
+       </div>
+    );
+  };
+
+  const renderActiveTime = () => {
+    const habits = analyzeHabits({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+    if (!habits) return null;
+
+    const dayPages: Record<string, number> = {};
+    activeLogs.forEach(l => {
+      const day = format(parseISO(l.timestamp), 'EEEE');
+      const m = activeMedia.find(x => x.id === l.mediaId);
+      if (m) {
+        dayPages[day] = (dayPages[day] || 0) + calculateScaledDelta(l.delta, m, settings);
+      }
+    });
+    
+    let peakDay = '';
+    let peakPages = -1;
+    Object.entries(dayPages).forEach(([day, pages]) => {
+      if (pages > peakPages) {
+        peakPages = pages;
+        peakDay = day;
+      }
+    });
+
+    return (
+       <div className={`${theme.bg} ${theme.border} p-8 rounded-3xl flex items-center gap-6 shadow-2xl relative overflow-hidden`}>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 blur-3xl rounded-full" />
+          <div className={`w-16 h-16 rounded-2xl ${theme.bg} flex items-center justify-center shrink-0 border ${theme.border} relative z-10`}>
+            <Clock className={`w-8 h-8 ${theme.text}`} />
+          </div>
+          <div className="relative z-10">
+            <h4 className={`${theme.text} font-black text-[10px] uppercase tracking-[0.3em] mb-2`}>Temporal Resonance</h4>
+            <p className="text-white font-black text-2xl tracking-tighter">{peakDay ? `${peakDay}s (${habits.profile})` : habits.profile}</p>
+            <p className="text-zinc-400 text-sm mt-1 max-w-md leading-relaxed">{peakDay ? `Your most potent energy manifests on ${peakDay}s. ` : ''}{habits.desc}</p>
+          </div>
+       </div>
+    );
+  };
+
+   const renderPatterns = () => {
+     if (timeframe !== 'year') return null;
+     const dna = analyzeMediaDNA({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+     if (!dna || dna.traits.length === 0) return null;
+     return (
+        <div className="space-y-3">
+           <h4 className="text-orange-400 font-bold text-xs uppercase tracking-widest mb-1">Noticeable Themes</h4>
+           <div className="flex flex-wrap gap-2">
+             {dna.traits.map(([trait, val]) => (
+                <div key={trait} className="px-3 py-1.5 bg-black/40 border border-white/10 rounded-lg text-sm text-zinc-300 flex items-center gap-2">
+                   <BrainCircuit className="w-4 h-4 text-orange-500/70" />
+                   {trait}
+                </div>
+             ))}
+           </div>
+        </div>
+     );
+  };
+
   return (
-    <div className="flex flex-col h-full max-h-full overflow-hidden w-full bg-[#09090B]">
-      {/* Header controls */}
-      <div className="flex-shrink-0 p-4 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 bg-zinc-900/40 sticky top-0 z-10 backdrop-blur-md">
-        <div className="flex items-center gap-3">
-          <Presentation className="w-8 h-8 text-indigo-500" />
-          <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">FauxLore Recaps</h1>
+    <div className="flex flex-col h-full max-h-full overflow-hidden w-full bg-[#080809]">
+      <div className="flex-shrink-0 p-4 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 bg-zinc-950/80 sticky top-0 z-10 backdrop-blur-xl">
+        <div className="flex items-center gap-4">
+          <div className={`p-2.5 rounded-xl ${theme.bg} border ${theme.border}`}>
+            {theme.icon}
+          </div>
+          <div>
+            <h1 className="text-xl md:text-2xl font-black text-white tracking-tight">{theme.label}</h1>
+            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-none mt-1">Archive of the {timeframe}</p>
+          </div>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-4 items-center">
-           <div className="flex bg-black/40 p-1 rounded-xl border border-white/5">
+           <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
               {(['week', 'month', 'year'] as Timeframe[]).map(t => (
                  <button
                    key={t}
                    onClick={() => { setTimeframe(t); setOffsetOffset(1); }}
-                   className={`px-4 py-1.5 rounded-lg text-sm font-bold capitalize transition-all ${timeframe === t ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}
+                   className={`px-5 py-1.5 rounded-lg text-sm font-black capitalize transition-all ${timeframe === t ? `bg-white/10 text-white shadow-xl` : 'text-zinc-500 hover:text-zinc-300'}`}
                  >
                    {t}
                  </button>
               ))}
            </div>
            
-           <div className="flex items-center gap-3 bg-black/40 px-2 py-1 rounded-xl border border-white/5 mr-4">
-              <button onClick={handlePrevious} className="p-1 md:p-2 text-zinc-400 hover:text-white transition-colors"><ChevronLeft className="w-5 h-5"/></button>
-              <span className="text-sm font-bold text-white min-w-[120px] text-center">{formatIntervalLabel()}</span>
+           <div className="flex items-center gap-3 bg-white/5 px-2 py-1 rounded-xl border border-white/10 md:mr-4">
+              <button onClick={handlePrevious} className="p-2 text-zinc-400 hover:text-white transition-colors"><ChevronLeft className="w-5 h-5"/></button>
+              <span className="text-xs font-black text-white min-w-[140px] text-center tracking-tighter">{formatIntervalLabel()}</span>
               <button 
                 onClick={handleNext} 
                 disabled={offsetOffset === 1} 
-                className={`p-1 md:p-2 transition-colors ${offsetOffset === 1 ? 'text-zinc-800 cursor-not-allowed' : 'text-zinc-400 hover:text-white'}`}
+                className={`p-2 transition-colors ${offsetOffset === 1 ? 'text-zinc-800 cursor-not-allowed' : 'text-zinc-400 hover:text-white'}`}
               >
                 <ChevronRight className="w-5 h-5"/>
               </button>
            </div>
-
-           <button
-             onClick={() => {
-               // html2canvas wrapper
-               const element = document.getElementById('recap-canvas-target');
-               if (element) {
-                 import('html2canvas').then(html2canvas => {
-                   html2canvas.default(element, { backgroundColor: '#09090B' }).then(canvas => {
-                     const link = document.createElement('a');
-                     link.download = `FauxLore-${timeframe}-recap.png`;
-                     link.href = canvas.toDataURL();
-                     link.click();
-                   });
-                 });
-               }
-             }}
-             className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-xl font-medium transition-colors text-sm border border-white/10 hidden md:block whitespace-nowrap"
-           >
-             Get Canvas
-           </button>
         </div>
       </div>
 
-      {/* Recap Content */}
       <div className="flex-1 overflow-y-auto no-scrollbar relative p-4 md:p-8">
          <AnimatePresence mode="wait">
             <motion.div
-               id="recap-canvas-target"
                key={`${timeframe}-${offsetOffset}`}
-               initial={{ opacity: 0, y: 20 }}
+               initial={{ opacity: 0, y: 30 }}
                animate={{ opacity: 1, y: 0 }}
-               exit={{ opacity: 0, scale: 0.98 }}
-               transition={{ duration: 0.4, ease: "easeOut" }}
-               className="max-w-5xl mx-auto w-full space-y-6 md:space-y-10"
+               exit={{ opacity: 0, y: -30 }}
+               className="max-w-7xl mx-auto space-y-6 pb-20"
             >
-               {activeLogs.length === 0 ? (
-                 <div className="h-64 flex flex-col items-center justify-center text-center px-4">
-                   <div className="w-16 h-16 rounded-full bg-zinc-900 border border-white/5 flex items-center justify-center mb-4">
-                      <Zap className="w-6 h-6 text-zinc-700" />
-                   </div>
-                   <h2 className="text-xl font-bold text-white mb-2">It's quiet in here...</h2>
-                   <p className="text-zinc-500 text-sm max-w-sm">No activity logged during {formatIntervalLabel().toLowerCase()}. Log some progress to see your recap!</p>
-                 </div>
-               ) : (
+               {activeLogs.length > 0 ? (
                  <>
-                   {timeframe === 'week' && (
-                     <WeeklyRecap logs={activeLogs} media={activeMedia} totalPages={totalMasterPages} interval={currentInterval} allMedia={media} settings={settings} />
-                   )}
-                   {timeframe === 'month' && (
-                     <MonthlyRecap logs={activeLogs} media={activeMedia} totalPages={totalMasterPages} interval={currentInterval} allMedia={media} settings={settings} />
-                   )}
-                   {timeframe === 'year' && (
-                     <YearlyRecap logs={activeLogs} media={activeMedia} totalPages={totalMasterPages} interval={currentInterval} allMedia={media} settings={settings} />
-                   )}
-                 </>
-               )}
-            </motion.div>
-         </AnimatePresence>
-      </div>
-    </div>
-  );
-}
+                   {/* Main Header / AI Section */}
+                   <div className={`bg-gradient-to-br from-black via-black to-zinc-950 border ${theme.border} rounded-[2rem] p-6 md:p-10 relative overflow-hidden shadow-2xl`}>
+                      <div className={`absolute top-0 right-0 w-[500px] h-[500px] ${theme.glow} blur-[120px] rounded-full pointer-events-none opacity-40`} />
+                      
+                      <div className="flex flex-col lg:flex-row lg:items-end justify-between relative z-10 gap-8 mb-8 border-b border-white/10 pb-8">
+                         <div className="flex-1 space-y-4">
+                           <span className={`${theme.text} font-black tracking-[0.3em] uppercase text-[10px] flex items-center gap-2 px-4 py-1.5 rounded-full border ${theme.border} bg-black/50 w-fit backdrop-blur-md`}>
+                             <Sparkles className="w-4 h-4" /> {timeframe}ly narrative
+                           </span>
+                           <h2 className="text-5xl md:text-8xl font-black text-white tracking-tighter leading-[0.9]">
+                             {currentRecap ? currentRecap.title : "Unwritten History"}
+                           </h2>
+                         </div>
+                         <button 
+                           onClick={handleGenerateAI}
+                           disabled={isGenerating}
+                           className="bg-white text-black hover:bg-zinc-200 px-8 py-4 rounded-2xl text-sm font-black transition-all flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 shadow-2xl shadow-white/5 whitespace-nowrap"
+                         >
+                           <RefreshCw className={`w-5 h-5 ${isGenerating ? 'animate-spin' : ''}`} /> 
+                           {currentRecap ? 'Forging New Tale' : 'Extract Memories'}
+                         </button>
+                      </div>
 
-// ----------------------------------------------------------------------
-// Weekly Recap Component
-// ----------------------------------------------------------------------
-function WeeklyRecap({ logs, media, totalPages, interval, allMedia, settings }: any) {
-  const analyticsData: RecapAnalyticsData = useMemo(() => ({
-    timeScale: 'week', logs, media, allMedia, settings
-  }), [logs, media, allMedia, settings]);
-
-  const habits = useMemo(() => analyzeHabits(analyticsData), [analyticsData]);
-  const streak = useMemo(() => calculateLongestStreak(analyticsData), [analyticsData]);
-  const dna = useMemo(() => analyzeMediaDNA(analyticsData), [analyticsData]);
-
-  // Aggregate pages by day
-  const dailyActivity = useMemo(() => {
-    const days: Record<string, number> = {};
-    for (let i = 0; i <= 6; i++) {
-       const d = startOfWeek(interval.start, { weekStartsOn: 1 });
-       d.setDate(d.getDate() + i);
-       days[format(d, 'yyyy-MM-dd')] = 0;
-    }
-    
-    logs.forEach((log: ProgressLog) => {
-      const date = format(parseISO(log.timestamp), 'yyyy-MM-dd');
-      const m = allMedia.find((x: MediaItem) => x.id === log.mediaId);
-      if (days[date] !== undefined && m) {
-         days[date] += calculateScaledDelta(log.delta, m, settings);
-      }
-    });
-    return Object.entries(days).map(([date, amount]) => ({ date, amount, dayName: format(parseISO(date), 'EEE') }));
-  }, [logs, interval, allMedia, settings]);
-
-  const peakDay = dailyActivity.reduce((max, current) => current.amount > max.amount ? current : max, dailyActivity[0]);
-  const activeDaysCount = dailyActivity.filter(d => d.amount > 0).length;
-
-  const rabbitHole = useMemo(() => {
-    const freq: Record<string, number> = {};
-    logs.forEach((l: ProgressLog) => freq[l.mediaId] = (freq[l.mediaId] || 0) + 1);
-    const mostLogsId = Object.keys(freq).reduce((a, b) => freq[a] > freq[b] ? a : b, '');
-    return {
-      media: allMedia.find((m: MediaItem) => m.id === mostLogsId),
-      logsCount: freq[mostLogsId] || 0
-    }
-  }, [logs, allMedia]);
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-br from-indigo-900/40 to-black border border-indigo-500/20 rounded-3xl p-6 md:p-10 relative overflow-hidden shadow-2xl flex flex-col md:flex-row gap-8">
-         <div className="absolute -top-24 -right-24 w-64 h-64 bg-indigo-600/30 blur-3xl rounded-full pointer-events-none" />
-         
-         <div className="flex-1 space-y-4 text-center md:text-left relative z-10">
-            <span className="text-indigo-400 font-bold tracking-widest uppercase text-xs">The Weekly Sprint</span>
-            <h2 className="text-4xl md:text-5xl font-black text-white leading-tight">
-               You conquered <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">{Math.round(totalPages).toLocaleString()}</span> Master Pages this week.
-            </h2>
-            <p className="text-zinc-400 text-sm md:text-base max-w-lg mx-auto md:mx-0">
-              You were active for {activeDaysCount} out of 7 days, showing true dedication to the lore. {peakDay.amount > 0 && `Your strongest push was on ${peakDay.dayName} with ${Math.round(peakDay.amount).toLocaleString()} pages.`}
-            </p>
-         </div>
-         
-         <div className="w-full md:w-64 h-48 bg-black/40 rounded-2xl flex items-end justify-between p-4 gap-2 border border-white/5 relative z-10 shrink-0">
-            {dailyActivity.map((day) => {
-              const heightPct = peakDay.amount > 0 ? (day.amount / peakDay.amount) * 100 : 0;
-              return (
-                <div key={day.date} className="flex-1 flex flex-col items-center gap-2 group">
-                   <div className="w-full relative flex-1 flex items-end">
-                      <motion.div 
-                        initial={{ height: 0 }}
-                        animate={{ height: `${heightPct}%` }}
-                        transition={{ duration: 1, ease: 'easeOut', delay: 0.2 }}
-                        className={`w-full rounded-md ${heightPct === 100 ? 'bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-zinc-700 group-hover:bg-zinc-600'} transition-all`}
-                      />
-                   </div>
-                   <span className="text-[10px] uppercase font-bold text-zinc-500">{day.dayName.charAt(0)}</span>
-                </div>
-              );
-            })}
-         </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-         {habits && (
-           <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 group relative overflow-hidden">
-             <Clock className="w-6 h-6 text-indigo-400 mb-3 relative z-10" />
-             <h4 className="text-white font-bold mb-1 relative z-10">{habits.profile}</h4>
-             <p className="text-xs text-zinc-400 relative z-10">{habits.desc}</p>
-             <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-indigo-500/5 blur-2xl rounded-full" />
-           </div>
-         )}
-         
-         <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 group relative overflow-hidden">
-             <TrendingUp className="w-6 h-6 text-orange-400 mb-3 relative z-10" />
-             <h4 className="text-white font-bold mb-1 relative z-10">{streak} Day Streak</h4>
-             <p className="text-xs text-zinc-400 relative z-10">Your longest unbroken combo this week.</p>
-             <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-orange-500/5 blur-2xl rounded-full" />
-         </div>
-
-         {dna && dna.length > 0 && (
-           <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 col-span-1 sm:col-span-2 relative overflow-hidden flex flex-col justify-center">
-             <div className="flex items-center gap-2 mb-3 relative z-10">
-                <Sparkles className="w-5 h-5 text-purple-400" />
-                <h4 className="text-sm font-bold text-zinc-300 uppercase tracking-widest border-b border-white/5 pb-1 flex-1">Weekly DNA</h4>
-             </div>
-             <div className="flex flex-wrap gap-2 relative z-10">
-               {dna.map(([trait]) => (
-                  <span key={trait} className="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-xs font-mono text-zinc-400">{trait}</span>
-               ))}
-             </div>
-           </div>
-         )}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 col-span-1 md:col-span-2">
-           <h3 className="text-sm font-bold text-zinc-400 mb-6 uppercase tracking-wider flex items-center gap-2">
-             <Flame className="w-4 h-4 text-orange-500" /> Active Journeys
-           </h3>
-           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {media.slice(0, 4).map((m: MediaItem) => (
-                 <div key={m.id} className="flex gap-4 items-center bg-black/30 p-3 rounded-xl border border-white/5">
-                    <img src={m.coverImageUrl} className="w-12 h-16 object-cover rounded shadow-lg" alt="" referrerPolicy="no-referrer" />
-                    <div className="flex-1 min-w-0">
-                       <h4 className="text-white font-bold truncate text-sm">{m.title}</h4>
-                       <p className="text-zinc-500 text-xs truncate">{m.mediaType}</p>
-                    </div>
-                 </div>
-              ))}
-           </div>
-        </div>
-
-        <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 relative overflow-hidden group">
-           <h3 className="text-sm font-bold text-zinc-400 mb-4 uppercase tracking-wider flex items-center gap-2">
-             <Compass className="w-4 h-4 text-indigo-400" /> Deepest Rabbit Hole
-           </h3>
-           {rabbitHole.media ? (
-             <div className="flex flex-col h-full mt-2 relative z-10">
-               <div className="flex items-start gap-4">
-                 <img src={rabbitHole.media.coverImageUrl} className="w-16 h-24 object-cover rounded-lg shadow-lg" alt="" referrerPolicy="no-referrer" />
-                 <div>
-                   <h4 className="text-white font-bold line-clamp-2 leading-tight">{rabbitHole.media.title}</h4>
-                   <p className="text-indigo-400 text-xs font-bold mt-2">{rabbitHole.logsCount} Sessions logged</p>
-                 </div>
-               </div>
-             </div>
-           ) : <p className="text-zinc-500 text-sm">No activity logged.</p>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ----------------------------------------------------------------------
-// Monthly Recap Component
-// ----------------------------------------------------------------------
-function MonthlyRecap({ logs, media, totalPages, allMedia, settings }: any) {
-  const analyticsData: RecapAnalyticsData = useMemo(() => ({
-    timeScale: 'month', logs, media, allMedia, settings
-  }), [logs, media, allMedia, settings]);
-
-  const sunkCost = useMemo(() => analyzeSunkCost(analyticsData), [analyticsData]);
-  const binge = useMemo(() => analyzeBingeFactor(analyticsData), [analyticsData]);
-  const archetypes = useMemo(() => determineArchetypes(analyticsData), [analyticsData]);
-  const journals = useMemo(() => extractJournals(analyticsData), [analyticsData]);
-
-  // Find highest individual delta generator
-  const MVP = useMemo(() => {
-    const scores: Record<string, number> = {};
-    logs.forEach((l: ProgressLog) => {
-      const m = allMedia.find((x: MediaItem) => x.id === l.mediaId);
-      if (m) scores[m.id] = (scores[m.id] || 0) + calculateScaledDelta(l.delta, m, settings);
-    });
-    // @ts-ignore
-    const bestId = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b, '');
-    return allMedia.find((m: MediaItem) => m.id === bestId);
-  }, [logs, allMedia, settings]);
-
-  const typeBreakdown = useMemo(() => {
-    const bt: Record<string, number> = {};
-    logs.forEach((l: ProgressLog) => {
-      const m = allMedia.find((x: MediaItem) => x.id === l.mediaId);
-      if (m) bt[m.mediaType] = (bt[m.mediaType] || 0) + calculateScaledDelta(l.delta, m, settings);
-    });
-    return Object.entries(bt).sort((a,b) => b[1] - a[1]);
-  }, [logs, allMedia, settings]);
-
-  const topGenres = useMemo(() => {
-    const g: Record<string, number> = {};
-    logs.forEach((l: ProgressLog) => {
-      const m = allMedia.find((x: MediaItem) => x.id === l.mediaId);
-      if (m && m.genres) {
-        const amt = calculateScaledDelta(l.delta, m, settings);
-        m.genres.forEach((genre: string) => g[genre] = (g[genre] || 0) + amt);
-      }
-    });
-    return Object.entries(g).sort((a,b) => b[1] - a[1]).slice(0, 3);
-  }, [logs, allMedia, settings]);
-
-  const completedCount = useMemo(() => {
-     return media.filter((m: MediaItem) => m.status === 'Completed').length;
-  }, [media]);
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-br from-emerald-900/40 to-[#09090B] border border-emerald-500/20 rounded-3xl p-6 md:p-12 text-center relative overflow-hidden">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150%] h-64 bg-emerald-600/10 blur-[100px] rounded-full pointer-events-none" />
-        <span className="text-emerald-500 font-bold tracking-widest uppercase text-xs relative z-10">The Deep Dive</span>
-        <h2 className="text-3xl md:text-5xl font-black text-white mt-4 mb-6 relative z-10 leading-tight">
-          A glorious month of exploration, spanning <br className="hidden md:block"/>
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400 text-5xl md:text-7xl">{Math.round(totalPages).toLocaleString()}</span><br className="hidden md:block"/> 
-          Master Pages.
-        </h2>
-        
-        {completedCount > 0 && (
-          <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-full text-emerald-300 font-medium text-sm relative z-10 mb-4">
-             <Trophy className="w-4 h-4" /> You completed {completedCount} quest{completedCount !== 1 ? 's' : ''} this month!
-          </div>
-        )}
-
-        {archetypes.length > 0 && (
-          <div className="flex flex-wrap justify-center gap-3 relative z-10 mt-6 pt-6 border-t border-white/10">
-            {archetypes.slice(0, 2).map(a => (
-              <div key={a.id} className="flex items-center gap-2 px-3 py-1.5 bg-black/40 border border-emerald-500/30 rounded-lg shadow-lg">
-                <Medal className="w-4 h-4 text-emerald-400" />
-                <span className="text-sm font-bold text-emerald-100">{a.name}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* New Special Metric Cards */}
-      {(binge || sunkCost) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {binge && (
-            <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 relative overflow-hidden group">
-               <Zap className="w-6 h-6 text-yellow-400 mb-4" />
-               <h3 className="text-sm font-bold text-zinc-400 mb-1 uppercase tracking-wider">The Hyper-Fixation</h3>
-               <p className="text-xs text-zinc-500 mb-4">Fastest completion from first log this month.</p>
-               <div className="flex items-center gap-4">
-                 <img src={binge.media.coverImageUrl} className="w-12 h-16 object-cover rounded shadow" alt="" referrerPolicy="no-referrer" />
-                 <div>
-                   <h4 className="text-white font-bold leading-tight">{binge.media.title}</h4>
-                   <p className="text-yellow-400 font-mono text-sm mt-1">{Math.round(binge.hours)} hours total</p>
-                 </div>
-               </div>
-            </div>
-          )}
-
-          {sunkCost && (
-            <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 relative overflow-hidden group">
-               <ThumbsDown className="w-6 h-6 text-rose-400 mb-4" />
-               <h3 className="text-sm font-bold text-zinc-400 mb-1 uppercase tracking-wider">Sunk Cost Fallacy</h3>
-               <p className="text-xs text-zinc-500 mb-4">Highest time invested for the lowest rating.</p>
-               <div className="flex items-center gap-4">
-                 <img src={sunkCost.media.coverImageUrl} className="w-12 h-16 object-cover rounded shadow border border-rose-500/20" alt="" referrerPolicy="no-referrer" />
-                 <div>
-                   <h4 className="text-white font-bold leading-tight">{sunkCost.media.title}</h4>
-                   <p className="text-rose-400 font-bold text-sm mt-1">Rated {sunkCost.media.userRating}/10</p>
-                 </div>
-               </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {journals.length > 0 && (
-        <div className="bg-[#18181b] border border-white/5 rounded-3xl p-6 md:p-8 relative">
-           <h3 className="text-sm font-bold text-zinc-400 mb-6 uppercase tracking-wider flex items-center gap-2">
-             <BookOpen className="w-4 h-4 text-emerald-500" /> Journal Highlights
-           </h3>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {journals.slice(0, 2).map((j, i) => (
-                <div key={i} className="bg-black/40 p-5 rounded-2xl border border-white/5 relative">
-                   <div className="text-emerald-500/20 absolute top-4 right-4"><BookOpen className="w-8 h-8" /></div>
-                   <p className="text-zinc-200 text-sm italic leading-relaxed relative z-10 mb-4">"{j.note}"</p>
-                   <div className="flex items-center gap-3 relative z-10 border-t border-white/5 pt-4">
-                      <img src={j.media.coverImageUrl} className="w-8 h-8 object-cover rounded shadow" alt="" referrerPolicy="no-referrer" />
-                      <div>
-                        <p className="text-xs font-bold text-white leading-tight">{j.media.title}</p>
-                        <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{format(parseISO(j.date), 'MMM do, yyyy')}</p>
+                      <div className="text-xl md:text-2xl text-zinc-400 relative z-10 leading-relaxed font-light">
+                         {currentRecap ? (
+                            <div className={`prose prose-invert prose-lg md:prose-xl max-w-none prose-p:leading-relaxed prose-strong:text-white prose-headings:text-white prose-a:text-white prose-blockquote:border-l-4 ${timeframe === 'week' ? 'prose-orange' : (timeframe === 'month' ? 'prose-indigo' : 'prose-emerald')} prose-blockquote:bg-white/5 prose-blockquote:px-8 prose-blockquote:py-4 prose-blockquote:rounded-r-3xl`}>
+                               <Markdown>{currentRecap.summary}</Markdown>
+                            </div>
+                         ) : (
+                            <div className="flex flex-col items-center justify-center text-center py-20 border-2 border-dashed border-white/5 rounded-[2rem] bg-white/[0.02]">
+                               <motion.div animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }}>
+                                  <RefreshCw className={`w-16 h-16 mb-6 ${isGenerating ? theme.text : 'text-zinc-800'}`} />
+                               </motion.div>
+                               <h3 className="text-2xl font-black text-white mb-2">{isGenerating ? "Consulting the Archives..." : "Ready for Chronicle"}</h3>
+                               <p className="text-zinc-500 max-w-md">Your {timeframe}ly journey awaits processing. Forge the legend to see your story unfold.</p>
+                            </div>
+                         )}
                       </div>
                    </div>
-                </div>
-              ))}
-           </div>
-        </div>
-      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="col-span-1 border border-white/5 bg-zinc-900 rounded-3xl p-6 relative overflow-hidden group flex flex-col">
-           <h3 className="text-sm font-bold text-zinc-400 mb-6 uppercase tracking-wider">The Monthly Obsession</h3>
-           {MVP ? (
-             <div className="flex flex-col items-center justify-center flex-1 text-center">
-                <div className="relative w-32 aspect-[2/3] mb-4 shadow-2xl transition-transform group-hover:scale-105">
-                   <img src={MVP.coverImageUrl} className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" alt="" />
-                   <div className="absolute inset-0 border border-white/10 rounded-xl" />
-                </div>
-                <h4 className="text-white font-bold text-lg line-clamp-2">{MVP.title}</h4>
-                <p className="text-emerald-400 text-sm mt-1">{MEDIA_COLORS[MVP.mediaType as keyof typeof MEDIA_COLORS]?.text.split('-')[1].toUpperCase() || 'Focus'}</p>
-             </div>
-           ) : <p className="text-zinc-500">Not enough data.</p>}
-        </div>
-
-        <div className="col-span-1 md:col-span-2 flex flex-col gap-6">
-           <div className="border border-white/5 bg-zinc-900 rounded-3xl p-6 flex flex-col flex-1 justify-center">
-              <h3 className="text-sm font-bold text-zinc-400 mb-6 uppercase tracking-wider flex items-center gap-2">
-                <Compass className="w-4 h-4 text-zinc-300" /> Format Breakdown
-              </h3>
-              <div className="space-y-4">
-                 {typeBreakdown.map(([type, amount]) => {
-                   const pct = (amount / totalPages) * 100;
-                   const colorRec = MEDIA_COLORS[type as keyof typeof MEDIA_COLORS];
-                   return (
-                     <div key={type} className="flex flex-col gap-1.5">
-                        <div className="flex justify-between text-xs font-bold font-mono">
-                           <span className="text-white">{type}</span>
-                           <span className="text-zinc-500">{Math.round(amount).toLocaleString()} pgs</span>
-                        </div>
-                        <div className="w-full h-3 bg-black rounded-full overflow-hidden">
-                           <motion.div 
-                             initial={{ width: 0 }} 
-                             animate={{ width: `${pct}%` }} 
-                             transition={{ duration: 1.5, ease: 'easeOut' }}
-                             className={`h-full ${colorRec ? colorRec.progress : 'bg-zinc-500'}`} 
-                           />
-                        </div>
-                     </div>
-                   )
-                 })}
-              </div>
-           </div>
-
-           {topGenres.length > 0 && (
-              <div className="border border-white/5 bg-zinc-900 rounded-3xl p-6">
-                 <h3 className="text-sm font-bold text-zinc-400 mb-4 uppercase tracking-wider flex items-center gap-2">
-                   <Star className="w-4 h-4 text-emerald-400" /> Defining Textures
-                 </h3>
-                 <p className="text-xs text-zinc-500 mb-4">Your most explored genres this month, ranked by time invested.</p>
-                 <div className="flex flex-wrap gap-2">
-                    {topGenres.map(([genre, amount], i) => (
-                       <div key={genre} className={`px-4 py-2 rounded-xl border flex items-center gap-2 ${i === 0 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-black/30 border-white/5 text-zinc-300'}`}>
-                          <span className="font-bold">{genre}</span>
-                          <span className="text-xs opacity-50 font-mono">{Math.round((amount / totalPages) * 100)}%</span>
-                       </div>
-                    ))}
-                 </div>
-              </div>
-           )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ----------------------------------------------------------------------
-// Yearly Recap Component
-// ----------------------------------------------------------------------
-function YearlyRecap({ logs, media, totalPages, allMedia, settings }: any) {
-  const analyticsData: RecapAnalyticsData = useMemo(() => ({
-    timeScale: 'year', logs, media, allMedia, settings
-  }), [logs, media, allMedia, settings]);
-
-  const archetypes = useMemo(() => determineArchetypes(analyticsData), [analyticsData]);
-  const contrarian = useMemo(() => analyzeContrarian(analyticsData), [analyticsData]);
-  const graveyard = useMemo(() => analyzeGraveyard(analyticsData), [analyticsData]);
-  const backlog = useMemo(() => analyzeBacklog(analyticsData), [analyticsData]);
-  const avgYear = useMemo(() => analyzeTimeTraveler(analyticsData), [analyticsData]);
-
-  const completedArray = useMemo(() => {
-     return media.filter((m: MediaItem) => m.status === 'Completed').sort((a: any, b: any) => (b.userRating||0) - (a.userRating||0));
-  }, [media]);
-
-  const topCompleted = completedArray.slice(0, 4);
-
-  const timeSink = useMemo(() => {
-    const scores: Record<string, number> = {};
-    logs.forEach((l: ProgressLog) => {
-      const m = allMedia.find((x: MediaItem) => x.id === l.mediaId);
-      if (m) scores[m.id] = (scores[m.id] || 0) + calculateScaledDelta(l.delta, m, settings);
-    });
-    const bestId = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b, '');
-    return {
-      media: allMedia.find((m: MediaItem) => m.id === bestId),
-      amount: scores[bestId] || 0
-    };
-  }, [logs, allMedia, settings]);
-
-  const ratingSpread = useMemo(() => {
-    const distro: Record<number, number> = { 1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0,10:0 };
-    completedArray.forEach((m: MediaItem) => {
-      if (m.userRating) {
-        distro[m.userRating] = (distro[m.userRating] || 0) + 1;
-      }
-    });
-    return Object.entries(distro).map(([score, count]) => ({ score: Number(score), count }));
-  }, [completedArray]);
-  const maxRatingCount = Math.max(...ratingSpread.map(r => r.count));
-
-  const topCreators = useMemo(() => {
-    const c: Record<string, number> = {};
-    media.forEach((m: MediaItem) => {
-      if (m.creator) c[m.creator] = (c[m.creator] || 0) + 1;
-    });
-    return Object.entries(c).sort((a,b) => b[1] - a[1]).slice(0, 3);
-  }, [media]);
-
-  return (
-    <div className="space-y-6">
-       
-      <div className="relative border border-orange-500/20 bg-gradient-to-b from-orange-950/40 to-[#09090B] rounded-3xl p-8 md:p-16 overflow-hidden">
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-orange-600/10 blur-[100px] rounded-full pointer-events-none translate-x-1/3 -translate-y-1/3" />
-        <div className="relative z-10 max-w-2xl">
-          <h2 className="text-5xl md:text-7xl font-black text-white leading-[1.1] mb-6">
-            A legendary year filled with <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-rose-400">{Math.round(totalPages).toLocaleString()}</span> Master Pages.
-          </h2>
-          <p className="text-zinc-400 text-lg">
-            This year, FauxLore tracked your adventures across {media.length} different media properties. You reached the conclusion of {completedArray.length} stories.
-          </p>
-
-          {archetypes.length > 0 && (
-             <div className="mt-8 flex flex-wrap gap-3">
-               {archetypes.map(a => (
-                 <div key={a.id} className="flex items-center gap-2 px-4 py-2 bg-orange-500/10 border border-orange-500/30 rounded-xl shadow-lg">
-                   <Crown className="w-5 h-5 text-orange-400" />
-                   <div className="flex flex-col">
-                     <span className="text-xs text-orange-500/70 font-bold uppercase tracking-wider">Persona</span>
-                     <span className="text-sm font-bold text-orange-100">{a.name}</span>
+                   {/* Macro Stats Bar */}
+                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-black/40 border border-white/5 p-6 rounded-3xl flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-all">
+                         <div className="text-3xl font-black text-white mb-1">{activeLogs.length}</div>
+                         <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black">Logged Actions</div>
+                      </div>
+                      <div className="bg-black/40 border border-white/5 p-6 rounded-3xl flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-all">
+                         <div className="text-3xl font-black text-white mb-1">{completedMedia.length}</div>
+                         <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black">Media Conquered</div>
+                      </div>
+                      <div className="bg-black/40 border border-white/5 p-6 rounded-3xl flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-all">
+                         <div className={`text-3xl font-black ${theme.text} mb-1`}>{Math.round(totalMasterPages)}</div>
+                         <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black">Master Pages</div>
+                      </div>
+                      <div className="bg-black/40 border border-white/5 p-6 rounded-3xl flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-all">
+                         <div className="text-3xl font-black text-white mb-1">{activeMedia.length}</div>
+                         <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black">Active Journeys</div>
+                      </div>
                    </div>
-                 </div>
-               ))}
-             </div>
-          )}
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric Cards */}
-        <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 relative overflow-hidden group">
-           <Trophy className="w-8 h-8 text-yellow-500 mb-4 ease-out duration-500 group-hover:scale-110" />
-           <p className="text-4xl font-black text-white mb-2">{completedArray.length}</p>
-           <p className="text-zinc-400 text-sm font-medium mt-1 uppercase tracking-wider">Completed</p>
-           <div className="absolute top-0 right-0 p-4 opacity-10"><Trophy className="w-24 h-24" /></div>
-        </div>
-        <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 relative overflow-hidden group">
-           <BarChart3 className="w-8 h-8 text-rose-500 mb-4 ease-out duration-500 group-hover:scale-110" />
-           <p className="text-4xl font-black text-white mb-2">{backlog.net > 0 ? '+' : ''}{backlog.net}</p>
-           <p className="text-zinc-400 text-sm font-medium mt-1 uppercase tracking-wider">Backlog Growth</p>
-           <div className="absolute top-0 right-0 p-4 opacity-10"><BarChart3 className="w-24 h-24" /></div>
-        </div>
-        <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 relative overflow-hidden group">
-           <Ghost className="w-8 h-8 text-zinc-500 mb-4 ease-out duration-500 group-hover:scale-110" />
-           <p className="text-4xl font-black text-white mb-2">{graveyard.dropped.length + graveyard.stale.length}</p>
-           <p className="text-zinc-400 text-sm font-medium mt-1 uppercase tracking-wider">Graveyard Count</p>
-           <div className="absolute top-0 right-0 p-4 opacity-5"><Ghost className="w-24 h-24" /></div>
-        </div>
-        <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 relative overflow-hidden group">
-           <History className="w-8 h-8 text-blue-500 mb-4 ease-out duration-500 group-hover:scale-110" />
-           <p className="text-4xl font-black text-white mb-2">{avgYear || 'N/A'}</p>
-           <p className="text-zinc-400 text-sm font-medium mt-1 uppercase tracking-wider">Avg Release Year</p>
-           <div className="absolute top-0 right-0 p-4 opacity-10"><History className="w-24 h-24" /></div>
-        </div>
+                   {/* Primary Grid Layout */}
+                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                      {/* Left Side: Rankings & Large Visuals */}
+                      <div className="lg:col-span-8 space-y-6">
+                         <div className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem] relative overflow-hidden">
+                            <div className="flex items-center justify-between mb-8">
+                               <h3 className="text-2xl font-black text-white flex items-center gap-4">
+                                 <Trophy className={`w-8 h-8 ${theme.text}`} />
+                                 {timeframe === 'week' ? "Weekly Standings" : timeframe === 'month' ? "Monthly Vanguard" : "The Yearly Pantheon"}
+                               </h3>
+                            </div>
+                            {renderRanking()}
+                         </div>
 
-        <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 lg:col-span-4 relative overflow-hidden flex flex-col justify-center">
-           <Star className="w-8 h-8 text-amber-400 mb-2 absolute right-6 -bottom-4 opacity-5 stroke-[0.5] fill-current w-32 h-32" />
-           <h3 className="text-sm font-bold text-amber-500 mb-4 uppercase tracking-wider relative z-10">Best in Class</h3>
-           
-           {topCompleted.length > 0 ? (
-             <div className="flex flex-wrap gap-4 relative z-10">
-               {topCompleted.map((c: MediaItem) => (
-                 <div key={c.id} className="relative aspect-[2/3] w-20 md:w-24 rounded-xl shadow-2xl shrink-0 group hover:z-20 transition-transform hover:scale-105">
-                    <img src={c.coverImageUrl} alt={c.title} className="w-full h-full object-cover rounded-xl border border-white/10" referrerPolicy="no-referrer" />
-                    <div className="absolute inset-0 bg-black/80 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center flex-col text-center p-2 backdrop-blur-sm">
-                      <span className="font-bold text-amber-400 text-base">{c.userRating}/10</span>
-                      <span className="text-[10px] text-zinc-300 font-medium line-clamp-3 mt-1 px-1">{c.title}</span>
-                    </div>
-                 </div>
-               ))}
-             </div>
-           ) : (
-             <p className="text-zinc-500 italic relative z-10">No completed and rated media this year.</p>
-           )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-         {timeSink.media && (
-           <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 md:p-8 flex items-center gap-6 group hover:border-orange-500/30 transition-colors">
-              <div className="w-24 shrink-0 aspect-[2/3] relative rounded-xl shadow-[0_0_30px_rgba(249,115,22,0.15)] group-hover:shadow-[0_0_30px_rgba(249,115,22,0.3)] transition-all">
-                 <img src={timeSink.media.coverImageUrl} alt="" className="w-full h-full object-cover rounded-xl border border-orange-500/30" referrerPolicy="no-referrer" />
-              </div>
-              <div className="flex-1">
-                 <h3 className="text-orange-500 font-bold uppercase tracking-widest text-xs mb-1">The Great Devourer</h3>
-                 <h4 className="text-2xl font-black text-white leading-tight mb-2">{timeSink.media.title}</h4>
-                 <p className="text-zinc-400 text-sm">
-                   Consumed the absolute lion's share of your time, accounting for <strong className="text-white">{Math.round((timeSink.amount / totalPages) * 100)}%</strong> of your entire year's logged activity.
-                 </p>
-              </div>
-           </div>
-         )}
-
-         {contrarian && (
-            <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 md:p-8 flex items-center gap-6 group hover:border-blue-500/30 transition-colors">
-              <div className="w-24 shrink-0 aspect-[2/3] relative rounded-xl shadow-[0_0_30px_rgba(59,130,246,0.15)] group-hover:shadow-[0_0_30px_rgba(59,130,246,0.3)] transition-all">
-                 <img src={contrarian.media.coverImageUrl} alt="" className="w-full h-full object-cover rounded-xl border border-blue-500/30" referrerPolicy="no-referrer" />
-              </div>
-              <div className="flex-1">
-                 <h3 className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-1">The Contrarian</h3>
-                 <h4 className="text-xl font-black text-white leading-tight mb-2">{contrarian.media.title}</h4>
-                 <p className="text-zinc-400 text-sm">
-                   You {contrarian.type === 'loved' ? 'loved' : 'hated'} it. The critics vehemently disagreed. You rated it <strong className="text-white">{contrarian.media.userRating}/10</strong> against a general critical score of <strong className="text-white">{Math.round(contrarian.media.reviewScore || 0)}/100</strong>.
-                 </p>
-              </div>
-           </div>
-         )}
-         
-         {topCreators.length > 0 && (
-           <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 md:p-8 flex items-center gap-6 group md:col-span-2">
-              <div className="flex-1 flex flex-col md:flex-row items-center justify-between gap-6">
-                <div>
-                  <h3 className="text-purple-400 font-bold uppercase tracking-widest text-xs mb-2">Creator Loyalty</h3>
-                  <p className="text-zinc-300 text-sm">The minds behind the media you consumed this year.</p>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  {topCreators.map(([creator, c], i) => (
-                    <div key={creator} className="px-4 py-2 bg-black/40 border border-white/10 rounded-xl flex items-center gap-3">
-                      <span className="text-xs text-zinc-500 font-mono">#{i+1}</span>
-                      <span className="font-bold text-white text-sm">{creator}</span>
-                      <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-zinc-300">{c} items</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-           </div>
-         )}
-
-         <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 flex flex-col justify-center md:col-span-2">
-            <h3 className="text-sm font-bold text-zinc-400 mb-6 uppercase tracking-wider flex items-center gap-2">
-              <Star className="w-4 h-4 text-rose-500" /> Annual Rating Spread
-            </h3>
-            <div className="flex items-end justify-between gap-1 h-32 px-2">
-               {ratingSpread.map((col) => {
-                 const pct = maxRatingCount > 0 ? (col.count / maxRatingCount) * 100 : 0;
-                 return (
-                   <div key={col.score} className="flex-1 flex flex-col items-center gap-2 group">
-                      <div className="w-full relative flex-1 flex items-end">
-                         <div className="w-full relative">
-                            {col.count > 0 && <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] text-zinc-500 font-mono opacity-0 group-hover:opacity-100 transition-opacity">{col.count}</span>}
-                            <motion.div 
-                              initial={{ height: 0 }}
-                              animate={{ height: `${pct}%` }}
-                              transition={{ duration: 1, ease: 'easeOut' }}
-                              className={`w-full rounded bg-rose-500/20 group-hover:bg-rose-500/40 transition-colors border-t border-rose-500/50`}
-                            />
+                          {timeframe !== 'week' && renderArchetypesSection()}
+                         
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {renderHabitsHeatmap()}
+                            <div className="space-y-6">
+                               {renderTopCreator()}
+                               {renderBingeSpotlight()}
+                            </div>
                          </div>
                       </div>
-                      <span className="text-[10px] font-bold text-zinc-500">{col.score}</span>
+ 
+                      {/* Right Side: Micro stats & Deep Dives */}
+                      <div className="lg:col-span-4 space-y-6">
+                         {renderActiveTime()}
+                         {renderVelocity()}
+                         {renderDNADeepDive()}
+                         {renderBacklogHealth()}
+                         <div className="grid grid-cols-2 gap-4">
+                            {renderTimeTraveler()}
+                            <div className="bg-black/40 border border-white/5 p-4 rounded-3xl flex flex-col items-center justify-center text-center">
+                               <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-3">
+                                  <Hash className="w-5 h-5 text-zinc-500" />
+                               </div>
+                               <div className="text-xl font-black text-white">{Math.round(totalMasterPages / (activeLogs.length || 1))}</div>
+                               <div className="text-[8px] text-zinc-500 uppercase tracking-widest font-black">Avg Session</div>
+                            </div>
+                         </div>
+                         {renderSunkCost()}
+                      </div>
                    </div>
-                 )
-               })}
-            </div>
-            <p className="text-xs text-center text-zinc-500 mt-4">Calculated from media completed this year.</p>
-         </div>
+                   {/* Themed Breakdown / Distribution */}
+                   <div className="bg-zinc-950/40 border border-white/5 p-8 rounded-[2.5rem]">
+                      <h3 className="text-xl font-black text-white mb-8 flex items-center gap-4">
+                        <BarChart3 className={`w-8 h-8 ${theme.text}`} />
+                        Format Allocation
+                      </h3>
+                      {renderTypeBreakdown()}
+                   </div>
+
+                   {/* Conquered Gallery */}
+                   {completedMedia.length > 0 && (
+                      <div className={`${theme.bg} ${theme.border} rounded-[3rem] p-10 md:p-16 relative overflow-hidden`}>
+                         <div className={`absolute top-0 right-0 w-96 h-96 ${theme.glow} blur-[120px] -mr-32 -mt-32 rounded-full pointer-events-none`} />
+                         <h3 className="text-3xl font-black text-white mb-12 flex items-center gap-5">
+                           <Medal className={`w-10 h-10 ${theme.text}`} />
+                           Artifacts Conquered
+                         </h3>
+                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                           {completedMedia.map(m => (
+                             <div key={m.id} className="bg-black border border-white/10 p-6 rounded-[2rem] flex gap-6 items-center relative overflow-hidden group/card hover:border-white/30 transition-all shadow-2xl">
+                                {m.coverImageUrl && (
+                                  <div className="absolute inset-0 opacity-20 bg-cover bg-center grayscale group-hover/card:grayscale-0 group-hover:scale-110 transition-all duration-700" style={{ backgroundImage: `url(${m.coverImageUrl})` }} />
+                                )}
+                                <div className="w-20 h-28 bg-zinc-800 rounded-2xl shrink-0 border border-white/10 overflow-hidden relative z-10 shadow-2xl">
+                                   {m.coverImageUrl ? (
+                                     <img src={m.coverImageUrl} className="w-full h-full object-cover" alt="" />
+                                   ) : (
+                                     <div className="w-full h-full flex items-center justify-center text-zinc-600"><Library /></div>
+                                   )}
+                                </div>
+                                <div className="flex-1 min-w-0 relative z-10">
+                                  <div className="font-black text-white text-xl truncate leading-tight mb-2">{m.title}</div>
+                                  <div className={`text-[10px] font-black tracking-[0.2em] uppercase ${MEDIA_COLORS[m.mediaType]?.text || 'text-zinc-500'}`}>{m.mediaType}</div>
+                                  <div className="flex flex-wrap gap-1.5 mt-3">
+                                     {(m.tags || []).slice(0, 2).map(t => (
+                                        <span key={t} className="text-[9px] px-2.5 py-1 bg-white/10 rounded-full text-zinc-400 border border-white/5 font-bold">{t}</span>
+                                     ))}
+                                  </div>
+                                </div>
+                             </div>
+                           ))}
+                         </div>
+                      </div>
+                   )}
+
+                   {/* Ongoing / Active Media */}
+                   {timeframe !== 'week' && (
+                      <div className="bg-black border border-white/5 p-10 md:p-14 rounded-[3rem]">
+                          <h3 className="text-xl font-black text-white mb-8 flex items-center gap-4">
+                            <Library className="w-8 h-8 text-zinc-500" />
+                            Ongoing Chronicles
+                          </h3>
+                          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+                             {activeMedia.filter(m => m.status !== 'Completed').map(m => (
+                                <div key={m.id} className="group relative aspect-[3/4.5] rounded-2xl overflow-hidden border border-white/5 hover:border-white/20 transition-all shadow-xl">
+                                   {m.coverImageUrl ? (
+                                     <img src={m.coverImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={m.title} />
+                                   ) : (
+                                     <div className="w-full h-full bg-zinc-900 flex items-center justify-center text-zinc-700"><Library /></div>
+                                   )}
+                                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent opacity-80" />
+                                   <div className="absolute bottom-0 left-0 right-0 p-4">
+                                      <div className="text-[10px] font-black text-white truncate leading-none mb-1">{m.title}</div>
+                                      <div className={`text-[8px] font-black uppercase tracking-widest ${MEDIA_COLORS[m.mediaType]?.text || 'text-white'} opacity-70`}>{m.mediaType}</div>
+                                   </div>
+                                </div>
+                             ))}
+                          </div>
+                      </div>
+                   )}
+                 </>
+               ) : (
+                  <div className="flex flex-col items-center justify-center text-center py-40 px-4">
+                     <div className="w-32 h-32 rounded-[2.5rem] bg-white/5 border border-white/10 flex items-center justify-center mb-8 rotate-12">
+                        <Sparkles className="w-12 h-12 text-zinc-700" />
+                     </div>
+                     <h2 className="text-3xl font-black text-white mb-4">The Chronicles are Empty</h2>
+                     <p className="text-zinc-500 max-w-sm mx-auto text-lg leading-relaxed">No echoes of your journeys were heard during this interval. Log your actions to fill these pages.</p>
+                  </div>
+               )}
+
+            </motion.div>
+         </AnimatePresence>
       </div>
     </div>
   );

@@ -85,12 +85,12 @@ export function MediaLibrary() {
               placeholder="Search title..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-zinc-900 border border-white/5 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 w-full sm:w-64"
+              className="bg-zinc-900 border border-white/5 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-orange-500 w-full sm:w-64"
             />
           </div>
           <button 
             onClick={handleAddNew}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl font-medium transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-indigo-900/20 whitespace-nowrap"
+            className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-xl font-medium transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-orange-900/20 whitespace-nowrap"
           >
             <Plus className="w-4 h-4" /> Add New
           </button>

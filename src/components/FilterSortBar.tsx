@@ -17,7 +17,7 @@ export function FilterSortBar({ statusFilter, setStatusFilter, sortBy, setSortBy
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as Status | 'All')}
-          className="w-full bg-zinc-900 border border-white/5 rounded-xl pl-9 pr-8 py-2 text-sm text-zinc-300 focus:outline-none focus:border-indigo-500 appearance-none hover:border-white/10 transition-colors cursor-pointer"
+          className="w-full bg-zinc-900 border border-white/5 rounded-xl pl-9 pr-8 py-2 text-sm text-zinc-300 focus:outline-none focus:border-orange-500 appearance-none hover:border-white/10 transition-colors cursor-pointer"
         >
           <option value="All">All Statuses</option>
           <option value="Active">Active</option>
@@ -33,7 +33,7 @@ export function FilterSortBar({ statusFilter, setStatusFilter, sortBy, setSortBy
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
-          className="w-full bg-zinc-900 border border-white/5 rounded-xl pl-9 pr-8 py-2 text-sm text-zinc-300 focus:outline-none focus:border-indigo-500 appearance-none hover:border-white/10 transition-colors cursor-pointer"
+          className="w-full bg-zinc-900 border border-white/5 rounded-xl pl-9 pr-8 py-2 text-sm text-zinc-300 focus:outline-none focus:border-orange-500 appearance-none hover:border-white/10 transition-colors cursor-pointer"
         >
           <option value="updatedAt">Last Activity</option>
           <option value="createdAt">Date Added</option>

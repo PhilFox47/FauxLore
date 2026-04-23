@@ -12,7 +12,7 @@ import { format, parseISO, differenceInDays } from 'date-fns';
 import { calculateRPGState } from '../lib/rpgSystem';
 
 export function Dashboard() {
-  const { media, logs, settings, saveMediaItem, addLog, deleteMediaItem } = useMediaContext();
+  const { media, logs, settings, saveMediaItem, addLog, deleteMediaItem, aiTextCache } = useMediaContext();
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MediaItem | undefined>(undefined);
@@ -69,6 +69,7 @@ export function Dashboard() {
   }, [logs]);
 
   const rpgState = useMemo(() => calculateRPGState(media, logs, settings), [media, logs, settings]);
+  const getDynamicTitle = () => aiTextCache[`rpg_title_${rpgState.level}`] || rpgState.className;
 
   const handleEdit = (item: MediaItem) => {
     setEditingItem(item);
@@ -94,13 +95,13 @@ export function Dashboard() {
     <>
       <div className="shrink-0 bg-zinc-900 border border-white/5 rounded-3xl p-6 mb-8 relative overflow-hidden w-full">
         {/* Glow behind RPG */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-[80px] pointer-events-none" />
         
         <div className="flex flex-col md:flex-row items-center gap-6 relative z-10 w-full">
           <div className="shrink-0 relative">
-            <div className="w-20 h-20 bg-zinc-950 rounded-2xl flex items-center justify-center border-4 border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.3)] relative">
-              <Shield className="w-10 h-10 text-indigo-400" />
-              <div className="absolute -bottom-3 -right-3 bg-indigo-600 text-white text-xs font-black px-2 py-0.5 rounded-full border-2 border-zinc-900 shadow-xl shadow-indigo-900/50">
+            <div className="w-20 h-20 bg-zinc-950 rounded-2xl flex items-center justify-center border-4 border-orange-500/50 shadow-[0_0_20px_rgba(249,115,22,0.3)] relative">
+              <Shield className="w-10 h-10 text-orange-400" />
+              <div className="absolute -bottom-3 -right-3 bg-orange-600 text-white text-xs font-black px-2 py-0.5 rounded-full border-2 border-zinc-900 shadow-xl shadow-orange-900/50">
                 Lvl {rpgState.level}
               </div>
             </div>
@@ -109,11 +110,11 @@ export function Dashboard() {
           <div className="flex-1 w-full flex flex-col justify-center min-w-0">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-3 gap-2">
               <div className="truncate w-full min-w-0">
-                 <h3 className="text-2xl font-black text-white italic tracking-tight truncate">{rpgState.className}</h3>
+                 <h3 className="text-2xl font-black text-white italic tracking-tight truncate">{getDynamicTitle()}</h3>
                  <p className="text-zinc-400 text-sm font-medium">{rpgState.currentExp.toLocaleString()} Total EXP</p>
               </div>
               <div className="text-left sm:text-right shrink-0 mt-1 sm:mt-0">
-                 <span className="text-xs text-indigo-400 font-bold tracking-wider uppercase block sm:inline">Next Level</span>
+                 <span className="text-xs text-orange-400 font-bold tracking-wider uppercase block sm:inline">Next Level</span>
                  <div className="text-xs text-zinc-500 font-mono mt-0.5 sm:mt-0">
                     {(rpgState.currentExp - rpgState.currentLevelExp).toLocaleString()} / {(rpgState.nextLevelExp - rpgState.currentLevelExp).toLocaleString()}
                  </div>
@@ -121,7 +122,7 @@ export function Dashboard() {
             </div>
             <div className="h-3 w-full bg-zinc-950 rounded-full overflow-hidden shadow-inner border border-white/5 relative">
               <div 
-                className="absolute top-0 left-0 h-full bg-gradient-to-r from-indigo-600 to-purple-500 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
+                className="absolute top-0 left-0 h-full bg-gradient-to-r from-orange-600 to-orange-500 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(249,115,22,0.5)]" 
                 style={{ width: `${Math.max(2, rpgState.expProgress * 100)}%` }} 
               />
             </div>
@@ -156,12 +157,12 @@ export function Dashboard() {
               placeholder="Search title..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-zinc-900 border border-white/5 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 w-full sm:w-64"
+              className="bg-zinc-900 border border-white/5 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-orange-500 w-full sm:w-64"
             />
           </div>
           <button 
             onClick={handleAddNew}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl font-medium transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-indigo-900/20 whitespace-nowrap"
+            className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-xl font-medium transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-orange-900/20 whitespace-nowrap"
           >
             <Plus className="w-4 h-4" /> Add New
           </button>
@@ -171,7 +172,7 @@ export function Dashboard() {
       {activeMedia.length === 0 ? (
         <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-12 text-center flex-1 flex flex-col items-center justify-center min-h-[400px]">
           <p className="text-zinc-500 mb-4">No tracking records found.</p>
-          <button onClick={handleAddNew} className="text-indigo-400 font-medium hover:text-indigo-300 transition-colors">
+          <button onClick={handleAddNew} className="text-orange-400 font-medium hover:text-orange-300 transition-colors">
             Start tracking something
           </button>
         </div>

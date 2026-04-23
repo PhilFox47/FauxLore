@@ -186,7 +186,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   type="button"
                   onClick={handleSearchMetadata}
                   disabled={isSearching || !formData.title}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl transition flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-medium rounded-xl transition flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                   Auto-fill
@@ -209,7 +209,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 transition flex justify-between items-center group border border-transparent hover:border-white/5 gap-4"
                   >
                     <div className="min-w-0">
-                      <div className="font-bold text-white line-clamp-2 group-hover:text-indigo-400 transition-colors">
+                      <div className="font-bold text-white line-clamp-2 group-hover:text-orange-400 transition-colors">
                         {res.title} <span className="text-zinc-500 font-normal">({res.year})</span>
                       </div>
                       <div className="text-xs text-zinc-400 truncate mt-0.5">
@@ -246,7 +246,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 transition flex justify-between items-center group border border-transparent hover:border-white/5 gap-4"
                   >
                     <div className="min-w-0">
-                      <div className="font-bold text-white line-clamp-2 group-hover:text-indigo-400 transition-colors">
+                      <div className="font-bold text-white line-clamp-2 group-hover:text-orange-400 transition-colors">
                         {s.name} <span className="text-zinc-500 font-normal">({s.seasonNumber})</span>
                       </div>
                       <div className="text-xs text-zinc-400 truncate mt-0.5">
@@ -555,7 +555,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                 </div>
                 <div className="col-span-1 sm:col-span-2 flex items-end pb-2">
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" name="watched" checked={!!formData.watched} onChange={(e) => setFormData(p => ({...p, watched: e.target.checked}))} className="w-5 h-5 accent-indigo-500 rounded bg-zinc-800" />
+                    <input type="checkbox" name="watched" checked={!!formData.watched} onChange={(e) => setFormData(p => ({...p, watched: e.target.checked}))} className="w-5 h-5 accent-orange-500 rounded bg-zinc-800" />
                     <span className="text-sm font-medium text-zinc-400">Watched?</span>
                   </label>
                 </div>
@@ -602,7 +602,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition">
               Cancel
             </button>
-            <button type="button" onClick={handleSubmit} className="px-4 py-2 rounded-xl font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition shadow-lg shadow-indigo-900/20">
+            <button type="button" onClick={handleSubmit} className="px-4 py-2 rounded-xl font-medium bg-orange-600 text-white hover:bg-orange-500 transition shadow-lg shadow-orange-900/20">
               Save Media
             </button>
           </div>

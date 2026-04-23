@@ -36,7 +36,7 @@ export function Layout() {
         {/* Mobile Header */}
         <div className="md:hidden flex items-center justify-between p-4 border-b border-white/5 bg-[#09090B] z-30">
           <div className="flex items-center">
-            <img src="/logo.png" alt="FauxLore" className="h-8 w-auto object-contain" />
+            <img src="https://i.imgur.com/ZgTImal.png" alt="FauxLore" className="h-8 w-auto object-contain" />
           </div>
           <button 
             onClick={() => setIsMobileMenuOpen(true)}

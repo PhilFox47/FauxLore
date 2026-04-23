@@ -98,9 +98,26 @@ async function startServer() {
       igdbClientSecret TEXT,
       tmdbApiKey TEXT,
       hardcoverApiKey TEXT,
+      nanoGptApiKey TEXT,
+      nanoGptModel TEXT,
       timezone TEXT,
       masterPageConfig TEXT,
       yearlyGoals TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_recaps (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL DEFAULT 'default_user',
+      timeframe TEXT NOT NULL,
+      timeId TEXT NOT NULL,
+      title TEXT,
+      summary TEXT,
+      UNIQUE(userId, timeframe, timeId)
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_text_cache (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
     );
   `);
 
@@ -109,6 +126,8 @@ async function startServer() {
   try { db.prepare("ALTER TABLE logs ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN questDifficulty REAL").run(); } catch (e) {} // old
   try { db.prepare("ALTER TABLE settings ADD COLUMN yearlyGoals TEXT").run(); console.log("Migration: Added yearlyGoals"); } catch (e) {}
+  try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptApiKey TEXT").run(); console.log("Migration: Added nanoGptApiKey"); } catch (e) {}
+  try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptModel TEXT").run(); console.log("Migration: Added nanoGptModel"); } catch (e) {}
   
   const normalizeMedia = (row: any) => ({
     ...row,
@@ -246,15 +265,43 @@ async function startServer() {
         delta: log.delta,
         note: log.note || null
       });
+
+      // Clear the AI recap cache for this specific timeframe to force regeneration
+      try {
+        const d = new Date(log.timestamp);
+        // We aren't guaranteed to have date-fns here so do basic JS
+        // Just empty all recaps for this userId where timeId matches the approximate week/month/year?
+        // Actually, it's safer to just delete all recaps for the user entirely? No, let's just delete them all.
+        // It forces regeneration next time they visit Recaps. The cost is negligible considering how rare back-logging is.
+        // Even better, find the specific IDs.
+        // Year:
+        const year = d.getFullYear().toString();
+        // Month:
+        const month = `${year}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        
+        db.prepare(`DELETE FROM ai_recaps WHERE userId = ? AND timeId IN (?, ?, 'all')`).run(userId, year, month);
+
+        // For weeks it's RRRR-II format... which is hard to compute without date-fns. 
+        // Let's just delete the 'weekly' ones that might match or are close. Actually let's delete ALL weekly recaps for this user to be safe if a back-log happens.
+        db.prepare(`DELETE FROM ai_recaps WHERE userId = ? AND timeframe = 'weekly'`).run(userId);
+      } catch(e) {
+        // fail silently
+      }
       
-      const mediaRow = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(log.mediaId, userId);
+      const mediaRow = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(log.mediaId, userId) as any;
       if (mediaRow) {
         const type = log.metricType;
         const now = new Date().toISOString();
+        
+        let newStatus = mediaRow.status;
+        if (newStatus === 'Planning' && log.delta > 0) {
+           newStatus = 'Playing';
+        }
+        
         if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {
-          db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, updatedAt = ? WHERE id = ? AND userId = ?`).run(log.delta, now, log.mediaId, userId);
+          db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, updatedAt = ?, status = ? WHERE id = ? AND userId = ?`).run(log.delta, now, newStatus, log.mediaId, userId);
         } else {
-          db.prepare(`UPDATE media SET updatedAt = ? WHERE id = ? AND userId = ?`).run(now, log.mediaId, userId);
+          db.prepare(`UPDATE media SET updatedAt = ?, status = ? WHERE id = ? AND userId = ?`).run(now, newStatus, log.mediaId, userId);
         }
       }
       res.json(db.prepare('SELECT * FROM logs WHERE id = ?').get(log.id));
@@ -280,13 +327,15 @@ async function startServer() {
       const userId = settings.userId || 'default_user';
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, timezone, masterPageConfig, yearlyGoals)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @timezone, @masterPageConfig, @yearlyGoals)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, timezone, masterPageConfig, yearlyGoals)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @timezone, @masterPageConfig, @yearlyGoals)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
           tmdbApiKey=excluded.tmdbApiKey,
           hardcoverApiKey=excluded.hardcoverApiKey,
+          nanoGptApiKey=excluded.nanoGptApiKey,
+          nanoGptModel=excluded.nanoGptModel,
           timezone=excluded.timezone,
           masterPageConfig=excluded.masterPageConfig,
           yearlyGoals=excluded.yearlyGoals
@@ -296,6 +345,8 @@ async function startServer() {
         igdbClientSecret: settings.igdbClientSecret || null,
         tmdbApiKey: settings.tmdbApiKey || null,
         hardcoverApiKey: settings.hardcoverApiKey || null,
+        nanoGptApiKey: settings.nanoGptApiKey || null,
+        nanoGptModel: settings.nanoGptModel || null,
         timezone: settings.timezone || null,
         masterPageConfig: settings.masterPageConfig ? JSON.stringify(settings.masterPageConfig) : null,
         yearlyGoals: settings.yearlyGoals ? JSON.stringify(settings.yearlyGoals) : null
@@ -306,6 +357,60 @@ async function startServer() {
         ...saved,
         masterPageConfig: saved.masterPageConfig ? JSON.parse(saved.masterPageConfig) : undefined
       });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.get("/api/recaps", (req, res) => {
+    try {
+      const userId = req.query.userId || 'default_user';
+      const rows = db.prepare('SELECT * FROM ai_recaps WHERE userId = ?').all(userId);
+      res.json(rows);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/recaps", (req, res) => {
+    try {
+      const payload = req.body;
+      const userId = payload.userId || 'default_user';
+      const id = payload.id || Math.random().toString(36).substr(2, 9);
+      db.prepare(`
+        INSERT INTO ai_recaps (id, userId, timeframe, timeId, title, summary)
+        VALUES (@id, @userId, @timeframe, @timeId, @title, @summary)
+        ON CONFLICT(userId, timeframe, timeId) DO UPDATE SET
+          title=excluded.title, summary=excluded.summary
+      `).run({
+        id,
+        userId,
+        timeframe: payload.timeframe,
+        timeId: payload.timeId,
+        title: payload.title || null,
+        summary: payload.summary || null
+      });
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.get("/api/ai-text", (req, res) => {
+    try {
+      const rows = db.prepare('SELECT * FROM ai_text_cache').all();
+      const map: Record<string, string> = {};
+      rows.forEach((r: any) => map[r.key] = r.value);
+      res.json(map);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/ai-text", (req, res) => {
+    try {
+      const payload = req.body;
+      db.prepare(`
+        INSERT INTO ai_text_cache (key, value)
+        VALUES (@key, @value)
+        ON CONFLICT(key) DO UPDATE SET value=excluded.value
+      `).run({
+        key: payload.key,
+        value: payload.value
+      });
+      res.json({ success: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 

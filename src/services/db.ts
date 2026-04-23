@@ -103,5 +103,45 @@ export const DatabaseService = {
       throw new Error(`Failed to save settings: ${errorData.error || res.statusText}`);
     }
     return res.json();
+  },
+
+  async getAiRecaps(): Promise<any[]> {
+    try {
+      const res = await fetch('/api/recaps');
+      if (!res.ok) return [];
+      return res.json();
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  },
+
+  async saveAiRecap(recap: any): Promise<void> {
+    const res = await fetch('/api/recaps', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(recap)
+    });
+    if (!res.ok) throw new Error('Failed to save AI recap');
+  },
+
+  async getAiTextCache(): Promise<Record<string, string>> {
+    try {
+      const res = await fetch('/api/ai-text');
+      if (!res.ok) return {};
+      return res.json();
+    } catch (e) {
+      console.error(e);
+      return {};
+    }
+  },
+
+  async saveAiText(key: string, value: string): Promise<void> {
+    const res = await fetch('/api/ai-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, value })
+    });
+    if (!res.ok) throw new Error('Failed to save AI text');
   }
 };
