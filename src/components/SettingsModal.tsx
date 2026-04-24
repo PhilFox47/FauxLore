@@ -15,7 +15,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     igdbClientId: '',
     igdbClientSecret: '',
     tmdbApiKey: '',
-    hardcoverApiKey: '',
     nanoGptApiKey: '',
     nanoGptModel: '',
     timezone: '',
@@ -49,7 +48,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           igdbClientId: settings.igdbClientId || '',
           igdbClientSecret: settings.igdbClientSecret || '',
           tmdbApiKey: settings.tmdbApiKey || '',
-          hardcoverApiKey: settings.hardcoverApiKey || '',
           nanoGptApiKey: settings.nanoGptApiKey || '',
           nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
           timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
@@ -188,7 +186,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         igdbClientId: formData.igdbClientId,
         igdbClientSecret: formData.igdbClientSecret,
         tmdbApiKey: formData.tmdbApiKey,
-        hardcoverApiKey: formData.hardcoverApiKey,
         nanoGptApiKey: formData.nanoGptApiKey,
         nanoGptModel: formData.nanoGptModel,
         timezone: formData.timezone,
@@ -439,17 +436,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       onChange={handleChange}
                       className="input-field" 
                       placeholder="eyJhbG..."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Hardcover API Key (Books)</label>
-                    <input 
-                      type="password"
-                      name="hardcoverApiKey"
-                      value={formData.hardcoverApiKey}
-                      onChange={handleChange}
-                      className="input-field" 
-                      placeholder="Bearer ..."
                     />
                   </div>
                   <div>

@@ -98,7 +98,6 @@ export interface Settings {
   igdbClientId?: string;
   igdbClientSecret?: string;
   tmdbApiKey?: string;
-  hardcoverApiKey?: string;
   nanoGptApiKey?: string;
   nanoGptModel?: string;
   timezone?: string;

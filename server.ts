@@ -999,143 +999,102 @@ async function startServer() {
     }
   });
 
-  // Hardcover API endpoints...
-  app.post("/api/books/introspect", async (req, res) => {
-    try {
-      const userId = req.query.userId as string || 'default_user';
-      const settings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId) || {};
-      const apiKey = settings.hardcoverApiKey || process.env.HARDCOVER_API_KEY;
-      if (!apiKey) return res.status(500).json({error: "No key configured"});
-      
-      const query = req.body.query || `
-        query {
-          __type(name: "books") {
-            fields {
-              name
-              type { name kind ofType { name kind } }
-            }
-          }
-        }
-      `;
-      const hcRes = await fetch("https://api.hardcover.app/v1/graphql", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": apiKey.startsWith("Bearer ") ? apiKey : `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({ query })
-      });
-      const data = await hcRes.json();
-      res.json(data);
-    } catch (e: any) {
-      res.status(500).json({error: e.message});
-    }
-  });
-
-  // Hardcover.app Integration (Books)
+  // Google Books Integration
   app.get("/api/books/search", async (req, res) => {
     try {
       const query = req.query.q as string;
-      const userId = req.query.userId as string || 'default_user';
-      const settings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId) || {};
-      const apiKey = settings.hardcoverApiKey || process.env.HARDCOVER_API_KEY;
 
       if (!query) {
         return res.status(400).json({ error: "Missing search query" });
       }
-      if (!apiKey) {
-        return res.status(500).json({ error: "HARDCOVER_API_KEY is missing. Please configure it in Settings." });
-      }
 
-      // Hardcover's Hasura instance blocks _ilike due to performance queries.
-      // We perform an exact match query on the title or slug instead.
-      const slug = query.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      
-      const graphqlQuery = `
-        query searchBooks($title: String!, $slug: String!) {
-          books(where: {_or: [{title: {_eq: $title}}, {slug: {_eq: $slug}}]}, order_by: {users_count: desc}, limit: 20) {
-            id
-            title
-            release_year
-            pages
-            rating
-            description
-            cached_tags
-            image {
-              url
-            }
-            contributions {
-              author {
-                name
-              }
-            }
-            taggings {
-              tag {
-                tag
-              }
-            }
+      let mappedResults: any[] = [];
+      let fetchSuccess = false;
+
+      // Try Google Books First
+      try {
+        const googleRes = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=20`, {
+          headers: {
+            'User-Agent': 'FauxLoreMediaTracker/1.0'
           }
+        });
+
+        if (googleRes.ok) {
+          const data = await googleRes.json();
+          mappedResults = (data.items || []).map((item: any) => {
+            const volumeInfo = item.volumeInfo || {};
+            
+            let creator = "Unknown Author";
+            if (volumeInfo.authors && volumeInfo.authors.length > 0) {
+              creator = volumeInfo.authors.join(", ");
+            }
+
+            let coverImageUrl = "";
+            if (volumeInfo.imageLinks) {
+              coverImageUrl = volumeInfo.imageLinks.thumbnail?.replace('http:', 'https:') 
+                || volumeInfo.imageLinks.smallThumbnail?.replace('http:', 'https:') 
+                || "";
+            }
+
+            const year = volumeInfo.publishedDate ? parseInt(volumeInfo.publishedDate.substring(0, 4)) : undefined;
+
+            return {
+              id: `gb_${item.id}`,
+              title: volumeInfo.title || "Unknown Title",
+              description: volumeInfo.description || "",
+              coverImageUrl: coverImageUrl,
+              year: !isNaN(year as number) ? year : undefined,
+              reviewScore: volumeInfo.averageRating ? Math.round(volumeInfo.averageRating * 2) / 2 : undefined,
+              totalPages: volumeInfo.pageCount,
+              creator: creator,
+              genres: volumeInfo.categories || []
+            };
+          });
+          fetchSuccess = true;
+        } else {
+          console.warn(`Google Books API HTTP Error: ${googleRes.status}, falling back to OpenLibrary...`);
         }
-      `;
-
-      const hcRes = await fetch("https://api.hardcover.app/v1/graphql", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": apiKey.startsWith("Bearer ") ? apiKey : `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          query: graphqlQuery,
-          variables: { title: query, slug: slug }
-        })
-      });
-
-      const data = await hcRes.json();
-
-      if (!hcRes.ok) {
-        throw new Error(data.error || data.message || `Hardcover API HTTP Error: ${hcRes.status}`);
+      } catch (err) {
+        console.warn(`Google Books fetch failed: ${err}, falling back to OpenLibrary...`);
       }
 
-      if (data.errors) {
-        throw new Error(data.errors[0].message || "GraphQL Error from Hardcover API");
-      }
-      
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      const books = data.data?.books || [];
-      const mappedResults = books.map((book: any) => {
-        let creator = "";
-        if (book.contributions && book.contributions.length > 0) {
-          // Generally the first contribution is the primary author
-          creator = book.contributions[0].author?.name || "";
+      // Fallback to OpenLibrary
+      if (!fetchSuccess) {
+        const olRes = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=20`);
+        if (!olRes.ok) {
+          throw new Error(`OpenLibrary API Error: ${olRes.status}`);
         }
+        const data = await olRes.json();
+        
+        mappedResults = (data.docs || []).map((doc: any) => {
+          let coverImageUrl = "";
+          if (doc.cover_i) {
+            coverImageUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
+          }
 
-        let genres: string[] = [];
-        if (book.cached_tags && book.cached_tags.Genre) {
-           genres = book.cached_tags.Genre.map((g: any) => g.tag).filter(Boolean);
-        } else if (book.taggings && book.taggings.length > 0) {
-           genres = book.taggings.map((t: any) => t.tag?.tag).filter(Boolean);
-        }
+          let creator = "Unknown Author";
+          if (doc.author_name && doc.author_name.length > 0) {
+             creator = doc.author_name.join(", ");
+          }
 
-        return {
-          id: book.id?.toString(),
-          title: book.title,
-          description: book.description,
-          coverImageUrl: book.image?.url || "",
-          year: book.release_year,
-          reviewScore: book.rating ? Math.round(book.rating * 2) / 2 : undefined,
-          totalPages: book.pages,
-          creator: creator,
-          genres: genres
-        };
-      });
+          return {
+            id: `ol_${doc.key}`,
+            title: doc.title || "Unknown Title",
+            description: "",
+            coverImageUrl: coverImageUrl,
+            year: doc.first_publish_year,
+            reviewScore: undefined,
+            totalPages: doc.number_of_pages_median,
+            creator: creator,
+            genres: doc.subject ? doc.subject.slice(0, 5) : []
+          };
+        });
+      }
 
       res.json(mappedResults);
     } catch (error: any) {
-      console.error("Error searching Hardcover:", error);
-      res.status(500).json({ error: error.message || "Failed to fetch metadata from Hardcover." });
+      console.error("Error searching Google Books:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch metadata from Google Books." });
     }
   });
 
