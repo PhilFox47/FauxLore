@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { Dice5, Sparkles, RefreshCw, Eye } from 'lucide-react';
 import { MediaCard } from '../components/MediaCard';
-import { MediaItem } from '../types/schema';
+import { MediaItem, MEDIA_TYPES, MediaType } from '../types/schema';
 import { MediaDetailModal } from '../components/MediaDetailModal';
 import { MediaFormModal } from '../components/MediaFormModal';
 import { generateText } from '../services/nanoGptService';
@@ -21,8 +21,22 @@ export function Roulette() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentActionItem, setCurrentActionItem] = useState<MediaItem | null>(null);
 
+  const [mediaTypeFilters, setMediaTypeFilters] = useState<MediaType[]>([]);
+
   // Consider things in Backlog (Planning only)
-  const validBacklog = useMemo(() => media.filter(m => m.status === 'Planning'), [media]);
+  const validBacklog = useMemo(() => {
+    let filtered = media.filter(m => m.status === 'Planning');
+    if (mediaTypeFilters.length > 0) {
+      filtered = filtered.filter(m => mediaTypeFilters.includes(m.mediaType));
+    }
+    return filtered;
+  }, [media, mediaTypeFilters]);
+
+  const toggleFilter = (type: MediaType) => {
+    setMediaTypeFilters(prev => 
+      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+    );
+  };
 
   const spinRoulette = () => {
     if (validBacklog.length === 0) return;
@@ -68,7 +82,10 @@ ${backlogList}
   };
 
   const generateSmartSuggestions = () => {
-    if (validBacklog.length === 0) return;
+    if (validBacklog.length === 0) {
+      setSmartSuggestions([]);
+      return;
+    }
 
     // Determine what user has been engaged with recently based on logs
     const recentLogs = [...logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 20);
@@ -102,11 +119,10 @@ ${backlogList}
     setSmartSuggestions(top3);
   };
 
-  // Generate initial suggestions if unset
-  useState(() => {
-    // Only run once
-    setTimeout(generateSmartSuggestions, 500);
-  });
+  // Generate suggestions initially and when valid backlog changes
+  React.useEffect(() => {
+    generateSmartSuggestions();
+  }, [validBacklog]);
 
   const handleEdit = (item: MediaItem) => {
     setCurrentActionItem(item);
@@ -126,6 +142,28 @@ ${backlogList}
           Backlog Roulette
         </h2>
         <p className="text-zinc-400 mt-2">Let fate decide your next journey.</p>
+        
+        <div className="mt-6">
+          <p className="text-sm text-zinc-500 mb-2 font-medium tracking-wide uppercase">Filter by Media Type:</p>
+          <div className="flex flex-wrap gap-2">
+            {MEDIA_TYPES.map(type => {
+              const isSelected = mediaTypeFilters.includes(type);
+              return (
+                <button
+                  key={type}
+                  onClick={() => toggleFilter(type)}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition duration-200 border ${
+                    isSelected
+                      ? 'bg-orange-500 text-white border-orange-500 shadow-md'
+                      : 'bg-zinc-800/50 text-zinc-400 border-white/5 hover:bg-zinc-800 hover:text-white'
+                  }`}
+                >
+                  {type}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </header>
 
       {/* The Roulette Section */}
