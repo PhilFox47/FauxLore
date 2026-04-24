@@ -10,7 +10,7 @@ export async function generateAiRecapText(apiKey: string, model: string, prompt:
     body: JSON.stringify({
       model: model || "gpt-4o-mini", // Cost efficient model fallback
       messages: [
-        { role: "system", content: "You are FauxLore's creative recap generator. Keep it engaging, flavorful, and match the 'Faux Brand' identity (quirky, tracking enthusiast, fun). Generate a succinct JSON response containing exactly two fields: 'title' (a punchy, creative title of 1-5 words maximum, string) and 'summary' (a highly detailed, Markdown-formatted narrative summarizing the data with multiple paragraphs, string)." },
+        { role: "system", content: "You are FauxLore's AI recap generator. You are witty, charismatic, naturally sarcastic, and modern. You act as an entertaining, hyper-aware geek podcaster analyzing the user's media habits. Generate a JSON response containing exactly two fields: 'title' (a clever, punchy title of 1-5 words maximum, string) and 'summary' (a highly detailed, Markdown-formatted narrative, string). VERY IMPORTANT: You must ensure your output is valid JSON. If you use double quotes inside your summary string, you MUST properly escape them as \\\"." },
         { role: "user", content: prompt }
       ],
       response_format: { type: "json_object" }
@@ -26,10 +26,62 @@ export async function generateAiRecapText(apiKey: string, model: string, prompt:
   const data = await res.json();
   const messageContent = data.choices[0].message.content;
   try {
-    return JSON.parse(messageContent);
+    let cleanStr = messageContent.trim();
+    // Remove starting backticks and optional language label
+    cleanStr = cleanStr.replace(/^```[a-z]*\s*/i, '');
+    // Remove trailing backticks (one or more)
+    cleanStr = cleanStr.replace(/`+$/, '');
+    cleanStr = cleanStr.trim();
+    
+    console.log("Raw NanoGPT Recap Response: ", cleanStr);
+    
+    let parsed: any;
+    try {
+      parsed = JSON.parse(cleanStr);
+    } catch(e) {
+      console.warn("Failed first pass JSON parse, trying regex fallback...");
+      // Regex fallback if JSON is totally broken
+      const titleMatch = cleanStr.match(/"title"\s*:\s*"([^"]+)"/i);
+      const summaryMatch = cleanStr.match(/"summary"\s*:\s*"([\s\S]*?)"\s*\}/i) || cleanStr.match(/"summary"\s*:\s*"([\s\S]*)"/i);
+      
+      if (titleMatch && summaryMatch) {
+         return {
+            title: titleMatch[1].replace(/\\"/g, '"'),
+            summary: summaryMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"')
+         };
+      }
+      throw e;
+    }
+    
+    function extractRecapFields(obj: any): { title: string, summary: string } | null {
+      if (!obj || typeof obj !== 'object') return null;
+      
+      const title = obj.title || obj.Title || obj.name || obj.Name || obj.heading;
+      const summary = obj.summary || obj.Summary || obj.recap || obj.Recap || obj.text || obj.Text || obj.content || obj.description || obj.body;
+      
+      if (title && summary) return { title: String(title), summary: String(summary) };
+      
+      for (const key of Object.keys(obj)) {
+        if (typeof obj[key] === 'object' && obj[key] !== null) {
+          const found = extractRecapFields(obj[key]);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+    
+    const extracted = extractRecapFields(parsed);
+    if (extracted) return extracted;
+    
+    return { 
+      title: parsed.title || parsed.name || "Untitled Recap", 
+      summary: parsed.summary || parsed.recap || (typeof parsed === 'object' ? JSON.stringify(parsed, null, 2) : String(parsed)) 
+    };
+    
   } catch (e) {
-    console.error("Failed to parse JSON from NanoGPT:", messageContent);
-    return { title: "Error generating title", summary: "Failed to generate proper JSON summary." };
+    console.error("Failed to parse JSON from NanoGPT:");
+    console.error(messageContent);
+    return { title: "Error generating recap", summary: "Failed to generate proper JSON summary. Try generating again." };
   }
 }
 
@@ -61,7 +113,7 @@ export async function generateAiArtifact(apiKey: string, model: string, item: an
     body: JSON.stringify({
       model: model || "gpt-4o-mini",
       messages: [
-        { role: "system", content: `You are an RPG Loot Master. The user has just completed a piece of media. Generate an Artifact based strictly on the lore, characters, or aesthetic of this media. The response MUST be a JSON object containing: 'name' (string, max 4 words), 'description' (string, 1-2 flavorful sentences), 'type' (string, e.g., Weapon, Relic, Armor, Spell, Trinket). The rarity of this item MUST be exactly '${rarity}'. Make the name and description match the prestige of the assigned rarity.` },
+        { role: "system", content: `You are an RPG Loot Master. The user has just completed a piece of media. Generate an Artifact based strictly on the lore, characters, or aesthetic of this media. The response MUST be a JSON object containing strictly these lowercase keys: 'name' (string, max 4 words), 'description' (string, 1-2 flavorful sentences), 'type' (string, e.g., Weapon, Relic, Armor, Spell, Trinket). The rarity of this item MUST be exactly '${rarity}'. Make the name and description match the prestige of the assigned rarity.` },
         { role: "user", content: `I just completed a piece of media. Drop some loot with rarity ${rarity}!\n\nContext regarding the media:\n${contextSnippet}` }
       ],
       response_format: { type: "json_object" }
@@ -78,18 +130,44 @@ export async function generateAiArtifact(apiKey: string, model: string, item: an
   const messageContent = data.choices[0].message.content;
   try {
     let cleanStr = messageContent.trim();
-    if (cleanStr.startsWith('```json')) {
-      cleanStr = cleanStr.replace(/^```json/, '').replace(/```$/, '').trim();
-    } else if (cleanStr.startsWith('```')) {
-      cleanStr = cleanStr.replace(/^```/, '').replace(/```$/, '').trim();
-    }
+    // Remove starting backticks and optional language label
+    cleanStr = cleanStr.replace(/^```[a-z]*\s*/i, '');
+    // Remove trailing backticks (one or more)
+    cleanStr = cleanStr.replace(/`+$/, '');
+    cleanStr = cleanStr.trim();
     const parsed = JSON.parse(cleanStr);
-    const artifactData = parsed.artifact || parsed; // Handle wrapping
+    console.log("Parsed AI Artifact Data:", parsed);
+    
+    function findArtifactData(obj: any): any {
+      if (!obj || typeof obj !== 'object') return null;
+      
+      const tName = obj.name || obj.Name;
+      const tDesc = obj.description || obj.Description || obj.desc;
+      const tType = obj.type || obj.Type || obj.itemType;
+      
+      if (tName && tDesc && tType) return obj;
+      
+      for (const key of Object.keys(obj)) {
+        const val = obj[key];
+        if (Array.isArray(val)) {
+          for (const item of val) {
+            const found = findArtifactData(item);
+            if (found) return found;
+          }
+        } else if (typeof val === 'object' && val !== null) {
+          const found = findArtifactData(val);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+    
+    const artifactData = findArtifactData(parsed) || parsed;
     
     return {
-      name: artifactData.name || "Mysterious Artifact",
-      description: artifactData.description || "The magic seems to have faded from this item.",
-      type: artifactData.type || "Trinket",
+      name: artifactData.name || artifactData.Name || "Mysterious Artifact",
+      description: artifactData.description || artifactData.Description || artifactData.desc || "The magic seems to have faded from this item.",
+      type: artifactData.type || artifactData.Type || artifactData.itemType || "Trinket",
       rarity 
     };
   } catch (e) {

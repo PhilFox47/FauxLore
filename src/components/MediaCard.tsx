@@ -46,6 +46,19 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
   
   switch(item.mediaType) {
     case 'Game':
+      if (item.isOngoing) {
+        progressText = `Ongoing (${item.playtimeHours || 0} hrs)`;
+        progressPercent = 0;
+      } else {
+        progressText = `${item.playtimeHours || 0} hrs`;
+        if (item.averagePlaytime && item.averagePlaytime > 0) {
+          progressText += ` / ${item.averagePlaytime} hrs`;
+          progressPercent = ((item.playtimeHours || 0) / item.averagePlaytime) * 100;
+        } else {
+          progressPercent = 0; // Usually no total for games unless we add it
+        }
+      }
+      break;
     case 'Visual Novel':
       progressText = `${item.playtimeHours || 0} hrs`;
       if (item.averagePlaytime && item.averagePlaytime > 0) {
@@ -132,16 +145,18 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
           <span className="text-zinc-300">{progressText}</span>
           {progressPercent > 0 && <span className={colors.text}>{progressPercent.toFixed(0)}%</span>}
         </div>
-        <div className="h-1 md:h-1.5 bg-zinc-800 rounded-full mb-3 md:mb-4">
-          {progressPercent > 0 ? (
-            <div 
-              className={cn("h-full rounded-full transition-all duration-500", colors.progress, colors.shadow)} 
-              style={{ width: `${Math.min(progressPercent, 100)}%` }} 
-            />
-          ) : item.mediaType === 'Game' || item.mediaType === 'Visual Novel' ? (
-            <div className={cn("h-full w-full animate-pulse rounded-full", colors.glow)} />
-          ) : null}
-        </div>
+        {!(item.mediaType === 'Game' && item.isOngoing) && (
+          <div className="h-1 md:h-1.5 bg-zinc-800 rounded-full mb-3 md:mb-4">
+            {progressPercent > 0 ? (
+              <div 
+                className={cn("h-full rounded-full transition-all duration-500", colors.progress, colors.shadow)} 
+                style={{ width: `${Math.min(progressPercent, 100)}%` }} 
+              />
+            ) : item.mediaType === 'Game' || item.mediaType === 'Visual Novel' ? (
+              <div className={cn("h-full w-full animate-pulse rounded-full", colors.glow)} />
+            ) : null}
+          </div>
+        )}
         
         <div className="flex gap-1.5 md:gap-2">
           <button 

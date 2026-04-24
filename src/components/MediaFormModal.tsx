@@ -498,6 +498,21 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
 
             {(formData.mediaType === 'Game' || formData.mediaType === 'Visual Novel') && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {formData.mediaType === 'Game' && (
+                  <div className="col-span-1 sm:col-span-2 flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="isOngoing" 
+                      name="isOngoing" 
+                      checked={formData.isOngoing || false} 
+                      onChange={(e) => setFormData(prev => ({ ...prev, isOngoing: e.target.checked }))}
+                      className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-zinc-900" 
+                    />
+                    <label htmlFor="isOngoing" className="text-sm font-medium text-zinc-300">
+                      Ongoing Game (e.g. Live Service, Multiplayer)
+                    </label>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-zinc-400 mb-1">Your Playtime (Hours)</label>
                   <input type="number" name="playtimeHours" value={formData.playtimeHours || ''} onChange={handleChange} className="input-field" placeholder="0" />

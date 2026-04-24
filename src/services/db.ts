@@ -62,14 +62,15 @@ export const DatabaseService = {
     return logs.filter(l => l.mediaId === mediaId);
   },
 
-  async addProgressLog(mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string): Promise<ProgressLog> {
+  async addProgressLog(mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string, location?: string): Promise<ProgressLog> {
      const newLog: ProgressLog = {
        id: uuidv4(),
        mediaId,
        timestamp: timestamp || new Date().toISOString(),
        metricType,
        delta,
-       note
+       note,
+       location
      };
      
      const res = await fetch('/api/logs', {

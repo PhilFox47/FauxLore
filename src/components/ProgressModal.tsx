@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MediaItem, getMetricForType, MEDIA_COLORS } from '../types/schema';
-import { X, Plus, Minus, Calendar, History, Check, Clock } from 'lucide-react';
+import { X, Plus, Minus, Calendar, History, Check, Clock, MapPin } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { useMediaContext } from '../contexts/MediaContext';
@@ -9,7 +9,7 @@ interface ProgressModalProps {
   isOpen: boolean;
   item: MediaItem | null;
   onClose: () => void;
-  onLog: (mediaId: string, metricType: any, delta: number, note?: string, timestamp?: string) => void;
+  onLog: (mediaId: string, metricType: any, delta: number, note?: string, timestamp?: string, location?: string) => void;
 }
 
 export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalProps) {
@@ -17,6 +17,7 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
   const [mode, setMode] = useState<'set' | 'add'>('set');
   const [inputValue, setInputValue] = useState<number | ''>(1);
   const [note, setNote] = useState('');
+  const [location, setLocation] = useState(localStorage.getItem('fauxlore_last_location') || '');
   const [status, setStatus] = useState<MediaItem['status']>('Active');
   const [logDate, setLogDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [logTime, setLogTime] = useState<string>(format(new Date(), 'HH:mm'));
@@ -93,7 +94,11 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       finalTimestamp = selectedDate.toISOString();
     }
     
-    onLog(item.id, metricType, delta, note, finalTimestamp);
+    if (location) {
+      localStorage.setItem('fauxlore_last_location', location);
+    }
+    
+    onLog(item.id, metricType, delta, note, finalTimestamp, location);
     if (status !== item.status) {
       saveMediaItem({ ...item, status: status });
     }
@@ -223,8 +228,20 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
                value={note}
                onChange={(e) => setNote(e.target.value)}
                placeholder="Brief notes from this session..."
-               className={cn("w-full bg-[#18181b] border border-white/10 rounded-xl px-3 py-3 text-white focus:outline-none min-h-[80px] resize-none text-sm", `focus:border-${colors.bg.split('-')[1]}-500`)}
+               className={cn("w-full bg-[#18181b] border border-white/10 rounded-xl px-3 py-3 text-white focus:outline-none min-h-[80px] resize-none text-sm mb-4", `focus:border-${colors.bg.split('-')[1]}-500`)}
              />
+             
+             <label className="block text-sm font-medium text-zinc-300 mb-1">Location (Optional)</label>
+             <div className="relative">
+               <MapPin className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+               <input 
+                 type="text"
+                 value={location}
+                 onChange={(e) => setLocation(e.target.value)}
+                 placeholder="e.g. Home, Train, Living Room"
+                 className={cn("w-full bg-[#18181b] border border-white/10 rounded-xl pl-10 pr-3 py-3 text-white focus:outline-none text-sm", `focus:border-${colors.bg.split('-')[1]}-500`)}
+               />
+             </div>
           </div>
 
           <div>

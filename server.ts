@@ -179,6 +179,10 @@ async function startServer() {
   const dbPath = path.join(process.cwd(), 'fauxlore.db');
   const db = new Database(dbPath);
   
+  // Automatic Migrations
+  try { db.exec("ALTER TABLE media ADD COLUMN language TEXT"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE media ADD COLUMN isOngoing INTEGER"); } catch (e) { /* Ignore if it exists */ }
+
   // Create Tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS media (
@@ -217,6 +221,8 @@ async function startServer() {
       totalIssues INTEGER,
       isReRun INTEGER,
       originalMediaId TEXT,
+      language TEXT,
+      isOngoing INTEGER,
       createdAt TEXT,
       updatedAt TEXT
     );
@@ -229,6 +235,7 @@ async function startServer() {
       metricType TEXT NOT NULL,
       delta REAL NOT NULL,
       note TEXT,
+      location TEXT,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
     );
 
@@ -298,6 +305,7 @@ async function startServer() {
   
   try { db.prepare("ALTER TABLE media ADD COLUMN originalMediaId TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN selectedHltbType TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE logs ADD COLUMN location TEXT").run(); } catch (e) {}
   
   const normalizeMedia = (row: any) => ({
     ...row,
@@ -305,7 +313,8 @@ async function startServer() {
     tags: row.tags ? JSON.parse(row.tags) : [],
     tropes: row.tropes ? JSON.parse(row.tropes) : [],
     watched: row.watched === 1,
-    isReRun: row.isReRun === 1
+    isReRun: row.isReRun === 1,
+    isOngoing: row.isOngoing === 1
   });
 
   // Local DB API Routes
@@ -337,14 +346,14 @@ async function startServer() {
           status, userRating, genres, tags, tropes,
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
-          issuesRead, totalIssues, isReRun, originalMediaId, createdAt, updatedAt
+          issuesRead, totalIssues, isReRun, originalMediaId, language, isOngoing, createdAt, updatedAt
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
           @reviewScore, @averagePlaytime, @hltbMain, @hltbMainExtra, @hltbCompletionist, @selectedHltbType,
           @status, @userRating, @genres, @tags, @tropes,
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
-          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @createdAt, @updatedAt
+          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @language, @isOngoing, @createdAt, @updatedAt
         )
         ON CONFLICT(id) DO UPDATE SET
           userId=excluded.userId, title=excluded.title, mediaType=excluded.mediaType, coverImageUrl=excluded.coverImageUrl,
@@ -359,6 +368,7 @@ async function startServer() {
           totalEpisodes=excluded.totalEpisodes, watched=excluded.watched, watchCount=excluded.watchCount,
           runtimeMinutes=excluded.runtimeMinutes, issuesRead=excluded.issuesRead, totalIssues=excluded.totalIssues,
           isReRun=excluded.isReRun, originalMediaId=excluded.originalMediaId,
+          language=excluded.language, isOngoing=excluded.isOngoing,
           updatedAt=excluded.updatedAt
       `);
 
@@ -398,6 +408,8 @@ async function startServer() {
         totalIssues: item.totalIssues || null,
         isReRun: item.isReRun ? 1 : 0,
         originalMediaId: item.originalMediaId || null,
+        language: item.language || null,
+        isOngoing: item.isOngoing ? 1 : 0,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt
       });
@@ -436,8 +448,8 @@ async function startServer() {
       const log = req.body;
       const userId = log.userId || 'default_user';
       db.prepare(`
-        INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note)
-        VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note)
+        INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note, location)
+        VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note, @location)
       `).run({
         id: log.id,
         userId: userId,
@@ -445,7 +457,8 @@ async function startServer() {
         timestamp: log.timestamp,
         metricType: log.metricType,
         delta: log.delta,
-        note: log.note || null
+        note: log.note || null,
+        location: log.location || null
       });
 
       // Update Streak Mode
@@ -529,13 +542,14 @@ async function startServer() {
       const newTimestamp = updates.timestamp !== undefined ? updates.timestamp : existingLog.timestamp;
       const newNote = updates.note !== undefined ? updates.note : existingLog.note;
       const newDelta = updates.delta !== undefined ? updates.delta : existingLog.delta;
+      const newLocation = updates.location !== undefined ? updates.location : existingLog.location;
       
       const deltaDiff = newDelta - existingLog.delta;
 
       db.prepare(`
-        UPDATE logs SET timestamp = ?, delta = ?, note = ?
+        UPDATE logs SET timestamp = ?, delta = ?, note = ?, location = ?
         WHERE id = ? AND userId = ?
-      `).run(newTimestamp, newDelta, newNote, logId, userId);
+      `).run(newTimestamp, newDelta, newNote, newLocation, logId, userId);
 
       // Clean AI recaps similar to add log if timestamp or delta changed significantly
       if (deltaDiff !== 0 || newTimestamp !== existingLog.timestamp) {

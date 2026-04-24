@@ -121,26 +121,36 @@ export function Recaps() {
       const promptContext = `
 Timeframe: ${timeframe} (${formatIntervalLabel()})
 Total Master Pages (EXP): ${Math.round(totalMasterPages)}
-Media In-Progress (Still Active): ${activeMedia.filter(m => m.status !== 'Completed').map(m => m.title).join(', ') || 'None'}
-Media Completed (Finished): ${completedMedia.length > 0 ? completedMedia.map(m => m.title).join(', ') : 'None'}
-Top Ranked Media: ${mediaRanking.slice(0,5).map(m => `${m.title} (${Math.round(m.pages)} MP)`).join(', ')}
 Total Logs: ${activeLogs.length}
-Journal Notes from this period:
-${activeLogs.filter(l => l.note && l.note.trim().length > 0).map(l => `- On ${activeMedia.find(m => m.id === l.mediaId)?.title || 'Media'}: "${l.note}"`).join('\n') || 'None'}
+
+MEDIA IN PROGRESS:
+${activeMedia.filter(m => m.status !== 'Completed').map(m => `- ${m.title} (${m.mediaType}): ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') || 'None'}
+
+MEDIA COMPLETED:
+${completedMedia.length > 0 ? completedMedia.map(m => `- ${m.title} (${m.mediaType}): ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') : 'None'}
+
+TOP RANKED MEDIA (By Engagement/Master Pages):
+${mediaRanking.slice(0,5).map(m => `- ${m.title} (${Math.round(m.pages)} MP)`).join('\n')}
+
+LOCATIONS TRACKED (Where the user consumed media):
+${Array.from(new Set(activeLogs.filter(l => l.location && l.location.trim().length > 0).map(l => l.location))).join(', ') || 'None'}
+
+JOURNAL NOTES (User's personal thoughts and reactions!):
+${activeLogs.filter(l => l.note && l.note.trim().length > 0).map(l => `- [${l.timestamp.split('T')[0]}] On ${activeMedia.find(m => m.id === l.mediaId)?.title || 'Media'}: "${l.note}"`).join('\n') || 'None'}
 `;
 
-      const aiResponse = await generateAiRecapText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', `Based on the following data, generate a title and a creative, highly detailed, and deeply flavorful summary of this ${timeframe}'s media consumption. 
+      const aiResponse = await generateAiRecapText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', `Based on the following data, generate a title and a creative, witty, and highly energetic recap of this ${timeframe}'s media consumption.
       
 CRITICAL INSTRUCTIONS:
-1. TITLE: Must be a punchy name (1-5 words max). DO NOT include descriptions, dashes, or full sentences in the title field. Example: 'The Crimson Chronicles' or 'Path of the Initiate'.
-2. SUMMARY FORMAT: Format your summary beautifully using Markdown (bolding, italics, blockquotes, horizontal rules, or bullet points).
-3. NARRATIVE: Write a detailed multi-paragraph narrative (Weekly: 3-4 paragraphs, Monthly/Yearly: 5-7 paragraphs) that feels like an epic RPG quest completion log.
-4. WEAVE TITLES: YOU MUST directly weave the SPECIFIC titles of the media consumed into the narrative. 
-5. ACCURACY: DO NOT assume a media item is completed unless it appears in the 'Media Completed' list. If it is only in 'Media In-Progress', describe the ongoing journey, not the conclusion.
-6. LORE: Ground every paragraph in the actual lore or theme of the titles provided!
-7. JOURNAL INTEGRATION: Integrate the user's thoughts and sentiments from the Journal Notes into your narrative. Reflect their specific feelings, quotes, or reactions to the media.
+1. TITLE: Must be a punchy, clever name (1-5 words max). DO NOT include descriptions.
+2. VIBE & TONE: Be charming, sarcastic, witty, and charismatic! Sound natural, modern and casual. Feel free to roast or tease the user playfully about their habits (e.g., spending too much time on one thing, slow reading, weird combos). Less "classic prose" and more like an entertaining, hyper-aware gamer/geek podcaster talking to the user.
+3. WEAVE REAL DATA: You MUST talk about the SPECIFIC media consumed, referencing their plots/descriptions/genres! Use their actual journal notes to comment on their opinions.
+4. ACCURACY: DO NOT assume a media item is completed unless it explicitly is in the 'MEDIA COMPLETED' list! If it's just 'IN PROGRESS', treat it as their current ongoing obsession or slog.
+5. FORMATTING: Use Markdown beautifully (bolding, italics, blockquotes, bullet points). Make it very readable.
+6. LENGTH: Give a detailed recap (Weekly: 2-3 paragraphs. Monthly/Yearly: 4-6 paragraphs) highlighting their key moments, weird obsessions, or big wins.
 
-Context: ${promptContext}`);
+Context: 
+${promptContext}`);
       
       await saveAiRecap({
         timeframe,

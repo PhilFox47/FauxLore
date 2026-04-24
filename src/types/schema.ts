@@ -36,6 +36,7 @@ export interface MediaItem {
   // Metrics (specific mapping per type)
   // Game & Visual Novel
   playtimeHours?: number;
+  isOngoing?: boolean;
   
   // Book
   pagesRead?: number;
@@ -81,6 +82,7 @@ export interface ProgressLog {
   metricType: MetricType;
   delta: number; // e.g., +2
   note?: string;
+  location?: string;
 }
 
 export interface Artifact {

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid, Cell } from 'recharts';
 import { format, subDays, isAfter, startOfDay } from 'date-fns';
-import { BarChart3, DatabaseZap, Clock, ListChecks, Calendar, Target, Activity, Zap } from 'lucide-react';
+import { BarChart3, DatabaseZap, Clock, ListChecks, Calendar, Target, Activity, Zap, MapPin } from 'lucide-react';
 import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
 import { calculateNativeUnits, NATIVE_UNIT_LABELS } from '../lib/rpgSystem';
 import { ProgressLog, MediaItem } from '../types/schema';
@@ -209,6 +209,27 @@ export function Statistics() {
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
   }, [media, filteredLogs, mediaTypeFilters]);
+
+  // Location Distribution
+  const locationDistribution = useMemo(() => {
+    const counts = filteredLogs.reduce((acc, log) => {
+      if (!log.location || !log.location.trim()) return acc;
+      const mediaItem = media.find(m => m.id === log.mediaId);
+      if (!mediaItem) return acc;
+      if (!mediaTypeFilters.includes('All') && !mediaTypeFilters.includes(mediaItem.mediaType)) return acc;
+
+      const loc = log.location.trim();
+      const pages = calculateScaledDelta(log.delta || 1, mediaItem, settings);
+      
+      acc[loc] = (acc[loc] || 0) + pages;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value: Math.floor(value) }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5); // top 5
+  }, [filteredLogs, media, settings, mediaTypeFilters]);
 
   const STATUS_COLORS: Record<string, string> = {
     'Active': '#10b981', // Emerald
@@ -440,6 +461,30 @@ export function Statistics() {
               </ResponsiveContainer>
             </div>
           </div>
+          
+          {/* Location Distribution */}
+          {locationDistribution.length > 0 && (
+            <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6 flex flex-col flex-1 min-h-[250px]">
+              <h4 className="text-sm font-bold text-zinc-400 mb-6 flex items-center gap-2">
+                 <MapPin className="w-4 h-4 text-sky-400" />
+                 Top Locations (Master Pages)
+              </h4>
+              <div className="w-full flex-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={locationDistribution} layout="vertical" margin={{ left: 60, top: 0, right: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={true} vertical={false} />
+                    <XAxis type="number" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} hide />
+                    <YAxis dataKey="name" type="category" stroke="#d4d4d8" fontSize={12} tickLine={false} axisLine={false} width={60} />
+                    <Tooltip 
+                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                      contentStyle={{ backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '1rem', color: '#fff' }}
+                    />
+                    <Bar dataKey="value" name="Master Pages" fill="#38bdf8" radius={[0, 4, 4, 0]} barSize={20} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

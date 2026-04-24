@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
 import { useMediaContext } from '../contexts/MediaContext';
-import { X, Edit2, Clock, Calendar, BookOpen, Star, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw } from 'lucide-react';
+import { X, Edit2, Clock, Calendar, BookOpen, Star, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin } from 'lucide-react';
 import { calculateScaledDelta } from '../lib/scaling';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { generateAiArtifact } from '../services/nanoGptService';
+import { v4 as uuidv4 } from 'uuid';
 import { Artifact } from '../types/schema';
 import { LootReveal } from './LootReveal';
 import { ForgingButton } from './ForgingButton';
@@ -27,9 +28,10 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   const [editLogData, setEditLogData] = useState<{
     delta: number;
     note: string;
+    location: string;
     logDate: string;
     logTime: string;
-  }>({ delta: 0, note: '', logDate: '', logTime: '' });
+  }>({ delta: 0, note: '', location: '', logDate: '', logTime: '' });
 
   if (!isOpen || !item) return null;
 
@@ -38,22 +40,22 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   // Sort logs descending by timestamp
   const sortedLogs = [...logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-  const itemArtifact = artifacts?.find(a => a.mediaId === item.id);
+  const itemArtifacts = artifacts?.filter(a => a.mediaId === item.id) || [];
 
   const handleClaimLoot = async () => {
     if (!settings?.nanoGptApiKey) {
-      // API key missing
+      alert("Please configure your AI Provider API Key in Settings to claim loot.");
       return;
     }
     setIsLooting(true);
     try {
       const generated = await generateAiArtifact(settings.nanoGptApiKey, settings.nanoGptModel || "gpt-4o-mini", item);
       const newArtifact = {
-        id: crypto.randomUUID(),
+        id: uuidv4(),
         mediaId: item.id,
         name: generated.name,
         description: generated.description,
-        type: generated.type,
+        type: generated.type || 'Trinket',
         rarity: generated.rarity as Artifact['rarity'],
         earnedAt: new Date().toISOString()
       };
@@ -61,13 +63,14 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
       setLootedArtifact(newArtifact);
     } catch(e: any) {
       console.error("Failed to loot: " + e.message);
+      alert("Failed to loot: " + e.message);
     } finally {
       setIsLooting(false);
     }
   };
 
   const handleReRun = async () => {
-    const newId = crypto.randomUUID();
+    const newId = uuidv4();
     const newCopy: MediaItem = {
       ...item,
       id: newId,
@@ -90,6 +93,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
     setEditLogData({
       delta: log.delta,
       note: log.note || '',
+      location: log.location || '',
       logDate: format(d, 'yyyy-MM-dd'),
       logTime: format(d, 'HH:mm'),
     });
@@ -109,6 +113,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
     await updateLog(logId, {
       delta: editLogData.delta,
       note: editLogData.note,
+      location: editLogData.location,
       timestamp: finalTimestamp
     });
 
@@ -222,38 +227,66 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
             </div>
           )}
 
-          {item.status === 'Completed' && (
-            <div className="mb-8">
-              <h3 className="text-lg font-bold text-white mb-3 tracking-wide flex items-center gap-2">
-                 <Gem className="w-5 h-5 text-purple-400" />
-                 Conquest Loot
-              </h3>
-              {itemArtifact ? (
-                 <div className="bg-purple-900/10 border border-purple-500/30 rounded-2xl p-5 flex items-start gap-4 shadow-lg shadow-purple-900/5 hover:border-purple-500/50 transition-colors">
-                    <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center shrink-0 border border-purple-500/40">
-                       <Gem className="w-6 h-6 text-purple-400" />
-                    </div>
-                    <div>
-                       <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-black text-purple-300 text-lg">{itemArtifact.name}</h4>
-                          <span className={cn(
-                             "text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded",
-                             itemArtifact.rarity === 'Mythic' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
-                             itemArtifact.rarity === 'Legendary' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                             itemArtifact.rarity === 'Epic' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
-                             itemArtifact.rarity === 'Rare' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                             itemArtifact.rarity === 'Uncommon' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                             'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30'
-                          )}>{itemArtifact.rarity} {itemArtifact.type}</span>
+          {(() => {
+            const isOngoingGame = item.mediaType === 'Game' && item.isOngoing;
+            let allowedArtifactsCount = 0;
+            let nonHistoricalPlaytime = 0;
+            
+            if (isOngoingGame) {
+              nonHistoricalPlaytime = logs
+                .filter(l => l.mediaId === item.id && !l.timestamp.startsWith('1970-01-01') && l.metricType === 'playtimeHours')
+                .reduce((sum, log) => sum + log.delta, 0);
+              
+              allowedArtifactsCount = Math.floor(nonHistoricalPlaytime / 100);
+            } else if (item.status === 'Completed') {
+              allowedArtifactsCount = 1;
+            }
+            
+            if (allowedArtifactsCount === 0 && itemArtifacts.length === 0) return null;
+
+            const canLoot = itemArtifacts.length < allowedArtifactsCount;
+
+            return (
+              <div className="mb-8">
+                <h3 className="text-lg font-bold text-white mb-3 tracking-wide flex items-center gap-2">
+                   <Gem className="w-5 h-5 text-purple-400" />
+                   {isOngoingGame ? 'Ongoing Conquest Loot' : 'Conquest Loot'}
+                </h3>
+                {isOngoingGame && (
+                  <p className="text-xs text-zinc-400 mb-4">Tracked Playtime: {nonHistoricalPlaytime.toFixed(1)} hrs (Next loot at {((itemArtifacts.length + (canLoot ? 0 : 1)) * 100)} hrs)</p>
+                )}
+                {itemArtifacts.length > 0 && (
+                  <div className="flex flex-col gap-3 mb-4">
+                    {itemArtifacts.map(artifact => (
+                       <div key={artifact.id} className="bg-purple-900/10 border border-purple-500/30 rounded-2xl p-5 flex items-start gap-4 shadow-lg shadow-purple-900/5 hover:border-purple-500/50 transition-colors">
+                          <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center shrink-0 border border-purple-500/40">
+                             <Gem className="w-6 h-6 text-purple-400" />
+                          </div>
+                          <div>
+                             <div className="flex items-center gap-2 mb-1">
+                                <h4 className="font-black text-purple-300 text-lg">{artifact.name}</h4>
+                                <span className={cn(
+                                   "text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded",
+                                   artifact.rarity === 'Mythic' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                                   artifact.rarity === 'Legendary' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                                   artifact.rarity === 'Epic' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                                   artifact.rarity === 'Rare' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                                   artifact.rarity === 'Uncommon' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                   'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30'
+                                )}>{artifact.rarity} {artifact.type}</span>
+                             </div>
+                             <p className="text-zinc-400 text-sm leading-relaxed">{artifact.description}</p>
+                          </div>
                        </div>
-                       <p className="text-zinc-400 text-sm leading-relaxed">{itemArtifact.description}</p>
-                    </div>
-                 </div>
-              ) : (
-                <ForgingButton isLooting={isLooting} onClick={handleClaimLoot} />
-              )}
-            </div>
-          )}
+                    ))}
+                  </div>
+                )}
+                {canLoot && (
+                  <ForgingButton isLooting={isLooting} onClick={handleClaimLoot} />
+                )}
+              </div>
+            );
+          })()}
 
           <div>
             <h3 className="text-lg font-bold text-white mb-4 tracking-wide">Journal Entries & Progress</h3>
@@ -297,13 +330,25 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                             />
                           </div>
                         </div>
-                        <div>
-                          <label className="block text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider">Note</label>
-                          <textarea 
-                            value={editLogData.note}
-                            onChange={(e) => setEditLogData({ ...editLogData, note: e.target.value })}
-                            className="w-full bg-[#18181b] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500 resize-none min-h-[60px]"
-                          />
+                        <div className="flex gap-2 w-full mt-2">
+                          <div className="flex-1">
+                            <label className="block text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider">Note</label>
+                            <textarea 
+                              value={editLogData.note}
+                              onChange={(e) => setEditLogData({ ...editLogData, note: e.target.value })}
+                              className="w-full bg-[#18181b] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500 resize-none min-h-[60px]"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="block text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider pl-1">Location</label>
+                            <input 
+                              type="text"
+                              value={editLogData.location}
+                              onChange={(e) => setEditLogData({ ...editLogData, location: e.target.value })}
+                              placeholder="e.g. Home, Train, Area..."
+                              className="w-full bg-[#18181b] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500"
+                            />
+                          </div>
                         </div>
                         <div className="flex gap-2 justify-end mt-4">
                           {deleteConfirmLogId === log.id ? (
@@ -374,9 +419,10 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                             <Edit2 className="w-3 h-3" />
                           </button>
                         </div>
-                        {log.note && (
-                          <div className="pl-4 relative z-10 mt-3">
-                            <p className="text-sm text-zinc-300 italic">"{log.note}"</p>
+                        {(log.note || log.location) && (
+                          <div className="pl-4 relative z-10 mt-3 flex flex-col gap-1">
+                            {log.note && <p className="text-sm text-zinc-300 italic">"{log.note}"</p>}
+                            {log.location && <p className="text-xs text-zinc-500 flex items-center gap-1"><MapPin className="w-3 h-3" /> {log.location}</p>}
                           </div>
                         )}
                       </>

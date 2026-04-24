@@ -14,7 +14,7 @@ interface MediaContextType {
   refreshData: () => Promise<void>;
   saveMediaItem: (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => Promise<void>;
   deleteMediaItem: (id: string) => Promise<void>;
-  addLog: (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string) => Promise<void>;
+  addLog: (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string, location?: string) => Promise<void>;
   updateLog: (id: string, updates: Partial<ProgressLog>) => Promise<void>;
   deleteLog: (id: string) => Promise<void>;
   saveAiRecap: (recap: any) => Promise<void>;
@@ -102,8 +102,8 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     await refreshData();
   }, [refreshData]);
 
-  const addLog = useCallback(async (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string) => {
-    await DatabaseService.addProgressLog(mediaId, metricType, delta, note, timestamp);
+  const addLog = useCallback(async (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string, location?: string) => {
+    await DatabaseService.addProgressLog(mediaId, metricType, delta, note, timestamp, location);
     await refreshData();
   }, [refreshData]);
 
