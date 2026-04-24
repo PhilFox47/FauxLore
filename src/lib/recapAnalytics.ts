@@ -1,6 +1,7 @@
 import { MediaItem, ProgressLog, Settings, MEDIA_TYPES } from '../types/schema';
 import { calculateScaledDelta } from './scaling';
 import { differenceInDays, parseISO, isSameDay, getHours } from 'date-fns';
+import { mulberry32 } from './rpgSystem';
 
 export interface RecapAnalyticsData {
   timeScale: 'week' | 'month' | 'year';
@@ -316,9 +317,17 @@ export function determineArchetypes(data: RecapAnalyticsData) {
       topMediaShare,
    };
 
-   // Evaluate rules
-   const earned = ARCHETYPES.filter(a => a.conditions(data, stats));
-   
-   // Randomize or sort to pick the top 3 best fitting ones (or just return all)
-   return earned.sort(() => 0.5 - Math.random()).slice(0, 3);
+    // Evaluate rules
+    const earned = ARCHETYPES.filter(a => a.conditions(data, stats));
+    
+    // Deterministic shuffle based on user data so it doesn't change arbitrarily
+    // which causes UI mismatch between desktop and phone
+    const rng = mulberry32(data.logs.length + Math.floor(totalMasterPages));
+    const shuffled = [...earned];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    
+    return shuffled.slice(0, 3);
 }

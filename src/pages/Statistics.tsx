@@ -7,14 +7,40 @@ import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
 import { calculateNativeUnits, NATIVE_UNIT_LABELS } from '../lib/rpgSystem';
 import { ProgressLog, MediaItem } from '../types/schema';
 
-type DateRange = '7days' | '30days' | '90days' | '1year' | 'all';
+type DateRange = '7days' | '30days' | '90days' | '1year' | 'all' | 'custom';
 
 export function Statistics() {
   const { logs, media, settings } = useMediaContext();
   const [dateRange, setDateRange] = useState<DateRange>('30days');
-  const [mediaTypeFilter, setMediaTypeFilter] = useState<string>('All');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [mediaTypeFilters, setMediaTypeFilters] = useState<string[]>(['All']);
 
-  const MEDIA_TYPES = ['All', 'Game', 'Book', 'Visual Novel', 'Manga', 'Series', 'Movie', 'Comic'];
+  const MEDIA_TYPES = ['Game', 'Book', 'Visual Novel', 'Manga', 'Series', 'Movie', 'Comic'];
+  const [isMediaDropdownOpen, setIsMediaDropdownOpen] = useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsMediaDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleMediaType = (type: string) => {
+    if (mediaTypeFilters.includes(type)) {
+      setMediaTypeFilters(mediaTypeFilters.filter(t => t !== type));
+    } else {
+      setMediaTypeFilters([...mediaTypeFilters.filter(t => t !== 'All'), type]);
+    }
+  };
+
+  const toggleAllMedia = () => {
+    setMediaTypeFilters(['All']);
+  };
 
   // Apply Date Filter to Logs
   const filteredLogs = useMemo(() => {
@@ -23,7 +49,8 @@ export function Statistics() {
       '30days': 30,
       '90days': 90,
       '1year': 365,
-      'all': null
+      'all': null,
+      'custom': null
     };
     
     const cutoffDays = cutoffMap[dateRange];
@@ -33,27 +60,45 @@ export function Statistics() {
       // 1. Exclude historical logs without a real date
       if (log.timestamp.startsWith('1970-01-01')) return false;
 
+      const logDate = new Date(log.timestamp);
+
       // 2. Date Range Filter
-      if (cutoffDate && !isAfter(new Date(log.timestamp), cutoffDate)) return false;
+      if (dateRange === 'custom') {
+        if (customStartDate && logDate < new Date(customStartDate)) return false;
+        if (customEndDate && logDate > new Date(customEndDate + 'T23:59:59')) return false;
+      } else {
+        if (cutoffDate && !isAfter(logDate, cutoffDate)) return false;
+      }
       
       // 3. Media Filter
-      if (mediaTypeFilter !== 'All') {
+      if (!mediaTypeFilters.includes('All') && mediaTypeFilters.length > 0) {
         const parentMedia = media.find(m => m.id === log.mediaId);
-        if (!parentMedia || parentMedia.mediaType !== mediaTypeFilter) return false;
+        if (!parentMedia || !mediaTypeFilters.includes(parentMedia.mediaType)) return false;
       }
       return true;
     });
-  }, [logs, media, dateRange, mediaTypeFilter]);
+  }, [logs, media, dateRange, mediaTypeFilters, customStartDate, customEndDate]);
 
   // Activity Over Time Mapping
   const activityData = useMemo(() => {
-    const daysToShow = dateRange === 'all' ? 365 // cap chart at 1 year max for 'all' to prevent massive lag
+    let daysToShow = dateRange === 'all' ? 365 
       : dateRange === '1year' ? 365
       : dateRange === '90days' ? 90
       : dateRange === '30days' ? 30 : 7;
 
+    let endD = new Date();
+    
+    if (dateRange === 'custom') {
+      const sDate = customStartDate ? new Date(customStartDate) : new Date(new Date().setFullYear(new Date().getFullYear() - 1));
+      const eDate = customEndDate ? new Date(customEndDate) : new Date();
+      endD = eDate;
+      const diffTime = Math.abs(eDate.getTime() - sDate.getTime());
+      daysToShow = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      if (daysToShow > 365) daysToShow = 365; // cap to 1 year for performance
+    }
+
     const days = Array.from({length: daysToShow}).map((_, i) => {
-      const d = startOfDay(subDays(new Date(), (daysToShow - 1) - i));
+      const d = startOfDay(subDays(endD, (daysToShow - 1) - i));
       return { 
         dateStr: format(d, 'yyyy-MM-dd'),
         display: format(d, daysToShow > 35 ? 'MMM d' : 'EEE, MMM d'),
@@ -73,7 +118,7 @@ export function Statistics() {
     });
 
     return days;
-  }, [filteredLogs, media, settings, dateRange]);
+  }, [filteredLogs, media, settings, dateRange, customStartDate, customEndDate]);
 
   // Aggregate Key Metrics
   const { totalMasterPages, totalLogs, busiestDay, nativeStats } = useMemo(() => {
@@ -97,9 +142,13 @@ export function Statistics() {
     });
 
     // Native total
-    if (mediaTypeFilter !== 'All') {
-      const unit = NATIVE_UNIT_LABELS[mediaTypeFilter as keyof typeof NATIVE_UNIT_LABELS];
-      nativeRollup[unit] = calculateNativeUnits(filteredLogs, media, mediaTypeFilter as any);
+    if (!mediaTypeFilters.includes('All')) {
+      mediaTypeFilters.forEach(type => {
+        const unit = NATIVE_UNIT_LABELS[type as keyof typeof NATIVE_UNIT_LABELS];
+        if (unit) {
+          nativeRollup[type + '_' + unit] = calculateNativeUnits(filteredLogs, media, type as any);
+        }
+      });
     }
     
     let maxDay = { date: '-', count: 0 };
@@ -115,7 +164,7 @@ export function Statistics() {
       busiestDay: maxDay,
       nativeStats: nativeRollup
     };
-  }, [filteredLogs, media, settings, mediaTypeFilter]);
+  }, [filteredLogs, media, settings, mediaTypeFilters]);
 
   // Library Composition Data (Filter based on timeframe activity)
   const typeDistribution = useMemo(() => {
@@ -124,7 +173,7 @@ export function Statistics() {
     const activeMediaInTimeframe = media.filter(m => activeMediaIds.has(m.id));
 
     const counts = activeMediaInTimeframe.reduce((acc, current) => {
-      if (mediaTypeFilter !== 'All' && current.mediaType !== mediaTypeFilter) return acc;
+      if (!mediaTypeFilters.includes('All') && !mediaTypeFilters.includes(current.mediaType)) return acc;
       
       // We only count the pages logged in this period for "Volume"
       const activityInPeriod = filteredLogs
@@ -140,7 +189,7 @@ export function Statistics() {
     return Object.entries(counts)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [media, filteredLogs, settings, mediaTypeFilter]);
+  }, [media, filteredLogs, settings, mediaTypeFilters]);
 
   // Status Distribution Data (Filter based on timeframe activity)
   const statusDistribution = useMemo(() => {
@@ -149,7 +198,7 @@ export function Statistics() {
     const activeMediaInTimeframe = media.filter(m => activeMediaIds.has(m.id));
 
     const counts = activeMediaInTimeframe.reduce((acc, current) => {
-      if (mediaTypeFilter !== 'All' && current.mediaType !== mediaTypeFilter) return acc;
+      if (!mediaTypeFilters.includes('All') && !mediaTypeFilters.includes(current.mediaType)) return acc;
       
       // Determine what status the item had *during* this period or at least it was active
       acc[current.status] = (acc[current.status] || 0) + 1;
@@ -159,7 +208,7 @@ export function Statistics() {
     return Object.entries(counts)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-  }, [media, filteredLogs, mediaTypeFilter]);
+  }, [media, filteredLogs, mediaTypeFilters]);
 
   const STATUS_COLORS: Record<string, string> = {
     'Active': '#10b981', // Emerald
@@ -177,26 +226,80 @@ export function Statistics() {
         </div>
         
         <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
+          {dateRange === 'custom' && (
+            <div className="flex items-center gap-2 bg-[#18181b] border border-white/10 rounded-xl px-2 h-10 w-full sm:w-auto">
+              <input 
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="bg-transparent text-sm text-white focus:outline-none max-w-[120px]"
+              />
+              <span className="text-zinc-500 text-sm">to</span>
+              <input 
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="bg-transparent text-sm text-white focus:outline-none max-w-[120px]"
+              />
+            </div>
+          )}
+
           <select 
             value={dateRange}
             onChange={(e) => setDateRange(e.target.value as DateRange)}
-            className="w-full sm:w-auto bg-[#18181b] border border-white/10 text-sm font-medium text-white rounded-xl px-4 py-2.5 outline-none focus:border-orange-500 transition-colors cursor-pointer"
+            className="w-full sm:w-auto bg-[#18181b] border border-white/10 text-sm font-medium text-white rounded-xl px-4 py-2 h-10 outline-none focus:border-orange-500 transition-colors cursor-pointer"
           >
             <option value="7days">Last 7 Days</option>
             <option value="30days">Last 30 Days</option>
             <option value="90days">Last 3 Months</option>
             <option value="1year">Last Year</option>
             <option value="all">All Time</option>
+            <option value="custom">Custom Range</option>
           </select>
-          <select 
-            value={mediaTypeFilter}
-            onChange={(e) => setMediaTypeFilter(e.target.value)}
-            className="w-full sm:w-auto bg-[#18181b] border border-white/10 text-sm font-medium text-white rounded-xl px-4 py-2.5 outline-none focus:border-orange-500 transition-colors cursor-pointer"
-          >
-            {MEDIA_TYPES.map(t => (
-              <option key={t} value={t}>{t === 'All' ? 'All Media Types' : t}</option>
-            ))}
-          </select>
+
+          <div className="relative group flex-1 sm:flex-none sm:w-48" ref={dropdownRef}>
+            <button
+              onClick={() => setIsMediaDropdownOpen(!isMediaDropdownOpen)}
+              className="w-full bg-[#18181b] border border-white/10 rounded-xl px-4 py-2 h-10 text-sm text-white focus:outline-none focus:border-orange-500 hover:border-white/20 transition-colors cursor-pointer text-left flex items-center justify-between"
+            >
+              <span className="truncate">
+                {mediaTypeFilters.includes('All') ? 'All Media Types' : 
+                 mediaTypeFilters.length === 0 ? 'No Types' : 
+                 mediaTypeFilters.join(', ')}
+              </span>
+            </button>
+
+            {isMediaDropdownOpen && (
+              <div className="absolute top-full right-0 mt-2 w-full lg:w-48 bg-zinc-900 border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden">
+                <div className="p-1">
+                  <button
+                    onClick={toggleAllMedia}
+                    className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-white/5 rounded-lg transition-colors flex items-center space-x-2"
+                  >
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center ${mediaTypeFilters.includes('All') ? 'bg-orange-500 border-orange-500' : 'border-zinc-700 bg-zinc-800'}`}>
+                      {mediaTypeFilters.includes('All') && <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                    </div>
+                    <span>All Media Types</span>
+                  </button>
+                  
+                  <div className="h-px bg-white/10 my-1 mx-2" />
+
+                  {MEDIA_TYPES.map(type => (
+                    <button
+                      key={type}
+                      onClick={() => toggleMediaType(type)}
+                      className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-white/5 rounded-lg transition-colors flex items-center space-x-2"
+                    >
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center ${mediaTypeFilters.includes(type) && !mediaTypeFilters.includes('All') ? 'bg-orange-500 border-orange-500' : 'border-zinc-700 bg-zinc-800'}`}>
+                        {mediaTypeFilters.includes(type) && !mediaTypeFilters.includes('All') && <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                      </div>
+                      <span>{type}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -212,13 +315,13 @@ export function Statistics() {
           </div>
         </div>
 
-        {mediaTypeFilter !== 'All' ? Object.entries(nativeStats).map(([unit, val]) => (
+        {!mediaTypeFilters.includes('All') ? Object.entries(nativeStats).map(([unit, val]) => (
           <div key={unit} className="bg-zinc-900/50 border border-white/5 p-5 rounded-2xl flex items-center gap-4">
             <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-xl">
               <Target className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">{unit}</p>
+              <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">{unit.split('_')[1]}</p>
               <p className="text-2xl font-black text-white">{Math.floor(val).toLocaleString()}</p>
             </div>
           </div>
@@ -286,8 +389,8 @@ export function Statistics() {
         </div>
 
         <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
-          {/* Media Distribution Chart (Only if All is selected) */}
-          {mediaTypeFilter === 'All' && (
+          {/* Media Distribution Chart (Only if All is selected, or multiple selected) */}
+          {(mediaTypeFilters.includes('All') || mediaTypeFilters.length > 1) && (
             <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6 flex flex-col flex-1 min-h-[250px]">
               <h4 className="text-sm font-bold text-zinc-400 mb-6 flex items-center gap-2">
                  <Zap className="w-4 h-4 text-orange-400" />
@@ -311,7 +414,7 @@ export function Statistics() {
           )}
 
           {/* Status Distribution Chart */}
-          <div className={`bg-zinc-900/50 border border-white/5 rounded-3xl p-6 flex flex-col flex-1 min-h-[250px] ${mediaTypeFilter !== 'All' ? 'h-full' : ''}`}>
+          <div className={`bg-zinc-900/50 border border-white/5 rounded-3xl p-6 flex flex-col flex-1 min-h-[250px] ${(mediaTypeFilters.includes('All') || mediaTypeFilters.length > 1) ? '' : 'h-full'}`}>
             <h4 className="text-sm font-bold text-zinc-400 mb-6 flex items-center gap-2">
                <Calendar className="w-4 h-4 text-emerald-400" />
                Status Overview (Item Count)

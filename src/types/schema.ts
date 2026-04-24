@@ -19,6 +19,10 @@ export interface MediaItem {
   year?: number;
   reviewScore?: number; // 1-100
   averagePlaytime?: number; // hours
+  hltbMain?: number;
+  hltbMainExtra?: number;
+  hltbCompletionist?: number;
+  selectedHltbType?: 'main' | 'mainExtra' | 'completionist';
   status: Status;
   userRating?: number; // 1-10
   

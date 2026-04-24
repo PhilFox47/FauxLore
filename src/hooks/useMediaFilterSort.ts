@@ -4,7 +4,7 @@ import { MediaItem, Status } from '../types/schema';
 export type SortOption = 'updatedAt' | 'createdAt' | 'titleAsc' | 'titleDesc' | 'rating';
 
 export function useMediaFilterSort(mediaElements: MediaItem[], defaultStatus: Status | 'All' = 'All') {
-  const [statusFilter, setStatusFilter] = useState<Status | 'All'>(defaultStatus);
+  const [statusFilters, setStatusFilters] = useState<Status[]>(defaultStatus === 'All' ? ["Active", "Planning", "On Hold", "Completed", "Dropped"] : [defaultStatus]);
   const [sortBy, setSortBy] = useState<SortOption>('updatedAt');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -12,11 +12,12 @@ export function useMediaFilterSort(mediaElements: MediaItem[], defaultStatus: St
     let result = [...mediaElements];
 
     // 1. Status Filter
-    if (statusFilter !== 'All') {
-      result = result.filter(m => m.status === statusFilter);
+    if (statusFilters.length > 0) {
+      result = result.filter(m => statusFilters.includes(m.status));
     }
 
     // 2. Search Filter
+
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase();
       result = result.filter(m => m.title.toLowerCase().includes(q));
@@ -43,11 +44,11 @@ export function useMediaFilterSort(mediaElements: MediaItem[], defaultStatus: St
     });
 
     return result;
-  }, [mediaElements, statusFilter, sortBy, searchQuery]);
+  }, [mediaElements, statusFilters, sortBy, searchQuery]);
 
   return {
-    statusFilter,
-    setStatusFilter,
+    statusFilters,
+    setStatusFilters,
     sortBy,
     setSortBy,
     searchQuery,

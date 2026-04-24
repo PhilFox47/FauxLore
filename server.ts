@@ -6,6 +6,140 @@ import Database from "better-sqlite3";
 
 dotenv.config();
 
+async function hltbSearch(query: string) {
+  try {
+    const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36";
+    
+    // 1. Fetch main page to find the script containing the dynamic endpoint
+    const mainPageRes = await fetch("https://howlongtobeat.com/", {
+      headers: { "User-Agent": userAgent, "Referer": "https://howlongtobeat.com/" }
+    });
+    if (!mainPageRes.ok) throw new Error("Could not fetch HLTB main page");
+    const mainHtml = await mainPageRes.text();
+    
+    const scriptRegex = /_next\/static\/chunks\/[^"]+\.js/g;
+    const scripts = mainHtml.match(scriptRegex) || [];
+    
+    let endpointBasePath = null;
+    
+    // Prioritize _app scripts but scan all if needed
+    const prioritizedScripts = scripts.filter(s => s.includes('_app'));
+    const otherScripts = scripts.filter(s => !s.includes('_app'));
+    const allScripts = [...prioritizedScripts, ...otherScripts].slice(0, 15);
+    
+    for (const script of allScripts) {
+      const scriptSrc = `https://howlongtobeat.com/${script}`;
+      try {
+        const scriptRes = await fetch(scriptSrc, { headers: { "User-Agent": userAgent } });
+        if (scriptRes.ok) {
+          const scriptText = await scriptRes.text();
+          // Look for fetch call with POST to find base endpoint (e.g. /api/search or /api/find)
+          const match = scriptText.match(/fetch\s*\(\s*["']\/api\/([a-zA-Z0-9_/]+)[^"']*["']\s*,\s*\{[^}]*method:\s*["']POST["'][^}]*\}/i);
+          if (match && match[1]) {
+            let basePath = match[1];
+            if (basePath.includes('/')) basePath = basePath.split('/')[0];
+            endpointBasePath = `/api/${basePath}`;
+            break;
+          }
+        }
+      } catch (err) {
+        // ignore individual script fetch errors
+      }
+    }
+    
+    // Fallback if not found inside scripts
+    if (!endpointBasePath) {
+      endpointBasePath = "/api/find"; // current as of mid-test
+    }
+    
+    // 2. Fetch the auth token using the /init endpoint
+    const initUrl = `https://howlongtobeat.com${endpointBasePath}/init?t=${Date.now()}`;
+    const initRes = await fetch(initUrl, { 
+      headers: { "User-Agent": userAgent, "Referer": "https://howlongtobeat.com/" } 
+    });
+    
+    if (!initRes.ok) throw new Error(`Failed to fetch init token, status: ${initRes.status}`);
+    const initData = await initRes.json();
+    
+    const token = initData.token;
+    let hpKey = "";
+    let hpVal = "";
+    
+    // Extract dynamic payload keys just like python scraper
+    for (const key of Object.keys(initData)) {
+      if (key.toLowerCase().includes("key")) hpKey = initData[key];
+      else if (key.toLowerCase().includes("val")) hpVal = initData[key];
+    }
+    
+    if (!token || !hpKey || !hpVal) {
+      throw new Error("Missing auth params from init payload");
+    }
+    
+    // 3. Perform the actual search request
+    const url = `https://howlongtobeat.com${endpointBasePath}`;
+    const payload: any = {
+      searchType: "games",
+      searchTerms: query.split(" "),
+      searchPage: 1,
+      size: 20,
+      searchOptions: {
+        games: {
+          userId: 0,
+          platform: "",
+          sortCategory: "popular",
+          rangeCategory: "main",
+          rangeTime: { min: 0, max: 0 },
+          gameplay: { perspective: "", flow: "", genre: "", difficulty: "" },
+          rangeYear: { max: "", min: "" },
+          modifier: ""
+        },
+        users: { sortCategory: "postcount" },
+        lists: { sortCategory: "follows" },
+        filter: "",
+        sort: 0,
+        randomizer: 0
+      },
+      useCache: true
+    };
+    
+    // Inject the dynamic key-value
+    payload[hpKey] = hpVal;
+    
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": userAgent,
+        "Referer": "https://howlongtobeat.com/",
+        "Origin": "https://howlongtobeat.com",
+        "x-auth-token": token,
+        "x-hp-key": hpKey,
+        "x-hp-val": hpVal
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      console.error(`HLTB API status error: ${response.status} at ${url}`);
+      return [];
+    }
+
+    const json = await response.json();
+    if (!json || !json.data) return [];
+
+    return json.data.map((item: any) => ({
+      gameplayMain: Math.round(item.comp_main / 3600),
+      gameplayMainExtra: Math.round(item.comp_plus / 3600),
+      gameplayCompletionist: Math.round(item.comp_100 / 3600),
+      gameName: item.game_name,
+      gameId: item.game_id
+    }));
+  } catch (err) {
+    console.error("HLTB search failed:", err);
+    return [];
+  }
+}
+
 let igdbToken: { access_token: string, expires_at: number } | null = null;
 async function getIgdbToken(clientId: string, clientSecret: string) {
   if (!clientId || !clientSecret) {
@@ -59,6 +193,10 @@ async function startServer() {
       year INTEGER,
       reviewScore INTEGER,
       averagePlaytime REAL,
+      hltbMain REAL,
+      hltbMainExtra REAL,
+      hltbCompletionist REAL,
+      selectedHltbType TEXT,
       status TEXT NOT NULL,
       userRating INTEGER,
       genres TEXT,
@@ -128,6 +266,10 @@ async function startServer() {
   try { db.prepare("ALTER TABLE settings ADD COLUMN yearlyGoals TEXT").run(); console.log("Migration: Added yearlyGoals"); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptApiKey TEXT").run(); console.log("Migration: Added nanoGptApiKey"); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptModel TEXT").run(); console.log("Migration: Added nanoGptModel"); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN hltbMain REAL").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN hltbMainExtra REAL").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN hltbCompletionist REAL").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN selectedHltbType TEXT").run(); } catch (e) {}
   
   const normalizeMedia = (row: any) => ({
     ...row,
@@ -162,13 +304,15 @@ async function startServer() {
       const stmt = db.prepare(`
         INSERT INTO media (
           id, userId, title, mediaType, coverImageUrl, description, creator, publisher, year, 
-          reviewScore, averagePlaytime, status, userRating, genres, tags, tropes,
+          reviewScore, averagePlaytime, hltbMain, hltbMainExtra, hltbCompletionist, selectedHltbType,
+          status, userRating, genres, tags, tropes,
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
           issuesRead, totalIssues, createdAt, updatedAt
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
-          @reviewScore, @averagePlaytime, @status, @userRating, @genres, @tags, @tropes,
+          @reviewScore, @averagePlaytime, @hltbMain, @hltbMainExtra, @hltbCompletionist, @selectedHltbType,
+          @status, @userRating, @genres, @tags, @tropes,
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
           @issuesRead, @totalIssues, @createdAt, @updatedAt
@@ -177,6 +321,8 @@ async function startServer() {
           userId=excluded.userId, title=excluded.title, mediaType=excluded.mediaType, coverImageUrl=excluded.coverImageUrl,
           description=excluded.description, creator=excluded.creator, publisher=excluded.publisher,
           year=excluded.year, reviewScore=excluded.reviewScore, averagePlaytime=excluded.averagePlaytime,
+          hltbMain=excluded.hltbMain, hltbMainExtra=excluded.hltbMainExtra, hltbCompletionist=excluded.hltbCompletionist,
+          selectedHltbType=excluded.selectedHltbType,
           status=excluded.status, userRating=excluded.userRating, genres=excluded.genres,
           tags=excluded.tags, tropes=excluded.tropes, playtimeHours=excluded.playtimeHours,
           pagesRead=excluded.pagesRead, totalPages=excluded.totalPages, chaptersRead=excluded.chaptersRead,
@@ -198,6 +344,10 @@ async function startServer() {
         year: item.year || null,
         reviewScore: item.reviewScore || null,
         averagePlaytime: item.averagePlaytime || null,
+        hltbMain: item.hltbMain || null,
+        hltbMainExtra: item.hltbMainExtra || null,
+        hltbCompletionist: item.hltbCompletionist || null,
+        selectedHltbType: item.selectedHltbType || null,
         status: item.status,
         userRating: item.userRating || null,
         genres: JSON.stringify(item.genres || []),
@@ -305,6 +455,79 @@ async function startServer() {
         }
       }
       res.json(db.prepare('SELECT * FROM logs WHERE id = ?').get(log.id));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.put("/api/logs/:id", (req, res) => {
+    try {
+      const logId = req.params.id;
+      const updates = req.body;
+      const userId = req.query.userId || 'default_user';
+
+      const existingLog = db.prepare('SELECT * FROM logs WHERE id = ? AND userId = ?').get(logId, userId) as any;
+      if (!existingLog) return res.status(404).json({ error: 'Log not found or unauthorized' });
+
+      const newTimestamp = updates.timestamp !== undefined ? updates.timestamp : existingLog.timestamp;
+      const newNote = updates.note !== undefined ? updates.note : existingLog.note;
+      const newDelta = updates.delta !== undefined ? updates.delta : existingLog.delta;
+      
+      const deltaDiff = newDelta - existingLog.delta;
+
+      db.prepare(`
+        UPDATE logs SET timestamp = ?, delta = ?, note = ?
+        WHERE id = ? AND userId = ?
+      `).run(newTimestamp, newDelta, newNote, logId, userId);
+
+      // Clean AI recaps similar to add log if timestamp or delta changed significantly
+      if (deltaDiff !== 0 || newTimestamp !== existingLog.timestamp) {
+        try {
+          db.prepare(`DELETE FROM ai_recaps WHERE userId = ?`).run(userId);
+        } catch(e) {}
+      }
+
+      // Update media item total logic
+      if (deltaDiff !== 0) {
+        const mediaRow = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(existingLog.mediaId, userId) as any;
+        if (mediaRow) {
+          const type = existingLog.metricType;
+          const now = new Date().toISOString();
+          if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {
+            db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, updatedAt = ? WHERE id = ? AND userId = ?`).run(deltaDiff, now, existingLog.mediaId, userId);
+          }
+        }
+      }
+
+      res.json(db.prepare('SELECT * FROM logs WHERE id = ?').get(logId));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.delete("/api/logs/:id", (req, res) => {
+    try {
+      const logId = req.params.id;
+      const userId = req.query.userId || 'default_user';
+
+      const existingLog = db.prepare('SELECT * FROM logs WHERE id = ? AND userId = ?').get(logId, userId) as any;
+      if (!existingLog) return res.status(404).json({ error: 'Log not found or unauthorized' });
+
+      db.prepare('DELETE FROM logs WHERE id = ? AND userId = ?').run(logId, userId);
+
+      // Clean AI recaps
+      try {
+        db.prepare(`DELETE FROM ai_recaps WHERE userId = ?`).run(userId);
+      } catch(e) {}
+
+      // Revert media item metrics
+      const mediaRow = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(existingLog.mediaId, userId) as any;
+      if (mediaRow) {
+        const type = existingLog.metricType;
+        const now = new Date().toISOString();
+        if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {
+          // Subtracting the delta, ensuring it doesn't drop below 0
+          db.prepare(`UPDATE media SET ${type} = MAX(0, IFNULL(${type}, 0) - ?), updatedAt = ? WHERE id = ? AND userId = ?`).run(existingLog.delta, now, existingLog.mediaId, userId);
+        }
+      }
+
+      res.json({ success: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -470,7 +693,7 @@ async function startServer() {
 
       const data = await igdbRes.json();
 
-      const mappedResults = data.map((game: any) => {
+      const mappedResults = await Promise.all(data.map(async (game: any) => {
         let developer = "";
         let publisher = "";
         
@@ -481,6 +704,21 @@ async function startServer() {
           if (pub && pub.company) publisher = pub.company.name;
         }
 
+        let hltbMain = 0;
+        let hltbMainExtra = 0;
+        let hltbCompletionist = 0;
+        try {
+          const hltbResults = await hltbSearch(game.name);
+          if (hltbResults && hltbResults.length > 0) {
+            const hltbRecord = hltbResults[0];
+            hltbMain = hltbRecord.gameplayMain || 0;
+            hltbMainExtra = hltbRecord.gameplayMainExtra || 0;
+            hltbCompletionist = hltbRecord.gameplayCompletionist || 0;
+          }
+        } catch (e) {
+          console.error(`HLTB error for ${game.name}:`, e);
+        }
+
         return {
           id: game.id.toString(),
           title: game.name,
@@ -488,18 +726,43 @@ async function startServer() {
           coverImageUrl: game.cover?.image_id ? `https://images.igdb.com/igdb/image/upload/t_cover_big/${game.cover.image_id}.jpg` : "",
           year: game.first_release_date ? new Date(game.first_release_date * 1000).getFullYear() : undefined,
           reviewScore: game.total_rating ? Math.round(game.total_rating / 10) / 2 : undefined,
-          averagePlaytime: 0, // IGDB does not have a native "time_to_beat" in the v4 games endpoint without an external source
+          averagePlaytime: hltbMainExtra || hltbMain || 0,
+          hltbMain,
+          hltbMainExtra,
+          hltbCompletionist,
+          selectedHltbType: 'mainExtra' as const,
           genres: game.genres ? game.genres.map((g: any) => g.name) : [],
           tags: game.themes ? game.themes.map((t: any) => t.name) : [],
           developer,
           publisher
         };
-      });
+      }));
 
       res.json(mappedResults);
     } catch (error: any) {
       console.error("Error searching IGDB:", error);
       res.status(500).json({ error: error.message || "Failed to fetch metadata from VGDB." });
+    }
+  });
+
+  app.get("/api/hltb/search", async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query) return res.status(400).json({ error: "Missing query" });
+      
+      const results = await hltbSearch(query);
+      if (results && results.length > 0) {
+        const top = results[0];
+        res.json({
+          hltbMain: top.gameplayMain || 0,
+          hltbMainExtra: top.gameplayMainExtra || 0,
+          hltbCompletionist: top.gameplayCompletionist || 0
+        });
+      } else {
+        res.status(404).json({ error: "No HLTB data found" });
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 

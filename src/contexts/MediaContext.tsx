@@ -12,6 +12,8 @@ interface MediaContextType {
   saveMediaItem: (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => Promise<void>;
   deleteMediaItem: (id: string) => Promise<void>;
   addLog: (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string) => Promise<void>;
+  updateLog: (id: string, updates: Partial<ProgressLog>) => Promise<void>;
+  deleteLog: (id: string) => Promise<void>;
   saveAiRecap: (recap: any) => Promise<void>;
   saveAiText: (key: string, value: string) => Promise<void>;
   clearAiTextCache: (key?: string) => Promise<void>;
@@ -69,6 +71,16 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     await refreshData();
   }, [refreshData]);
 
+  const updateLog = useCallback(async (id: string, updates: Partial<ProgressLog>) => {
+    await DatabaseService.updateProgressLog(id, updates);
+    await refreshData();
+  }, [refreshData]);
+
+  const deleteLog = useCallback(async (id: string) => {
+    await DatabaseService.deleteProgressLog(id);
+    await refreshData();
+  }, [refreshData]);
+
   const saveAiRecap = useCallback(async (recap: any) => {
     await DatabaseService.saveAiRecap(recap);
     await refreshData();
@@ -85,7 +97,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [refreshData]);
 
   return (
-    <MediaContext.Provider value={{ media, logs, settings, aiRecaps, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, saveAiRecap, saveAiText, clearAiTextCache, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, aiRecaps, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, saveAiRecap, saveAiText, clearAiTextCache, isLoading }}>
       {children}
     </MediaContext.Provider>
   );

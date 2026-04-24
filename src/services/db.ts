@@ -81,6 +81,21 @@ export const DatabaseService = {
      return res.json();
   },
 
+  async updateProgressLog(id: string, updates: Partial<ProgressLog>): Promise<ProgressLog> {
+    const res = await fetch(`/api/logs/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    if (!res.ok) throw new Error('Failed to update log');
+    return res.json();
+  },
+
+  async deleteProgressLog(id: string): Promise<void> {
+    const res = await fetch(`/api/logs/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete log');
+  },
+
   async getSettings(): Promise<any> {
     try {
       const res = await fetch('/api/settings');

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { MediaItem, MEDIA_TYPES, STATUSES, MediaType } from '../types/schema';
-import { X, Search, Loader2 } from 'lucide-react';
+import { X, Search, Loader2, RefreshCw } from 'lucide-react';
 import { IntegrationsService, GameMetadata } from '../services/integrations';
+import { cn } from '../lib/utils';
 
 interface MediaFormModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
   const [selectedSeriesForSeasons, setSelectedSeriesForSeasons] = useState<any | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isRefetchingHltb, setIsRefetchingHltb] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -121,6 +123,10 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
       tags: match.tags || [],
       reviewScore: match.reviewScore,
       averagePlaytime: match.averagePlaytime,
+      hltbMain: match.hltbMain,
+      hltbMainExtra: match.hltbMainExtra,
+      hltbCompletionist: match.hltbCompletionist,
+      selectedHltbType: match.selectedHltbType || 'mainExtra',
       totalPages: match.totalPages,
       totalEpisodes: match.totalEpisodes,
       totalChapters: match.totalChapters,
@@ -147,6 +153,28 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
       season: season.seasonNumber,
     }));
     setSelectedSeriesForSeasons(null);
+  };
+
+  const handleRefetchHltb = async () => {
+    if (!formData.title || formData.mediaType !== 'Game') return;
+    setIsRefetchingHltb(true);
+    try {
+      const data = await IntegrationsService.fetchHltbData(formData.title);
+      setFormData(prev => ({
+        ...prev,
+        hltbMain: data.hltbMain,
+        hltbMainExtra: data.hltbMainExtra,
+        hltbCompletionist: data.hltbCompletionist,
+        averagePlaytime: prev.selectedHltbType === 'main' ? data.hltbMain : 
+                        prev.selectedHltbType === 'completionist' ? data.hltbCompletionist : 
+                        data.hltbMainExtra
+      }));
+    } catch (e) {
+      console.error(e);
+      alert("Failed to find HLTB data for this title.");
+    } finally {
+      setIsRefetchingHltb(false);
+    }
   };
 
   return (
@@ -325,7 +353,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   step="0.5"
                   min="0"
                   max="5"
-                  value={formData.reviewScore === undefined ? '' : formData.reviewScore}
+                  value={formData.reviewScore ?? ''}
                   onChange={(e) => {
                     const val = e.target.value;
                     setFormData(p => ({...p, reviewScore: val === '' ? undefined : Number(val) }));
@@ -398,7 +426,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   step="0.5"
                   min="0"
                   max="5"
-                  value={formData.reviewScore === undefined ? '' : formData.reviewScore}
+                  value={formData.reviewScore ?? ''}
                   onChange={(e) => {
                     const val = e.target.value;
                     setFormData(p => ({...p, reviewScore: val === '' ? undefined : Number(val) }));
@@ -457,7 +485,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   step="0.5" 
                   min="0" 
                   max="5" 
-                  value={formData.userRating === undefined ? '' : formData.userRating} 
+                  value={formData.userRating ?? ''} 
                   onChange={(e) => {
                     const val = e.target.value;
                     setFormData(p => ({...p, userRating: val === '' ? undefined : Number(val) }));
@@ -475,9 +503,53 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   <input type="number" name="playtimeHours" value={formData.playtimeHours || ''} onChange={handleChange} className="input-field" placeholder="0" />
                 </div>
                 {formData.mediaType === 'Game' && (
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Avg. Playtime (HLTB)</label>
-                    <input type="number" name="averagePlaytime" value={formData.averagePlaytime || ''} onChange={handleChange} className="input-field" placeholder="0" />
+                  <div className="col-span-1 sm:col-span-2 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">Target Playtime (Hours)</label>
+                      <input type="number" name="averagePlaytime" value={formData.averagePlaytime || ''} onChange={handleChange} className="input-field" placeholder="0" />
+                    </div>
+                    {formData.hltbMain !== undefined && (
+                      <div className="bg-zinc-800/30 p-4 rounded-2xl space-y-3 border border-white/5">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Select HLTB Target</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                           {[
+                             { id: 'main', label: 'Main', value: formData.hltbMain },
+                             { id: 'mainExtra', label: 'Main + Extras', value: formData.hltbMainExtra },
+                             { id: 'completionist', label: 'Completionist', value: formData.hltbCompletionist }
+                           ].map(type => (
+                             <button
+                               key={type.id}
+                               type="button"
+                               onClick={() => {
+                                 setFormData(prev => ({
+                                   ...prev,
+                                   selectedHltbType: type.id as any,
+                                   averagePlaytime: type.value
+                                 }));
+                               }}
+                               className={cn(
+                                 "flex flex-col items-center justify-center p-2 rounded-xl text-[10px] transition-all border",
+                                 formData.selectedHltbType === type.id 
+                                   ? "bg-orange-500 text-white border-orange-400" 
+                                   : "bg-black/20 text-zinc-400 border-white/5 hover:border-white/10"
+                               )}
+                             >
+                               <span className="opacity-70">{type.label}</span>
+                               <span className="font-black text-sm">{type.value}h</span>
+                             </button>
+                           ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRefetchHltb}
+                          disabled={isRefetchingHltb}
+                          className="w-full flex items-center justify-center gap-2 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-colors border border-white/5"
+                        >
+                          <RefreshCw className={cn("w-3 h-3", isRefetchingHltb && "animate-spin")} />
+                          {isRefetchingHltb ? 'Updating...' : 'Re-Fetch HLTB Data'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

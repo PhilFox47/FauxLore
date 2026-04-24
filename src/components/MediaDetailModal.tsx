@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
 import { useMediaContext } from '../contexts/MediaContext';
-import { X, Edit2, Clock, Calendar, BookOpen, Star, Hash, Gamepad2, Tv, Film } from 'lucide-react';
+import { X, Edit2, Clock, Calendar, BookOpen, Star, Hash, Gamepad2, Tv, Film, Save, Trash2 } from 'lucide-react';
 import { calculateScaledDelta } from '../lib/scaling';
+import { cn } from '../lib/utils';
+import { format } from 'date-fns';
 
 interface MediaDetailModalProps {
   isOpen: boolean;
@@ -13,13 +15,58 @@ interface MediaDetailModalProps {
 }
 
 export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaDetailModalProps) {
+  const { settings, updateLog, deleteLog } = useMediaContext();
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
+  const [deleteConfirmLogId, setDeleteConfirmLogId] = useState<string | null>(null);
+  const [editLogData, setEditLogData] = useState<{
+    delta: number;
+    note: string;
+    logDate: string;
+    logTime: string;
+  }>({ delta: 0, note: '', logDate: '', logTime: '' });
+
   if (!isOpen || !item) return null;
 
-  const { settings } = useMediaContext();
   const totalMasterPages = logs.reduce((acc, log) => acc + calculateScaledDelta(log.delta, item, settings), 0);
   
   // Sort logs descending by timestamp
   const sortedLogs = [...logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  const handleEditClick = (log: ProgressLog) => {
+    const d = new Date(log.timestamp);
+    setEditLogData({
+      delta: log.delta,
+      note: log.note || '',
+      logDate: format(d, 'yyyy-MM-dd'),
+      logTime: format(d, 'HH:mm'),
+    });
+    setEditingLogId(log.id);
+  };
+
+  const handleSaveLogUpdate = async (logId: string) => {
+    if (typeof editLogData.delta !== 'number') return;
+    
+    const selectedDate = new Date(editLogData.logDate);
+    if (editLogData.logTime) {
+      const [hours, minutes] = editLogData.logTime.split(':').map(Number);
+      selectedDate.setHours(hours, minutes, 0, 0);
+    }
+    const finalTimestamp = selectedDate.toISOString();
+
+    await updateLog(logId, {
+      delta: editLogData.delta,
+      note: editLogData.note,
+      timestamp: finalTimestamp
+    });
+
+    setEditingLogId(null);
+  };
+
+  const handleDeleteLog = async (logId: string) => {
+    await deleteLog(logId);
+    setEditingLogId(null);
+    setDeleteConfirmLogId(null);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
@@ -118,23 +165,124 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
             ) : (
               <div className="space-y-4">
                 {sortedLogs.map(log => (
-                  <div key={log.id} className="p-4 bg-zinc-800/30 rounded-xl border border-white/5 relative">
+                  <div key={log.id} className="p-4 bg-zinc-800/30 rounded-xl border border-white/5 relative group">
                     {/* Timestamp indicator line */}
                     <div className="absolute top-0 bottom-0 left-4 w-px bg-zinc-700/50" />
                     
-                    <div className="flex items-center gap-3 mb-2 relative z-10 pl-4">
-                      <div className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] -ml-[21px]" />
-                      <span className="text-xs font-mono text-zinc-400">
-                        {new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <span className="text-xs font-bold text-orange-400 ml-auto bg-orange-500/10 px-2 py-0.5 rounded">
-                        +{log.delta} {log.metricType}
-                      </span>
-                    </div>
-                    {log.note && (
-                      <div className="pl-4 relative z-10 mt-3">
-                        <p className="text-sm text-zinc-300 italic">"{log.note}"</p>
+                    {editingLogId === log.id ? (
+                      <div className="relative z-10 pl-6 space-y-4">
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <div className="flex-1">
+                            <label className="block text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider">Delta (+{log.metricType})</label>
+                            <input 
+                              type="number"
+                              value={editLogData.delta}
+                              onChange={(e) => setEditLogData({ ...editLogData, delta: e.target.value === '' ? 0 : Number(e.target.value) })}
+                              className="w-full bg-[#18181b] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500 font-bold"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="block text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider">Date</label>
+                            <input 
+                              type="date"
+                              value={editLogData.logDate}
+                              onChange={(e) => setEditLogData({ ...editLogData, logDate: e.target.value })}
+                              className="w-full bg-[#18181b] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500 cursor-pointer"
+                            />
+                          </div>
+                          <div className="w-24 shrink-0">
+                            <label className="block text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider">Time</label>
+                            <input 
+                              type="time"
+                              value={editLogData.logTime}
+                              onChange={(e) => setEditLogData({ ...editLogData, logTime: e.target.value })}
+                              className="w-full bg-[#18181b] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider">Note</label>
+                          <textarea 
+                            value={editLogData.note}
+                            onChange={(e) => setEditLogData({ ...editLogData, note: e.target.value })}
+                            className="w-full bg-[#18181b] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500 resize-none min-h-[60px]"
+                          />
+                        </div>
+                        <div className="flex gap-2 justify-end mt-4">
+                          {deleteConfirmLogId === log.id ? (
+                            <div className="mr-auto flex items-center gap-2 bg-red-500/10 px-2 py-1 rounded-lg border border-red-500/20">
+                              <span className="text-xs text-red-400 font-medium whitespace-nowrap">Delete entry?</span>
+                              <button 
+                                onClick={() => handleDeleteLog(log.id)}
+                                className="px-2 py-1 text-xs font-bold text-white bg-red-600 hover:bg-red-500 rounded transition-colors"
+                              >
+                                Yes
+                              </button>
+                              <button 
+                                onClick={() => setDeleteConfirmLogId(null)}
+                                className="px-2 py-1 text-xs font-medium text-zinc-300 hover:text-white hover:bg-white/10 rounded transition-colors"
+                              >
+                                No
+                              </button>
+                            </div>
+                          ) : (
+                            <button 
+                              onClick={() => setDeleteConfirmLogId(log.id)}
+                              className="mr-auto px-3 py-1.5 text-xs font-medium text-red-500 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors flex items-center gap-1.5"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Delete
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => {
+                              setEditingLogId(null);
+                              setDeleteConfirmLogId(null);
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button 
+                            onClick={() => handleSaveLogUpdate(log.id)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-orange-600 hover:bg-orange-500 rounded-lg transition-colors shadow-lg shadow-orange-900/20"
+                          >
+                            <Save className="w-3 h-3" />
+                            Save
+                          </button>
+                        </div>
                       </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-3 mb-2 relative z-10 pl-4">
+                          <div className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] -ml-[21px]" />
+                          <span className="text-xs font-mono text-zinc-400">
+                            {new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="text-xs font-bold text-orange-400 ml-auto bg-orange-500/10 px-2 py-0.5 rounded">
+                            +{log.delta} {log.metricType}
+                          </span>
+                          <button 
+                            onClick={() => handleEditClick(log)}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white rounded-md transition-all sm:flex hidden"
+                            title="Edit Entry"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                          {/* Mobile visible edit button */}
+                          <button 
+                            onClick={() => handleEditClick(log)}
+                            className="p-1 text-zinc-400 hover:text-white sm:hidden"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                        {log.note && (
+                          <div className="pl-4 relative z-10 mt-3">
+                            <p className="text-sm text-zinc-300 italic">"{log.note}"</p>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 ))}

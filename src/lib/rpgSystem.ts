@@ -44,7 +44,7 @@ export function getExpForLevel(level: number): number {
 }
 
 // Seeded PRNG
-function mulberry32(a: number) {
+export function mulberry32(a: number) {
   return function() {
     var t = a += 0x6D2B79F5;
     t = Math.imul(t ^ t >>> 15, t | 1);
@@ -52,6 +52,7 @@ function mulberry32(a: number) {
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   }
 }
+
 
 export function calculateRPGState(media: MediaItem[], logs: ProgressLog[], settings: any): RPGState {
   // Filter historical
@@ -72,7 +73,7 @@ export function calculateRPGState(media: MediaItem[], logs: ProgressLog[], setti
 
   let decayExp = 0;
   if (validLogs.length > 0) {
-    const dates = validLogs.map(l => parseISO(l.timestamp).getTime()).sort();
+    const dates = validLogs.map(l => parseISO(l.timestamp).getTime()).sort((a, b) => a - b);
     for (let i = 1; i < dates.length; i++) {
       const days = differenceInDays(dates[i], dates[i-1]);
       if (days > 3) decayExp -= (days - 3) * 50;
@@ -380,8 +381,12 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     }
   ];
 
-  // Shuffle templates array based on RNG
-  const shuffled = [...templates].sort(() => rng() - 0.5);
+  // Fisher-Yates shuffle using RNG
+  const shuffled = [...templates];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
   
   for (let i = 0; i < count; i++) {
     const generator = shuffled[i % shuffled.length];

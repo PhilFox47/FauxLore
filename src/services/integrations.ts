@@ -10,6 +10,10 @@ export interface GameMetadata {
   tags: string[];
   reviewScore: number;
   averagePlaytime: number;
+  hltbMain?: number;
+  hltbMainExtra?: number;
+  hltbCompletionist?: number;
+  selectedHltbType?: 'main' | 'mainExtra' | 'completionist';
   description?: string;
   coverImageUrl: string;
 }
@@ -223,5 +227,19 @@ export const IntegrationsService = {
    */
   async syncAniList(username: string): Promise<void> {
     console.log(`[Future] Will sync AniList library for ${username}`);
+  },
+  
+  /**
+   * Standalone HLTB fetcher
+   */
+  async fetchHltbData(query: string) {
+    try {
+      const response = await fetch(`/api/hltb/search?q=${encodeURIComponent(query)}`);
+      if (!response.ok) throw new Error("Could not find HLTB data");
+      return await response.json();
+    } catch (e) {
+      console.error("HLTB Fetch error:", e);
+      throw e;
+    }
   }
 };

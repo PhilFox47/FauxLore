@@ -24,8 +24,8 @@ export function Dashboard() {
   const [progressItem, setProgressItem] = useState<MediaItem | null>(null);
 
   const {
-    statusFilter,
-    setStatusFilter,
+    statusFilters,
+    setStatusFilters,
     sortBy,
     setSortBy,
     searchQuery,
@@ -145,8 +145,8 @@ export function Dashboard() {
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
           <FilterSortBar 
-            statusFilter={statusFilter}
-            setStatusFilter={setStatusFilter}
+            statusFilters={statusFilters}
+            setStatusFilters={setStatusFilters}
             sortBy={sortBy}
             setSortBy={(val) => setSortBy(val as any)}
           />

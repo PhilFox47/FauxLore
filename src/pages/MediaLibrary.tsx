@@ -28,8 +28,8 @@ export function MediaLibrary() {
   const baseMediaItems = media.filter(m => m.mediaType === decodedMediaType);
   
   const {
-    statusFilter,
-    setStatusFilter,
+    statusFilters,
+    setStatusFilters,
     sortBy,
     setSortBy,
     searchQuery,
@@ -73,8 +73,8 @@ export function MediaLibrary() {
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
           <FilterSortBar 
-            statusFilter={statusFilter}
-            setStatusFilter={setStatusFilter}
+            statusFilters={statusFilters}
+            setStatusFilters={setStatusFilters}
             sortBy={sortBy}
             setSortBy={(val) => setSortBy(val as any)}
           />
