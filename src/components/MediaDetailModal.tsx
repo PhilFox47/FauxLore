@@ -6,6 +6,9 @@ import { calculateScaledDelta } from '../lib/scaling';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { generateAiArtifact } from '../services/nanoGptService';
+import { Artifact } from '../types/schema';
+import { LootReveal } from './LootReveal';
+import { ForgingButton } from './ForgingButton';
 
 interface MediaDetailModalProps {
   isOpen: boolean;
@@ -20,6 +23,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [deleteConfirmLogId, setDeleteConfirmLogId] = useState<string | null>(null);
   const [isLooting, setIsLooting] = useState(false);
+  const [lootedArtifact, setLootedArtifact] = useState<Artifact | null>(null);
   const [editLogData, setEditLogData] = useState<{
     delta: number;
     note: string;
@@ -43,16 +47,18 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
     }
     setIsLooting(true);
     try {
-      const generated = await generateAiArtifact(settings.nanoGptApiKey, settings.nanoGptModel || "gpt-4o-mini", item.title, item.mediaType);
-      await saveArtifact({
+      const generated = await generateAiArtifact(settings.nanoGptApiKey, settings.nanoGptModel || "gpt-4o-mini", item);
+      const newArtifact = {
         id: crypto.randomUUID(),
         mediaId: item.id,
         name: generated.name,
         description: generated.description,
         type: generated.type,
-        rarity: generated.rarity,
+        rarity: generated.rarity as Artifact['rarity'],
         earnedAt: new Date().toISOString()
-      });
+      };
+      await saveArtifact(newArtifact);
+      setLootedArtifact(newArtifact);
     } catch(e: any) {
       console.error("Failed to loot: " + e.message);
     } finally {
@@ -116,6 +122,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   };
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
       <div className="relative w-full max-w-4xl min-h-[70vh] max-h-[90vh] bg-zinc-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row">
         
@@ -243,20 +250,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                     </div>
                  </div>
               ) : (
-                <button 
-                  onClick={handleClaimLoot}
-                  disabled={isLooting}
-                  className="w-full py-4 border-2 border-dashed border-purple-500/30 hover:border-purple-500/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all"
-                >
-                  {isLooting ? (
-                     <Loader2 className="w-8 h-8 text-purple-400 animate-spin mb-1" />
-                  ) : (
-                     <Gem className="w-8 h-8 text-purple-400 group-hover:scale-110 group-hover:text-purple-300 transition-all mb-1" />
-                  )}
-                  <span className="font-black text-purple-400 tracking-wider">
-                     {isLooting ? 'Forging Legacy...' : 'Claim Conquest Loot!'}
-                  </span>
-                </button>
+                <ForgingButton isLooting={isLooting} onClick={handleClaimLoot} />
               )}
             </div>
           )}
@@ -396,5 +390,11 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
         </div>
       </div>
     </div>
+    
+    <LootReveal 
+      artifact={lootedArtifact} 
+      onClose={() => setLootedArtifact(null)} 
+    />
+    </>
   );
 }

@@ -156,7 +156,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
   };
 
   const handleRefetchHltb = async () => {
-    if (!formData.title || formData.mediaType !== 'Game') return;
+    if (!formData.title || !['Game', 'Visual Novel'].includes(formData.mediaType)) return;
     setIsRefetchingHltb(true);
     try {
       const data = await IntegrationsService.fetchHltbData(formData.title);
@@ -502,7 +502,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   <label className="block text-sm font-medium text-zinc-400 mb-1">Your Playtime (Hours)</label>
                   <input type="number" name="playtimeHours" value={formData.playtimeHours || ''} onChange={handleChange} className="input-field" placeholder="0" />
                 </div>
-                {formData.mediaType === 'Game' && (
+                {(formData.mediaType === 'Game' || formData.mediaType === 'Visual Novel') && (
                   <div className="col-span-1 sm:col-span-2 space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-zinc-400 mb-1">Target Playtime (Hours)</label>

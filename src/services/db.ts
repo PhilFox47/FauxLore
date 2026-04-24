@@ -183,6 +183,9 @@ export const DatabaseService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(artifact)
     });
-    if (!res.ok) throw new Error('Failed to save artifact');
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Failed to save artifact: ${text}`);
+    }
   }
 };

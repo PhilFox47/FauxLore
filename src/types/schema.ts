@@ -88,7 +88,7 @@ export interface Artifact {
   mediaId: string;
   name: string;
   description: string;
-  rarity: 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
+  rarity: 'Common' | 'Uncommon' | 'Rare' | 'Super Rare' | 'Epic' | 'Legendary' | 'Mythic';
   type: string;
   earnedAt: string;
 }
