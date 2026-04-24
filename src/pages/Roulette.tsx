@@ -1,16 +1,22 @@
 import React, { useState, useMemo } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
-import { Dice5, Sparkles, RefreshCw } from 'lucide-react';
+import { Dice5, Sparkles, RefreshCw, Eye } from 'lucide-react';
 import { MediaCard } from '../components/MediaCard';
 import { MediaItem } from '../types/schema';
 import { MediaDetailModal } from '../components/MediaDetailModal';
 import { MediaFormModal } from '../components/MediaFormModal';
+import { generateText } from '../services/nanoGptService';
+import Markdown from 'react-markdown';
 
 export function Roulette() {
-  const { media, logs, saveMediaItem, deleteMediaItem } = useMediaContext();
+  const { media, logs, settings, saveMediaItem, deleteMediaItem } = useMediaContext();
 
   const [selectedCard, setSelectedCard] = useState<MediaItem | null>(null);
   const [smartSuggestions, setSmartSuggestions] = useState<MediaItem[]>([]);
+  
+  const [isOracleLoading, setIsOracleLoading] = useState(false);
+  const [oracleRecommendation, setOracleRecommendation] = useState<string | null>(null);
+
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentActionItem, setCurrentActionItem] = useState<MediaItem | null>(null);
@@ -22,6 +28,43 @@ export function Roulette() {
     if (validBacklog.length === 0) return;
     const randomIndex = Math.floor(Math.random() * validBacklog.length);
     setSelectedCard(validBacklog[randomIndex]);
+  };
+
+  const consultOracle = async () => {
+    if (!settings?.nanoGptApiKey || validBacklog.length === 0) {
+       return;
+    }
+
+    setIsOracleLoading(true);
+    setOracleRecommendation(null);
+    try {
+      const recentLogs = [...logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 20);
+      const recentMediaIds = Array.from(new Set(recentLogs.map(l => l.mediaId)));
+      const recentMedia = media.filter(m => recentMediaIds.includes(m.id)).map(m => m.title).join(', ');
+      
+      const backlogList = validBacklog.map(m => `[${m.mediaType}] ${m.title}`).join('\n');
+
+      const promptContext = `
+USER'S RECENTLY CONSUMED MEDIA:
+${recentMedia || "None"}
+
+USER'S BACKLOG:
+${backlogList}
+      `;
+
+      const aiText = await generateText(
+        settings.nanoGptApiKey, 
+        settings.nanoGptModel || "gpt-4o-mini",
+        "You are 'The Oracle', a cryptic but deeply intuitive AI entity within an RPG universe. Your task is to recommend EXACTLY ONE item from the user's BACKLOG. Explain your reasoning based on their recent consumption or simply what might spark joy and wonder. Do not list multiple items. Embellish your response with mystical prose and deep insight.",
+        promptContext
+      );
+
+      setOracleRecommendation(aiText);
+    } catch(e: any) {
+      console.error("Oracle connection failed: " + e.message);
+    } finally {
+      setIsOracleLoading(false);
+    }
   };
 
   const generateSmartSuggestions = () => {
@@ -157,6 +200,45 @@ export function Roulette() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* The Oracle Section */}
+      <section className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border border-indigo-500/20 rounded-3xl p-8 relative overflow-hidden">
+        <div className="absolute -top-32 -right-32 w-64 h-64 bg-indigo-500/20 blur-[100px] rounded-full pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+           <div className="flex-1">
+             <h3 className="text-3xl font-black text-indigo-100 flex items-center gap-3 mb-4 tracking-tight">
+               <Eye className="w-8 h-8 text-indigo-400" />
+               Consult The Oracle
+             </h3>
+             <p className="text-indigo-200/70 mb-6 text-sm leading-relaxed max-w-lg">
+               Allow the mystic forces (Nano-GPT) to peer into your past journeys and scry your backlog to reveal the singular path you must take.
+             </p>
+             <button 
+               onClick={consultOracle}
+               disabled={isOracleLoading || validBacklog.length === 0}
+               className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-900 disabled:text-indigo-500 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-bold transition-colors flex items-center gap-2"
+             >
+               {isOracleLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+               {isOracleLoading ? "The Oracle is Scrying..." : "Ask The Oracle"}
+             </button>
+           </div>
+           
+           {(oracleRecommendation || isOracleLoading) && (
+             <div className="flex-1 w-full bg-black/40 border border-indigo-500/30 rounded-2xl p-6 min-h-[200px]">
+                {isOracleLoading ? (
+                  <div className="h-full flex flex-col items-center justify-center text-indigo-400 opacity-70 gap-4">
+                     <Eye className="w-10 h-10 animate-pulse" />
+                     <span className="text-sm tracking-widest uppercase font-bold text-indigo-300">Peering into the void...</span>
+                  </div>
+                ) : (
+                  <div className="prose prose-invert prose-sm prose-indigo max-w-none">
+                     <Markdown>{oracleRecommendation}</Markdown>
+                  </div>
+                )}
+             </div>
+           )}
+        </div>
       </section>
 
       {/* Modals */}

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { MediaItem, ProgressLog, MetricType, MediaType, Settings } from '../types/schema';
+import { MediaItem, ProgressLog, MetricType, MediaType, Settings, Artifact } from '../types/schema';
 import { DatabaseService } from '../services/db';
 
 interface MediaContextType {
@@ -7,6 +7,7 @@ interface MediaContextType {
   logs: ProgressLog[];
   settings: Settings | null;
   aiRecaps: any[];
+  artifacts: Artifact[];
   aiTextCache: Record<string, string>;
   refreshData: () => Promise<void>;
   saveMediaItem: (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => Promise<void>;
@@ -15,6 +16,7 @@ interface MediaContextType {
   updateLog: (id: string, updates: Partial<ProgressLog>) => Promise<void>;
   deleteLog: (id: string) => Promise<void>;
   saveAiRecap: (recap: any) => Promise<void>;
+  saveArtifact: (artifact: Artifact) => Promise<void>;
   saveAiText: (key: string, value: string) => Promise<void>;
   clearAiTextCache: (key?: string) => Promise<void>;
   isLoading: boolean;
@@ -27,23 +29,26 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   const [logs, setLogs] = useState<ProgressLog[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [aiRecaps, setAiRecaps] = useState<any[]>([]);
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [aiTextCache, setAiTextCache] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [mediaData, logsData, settingsData, recapsData, textCacheData] = await Promise.all([
+      const [mediaData, logsData, settingsData, recapsData, artifactsData, textCacheData] = await Promise.all([
         DatabaseService.getAllMedia(),
         DatabaseService.getAllLogs(),
         DatabaseService.getSettings(),
         DatabaseService.getAiRecaps(),
+        DatabaseService.getArtifacts(),
         DatabaseService.getAiTextCache()
       ]);
       setMedia(mediaData);
       setLogs(logsData);
       setSettings(settingsData);
       setAiRecaps(recapsData);
+      setArtifacts(artifactsData);
       setAiTextCache(textCacheData);
     } catch (error) {
       console.error("Failed to load data from server:", error);
@@ -86,6 +91,11 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     await refreshData();
   }, [refreshData]);
 
+  const saveArtifact = useCallback(async (artifact: Artifact) => {
+    await DatabaseService.saveArtifact(artifact);
+    await refreshData();
+  }, [refreshData]);
+
   const saveAiText = useCallback(async (key: string, value: string) => {
     await DatabaseService.saveAiText(key, value);
     await refreshData();
@@ -97,7 +107,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [refreshData]);
 
   return (
-    <MediaContext.Provider value={{ media, logs, settings, aiRecaps, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, saveAiRecap, saveAiText, clearAiTextCache, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, aiRecaps, artifacts, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, saveAiRecap, saveArtifact, saveAiText, clearAiTextCache, isLoading }}>
       {children}
     </MediaContext.Provider>
   );

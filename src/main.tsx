@@ -10,6 +10,7 @@ import { Recaps } from './pages/Recaps';
 import { Lorebook } from './pages/Lorebook';
 import { Lorekeeper } from './pages/Lorekeeper';
 import { Roulette } from './pages/Roulette';
+import { Armory } from './pages/Armory';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -25,6 +26,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="lorebook" element={<Lorebook />} />
             <Route path="lorekeeper" element={<Lorekeeper />} />
             <Route path="roulette" element={<Roulette />} />
+            <Route path="armory" element={<Armory />} />
           </Route>
         </Routes>
       </BrowserRouter>

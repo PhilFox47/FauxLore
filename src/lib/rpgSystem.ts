@@ -205,6 +205,21 @@ const PRIMARY_METRICS: Record<MediaType, string> = {
 
 const MEDIA_TYPES: MediaType[] = ['Game', 'Book', 'Visual Novel', 'Manga', 'Series', 'Movie', 'Comic'];
 
+const MONTH_THEMES: Record<number, { name: string, tags: string[], desc: string }> = {
+  1: { name: "New Beginnings", tags: ["Action", "Adventure", "Sci-Fi", "Mystery"], desc: "Kick off the year with" },
+  2: { name: "Season of Love", tags: ["Romance", "Drama", "Slice of Life", "Dating Sim", "Otome"], desc: "Swoon over" },
+  3: { name: "Spring Awakening", tags: ["Fantasy", "Magic", "Nature", "Comedy", "Wholesome"], desc: "Embrace the bloom with" },
+  4: { name: "Fools & Humor", tags: ["Comedy", "Parody", "Satire", "Gag"], desc: "Laugh out loud to" },
+  5: { name: "May Madness", tags: ["Action", "Mecha", "Sports", "Fighting"], desc: "Get pumped with" },
+  6: { name: "Summer Vibes", tags: ["Adventure", "Slice of Life", "Travel", "Beach"], desc: "Enjoy the sun with" },
+  7: { name: "Midsummer Night", tags: ["Sci-Fi", "Cyberpunk", "Space", "Futuristic"], desc: "Look to the stars with" },
+  8: { name: "August Heat", tags: ["Thriller", "Action", "Survival", "Post-Apocalyptic"], desc: "Survive the heat in" },
+  9: { name: "Scholars & History", tags: ["School", "Coming of Age", "Historical", "Documentary"], desc: "Learn something new from" },
+  10: { name: "Spooky Season", tags: ["Horror", "Thriller", "Supernatural", "Vampire", "Zombie", "Dark"], desc: "Face your fears in" },
+  11: { name: "Cozy Autumn", tags: ["Slice of Life", "Mystery", "Detective", "Cozy"], desc: "Curl up with" },
+  12: { name: "Winter Wonderland", tags: ["Fantasy", "Family", "Emotional", "Drama", "Holiday"], desc: "Warm your heart with" },
+};
+
 function getYearlyGoals(settings: any) {
   return { ...DEFAULT_YEARLY_GOALS, ...(settings?.yearlyGoals || {}) };
 }
@@ -388,7 +403,41 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   
-  for (let i = 0; i < count; i++) {
+  let iOffset = 0;
+
+  // Add Theme Quest for Monthly
+  if (timeframe === 'monthly') {
+    const monthStr = timeId.split('-')[1];
+    const monthNum = parseInt(monthStr, 10);
+    const theme = MONTH_THEMES[monthNum];
+    if (theme) {
+       const target = 10;
+       
+       let current = 0;
+       logs.forEach(l => {
+          const m = media.find(x => x.id === l.mediaId);
+          if (m && m.genres?.some(g => theme.tags.includes(g))) {
+             current += calculateScaledDelta(l.delta, m, settings);
+          }
+       });
+
+       quests.push({
+         id: `${timeId}-theme`,
+         type: timeframe,
+         title: `${theme.name} Theme`,
+         description: `${theme.desc} something tagged: ${theme.tags.slice(0, 3).join(', ')} (${target} Master Pages)`,
+         targetAmount: target,
+         currentAmount: Math.floor(current),
+         expReward: baseReward * 3,
+         metric: 'pages',
+         isCompleted: Math.floor(current) >= target,
+         isFailed: false
+       });
+       iOffset = 1;
+    }
+  }
+
+  for (let i = iOffset; i < count; i++) {
     const generator = shuffled[i % shuffled.length];
     const data = generator();
     

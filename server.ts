@@ -215,6 +215,8 @@ async function startServer() {
       runtimeMinutes INTEGER,
       issuesRead INTEGER,
       totalIssues INTEGER,
+      isReRun INTEGER,
+      originalMediaId TEXT,
       createdAt TEXT,
       updatedAt TEXT
     );
@@ -240,7 +242,9 @@ async function startServer() {
       nanoGptModel TEXT,
       timezone TEXT,
       masterPageConfig TEXT,
-      yearlyGoals TEXT
+      yearlyGoals TEXT,
+      lastActiveDate TEXT,
+      currentStreak INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS ai_recaps (
@@ -257,6 +261,18 @@ async function startServer() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS artifacts (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      mediaId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      rarity TEXT NOT NULL, 
+      type TEXT NOT NULL,
+      earnedAt TEXT NOT NULL,
+      FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
+    );
   `);
 
   // Migration steps
@@ -266,9 +282,13 @@ async function startServer() {
   try { db.prepare("ALTER TABLE settings ADD COLUMN yearlyGoals TEXT").run(); console.log("Migration: Added yearlyGoals"); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptApiKey TEXT").run(); console.log("Migration: Added nanoGptApiKey"); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptModel TEXT").run(); console.log("Migration: Added nanoGptModel"); } catch (e) {}
+  try { db.prepare("ALTER TABLE settings ADD COLUMN lastActiveDate TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE settings ADD COLUMN currentStreak INTEGER").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN hltbMain REAL").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN hltbMainExtra REAL").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN hltbCompletionist REAL").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN isReRun INTEGER").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN originalMediaId TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN selectedHltbType TEXT").run(); } catch (e) {}
   
   const normalizeMedia = (row: any) => ({
@@ -276,7 +296,8 @@ async function startServer() {
     genres: row.genres ? JSON.parse(row.genres) : [],
     tags: row.tags ? JSON.parse(row.tags) : [],
     tropes: row.tropes ? JSON.parse(row.tropes) : [],
-    watched: row.watched === 1
+    watched: row.watched === 1,
+    isReRun: row.isReRun === 1
   });
 
   // Local DB API Routes
@@ -308,14 +329,14 @@ async function startServer() {
           status, userRating, genres, tags, tropes,
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
-          issuesRead, totalIssues, createdAt, updatedAt
+          issuesRead, totalIssues, isReRun, originalMediaId, createdAt, updatedAt
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
           @reviewScore, @averagePlaytime, @hltbMain, @hltbMainExtra, @hltbCompletionist, @selectedHltbType,
           @status, @userRating, @genres, @tags, @tropes,
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
-          @issuesRead, @totalIssues, @createdAt, @updatedAt
+          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @createdAt, @updatedAt
         )
         ON CONFLICT(id) DO UPDATE SET
           userId=excluded.userId, title=excluded.title, mediaType=excluded.mediaType, coverImageUrl=excluded.coverImageUrl,
@@ -329,6 +350,7 @@ async function startServer() {
           totalChapters=excluded.totalChapters, season=excluded.season, episodesWatched=excluded.episodesWatched,
           totalEpisodes=excluded.totalEpisodes, watched=excluded.watched, watchCount=excluded.watchCount,
           runtimeMinutes=excluded.runtimeMinutes, issuesRead=excluded.issuesRead, totalIssues=excluded.totalIssues,
+          isReRun=excluded.isReRun, originalMediaId=excluded.originalMediaId,
           updatedAt=excluded.updatedAt
       `);
 
@@ -366,6 +388,8 @@ async function startServer() {
         runtimeMinutes: item.runtimeMinutes || null,
         issuesRead: item.issuesRead || null,
         totalIssues: item.totalIssues || null,
+        isReRun: item.isReRun ? 1 : 0,
+        originalMediaId: item.originalMediaId || null,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt
       });
@@ -415,6 +439,33 @@ async function startServer() {
         delta: log.delta,
         note: log.note || null
       });
+
+      // Update Streak Mode
+      try {
+        const todayStr = new Date(log.timestamp).toISOString().split('T')[0];
+        const settingsRow: any = db.prepare('SELECT lastActiveDate, currentStreak FROM settings WHERE userId = ?').get(userId);
+        
+        let newStreak = settingsRow?.currentStreak || 0;
+        let lastActiveDate = settingsRow?.lastActiveDate || "";
+
+        if (lastActiveDate !== todayStr) {
+          const yesterday = new Date(log.timestamp);
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+          if (lastActiveDate === yesterdayStr) {
+            newStreak += 1;
+          } else {
+            newStreak = 1; // start a new streak if gap > 1 day
+          }
+          
+          db.prepare(`
+            INSERT INTO settings (userId, lastActiveDate, currentStreak) 
+            VALUES (?, ?, ?) 
+            ON CONFLICT(userId) DO UPDATE SET lastActiveDate=excluded.lastActiveDate, currentStreak=excluded.currentStreak
+          `).run(userId, todayStr, newStreak);
+        }
+      } catch(e) {}
 
       // Clear the AI recap cache for this specific timeframe to force regeneration
       try {
@@ -550,8 +601,8 @@ async function startServer() {
       const userId = settings.userId || 'default_user';
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, timezone, masterPageConfig, yearlyGoals)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @timezone, @masterPageConfig, @yearlyGoals)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -561,7 +612,9 @@ async function startServer() {
           nanoGptModel=excluded.nanoGptModel,
           timezone=excluded.timezone,
           masterPageConfig=excluded.masterPageConfig,
-          yearlyGoals=excluded.yearlyGoals
+          yearlyGoals=excluded.yearlyGoals,
+          lastActiveDate=excluded.lastActiveDate,
+          currentStreak=excluded.currentStreak
       `).run({
         userId: userId,
         igdbClientId: settings.igdbClientId || null,
@@ -572,7 +625,9 @@ async function startServer() {
         nanoGptModel: settings.nanoGptModel || null,
         timezone: settings.timezone || null,
         masterPageConfig: settings.masterPageConfig ? JSON.stringify(settings.masterPageConfig) : null,
-        yearlyGoals: settings.yearlyGoals ? JSON.stringify(settings.yearlyGoals) : null
+        yearlyGoals: settings.yearlyGoals ? JSON.stringify(settings.yearlyGoals) : null,
+        lastActiveDate: settings.lastActiveDate || null,
+        currentStreak: settings.currentStreak || 0
       });
       
       const saved: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId);
@@ -646,6 +701,36 @@ async function startServer() {
         db.prepare('DELETE FROM ai_text_cache').run();
       }
       res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.get("/api/artifacts", (req, res) => {
+    try {
+      const userId = req.query.userId || 'default_user';
+      const rows = db.prepare('SELECT * FROM artifacts WHERE userId = ? ORDER BY earnedAt DESC').all(userId);
+      res.json(rows);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/artifacts", (req, res) => {
+    try {
+      const artifact = req.body;
+      const userId = artifact.userId || 'default_user';
+      const stmt = db.prepare(`
+        INSERT INTO artifacts (id, userId, mediaId, name, description, rarity, type, earnedAt)
+        VALUES (@id, @userId, @mediaId, @name, @description, @rarity, @type, @earnedAt)
+      `);
+      stmt.run({
+        id: artifact.id,
+        userId: userId,
+        mediaId: artifact.mediaId,
+        name: artifact.name,
+        description: artifact.description,
+        rarity: artifact.rarity,
+        type: artifact.type,
+        earnedAt: artifact.earnedAt
+      });
+      res.json({ success: true, artifact });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
 import { useMediaContext } from '../contexts/MediaContext';
-import { X, Edit2, Clock, Calendar, BookOpen, Star, Hash, Gamepad2, Tv, Film, Save, Trash2 } from 'lucide-react';
+import { X, Edit2, Clock, Calendar, BookOpen, Star, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw } from 'lucide-react';
 import { calculateScaledDelta } from '../lib/scaling';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
+import { generateAiArtifact } from '../services/nanoGptService';
 
 interface MediaDetailModalProps {
   isOpen: boolean;
@@ -15,9 +16,10 @@ interface MediaDetailModalProps {
 }
 
 export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaDetailModalProps) {
-  const { settings, updateLog, deleteLog } = useMediaContext();
+  const { settings, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem } = useMediaContext();
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [deleteConfirmLogId, setDeleteConfirmLogId] = useState<string | null>(null);
+  const [isLooting, setIsLooting] = useState(false);
   const [editLogData, setEditLogData] = useState<{
     delta: number;
     note: string;
@@ -31,6 +33,51 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   
   // Sort logs descending by timestamp
   const sortedLogs = [...logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  const itemArtifact = artifacts?.find(a => a.mediaId === item.id);
+
+  const handleClaimLoot = async () => {
+    if (!settings?.nanoGptApiKey) {
+      // API key missing
+      return;
+    }
+    setIsLooting(true);
+    try {
+      const generated = await generateAiArtifact(settings.nanoGptApiKey, settings.nanoGptModel || "gpt-4o-mini", item.title, item.mediaType);
+      await saveArtifact({
+        id: crypto.randomUUID(),
+        mediaId: item.id,
+        name: generated.name,
+        description: generated.description,
+        type: generated.type,
+        rarity: generated.rarity,
+        earnedAt: new Date().toISOString()
+      });
+    } catch(e: any) {
+      console.error("Failed to loot: " + e.message);
+    } finally {
+      setIsLooting(false);
+    }
+  };
+
+  const handleReRun = async () => {
+    const newId = crypto.randomUUID();
+    const newCopy: MediaItem = {
+      ...item,
+      id: newId,
+      status: 'Active',
+      isReRun: true,
+      originalMediaId: item.id,
+      playtimeHours: 0,
+      pagesRead: 0,
+      chaptersRead: 0,
+      episodesWatched: 0,
+      watched: false,
+      issuesRead: 0
+    };
+    await saveMediaItem(newCopy);
+    onClose();
+  };
 
   const handleEditClick = (log: ProgressLog) => {
     const d = new Date(log.timestamp);
@@ -107,13 +154,23 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
               {item.year && <span className="px-3 py-1 bg-white/10 text-white rounded-md text-xs font-medium backdrop-blur-sm shadow-sm">{item.year}</span>}
             </div>
 
-            <button 
-              onClick={() => { onClose(); onEdit(item); }}
-              className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium flex justify-center items-center gap-2 transition"
-            >
-              <Edit2 className="w-4 h-4" />
-              Edit Media Details
-            </button>
+            <div className="flex flex-col gap-3 w-full">
+               <button 
+                 onClick={() => { onClose(); onEdit(item); }}
+                 className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium flex justify-center items-center gap-2 transition"
+               >
+                 <Edit2 className="w-4 h-4" />
+                 Edit Media Details
+               </button>
+
+               <button 
+                 onClick={handleReRun}
+                 className="w-full py-3 border border-white/10 hover:bg-white/5 text-white rounded-xl font-medium flex justify-center items-center gap-2 transition"
+               >
+                 <RotateCcw className="w-4 h-4" />
+                 Start Re-Run
+               </button>
+            </div>
           </div>
         </div>
 
@@ -155,6 +212,52 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                 {item.genres.map((g, i) => <span key={i} className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">{g}</span>)}
                 {item.tags?.map((t, i) => <span key={i} className="text-xs px-2 py-1 bg-orange-500/10 text-orange-400 rounded border border-orange-500/20">{t}</span>)}
               </div>
+            </div>
+          )}
+
+          {item.status === 'Completed' && (
+            <div className="mb-8">
+              <h3 className="text-lg font-bold text-white mb-3 tracking-wide flex items-center gap-2">
+                 <Gem className="w-5 h-5 text-purple-400" />
+                 Conquest Loot
+              </h3>
+              {itemArtifact ? (
+                 <div className="bg-purple-900/10 border border-purple-500/30 rounded-2xl p-5 flex items-start gap-4 shadow-lg shadow-purple-900/5 hover:border-purple-500/50 transition-colors">
+                    <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center shrink-0 border border-purple-500/40">
+                       <Gem className="w-6 h-6 text-purple-400" />
+                    </div>
+                    <div>
+                       <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-black text-purple-300 text-lg">{itemArtifact.name}</h4>
+                          <span className={cn(
+                             "text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded",
+                             itemArtifact.rarity === 'Mythic' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                             itemArtifact.rarity === 'Legendary' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                             itemArtifact.rarity === 'Epic' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                             itemArtifact.rarity === 'Rare' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                             itemArtifact.rarity === 'Uncommon' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                             'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30'
+                          )}>{itemArtifact.rarity} {itemArtifact.type}</span>
+                       </div>
+                       <p className="text-zinc-400 text-sm leading-relaxed">{itemArtifact.description}</p>
+                    </div>
+                 </div>
+              ) : (
+                <button 
+                  onClick={handleClaimLoot}
+                  disabled={isLooting}
+                  className="w-full py-4 border-2 border-dashed border-purple-500/30 hover:border-purple-500/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all"
+                >
+                  {isLooting ? (
+                     <Loader2 className="w-8 h-8 text-purple-400 animate-spin mb-1" />
+                  ) : (
+                     <Gem className="w-8 h-8 text-purple-400 group-hover:scale-110 group-hover:text-purple-300 transition-all mb-1" />
+                  )}
+                  <span className="font-black text-purple-400 tracking-wider">
+                     {isLooting ? 'Forging Legacy...' : 'Claim Conquest Loot!'}
+                  </span>
+                </button>
+              )}
             </div>
           )}
 

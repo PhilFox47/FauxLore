@@ -33,6 +33,41 @@ export async function generateAiRecapText(apiKey: string, model: string, prompt:
   }
 }
 
+export async function generateAiArtifact(apiKey: string, model: string, mediaTitle: string, mediaType: string) {
+  if (!apiKey) throw new Error("Nano-GPT API Key is missing. Please configure it in Settings.");
+
+  const res = await fetch("https://nano-gpt.com/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: model || "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are an RPG Loot Master. The user has just completed a piece of media. Generate an Artifact based strictly on the lore, characters, or aesthetic of this media. The response MUST be a JSON object containing: 'name' (string, max 4 words), 'description' (string, 1-2 flavorful sentences), 'type' (string, e.g., Weapon, Relic, Armor, Spell, Trinket), and 'rarity' (string, strict choice: 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'). Make rarer items sound more prestigious." },
+        { role: "user", content: `I just completed a ${mediaType} called "${mediaTitle}". Drop some loot!` }
+      ],
+      response_format: { type: "json_object" }
+    })
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error("NanoGPT error:", errorText);
+    throw new Error(`Nano-GPT Error: ${res.statusText}`);
+  }
+
+  const data = await res.json();
+  const messageContent = data.choices[0].message.content;
+  try {
+    return JSON.parse(messageContent);
+  } catch (e) {
+    console.error("Failed to parse JSON from NanoGPT:", messageContent);
+    throw new Error("Failed to generate proper JSON for Artifact.");
+  }
+}
+
 export async function generateText(apiKey: string, model: string, systemPrompt: string, prompt: string) {
   if (!apiKey) throw new Error("Nano-GPT API Key is missing. Please configure it in Settings.");
 

@@ -125,6 +125,8 @@ Media In-Progress (Still Active): ${activeMedia.filter(m => m.status !== 'Comple
 Media Completed (Finished): ${completedMedia.length > 0 ? completedMedia.map(m => m.title).join(', ') : 'None'}
 Top Ranked Media: ${mediaRanking.slice(0,5).map(m => `${m.title} (${Math.round(m.pages)} MP)`).join(', ')}
 Total Logs: ${activeLogs.length}
+Journal Notes from this period:
+${activeLogs.filter(l => l.note && l.note.trim().length > 0).map(l => `- On ${activeMedia.find(m => m.id === l.mediaId)?.title || 'Media'}: "${l.note}"`).join('\n') || 'None'}
 `;
 
       const aiResponse = await generateAiRecapText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', `Based on the following data, generate a title and a creative, highly detailed, and deeply flavorful summary of this ${timeframe}'s media consumption. 
@@ -136,6 +138,7 @@ CRITICAL INSTRUCTIONS:
 4. WEAVE TITLES: YOU MUST directly weave the SPECIFIC titles of the media consumed into the narrative. 
 5. ACCURACY: DO NOT assume a media item is completed unless it appears in the 'Media Completed' list. If it is only in 'Media In-Progress', describe the ongoing journey, not the conclusion.
 6. LORE: Ground every paragraph in the actual lore or theme of the titles provided!
+7. JOURNAL INTEGRATION: Integrate the user's thoughts and sentiments from the Journal Notes into your narrative. Reflect their specific feelings, quotes, or reactions to the media.
 
 Context: ${promptContext}`);
       

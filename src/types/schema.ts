@@ -10,6 +10,8 @@ export type Status = typeof STATUSES[number];
 
 export interface MediaItem {
   id: string;
+  isReRun?: boolean;
+  originalMediaId?: string;
   title: string;
   mediaType: MediaType;
   coverImageUrl?: string;
@@ -80,6 +82,17 @@ export interface ProgressLog {
   note?: string;
 }
 
+export interface Artifact {
+  id: string;
+  userId?: string;
+  mediaId: string;
+  name: string;
+  description: string;
+  rarity: 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
+  type: string;
+  earnedAt: string;
+}
+
 export interface Settings {
   userId: string;
   igdbClientId?: string;
@@ -90,6 +103,8 @@ export interface Settings {
   nanoGptModel?: string;
   timezone?: string;
   yearlyGoals?: Partial<Record<MediaType, number>>;
+  lastActiveDate?: string;
+  currentStreak?: number;
   masterPageConfig?: {
     gamePagesPerHour?: number; // 5 mins = 1 page -> 12 pages per hr
     vnPagesPerHour?: number; // 2.5 mins = 1 page -> 24 pages per hr

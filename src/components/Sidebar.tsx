@@ -1,12 +1,12 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, Settings, X, Presentation, BookOpen, Dice5, Shield } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Settings, X, Presentation, BookOpen, Dice5, Shield, Flame, Gem } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
 import { MEDIA_COLORS } from '../types/schema';
 
 export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () => void, onOpenSettings?: () => void }) {
-  const { media } = useMediaContext();
+  const { media, settings } = useMediaContext();
 
   const getCount = (type: string) => media.filter(m => m.mediaType === type).length;
 
@@ -14,6 +14,7 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Lorekeeper', path: '/lorekeeper', icon: Shield },
     { name: 'Lorebook', path: '/lorebook', icon: BookOpen },
+    { name: 'Armory', path: '/armory', icon: Gem },
     { name: 'Roulette', path: '/roulette', icon: Dice5 },
     { name: 'Statistics', path: '/stats', icon: BarChart3 },
     { name: 'Recaps', path: '/recaps', icon: Presentation },
@@ -29,11 +30,26 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
     { name: 'Comics', path: '/library/Comic', count: getCount('Comic'), color: MEDIA_COLORS['Comic'] },
   ];
 
+  const currentStreak = settings?.currentStreak || 0;
+  const lastActiveDate = settings?.lastActiveDate || "";
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isActiveStreak = currentStreak > 0 && (lastActiveDate === todayStr || (() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return lastActiveDate === yesterday.toISOString().split('T')[0];
+  })());
+
   return (
     <aside className="w-60 border-r border-white/10 flex flex-col p-6 h-full bg-[#09090B] text-zinc-400">
       <div className="flex items-center justify-between mb-10">
-        <div className="flex items-center group cursor-pointer transition-opacity hover:opacity-80">
-          <img src="https://i.imgur.com/ZgTImal.png" alt="FauxLore" className="h-8 w-auto object-contain" />
+        <div className="flex items-center gap-3">
+           <img src="https://i.imgur.com/ZgTImal.png" alt="FauxLore" className="h-8 w-auto object-contain cursor-pointer transition-opacity hover:opacity-80" />
+           {isActiveStreak && currentStreak > 0 && (
+              <div className="flex items-center gap-1 bg-orange-500/10 border border-orange-500/20 px-2 py-1 rounded-lg" title={`Current Streak: ${currentStreak} days`}>
+                 <Flame className="w-4 h-4 text-orange-500 animate-pulse" />
+                 <span className="text-orange-500 font-black text-xs">{currentStreak}</span>
+              </div>
+           )}
         </div>
         {onCloseMobile && (
           <button onClick={onCloseMobile} className="md:hidden p-1 text-zinc-400 hover:text-white rounded-lg">

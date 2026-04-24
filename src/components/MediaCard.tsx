@@ -1,6 +1,6 @@
 import React from 'react';
 import { MediaItem, getMetricForType, MEDIA_COLORS } from '../types/schema';
-import { Play, PlayCircle, Plus, Edit2, Popcorn, BookOpen, Star, StarHalf } from 'lucide-react';
+import { Play, PlayCircle, Plus, Edit2, Popcorn, BookOpen, Star, StarHalf, RotateCcw } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface MediaCardProps {
@@ -97,6 +97,11 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
         className="aspect-[2/3] bg-zinc-800 rounded-lg md:rounded-xl relative w-full overflow-hidden shadow-xl shrink-0 mb-3 md:mb-4 cursor-pointer"
         onClick={() => onViewDetails?.(item)}
       >
+        {item.isReRun && (
+          <div className="absolute top-2 left-2 z-20 bg-black/60 backdrop-blur-md rounded-full p-1 border border-white/10" title="Re-Run">
+             <RotateCcw className="w-3 h-3 text-orange-400" />
+          </div>
+        )}
         <div className="absolute top-0 right-0 z-20 flex flex-col items-end opacity-90 hover:opacity-100 transition-opacity">
           {item.userRating != null && (
             <div className="bg-amber-500/80 backdrop-blur-sm text-black px-1.5 md:px-2 py-0.5 md:py-1 text-xs rounded-bl-lg md:rounded-bl-xl shadow-lg flex flex-col items-end gap-0.5 min-w-[2rem] md:min-w-[2.5rem]">

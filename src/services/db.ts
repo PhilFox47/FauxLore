@@ -164,5 +164,25 @@ export const DatabaseService = {
     const url = key ? `/api/ai-text?key=${encodeURIComponent(key)}` : '/api/ai-text';
     const res = await fetch(url, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to clear AI text');
+  },
+
+  async getArtifacts(): Promise<any[]> {
+    try {
+      const res = await fetch('/api/artifacts');
+      if (!res.ok) return [];
+      return res.json();
+    } catch(e) {
+      console.error(e);
+      return [];
+    }
+  },
+
+  async saveArtifact(artifact: any): Promise<void> {
+    const res = await fetch('/api/artifacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(artifact)
+    });
+    if (!res.ok) throw new Error('Failed to save artifact');
   }
 };

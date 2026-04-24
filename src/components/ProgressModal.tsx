@@ -3,6 +3,7 @@ import { MediaItem, getMetricForType, MEDIA_COLORS } from '../types/schema';
 import { X, Plus, Minus, Calendar, History, Check, Clock } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
+import { useMediaContext } from '../contexts/MediaContext';
 
 interface ProgressModalProps {
   isOpen: boolean;
@@ -12,9 +13,11 @@ interface ProgressModalProps {
 }
 
 export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalProps) {
+  const { saveMediaItem } = useMediaContext();
   const [mode, setMode] = useState<'set' | 'add'>('set');
   const [inputValue, setInputValue] = useState<number | ''>(1);
   const [note, setNote] = useState('');
+  const [status, setStatus] = useState<MediaItem['status']>('Active');
   const [logDate, setLogDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [logTime, setLogTime] = useState<string>(format(new Date(), 'HH:mm'));
   const [isHistorical, setIsHistorical] = useState(false);
@@ -32,6 +35,7 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       setMode('set');
       setInputValue(cv + 1); // UX Default: One increment above current total
       setNote('');
+      setStatus(item.status);
       const now = new Date();
       setLogDate(format(now, 'yyyy-MM-dd'));
       setLogTime(format(now, 'HH:mm'));
@@ -90,12 +94,15 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
     }
     
     onLog(item.id, metricType, delta, note, finalTimestamp);
+    if (status !== item.status) {
+      saveMediaItem({ ...item, status: status });
+    }
     onClose();
   };
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-zinc-900 border border-white/10 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
+      <div className="bg-zinc-900 border border-white/10 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl overflow-y-auto max-h-[90vh]">
         <div className="flex justify-between items-center p-6 border-b border-white/5">
           <h2 className="text-lg font-bold text-white flex-1 truncate">
             Update {item.title}
@@ -218,6 +225,20 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
                placeholder="Brief notes from this session..."
                className={cn("w-full bg-[#18181b] border border-white/10 rounded-xl px-3 py-3 text-white focus:outline-none min-h-[80px] resize-none text-sm", `focus:border-${colors.bg.split('-')[1]}-500`)}
              />
+          </div>
+
+          <div>
+             <label className="block text-sm font-medium text-zinc-300 mb-1">Status</label>
+             <select
+               value={status}
+               onChange={(e) => setStatus(e.target.value as MediaItem['status'])}
+               className={cn("w-full bg-[#18181b] border border-white/10 rounded-xl px-3 py-3 text-white focus:outline-none text-sm appearance-none", `focus:border-${colors.bg.split('-')[1]}-500`)}
+             >
+               <option value="Active">Active</option>
+               <option value="Backlog">Backlog</option>
+               <option value="Completed">Completed</option>
+               <option value="Dropped">Dropped</option>
+             </select>
           </div>
         </div>
 
