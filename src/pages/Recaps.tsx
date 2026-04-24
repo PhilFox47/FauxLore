@@ -152,6 +152,10 @@ CRITICAL INSTRUCTIONS:
 Context: 
 ${promptContext}`);
       
+      if (!aiResponse.summary || String(aiResponse.summary).trim().length === 0) {
+        throw new Error("The AI failed to generate a narrative summary.");
+      }
+
       await saveAiRecap({
         timeframe,
         timeId,
