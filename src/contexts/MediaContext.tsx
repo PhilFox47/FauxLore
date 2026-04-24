@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { MediaItem, ProgressLog, MetricType, MediaType, Settings, Artifact } from '../types/schema';
 import { DatabaseService } from '../services/db';
+import { calculateRPGState } from '../lib/rpgSystem';
+import { generateText } from '../services/nanoGptService';
 
 interface MediaContextType {
   media: MediaItem[];
@@ -60,6 +62,35 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     refreshData();
   }, [refreshData]);
+
+  const previousLevel = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isLoading || !settings) return;
+
+    const rpgState = calculateRPGState(media, logs, settings);
+    const currentLevel = rpgState.level;
+
+    if (previousLevel.current === null || previousLevel.current !== currentLevel) {
+      if (settings.nanoGptApiKey) {
+        const titleKey = `rpg_title_${currentLevel}`;
+        
+        // Generate if it's an actual level change, OR if it's the initial load and the title is missing
+        if ((previousLevel.current !== null && previousLevel.current !== currentLevel) || !aiTextCache[titleKey]) {
+          const systemPrompt = "You are FauxLore, a helpful and natural media tracking assistant. Keep your tone conversational, friendly, and grounded. No epic RPG or fantasy roleplay unless explicitly asked.";
+          const titlePrompt = `The user has just reached Level ${currentLevel} with the base title "${rpgState.className}". Generate a creative, punchy, and natural title for them. NO extra comments, just the title. 1-4 words. Avoid fantasy clichés.`;
+          
+          generateText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', systemPrompt, titlePrompt)
+            .then(titleRes => {
+               DatabaseService.saveAiText(titleKey, titleRes).then(() => refreshData());
+            })
+            .catch(err => console.error("Auto generation of title failed", err));
+        }
+      }
+    }
+    
+    previousLevel.current = currentLevel;
+  }, [media, logs, settings, aiTextCache, isLoading, refreshData]);
 
   const saveMediaItem = useCallback(async (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => {
     await DatabaseService.saveMedia(item);

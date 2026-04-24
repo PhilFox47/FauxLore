@@ -767,7 +767,7 @@ async function startServer() {
       const body = `
         search "${query}";
         fields name, summary, cover.image_id, first_release_date, total_rating, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, genres.name, themes.name;
-        limit 5;
+        limit 20;
       `;
 
       const igdbRes = await fetch("https://api.igdb.com/v4/games", {
@@ -881,9 +881,9 @@ async function startServer() {
       }
       
       const searchData = await searchRes.json();
-      const topResults = (searchData.results || []).slice(0, 5);
+      const topResults = (searchData.results || []).slice(0, 20);
 
-      // 2. Fetch detailed info (credits + genres) for the top 5
+      // 2. Fetch detailed info (credits + genres) for the top 20
       const detailedResults = await Promise.all(topResults.map(async (item: any) => {
          const detailRes = await fetch(`https://api.themoviedb.org/3/${type}/${item.id}?api_key=${apiKey}&append_to_response=credits`);
          if (!detailRes.ok) return null;
@@ -958,7 +958,7 @@ async function startServer() {
       const payload = {
         filters: ["search", "=", query],
         fields: "title, image.url, description, rating, developers.name, length_minutes, released, tags.name",
-        results: 5
+        results: 20
       };
 
       const searchRes = await fetch('https://api.vndb.org/kana/vn', {
@@ -1053,7 +1053,7 @@ async function startServer() {
       
       const graphqlQuery = `
         query searchBooks($title: String!, $slug: String!) {
-          books(where: {_or: [{title: {_eq: $title}}, {slug: {_eq: $slug}}]}, order_by: {users_count: desc}, limit: 5) {
+          books(where: {_or: [{title: {_eq: $title}}, {slug: {_eq: $slug}}]}, order_by: {users_count: desc}, limit: 20) {
             id
             title
             release_year
@@ -1149,7 +1149,7 @@ async function startServer() {
 
       const graphqlQuery = `
         query ($search: String) {
-          Page (perPage: 5) {
+          Page (perPage: 20) {
             media (search: $search, type: MANGA) {
               id
               title {
