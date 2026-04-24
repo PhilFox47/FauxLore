@@ -88,7 +88,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
         const results = await IntegrationsService.searchVNDBMetadata(formData.title);
         setSearchResults(results);
       } else if (formData.mediaType === 'Book') {
-        const results = await IntegrationsService.searchBookMetadata(formData.title);
+        const results = await IntegrationsService.searchBookMetadata(formData.title, formData.language);
         setSearchResults(results);
       } else if (formData.mediaType === 'Movie' || formData.mediaType === 'Series') {
         const results = await IntegrationsService.searchTMDBMetadata(formData.title, formData.mediaType);
@@ -578,6 +578,19 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
 
             {formData.mediaType === 'Book' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="col-span-1 sm:col-span-2">
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">Language (For Metadata Search)</label>
+                  <select
+                    name="language"
+                    value={formData.language || ''}
+                    onChange={handleChange}
+                    className="input-field"
+                  >
+                    <option value="">Any Language</option>
+                    <option value="en">English</option>
+                    <option value="de">German</option>
+                  </select>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-zinc-400 mb-1">Pages Read</label>
                   <input type="number" name="pagesRead" value={formData.pagesRead || ''} onChange={handleChange} className="input-field" placeholder="0" />

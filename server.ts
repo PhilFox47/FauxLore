@@ -1003,6 +1003,7 @@ async function startServer() {
   app.get("/api/books/search", async (req, res) => {
     try {
       const query = req.query.q as string;
+      const lang = req.query.lang as string;
 
       if (!query) {
         return res.status(400).json({ error: "Missing search query" });
@@ -1013,7 +1014,11 @@ async function startServer() {
 
       // Try Google Books First
       try {
-        const googleRes = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=20`, {
+        let googleUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=20`;
+        if (lang) {
+          googleUrl += `&langRestrict=${lang}`;
+        }
+        const googleRes = await fetch(googleUrl, {
           headers: {
             'User-Agent': 'FauxLoreMediaTracker/1.0'
           }

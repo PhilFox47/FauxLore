@@ -120,9 +120,14 @@ export const IntegrationsService = {
   /**
    * Search Hardcover.app API using full-stack proxy route
    */
-  async searchBookMetadata(query: string): Promise<BookMetadata[]> {
+  async searchBookMetadata(query: string, lang?: string): Promise<BookMetadata[]> {
     try {
-      const response = await fetch(`/api/books/search?q=${encodeURIComponent(query)}`);
+      const url = new URL('/api/books/search', window.location.origin);
+      url.searchParams.append('q', query);
+      if (lang) {
+        url.searchParams.append('lang', lang);
+      }
+      const response = await fetch(url.toString());
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);

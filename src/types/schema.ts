@@ -40,6 +40,7 @@ export interface MediaItem {
   // Book
   pagesRead?: number;
   totalPages?: number;
+  language?: string; // e.g. 'en', 'de'
 
   // Manga
   chaptersRead?: number;
