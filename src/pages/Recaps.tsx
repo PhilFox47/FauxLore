@@ -193,8 +193,8 @@ Mayor Gaps in Logging: ${maxGapDays >= 3 ? `Yes, max gap of ${Math.round(maxGapD
 LOREKEEPER LEVELING:
 Current Level: ${rpgStateAtEnd.level} (${rpgStateAtEnd.className})
 Levels Gained this ${timeframe}: ${levelUps}
-Quests Completed this ${timeframe}: ${completedQuests.length > 0 ? completedQuests.map(q => q.title).join(', ') : 'None'}
-Missed Quests: ${missedQuests.length > 0 ? missedQuests.map(q => `${q.title} (${q.currentAmount}/${q.targetAmount})`).join(', ') : 'None'}
+Quests Completed this ${timeframe}: ${completedQuests.length > 0 ? completedQuests.map(q => `${q.title} - ${q.description}`).join(' | ') : 'None'}
+Missed Quests: ${missedQuests.length > 0 ? missedQuests.map(q => `${q.title} - ${q.description} (${q.currentAmount}/${q.targetAmount})`).join(' | ') : 'None'}
 
 Total Master Pages (EXP): ${Math.round(totalMasterPages)}
 Total Logs: ${activeLogs.length}
