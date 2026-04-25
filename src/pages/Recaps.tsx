@@ -19,7 +19,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieCha
 type Timeframe = 'week' | 'month' | 'year';
 
 export function Recaps() {
-  const { media, logs, settings, aiRecaps, saveAiRecap } = useMediaContext();
+  const { media, logs, settings, aiRecaps, saveAiRecap, artifacts } = useMediaContext();
   const [timeframe, setTimeframe] = useState<Timeframe>('week');
   const [offsetOffset, setOffsetOffset] = useState(1); 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -61,6 +61,41 @@ export function Recaps() {
   const completedMedia = useMemo(() => {
     return activeMedia.filter(m => m.status === 'Completed' && isWithinInterval(parseISO(m.updatedAt), currentInterval));
   }, [activeMedia, currentInterval]);
+
+  const gatheredLoot = useMemo(() => {
+    let intervalArtifacts = artifacts.filter(a => isWithinInterval(parseISO(a.earnedAt), currentInterval));
+    
+    const rarityWeight: Record<string, number> = {
+      'Mythic': 7,
+      'Legendary': 6,
+      'Epic': 5,
+      'Super Rare': 4,
+      'Rare': 3,
+      'Uncommon': 2,
+      'Common': 1
+    };
+
+    intervalArtifacts.sort((a, b) => {
+      const weightA = rarityWeight[a.rarity] || 0;
+      const weightB = rarityWeight[b.rarity] || 0;
+      
+      if (weightB !== weightA) {
+        return weightB - weightA;
+      }
+      
+      const mLogsA = validLogs.filter(l => l.mediaId === a.mediaId);
+      const pagesA = mLogsA.reduce((acc, l) => acc + calculateScaledDelta(l.delta, media.find(m => m.id === a.mediaId)!, settings), 0);
+      
+      const mLogsB = validLogs.filter(l => l.mediaId === b.mediaId);
+      const pagesB = mLogsB.reduce((acc, l) => acc + calculateScaledDelta(l.delta, media.find(m => m.id === b.mediaId)!, settings), 0);
+      
+      return pagesB - pagesA;
+    });
+
+    if (timeframe === 'month') return intervalArtifacts.slice(0, 5);
+    if (timeframe === 'year') return intervalArtifacts.slice(0, 10);
+    return intervalArtifacts;
+  }, [artifacts, currentInterval, timeframe, validLogs, media, settings]);
 
   const totalMasterPages = useMemo(() => {
     return activeLogs.reduce((acc, log) => {
@@ -176,6 +211,9 @@ ${mediaRanking.slice(0,5).map(m => `- ${m.title} (${Math.round(m.pages)} MP)`).j
 LOCATIONS TRACKED (Where the user consumed media):
 ${Array.from(new Set(activeLogs.filter(l => l.location && l.location.trim().length > 0).map(l => l.location))).join(', ') || 'None'}
 
+GATHERED LOOT (Artifacts earned by finishing media!):
+${gatheredLoot.length > 0 ? gatheredLoot.map(a => `- ${a.name} (${a.rarity}): ${a.description}`).join('\n') : 'None'}
+
 JOURNAL NOTES (User's personal thoughts and reactions!):
 ${activeLogs.filter(l => l.note && l.note.trim().length > 0).map(l => `- [${l.timestamp.split('T')[0]}] On ${activeMedia.find(m => m.id === l.mediaId)?.title || 'Media'}: "${l.note}"`).join('\n') || 'None'}
 
@@ -189,7 +227,7 @@ CRITICAL INSTRUCTIONS:
 1. TITLE: Must be a punchy, clever name (1-5 words max). DO NOT include descriptions.
 2. VIBE & TONE: Be charming, sarcastic, witty, and charismatic! Sound natural, modern and casual. Feel free to roast or tease the user playfully about their habits (e.g., spending too much time on one thing, slow reading, weird combos). Less "classic prose" and more like an entertaining, hyper-aware gamer/geek podcaster talking to the user.
 3. STRUCTURE & FOCUS: The core structure and primary focus of your recap MUST be the 'MEDIA COMPLETED' list (if any). Let what they finished dictate your narrative flow. After completing media, cover their 'MEDIA IN PROGRESS' as ongoing obsessions or endless slogs.
-4. ORGANIC WEAVING: You MUST organically weave Journal Notes, Locations, and Lorekeeper Leveling stats (Level ups, Quests) directly into the discussion of the specific media. DO NOT create standalone paragraphs for locations, lorekeeper info, or notes. Examples: "Reading some One Piece this month really helped you finish the 'Read some Manga' Quest!", "Glad to see you followed your weekly quest and went to watch a Comedy Movie!", or "You clearly enjoyed your time reading [Book] in [Location] based on your notes."
+4. ORGANIC WEAVING: You MUST organically weave Journal Notes, Locations, Gathered Loot, and Lorekeeper Leveling stats (Level ups, Quests) directly into the discussion of the specific media. DO NOT create standalone paragraphs for locations, lorekeeper info, gathered loot, or notes. Examples: "Reading some One Piece this month really helped you finish the 'Read some Manga' Quest!", "Glad to see you followed your weekly quest and went to watch a Comedy Movie!", "You clearly enjoyed your time reading [Book] in [Location] based on your notes.", or "Finishing [Media] gave you that sweet [Loot Name]!".
 5. ACCURACY: DO NOT assume a media item is completed unless it explicitly is in the 'MEDIA COMPLETED' list! If it's just 'IN PROGRESS', treat it as their current ongoing obsession or slog.
 6. FORMATTING: Use Markdown beautifully (bolding, italics, blockquotes, bullet points). Make it very readable.
 7. LENGTH: Give a detailed recap (Weekly: 2-3 paragraphs. Monthly/Yearly: 4-6 paragraphs) highlighting their key moments, weird obsessions, or big wins.
@@ -711,6 +749,42 @@ ${promptContext}`);
      );
   };
 
+  const renderGatheredLoot = () => {
+     if (gatheredLoot.length === 0) return null;
+
+     const rarityColors: Record<string, string> = {
+       'Mythic': 'text-rose-500 border-rose-500/30 bg-rose-500/10 shadow-[0_0_15px_rgba(244,63,94,0.3)]',
+       'Legendary': 'text-amber-400 border-amber-400/30 bg-amber-400/10 shadow-[0_0_15px_rgba(251,191,36,0.3)]',
+       'Epic': 'text-fuchsia-400 border-fuchsia-400/30 bg-fuchsia-400/10 shadow-[0_0_15px_rgba(232,121,249,0.3)]',
+       'Super Rare': 'text-violet-400 border-violet-400/30 bg-violet-400/10',
+       'Rare': 'text-blue-400 border-blue-400/30 bg-blue-400/10',
+       'Uncommon': 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10',
+       'Common': 'text-zinc-300 border-white/10 bg-white/5',
+     };
+
+     return (
+        <div className="bg-zinc-900/50 border border-white/5 p-6 rounded-3xl">
+           <h3 className="text-lg font-black text-white mb-6 flex items-center gap-3">
+             <Trophy className="w-5 h-5 text-amber-500" />
+             Gathered Loot
+           </h3>
+           <div className="space-y-4">
+              {gatheredLoot.map((artifact, idx) => (
+                 <div key={idx} className="flex flex-col gap-2 p-3 bg-black/40 rounded-2xl border border-white/5 relative overflow-hidden group">
+                    <div className="flex justify-between items-start gap-4 z-10 relative">
+                       <span className="font-bold text-white text-sm line-clamp-2">{artifact.name}</span>
+                       <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full border whitespace-nowrap ${rarityColors[artifact.rarity] || rarityColors['Common']}`}>
+                          {artifact.rarity}
+                       </span>
+                    </div>
+                    <p className="text-xs text-zinc-500 z-10 relative line-clamp-2">{artifact.description}</p>
+                 </div>
+              ))}
+           </div>
+        </div>
+     );
+  };
+
   const renderLocationBreakdown = () => {
      const locations: Record<string, number> = {};
      let locationCount = 0;
@@ -906,6 +980,7 @@ ${promptContext}`);
                             </div>
                          </div>
                          {renderLocationBreakdown()}
+                         {renderGatheredLoot()}
                          {renderSunkCost()}
                       </div>
                    </div>
