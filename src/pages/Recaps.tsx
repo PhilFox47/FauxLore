@@ -148,7 +148,7 @@ CRITICAL INSTRUCTIONS:
 4. ACCURACY: DO NOT assume a media item is completed unless it explicitly is in the 'MEDIA COMPLETED' list! If it's just 'IN PROGRESS', treat it as their current ongoing obsession or slog.
 5. FORMATTING: Use Markdown beautifully (bolding, italics, blockquotes, bullet points). Make it very readable.
 6. LENGTH: Give a detailed recap (Weekly: 2-3 paragraphs. Monthly/Yearly: 4-6 paragraphs) highlighting their key moments, weird obsessions, or big wins.
-7. LOCATIONS: If any locations are tracked, incorporate them into the recap creatively (e.g. 'You were slaying dragons while stuck in a waiting room').
+7. LOCATIONS: If locations are tracked, organically weave them into the narrative alongside the media consumed (e.g., finding connections between what was consumed on the train vs in bed). DO NOT create a standalone paragraph just for locations.
 
 Context: 
 ${promptContext}`);
@@ -633,12 +633,16 @@ ${promptContext}`);
      activeLogs.forEach(l => {
         if (l.location && l.location.trim().length > 0) {
            const loc = l.location.trim();
-           locations[loc] = (locations[loc] || 0) + 1;
-           locationCount++;
+           const m = activeMedia.find(media => media.id === l.mediaId);
+           if (m) {
+              const pages = calculateScaledDelta(l.delta || 0, m, settings);
+              locations[loc] = (locations[loc] || 0) + pages;
+              locationCount++;
+           }
         }
      });
 
-     if (locationCount === 0) return null;
+     if (locationCount === 0 || Object.keys(locations).length === 0) return null;
 
      const sorted = Object.entries(locations).sort((a,b) => b[1] - a[1]);
 
@@ -649,13 +653,13 @@ ${promptContext}`);
              Scouted Locations
            </h3>
            <div className="space-y-4">
-              {sorted.map(([loc, count], idx) => (
+              {sorted.map(([loc, pages], idx) => (
                  <div key={idx} className="flex justify-between items-center group">
                     <div className="flex items-center gap-3">
                        <div className="w-2 h-2 rounded-full bg-zinc-600 group-hover:bg-white transition-colors" />
                        <span className="text-sm font-bold text-zinc-300 truncate max-w-[150px]" title={loc}>{loc}</span>
                     </div>
-                    <span className="text-zinc-500 font-black text-xs bg-white/5 px-2 py-1 rounded-lg border border-white/5">{count} log{count !== 1 ? 's' : ''}</span>
+                    <span className="text-zinc-500 font-black text-xs bg-white/5 px-2 py-1 rounded-lg border border-white/5">{Math.round(pages)} MP</span>
                  </div>
               ))}
            </div>
