@@ -17,6 +17,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     tmdbApiKey: '',
     nanoGptApiKey: '',
     nanoGptModel: '',
+    geminiApiKey: '',
     timezone: '',
     yearlyGoals: {
       'Game': 100,
@@ -41,41 +42,71 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadSettings() {
-      try {
-        const settings = await DatabaseService.getSettings();
-        setFormData({
-          igdbClientId: settings.igdbClientId || '',
-          igdbClientSecret: settings.igdbClientSecret || '',
-          tmdbApiKey: settings.tmdbApiKey || '',
-          nanoGptApiKey: settings.nanoGptApiKey || '',
-          nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
-          timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
-          yearlyGoals: {
-            'Game': settings.yearlyGoals?.['Game'] ?? 100,
-            'Book': settings.yearlyGoals?.['Book'] ?? 5000,
-            'Visual Novel': settings.yearlyGoals?.['Visual Novel'] ?? 50,
-            'Manga': settings.yearlyGoals?.['Manga'] ?? 200,
-            'Series': settings.yearlyGoals?.['Series'] ?? 100,
-            'Movie': settings.yearlyGoals?.['Movie'] ?? 20,
-            'Comic': settings.yearlyGoals?.['Comic'] ?? 100
-          },
-          gamePagesPerHour: settings.masterPageConfig?.gamePagesPerHour ?? 12,
-          vnPagesPerHour: settings.masterPageConfig?.vnPagesPerHour ?? 24,
-          mangaPagesPerChapter: settings.masterPageConfig?.mangaPagesPerChapter ?? 5,
-          comicPagesPerIssue: settings.masterPageConfig?.comicPagesPerIssue ?? 20,
-          episodesWatchedMultiplier: settings.masterPageConfig?.episodesWatchedMultiplier ?? 30,
-          moviePagesPerMovie: settings.masterPageConfig?.moviePagesPerMovie ?? 100,
-          runtimeMinutesPerPage: settings.masterPageConfig?.runtimeMinutesPerPage ?? 2.5
-        });
-      } catch (err: any) {
-        setError(err.message || 'Failed to load settings');
-      } finally {
-        setIsLoading(false);
+    if (settings) {
+      setFormData({
+        igdbClientId: settings.igdbClientId || '',
+        igdbClientSecret: settings.igdbClientSecret || '',
+        tmdbApiKey: settings.tmdbApiKey || '',
+        nanoGptApiKey: settings.nanoGptApiKey || '',
+        nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
+        geminiApiKey: settings.geminiApiKey || '',
+        timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+        yearlyGoals: {
+          'Game': settings.yearlyGoals?.['Game'] ?? 100,
+          'Book': settings.yearlyGoals?.['Book'] ?? 5000,
+          'Visual Novel': settings.yearlyGoals?.['Visual Novel'] ?? 50,
+          'Manga': settings.yearlyGoals?.['Manga'] ?? 200,
+          'Series': settings.yearlyGoals?.['Series'] ?? 100,
+          'Movie': settings.yearlyGoals?.['Movie'] ?? 20,
+          'Comic': settings.yearlyGoals?.['Comic'] ?? 100
+        },
+        gamePagesPerHour: settings.masterPageConfig?.gamePagesPerHour ?? 12,
+        vnPagesPerHour: settings.masterPageConfig?.vnPagesPerHour ?? 24,
+        mangaPagesPerChapter: settings.masterPageConfig?.mangaPagesPerChapter ?? 5,
+        comicPagesPerIssue: settings.masterPageConfig?.comicPagesPerIssue ?? 20,
+        episodesWatchedMultiplier: settings.masterPageConfig?.episodesWatchedMultiplier ?? 30,
+        moviePagesPerMovie: settings.masterPageConfig?.moviePagesPerMovie ?? 100,
+        runtimeMinutesPerPage: settings.masterPageConfig?.runtimeMinutesPerPage ?? 2.5
+      });
+      setIsLoading(false);
+    } else {
+      async function loadSettings() {
+        try {
+          const settings = await DatabaseService.getSettings();
+          setFormData({
+            igdbClientId: settings.igdbClientId || '',
+            igdbClientSecret: settings.igdbClientSecret || '',
+            tmdbApiKey: settings.tmdbApiKey || '',
+            nanoGptApiKey: settings.nanoGptApiKey || '',
+            nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
+            geminiApiKey: settings.geminiApiKey || '',
+            timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+            yearlyGoals: {
+              'Game': settings.yearlyGoals?.['Game'] ?? 100,
+              'Book': settings.yearlyGoals?.['Book'] ?? 5000,
+              'Visual Novel': settings.yearlyGoals?.['Visual Novel'] ?? 50,
+              'Manga': settings.yearlyGoals?.['Manga'] ?? 200,
+              'Series': settings.yearlyGoals?.['Series'] ?? 100,
+              'Movie': settings.yearlyGoals?.['Movie'] ?? 20,
+              'Comic': settings.yearlyGoals?.['Comic'] ?? 100
+            },
+            gamePagesPerHour: settings.masterPageConfig?.gamePagesPerHour ?? 12,
+            vnPagesPerHour: settings.masterPageConfig?.vnPagesPerHour ?? 24,
+            mangaPagesPerChapter: settings.masterPageConfig?.mangaPagesPerChapter ?? 5,
+            comicPagesPerIssue: settings.masterPageConfig?.comicPagesPerIssue ?? 20,
+            episodesWatchedMultiplier: settings.masterPageConfig?.episodesWatchedMultiplier ?? 30,
+            moviePagesPerMovie: settings.masterPageConfig?.moviePagesPerMovie ?? 100,
+            runtimeMinutesPerPage: settings.masterPageConfig?.runtimeMinutesPerPage ?? 2.5
+          });
+        } catch (err: any) {
+          setError(err.message || 'Failed to load settings');
+        } finally {
+          setIsLoading(false);
+        }
       }
+      loadSettings();
     }
-    loadSettings();
-  }, []);
+  }, [settings]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, step } = e.target;
@@ -188,6 +219,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         tmdbApiKey: formData.tmdbApiKey,
         nanoGptApiKey: formData.nanoGptApiKey,
         nanoGptModel: formData.nanoGptModel,
+        geminiApiKey: formData.geminiApiKey,
         timezone: formData.timezone,
         masterPageConfig: {
           gamePagesPerHour: formData.gamePagesPerHour,
@@ -459,6 +491,18 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       className="input-field"
                       placeholder="gpt-4o-mini"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Gemini API Key (Google AI Studio)</label>
+                    <input
+                      type="password"
+                      name="geminiApiKey"
+                      value={formData.geminiApiKey}
+                      onChange={handleChange}
+                      className="input-field"
+                      placeholder="..."
+                    />
+                    <p className="text-[10px] text-zinc-500 mt-1">Required for advanced Item Generation with web search capabilities.</p>
                   </div>
                 </div>
 

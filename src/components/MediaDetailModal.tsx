@@ -5,7 +5,7 @@ import { X, Edit2, Clock, Calendar, BookOpen, Star, Hash, Gamepad2, Tv, Film, Sa
 import { calculateScaledDelta } from '../lib/scaling';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
-import { generateAiArtifact } from '../services/nanoGptService';
+import { generateAiArtifactWithGemini } from '../services/geminiService';
 import { v4 as uuidv4 } from 'uuid';
 import { Artifact } from '../types/schema';
 import { LootReveal } from './LootReveal';
@@ -43,13 +43,9 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   const itemArtifacts = artifacts?.filter(a => a.mediaId === item.id) || [];
 
   const handleClaimLoot = async () => {
-    if (!settings?.nanoGptApiKey) {
-      alert("Please configure your AI Provider API Key in Settings to claim loot.");
-      return;
-    }
     setIsLooting(true);
     try {
-      const generated = await generateAiArtifact(settings.nanoGptApiKey, settings.nanoGptModel || "gpt-4o-mini", item);
+      const generated = await generateAiArtifactWithGemini(settings?.geminiApiKey, item);
       const newArtifact = {
         id: uuidv4(),
         mediaId: item.id,
@@ -63,7 +59,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
       setLootedArtifact(newArtifact);
     } catch(e: any) {
       console.error("Failed to loot: " + e.message);
-      alert("Failed to loot: " + e.message);
+      alert("Failed to loot: " + e.message + "\n\nNote: Ensure your Gemini API Key is set in AI Studio Secrets.");
     } finally {
       setIsLooting(false);
     }

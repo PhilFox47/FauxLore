@@ -103,6 +103,7 @@ export interface Settings {
   tmdbApiKey?: string;
   nanoGptApiKey?: string;
   nanoGptModel?: string;
+  geminiApiKey?: string;
   timezone?: string;
   yearlyGoals?: Partial<Record<MediaType, number>>;
   lastActiveDate?: string;

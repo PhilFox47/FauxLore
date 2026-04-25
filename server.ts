@@ -247,6 +247,7 @@ async function startServer() {
       hardcoverApiKey TEXT,
       nanoGptApiKey TEXT,
       nanoGptModel TEXT,
+      geminiApiKey TEXT,
       timezone TEXT,
       masterPageConfig TEXT,
       yearlyGoals TEXT,
@@ -291,6 +292,7 @@ async function startServer() {
   try { db.prepare("ALTER TABLE settings ADD COLUMN yearlyGoals TEXT").run(); console.log("Migration: Added yearlyGoals"); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptApiKey TEXT").run(); console.log("Migration: Added nanoGptApiKey"); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptModel TEXT").run(); console.log("Migration: Added nanoGptModel"); } catch (e) {}
+  try { db.prepare("ALTER TABLE settings ADD COLUMN geminiApiKey TEXT").run(); console.log("Migration: Added geminiApiKey"); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN lastActiveDate TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN currentStreak INTEGER").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN hltbMain REAL").run(); } catch (e) {}
@@ -623,8 +625,8 @@ async function startServer() {
       const userId = settings.userId || 'default_user';
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -632,6 +634,7 @@ async function startServer() {
           hardcoverApiKey=excluded.hardcoverApiKey,
           nanoGptApiKey=excluded.nanoGptApiKey,
           nanoGptModel=excluded.nanoGptModel,
+          geminiApiKey=excluded.geminiApiKey,
           timezone=excluded.timezone,
           masterPageConfig=excluded.masterPageConfig,
           yearlyGoals=excluded.yearlyGoals,
@@ -645,6 +648,7 @@ async function startServer() {
         hardcoverApiKey: settings.hardcoverApiKey || null,
         nanoGptApiKey: settings.nanoGptApiKey || null,
         nanoGptModel: settings.nanoGptModel || null,
+        geminiApiKey: settings.geminiApiKey || null,
         timezone: settings.timezone || null,
         masterPageConfig: settings.masterPageConfig ? JSON.stringify(settings.masterPageConfig) : null,
         yearlyGoals: settings.yearlyGoals ? JSON.stringify(settings.yearlyGoals) : null,
@@ -655,7 +659,8 @@ async function startServer() {
       const saved: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId);
       res.json({
         ...saved,
-        masterPageConfig: saved.masterPageConfig ? JSON.parse(saved.masterPageConfig) : undefined
+        masterPageConfig: saved.masterPageConfig ? JSON.parse(saved.masterPageConfig) : undefined,
+        yearlyGoals: saved.yearlyGoals ? JSON.parse(saved.yearlyGoals) : undefined
       });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
