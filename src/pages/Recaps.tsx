@@ -148,6 +148,7 @@ CRITICAL INSTRUCTIONS:
 4. ACCURACY: DO NOT assume a media item is completed unless it explicitly is in the 'MEDIA COMPLETED' list! If it's just 'IN PROGRESS', treat it as their current ongoing obsession or slog.
 5. FORMATTING: Use Markdown beautifully (bolding, italics, blockquotes, bullet points). Make it very readable.
 6. LENGTH: Give a detailed recap (Weekly: 2-3 paragraphs. Monthly/Yearly: 4-6 paragraphs) highlighting their key moments, weird obsessions, or big wins.
+7. LOCATIONS: If any locations are tracked, incorporate them into the recap creatively (e.g. 'You were slaying dragons while stuck in a waiting room').
 
 Context: 
 ${promptContext}`);
@@ -626,6 +627,42 @@ ${promptContext}`);
      );
   };
 
+  const renderLocationBreakdown = () => {
+     const locations: Record<string, number> = {};
+     let locationCount = 0;
+     activeLogs.forEach(l => {
+        if (l.location && l.location.trim().length > 0) {
+           const loc = l.location.trim();
+           locations[loc] = (locations[loc] || 0) + 1;
+           locationCount++;
+        }
+     });
+
+     if (locationCount === 0) return null;
+
+     const sorted = Object.entries(locations).sort((a,b) => b[1] - a[1]);
+
+     return (
+        <div className="bg-zinc-900/50 border border-white/5 p-6 rounded-3xl">
+           <h3 className="text-lg font-black text-white mb-6 flex items-center gap-3">
+             <Map className="w-5 h-5 text-zinc-400" />
+             Scouted Locations
+           </h3>
+           <div className="space-y-4">
+              {sorted.map(([loc, count], idx) => (
+                 <div key={idx} className="flex justify-between items-center group">
+                    <div className="flex items-center gap-3">
+                       <div className="w-2 h-2 rounded-full bg-zinc-600 group-hover:bg-white transition-colors" />
+                       <span className="text-sm font-bold text-zinc-300 truncate max-w-[150px]" title={loc}>{loc}</span>
+                    </div>
+                    <span className="text-zinc-500 font-black text-xs bg-white/5 px-2 py-1 rounded-lg border border-white/5">{count} log{count !== 1 ? 's' : ''}</span>
+                 </div>
+              ))}
+           </div>
+        </div>
+     );
+  };
+
   return (
     <div className="flex flex-col h-full max-h-full overflow-hidden w-full bg-[#080809]">
       <div className="flex-shrink-0 p-4 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 bg-zinc-950/80 sticky top-0 z-10 backdrop-blur-xl">
@@ -778,6 +815,7 @@ ${promptContext}`);
                                <div className="text-[8px] text-zinc-500 uppercase tracking-widest font-black">Avg Session</div>
                             </div>
                          </div>
+                         {renderLocationBreakdown()}
                          {renderSunkCost()}
                       </div>
                    </div>
