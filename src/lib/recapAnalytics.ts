@@ -22,7 +22,7 @@ export function analyzeSunkCost(data: RecapAnalyticsData) {
   let worst: { media: MediaItem, pages: number } | null = null;
   
   for (const media of data.media) {
-    if (media.userRating && media.userRating <= 5 && masterPages[media.id] > 50) {
+    if (media.userRating && media.userRating <= 2.5 && masterPages[media.id] > 50) {
        if (!worst || masterPages[media.id] > worst.pages) {
           worst = { media, pages: masterPages[media.id] };
        }
@@ -32,15 +32,15 @@ export function analyzeSunkCost(data: RecapAnalyticsData) {
 }
 
 export function analyzeContrarian(data: RecapAnalyticsData) {
-  // Find largest difference between userRating (1-10) and reviewScore (1-100)
+  // Find largest difference between userRating (0-5) and reviewScore (0-5)
   let biggestDiff = -1;
   let contrarianMedia: { media: MediaItem, diff: number, type: 'hated' | 'loved' } | null = null;
 
   for (const m of data.media) {
     if (m.userRating && m.reviewScore) {
-      const normalizedCritic = m.reviewScore / 10;
+      const normalizedCritic = m.reviewScore;
       const difference = Math.abs(m.userRating - normalizedCritic);
-      if (difference > biggestDiff && difference >= 2) {
+      if (difference > biggestDiff && difference >= 1.5) {
         biggestDiff = difference;
         contrarianMedia = { media: m, diff: difference, type: m.userRating > normalizedCritic ? 'loved' : 'hated' };
       }

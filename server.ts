@@ -309,6 +309,9 @@ async function startServer() {
   try { db.prepare("ALTER TABLE media ADD COLUMN selectedHltbType TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE logs ADD COLUMN location TEXT").run(); } catch (e) {}
   
+  try { db.prepare("UPDATE media SET status = 'Active' WHERE status = 'Playing'").run(); } catch(e) {}
+  try { db.prepare("UPDATE media SET status = 'Planning' WHERE status = 'Backlog'").run(); } catch(e) {}
+
   const normalizeMedia = (row: any) => ({
     ...row,
     genres: row.genres ? JSON.parse(row.genres) : [],
@@ -519,7 +522,7 @@ async function startServer() {
         
         let newStatus = mediaRow.status;
         if (newStatus === 'Planning' && log.delta > 0) {
-           newStatus = 'Playing';
+           newStatus = 'Active';
         }
         
         if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
 import { useMediaContext } from '../contexts/MediaContext';
-import { X, Edit2, Clock, Calendar, BookOpen, Star, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin } from 'lucide-react';
+import { X, Edit2, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin } from 'lucide-react';
 import { calculateScaledDelta } from '../lib/scaling';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
@@ -196,7 +196,14 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
               <div className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
                 <Star className="w-3 h-3" /> Rating
               </div>
-              <div className="text-2xl font-black text-white">{item.userRating ? `${Array(item.userRating).fill('★').join('')}` : '-'}</div>
+              <div className="text-2xl font-black text-white flex items-center h-8">
+                {item.userRating ? (
+                  <>
+                     {Array(Math.floor(item.userRating)).fill(0).map((_, i) => <Star key={`full-${i}`} className="w-5 h-5 fill-white text-white" />)}
+                     {item.userRating % 1 !== 0 && <StarHalf className="w-5 h-5 fill-white text-white" />}
+                  </>
+                ) : '-'}
+              </div>
             </div>
             <div className="bg-zinc-800/50 p-4 rounded-2xl border border-white/5">
               <div className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
@@ -210,6 +217,14 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
             <div className="mb-8">
               <h3 className="text-lg font-bold text-white mb-3 tracking-wide">Description</h3>
               <p className="text-zinc-400 text-sm leading-relaxed">{item.description}</p>
+            </div>
+          )}
+
+          {item.userReview && (
+            <div className="mb-8 p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl relative overflow-hidden text-amber-50/90">
+              <Star className="w-16 h-16 text-amber-500/10 absolute -top-4 -right-2 pointer-events-none" />
+              <h3 className="text-sm font-bold text-amber-500 mb-2 tracking-wide uppercase">Your Review</h3>
+              <p className="text-sm leading-relaxed relative z-10 italic">"{item.userReview}"</p>
             </div>
           )}
 

@@ -19,6 +19,8 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
   const [note, setNote] = useState('');
   const [location, setLocation] = useState(localStorage.getItem('fauxlore_last_location') || '');
   const [status, setStatus] = useState<MediaItem['status']>('Active');
+  const [userRating, setUserRating] = useState<number | ''>('');
+  const [userReview, setUserReview] = useState('');
   const [logDate, setLogDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [logTime, setLogTime] = useState<string>(format(new Date(), 'HH:mm'));
   const [isHistorical, setIsHistorical] = useState(false);
@@ -37,6 +39,8 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       setInputValue(cv + 1); // UX Default: One increment above current total
       setNote('');
       setStatus(item.status);
+      setUserRating(item.userRating ?? '');
+      setUserReview(item.userReview ?? '');
       const now = new Date();
       setLogDate(format(now, 'yyyy-MM-dd'));
       setLogTime(format(now, 'HH:mm'));
@@ -99,9 +103,30 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
     }
     
     onLog(item.id, metricType, delta, note, finalTimestamp, location);
+    
+    let updatedItem = { ...item };
+    let needsUpdate = false;
+    
     if (status !== item.status) {
-      saveMediaItem({ ...item, status: status });
+      updatedItem.status = status;
+      needsUpdate = true;
     }
+    
+    if (status === 'Completed') {
+      if (userRating !== '' && userRating !== item.userRating) {
+        updatedItem.userRating = userRating;
+        needsUpdate = true;
+      }
+      if (userReview !== item.userReview) {
+        updatedItem.userReview = userReview;
+        needsUpdate = true;
+      }
+    }
+
+    if (needsUpdate) {
+      saveMediaItem(updatedItem);
+    }
+    
     onClose();
   };
 
@@ -244,18 +269,49 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
              </div>
           </div>
 
-          <div>
-             <label className="block text-sm font-medium text-zinc-300 mb-1">Status</label>
-             <select
-               value={status}
-               onChange={(e) => setStatus(e.target.value as MediaItem['status'])}
-               className={cn("w-full bg-[#18181b] border border-white/10 rounded-xl px-3 py-3 text-white focus:outline-none text-sm appearance-none", `focus:border-${colors.bg.split('-')[1]}-500`)}
-             >
-               <option value="Active">Active</option>
-               <option value="Backlog">Backlog</option>
-               <option value="Completed">Completed</option>
-               <option value="Dropped">Dropped</option>
-             </select>
+          <div className="space-y-4">
+             <div>
+               <label className="block text-sm font-medium text-zinc-300 mb-1">Status</label>
+               <select
+                 value={status}
+                 onChange={(e) => setStatus(e.target.value as MediaItem['status'])}
+                 className={cn("w-full bg-[#18181b] border border-white/10 rounded-xl px-3 py-3 text-white focus:outline-none text-sm appearance-none", `focus:border-${colors.bg.split('-')[1]}-500`)}
+               >
+                 <option value="Active">Active</option>
+                 <option value="Planning">Planning</option>
+                 <option value="Completed">Completed</option>
+                 <option value="Dropped">Dropped</option>
+               </select>
+             </div>
+
+             {status === 'Completed' && (
+               <div className="space-y-4 p-4 border border-amber-500/30 bg-amber-500/5 rounded-xl">
+                 <div>
+                   <label className="block text-sm font-medium text-amber-500 mb-1 flex justify-between items-center">
+                     <span>Your Rating</span>
+                     {userRating !== '' && <span className="font-bold">{userRating}/5</span>}
+                   </label>
+                   <input
+                     type="range"
+                     min="0"
+                     max="5"
+                     step="0.5"
+                     value={userRating === '' ? 5 : userRating}
+                     onChange={(e) => setUserRating(Number(e.target.value))}
+                     className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                   />
+                 </div>
+                 <div>
+                   <label className="block text-sm font-medium text-amber-500 mb-1">Your Review</label>
+                   <textarea
+                     value={userReview}
+                     onChange={(e) => setUserReview(e.target.value)}
+                     placeholder="What did you think of it overall?"
+                     className="w-full bg-[#18181b] border border-amber-500/30 rounded-lg px-3 py-2 text-white text-sm min-h-[80px] focus:outline-none focus:border-amber-500 resize-none"
+                   />
+                 </div>
+               </div>
+             )}
           </div>
         </div>
 

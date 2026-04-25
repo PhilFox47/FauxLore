@@ -200,10 +200,10 @@ Total Master Pages (EXP): ${Math.round(totalMasterPages)}
 Total Logs: ${activeLogs.length}
 
 MEDIA IN PROGRESS:
-${activeMedia.filter(m => m.status !== 'Completed').map(m => `- ${m.title} (${m.mediaType}): ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') || 'None'}
+${activeMedia.filter(m => m.status !== 'Completed').map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5] ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') || 'None'}
 
 MEDIA COMPLETED:
-${completedMedia.length > 0 ? completedMedia.map(m => `- ${m.title} (${m.mediaType}): ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') : 'None'}
+${completedMedia.length > 0 ? completedMedia.map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5] ${m.userReview ? `[User Review: "${m.userReview}"] ` : ''}${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') : 'None'}
 
 TOP RANKED MEDIA (By Engagement/Master Pages):
 ${mediaRanking.slice(0,5).map(m => `- ${m.title} (${Math.round(m.pages)} MP)`).join('\n')}
@@ -227,7 +227,7 @@ CRITICAL INSTRUCTIONS:
 1. TITLE: Must be a punchy, clever name (1-5 words max). DO NOT include descriptions.
 2. VIBE & TONE: Be charming, sarcastic, witty, and charismatic! Sound natural, modern and casual. Feel free to roast or tease the user playfully about their habits (e.g., spending too much time on one thing, slow reading, weird combos). Less "classic prose" and more like an entertaining, hyper-aware gamer/geek podcaster talking to the user.
 3. STRUCTURE & FOCUS: The core structure and primary focus of your recap MUST be the 'MEDIA COMPLETED' list (if any). Let what they finished dictate your narrative flow. After completing media, cover their 'MEDIA IN PROGRESS' as ongoing obsessions or endless slogs.
-4. ORGANIC WEAVING: You MUST organically weave Journal Notes, Locations, Gathered Loot, and Lorekeeper Leveling stats (Level ups, Quests) directly into the discussion of the specific media. DO NOT create standalone paragraphs for locations, lorekeeper info, gathered loot, or notes. Examples: "Reading some One Piece this month really helped you finish the 'Read some Manga' Quest!", "Glad to see you followed your weekly quest and went to watch a Comedy Movie!", "You clearly enjoyed your time reading [Book] in [Location] based on your notes.", or "Finishing [Media] gave you that sweet [Loot Name]!".
+4. ORGANIC WEAVING: You MUST organically weave Journal Notes, Locations, Gathered Loot, Ratings (Critic and User Ratings), and Lorekeeper Leveling stats (Level ups, Quests) directly into the discussion of the specific media. DO NOT create standalone paragraphs for locations, lorekeeper info, gathered loot, ratings or notes. Examples: "Reading some One Piece this month really helped you finish the 'Read some Manga' Quest!", "Glad to see you followed your weekly quest and went to watch a Comedy Movie!", "You clearly enjoyed your time reading [Book] in [Location] based on your notes.", "It's no surprise you gave it an 4/5, considering critics loved it with a 92/100!", or "Finishing [Media] gave you that sweet [Loot Name]!".
 5. ACCURACY: DO NOT assume a media item is completed unless it explicitly is in the 'MEDIA COMPLETED' list! If it's just 'IN PROGRESS', treat it as their current ongoing obsession or slog.
 6. FORMATTING: Use Markdown beautifully (bolding, italics, blockquotes, bullet points). Make it very readable.
 7. LENGTH: Give a detailed recap (Weekly: 2-3 paragraphs. Monthly/Yearly: 4-6 paragraphs) highlighting their key moments, weird obsessions, or big wins.
@@ -428,7 +428,11 @@ ${promptContext}`);
                  )}
                  <div className="flex flex-col min-w-0">
                     <span className="font-bold text-white text-base truncate">{r.item.title}</span>
-                    <span className={`text-xs uppercase tracking-widest font-bold mt-0.5 ${MEDIA_COLORS[r.item.mediaType]?.text || 'text-zinc-400'}`}>{r.item.mediaType}</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                       <span className={`text-[10px] uppercase tracking-widest font-bold ${MEDIA_COLORS[r.item.mediaType]?.text || 'text-zinc-400'}`}>{r.item.mediaType}</span>
+                       {r.item.reviewScore && <span className="text-[9px] px-1.5 py-0.5 bg-blue-500/20 rounded-md text-blue-400 font-bold">C: {r.item.reviewScore}</span>}
+                       {r.item.userRating && <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 rounded-md text-amber-500 font-bold">★ {r.item.userRating}</span>}
+                    </div>
                  </div>
               </div>
               <div className="text-right relative z-10 shrink-0 ml-4">
@@ -1021,6 +1025,8 @@ ${promptContext}`);
                                      {(m.tags || []).slice(0, 2).map(t => (
                                         <span key={t} className="text-[9px] px-2.5 py-1 bg-white/10 rounded-full text-zinc-400 border border-white/5 font-bold">{t}</span>
                                      ))}
+                                     {m.reviewScore && <span className="text-[9px] px-2.5 py-1 bg-blue-500/20 rounded-full text-blue-400 border border-blue-500/20 font-bold">Critic: {m.reviewScore}/5</span>}
+                                     {m.userRating && <span className="text-[9px] px-2.5 py-1 bg-amber-500/20 rounded-full text-amber-500 border border-amber-500/20 font-bold">★ {m.userRating}/5</span>}
                                   </div>
                                 </div>
                              </div>
@@ -1046,6 +1052,10 @@ ${promptContext}`);
                                    )}
                                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent opacity-80" />
                                    <div className="absolute bottom-0 left-0 right-0 p-4">
+                                      <div className="flex items-center gap-1.5 mb-1.5 overflow-hidden">
+                                        {m.reviewScore && <span className="shrink-0 text-[7px] px-1.5 py-0.5 bg-blue-500/30 rounded-sm text-blue-300 font-bold">C:{m.reviewScore}</span>}
+                                        {m.userRating && <span className="shrink-0 text-[7px] px-1.5 py-0.5 bg-amber-500/30 rounded-sm text-amber-500 font-bold">★{m.userRating}</span>}
+                                      </div>
                                       <div className="text-[10px] font-black text-white truncate leading-none mb-1">{m.title}</div>
                                       <div className={`text-[8px] font-black uppercase tracking-widest ${MEDIA_COLORS[m.mediaType]?.text || 'text-white'} opacity-70`}>{m.mediaType}</div>
                                    </div>

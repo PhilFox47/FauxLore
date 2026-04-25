@@ -19,14 +19,15 @@ export interface MediaItem {
   creator?: string; // Developer, Author, Studio, Director
   publisher?: string;
   year?: number;
-  reviewScore?: number; // 1-100
+  reviewScore?: number; // 0-5
   averagePlaytime?: number; // hours
   hltbMain?: number;
   hltbMainExtra?: number;
   hltbCompletionist?: number;
   selectedHltbType?: 'main' | 'mainExtra' | 'completionist';
   status: Status;
-  userRating?: number; // 1-10
+  userRating?: number; // 0-5
+  userReview?: string; // Text review written by the user
   
   // Taxonomies
   genres: string[];

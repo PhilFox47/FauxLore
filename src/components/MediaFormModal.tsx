@@ -494,6 +494,16 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   placeholder="Leave blank for unrated" 
                 />
               </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-amber-500/80 mb-1">Your Review</label>
+                <textarea 
+                  name="userReview" 
+                  value={formData.userReview ?? ''} 
+                  onChange={(e) => setFormData(p => ({...p, userReview: e.target.value }))} 
+                  className="input-field border-amber-500/20 focus:border-amber-500/50 min-h-[80px]" 
+                  placeholder="What did you think of it overall?" 
+                />
+              </div>
             </div>
 
             {(formData.mediaType === 'Game' || formData.mediaType === 'Visual Novel') && (

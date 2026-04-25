@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, BarChart3, Settings, X, Presentation, BookOpen, Dice5, Shield, Flame, Gem } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
 import { MEDIA_COLORS } from '../types/schema';
+import { calculateStreak } from '../lib/streak';
 
 export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () => void, onOpenSettings?: () => void }) {
-  const { media, settings } = useMediaContext();
+  const { media, logs } = useMediaContext();
 
   const getCount = (type: string) => media.filter(m => m.mediaType === type).length;
 
@@ -30,14 +31,8 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
     { name: 'Comics', path: '/library/Comic', count: getCount('Comic'), color: MEDIA_COLORS['Comic'] },
   ];
 
-  const currentStreak = settings?.currentStreak || 0;
-  const lastActiveDate = settings?.lastActiveDate || "";
-  const todayStr = new Date().toISOString().split('T')[0];
-  const isActiveStreak = currentStreak > 0 && (lastActiveDate === todayStr || (() => {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    return lastActiveDate === yesterday.toISOString().split('T')[0];
-  })());
+  const currentStreak = useMemo(() => calculateStreak(logs), [logs]);
+  const isActiveStreak = currentStreak > 0;
 
   return (
     <aside className="w-60 border-r border-white/10 flex flex-col p-6 h-full bg-[#09090B] text-zinc-400">

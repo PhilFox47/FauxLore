@@ -233,7 +233,7 @@ export function Statistics() {
 
   const STATUS_COLORS: Record<string, string> = {
     'Active': '#10b981', // Emerald
-    'Backlog': '#8b5cf6', // Violet
+    'Planning': '#8b5cf6', // Violet
     'Completed': '#3b82f6', // Blue
     'Dropped': '#ef4444' // Red
   };
