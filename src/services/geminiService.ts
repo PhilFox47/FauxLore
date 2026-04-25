@@ -47,7 +47,12 @@ REQUIREMENTS:
 3. The description should be 1-2 sentences of high-quality RPG flavor text that mentions lore details found via your search.
 4. The type should be a logical RPG category (Weapon, Relic, Armor, Spell, Trinket, Consumable, etc.).
 
-Return the result as a JSON object.`;
+Return EXACTLY and ONLY a JSON object with the following keys:
+{
+  "name": "The item name",
+  "description": "The flavor text",
+  "type": "The RPG item type"
+}`;
 
   try {
     const response = await ai.models.generateContent({
@@ -56,33 +61,27 @@ Return the result as a JSON object.`;
       config: {
         tools: [
           { googleSearch: {} }
-        ],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            name: { 
-              type: Type.STRING,
-              description: "The name of the artifact."
-            },
-            description: { 
-              type: Type.STRING,
-              description: "Flavor text and lore description."
-            },
-            type: { 
-              type: Type.STRING,
-              description: "The RPG type of the item."
-            }
-          },
-          required: ["name", "description", "type"]
-        }
+        ]
       }
     });
 
-    const jsonText = response.text;
+    let jsonText = response.text;
     if (!jsonText) {
       throw new Error("Gemini returned an empty response.");
     }
+
+    // Clean up potential markdown JSON block
+    const match = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
+    if (match) {
+      jsonText = match[1];
+    } else {
+      // Sometimes it might not include the json identifier but still be backticked
+      const rawMatch = jsonText.match(/```\s*([\s\S]*?)\s*```/);
+      if (rawMatch) {
+        jsonText = rawMatch[1];
+      }
+    }
+    jsonText = jsonText.trim();
 
     const parsed = JSON.parse(jsonText);
     
