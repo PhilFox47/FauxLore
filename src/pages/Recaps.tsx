@@ -8,6 +8,7 @@ import {
   format, isWithinInterval, parseISO
 } from 'date-fns';
 import { calculateScaledDelta } from '../lib/scaling';
+import { calculateRPGState } from '../lib/rpgSystem';
 import { MediaItem, MEDIA_COLORS, ProgressLog } from '../types/schema';
 import { generateAiRecapText } from '../services/nanoGptService';
 import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon } from 'lucide-react';
@@ -118,8 +119,48 @@ export function Recaps() {
         return { title: m.title, type: m.mediaType, pages };
       }).sort((a,b) => b.pages - a.pages).slice(0, rankingLimit);
 
+      // Previous recaps for continuity
+      const previousRecaps = aiRecaps
+        .filter(r => r.timeframe === timeframe && r.timeId !== timeId && r.timeId < timeId)
+        .sort((a, b) => b.timeId.localeCompare(a.timeId))
+        .slice(0, 4)
+        .reverse();
+
+      const isFirstRecap = aiRecaps.filter(r => r.timeframe === timeframe && r.timeId < timeId).length === 0;
+
+      // Gap calculation
+      let maxGapDays = 0;
+      if (activeLogs.length > 1) {
+        const sortedDates = activeLogs.map(l => parseISO(l.timestamp).getTime()).sort();
+        for(let i=1; i<sortedDates.length; i++) {
+           const gap = (sortedDates[i] - sortedDates[i-1]) / (1000 * 60 * 60 * 24);
+           if (gap > maxGapDays) maxGapDays = gap;
+        }
+      }
+
+      // Lorekeeper Stats
+      const historyLogsAtEnd = validLogs.filter(l => parseISO(l.timestamp).getTime() <= currentInterval.end.getTime());
+      const rpgStateAtEnd = calculateRPGState(media, historyLogsAtEnd, settings, currentInterval.end);
+      
+      const historyLogsAtStart = validLogs.filter(l => parseISO(l.timestamp).getTime() < currentInterval.start.getTime());
+      const rpgStateAtStart = calculateRPGState(media, historyLogsAtStart, settings, new Date(currentInterval.start.getTime() - 1000));
+
+      const levelUps = Math.max(0, rpgStateAtEnd.level - rpgStateAtStart.level);
+      const activeQuests = rpgStateAtEnd.quests.filter(q => q.type.startsWith(timeframe));
+      const completedQuests = activeQuests.filter(q => q.isCompleted);
+      const missedQuests = activeQuests.filter(q => !q.isCompleted);
+
       const promptContext = `
 Timeframe: ${timeframe} (${formatIntervalLabel()})
+Is First Ever Recap?: ${isFirstRecap ? "YES. Welcome the user to their first recap!" : "NO"}
+Mayor Gaps in Logging: ${maxGapDays >= 3 ? `Yes, max gap of ${Math.round(maxGapDays)} days without playing/reading.` : "No major gaps. Consistent!"}
+
+LOREKEEPER LEVELING:
+Current Level: ${rpgStateAtEnd.level} (${rpgStateAtEnd.className})
+Levels Gained this ${timeframe}: ${levelUps}
+Quests Completed this ${timeframe}: ${completedQuests.length > 0 ? completedQuests.map(q => q.title).join(', ') : 'None'}
+Missed Quests: ${missedQuests.length > 0 ? missedQuests.map(q => `${q.title} (${q.currentAmount}/${q.targetAmount})`).join(', ') : 'None'}
+
 Total Master Pages (EXP): ${Math.round(totalMasterPages)}
 Total Logs: ${activeLogs.length}
 
@@ -137,6 +178,9 @@ ${Array.from(new Set(activeLogs.filter(l => l.location && l.location.trim().leng
 
 JOURNAL NOTES (User's personal thoughts and reactions!):
 ${activeLogs.filter(l => l.note && l.note.trim().length > 0).map(l => `- [${l.timestamp.split('T')[0]}] On ${activeMedia.find(m => m.id === l.mediaId)?.title || 'Media'}: "${l.note}"`).join('\n') || 'None'}
+
+PREVIOUS RECAPS (Chronological):
+${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title}): \n${r.summary}`).join('\n\n') : 'No past recaps available.'}
 `;
 
       const aiResponse = await generateAiRecapText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', `Based on the following data, generate a title and a creative, witty, and highly energetic recap of this ${timeframe}'s media consumption.
@@ -144,11 +188,12 @@ ${activeLogs.filter(l => l.note && l.note.trim().length > 0).map(l => `- [${l.ti
 CRITICAL INSTRUCTIONS:
 1. TITLE: Must be a punchy, clever name (1-5 words max). DO NOT include descriptions.
 2. VIBE & TONE: Be charming, sarcastic, witty, and charismatic! Sound natural, modern and casual. Feel free to roast or tease the user playfully about their habits (e.g., spending too much time on one thing, slow reading, weird combos). Less "classic prose" and more like an entertaining, hyper-aware gamer/geek podcaster talking to the user.
-3. WEAVE REAL DATA: You MUST talk about the SPECIFIC media consumed, referencing their plots/descriptions/genres! Use their actual journal notes to comment on their opinions.
+3. WEAVE REAL DATA: You MUST talk about the SPECIFIC media consumed, referencing their plots/descriptions/genres! Use their actual journal notes to comment on their opinions. Include the Lorekeeper leveling stats naturally as part of the story.
 4. ACCURACY: DO NOT assume a media item is completed unless it explicitly is in the 'MEDIA COMPLETED' list! If it's just 'IN PROGRESS', treat it as their current ongoing obsession or slog.
 5. FORMATTING: Use Markdown beautifully (bolding, italics, blockquotes, bullet points). Make it very readable.
 6. LENGTH: Give a detailed recap (Weekly: 2-3 paragraphs. Monthly/Yearly: 4-6 paragraphs) highlighting their key moments, weird obsessions, or big wins.
 7. LOCATIONS: If locations are tracked, organically weave them into the narrative alongside the media consumed (e.g., finding connections between what was consumed on the train vs in bed). DO NOT create a standalone paragraph just for locations.
+8. CONTINUITY: Read the "PREVIOUS RECAPS" section and if relevant, comment on running themes, jokes, or unbroken streaks. Keep the lore alive.
 
 Context: 
 ${promptContext}`);
@@ -627,6 +672,45 @@ ${promptContext}`);
      );
   };
 
+  const renderLorekeeper = () => {
+     const historyLogsAtEnd = validLogs.filter(l => parseISO(l.timestamp).getTime() <= currentInterval.end.getTime());
+     const rpgStateAtEnd = calculateRPGState(media, historyLogsAtEnd, settings, currentInterval.end);
+     const activeQuests = rpgStateAtEnd.quests.filter(q => q.type.startsWith(timeframe));
+     const completedQuests = activeQuests.filter(q => q.isCompleted);
+     const missedQuests = activeQuests.filter(q => !q.isCompleted);
+
+     return (
+        <div className="bg-gradient-to-br from-indigo-900/40 to-black border border-indigo-500/20 p-6 rounded-3xl relative overflow-hidden">
+           <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-[50px] rounded-full pointer-events-none" />
+           <h3 className="text-lg font-black text-indigo-400 mb-6 flex items-center gap-3">
+             <Star className="w-5 h-5" />
+             Lorekeeper Progress
+           </h3>
+           <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex flex-col items-center justify-center border border-indigo-500/30">
+                 <span className="text-[9px] font-black uppercase text-indigo-300">Level</span>
+                 <span className="text-xl font-black text-white leading-none">{rpgStateAtEnd.level}</span>
+              </div>
+              <div>
+                 <div className="text-sm font-bold text-zinc-300">{rpgStateAtEnd.className}</div>
+                 <div className="text-xs text-zinc-500">{Math.round(rpgStateAtEnd.currentExp)} Total EXP</div>
+              </div>
+           </div>
+           
+           <div className="grid grid-cols-2 gap-4">
+              <div className="bg-black/30 border border-white/5 p-3 rounded-2xl text-center">
+                 <div className="text-2xl font-black text-emerald-400">{completedQuests.length}</div>
+                 <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mt-1">Quests Done</div>
+              </div>
+              <div className="bg-black/30 border border-white/5 p-3 rounded-2xl text-center">
+                 <div className="text-2xl font-black text-orange-400">{missedQuests.length}</div>
+                 <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mt-1">Quests Missed</div>
+              </div>
+           </div>
+        </div>
+     );
+  };
+
   const renderLocationBreakdown = () => {
      const locations: Record<string, number> = {};
      let locationCount = 0;
@@ -793,6 +877,8 @@ ${promptContext}`);
                          </div>
 
                           {timeframe !== 'week' && renderArchetypesSection()}
+                         
+                         {renderLorekeeper()}
                          
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {renderHabitsHeatmap()}

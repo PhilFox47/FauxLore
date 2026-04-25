@@ -54,7 +54,7 @@ export function mulberry32(a: number) {
 }
 
 
-export function calculateRPGState(media: MediaItem[], logs: ProgressLog[], settings: any): RPGState {
+export function calculateRPGState(media: MediaItem[], logs: ProgressLog[], settings: any, evalDate: Date = new Date()): RPGState {
   // Filter historical
   const validLogs = logs.filter(l => !l.timestamp.startsWith('1970-01-01'));
   
@@ -78,13 +78,13 @@ export function calculateRPGState(media: MediaItem[], logs: ProgressLog[], setti
       const days = differenceInDays(dates[i], dates[i-1]);
       if (days > 3) decayExp -= (days - 3) * 50;
     }
-    const daysSinceLast = differenceInDays(new Date(), dates[dates.length - 1]);
+    const daysSinceLast = differenceInDays(evalDate, dates[dates.length - 1]);
     if (daysSinceLast > 3) decayExp -= (daysSinceLast - 3) * 50;
   }
 
   let questExp = 0;
   
-  const now = new Date();
+  const now = evalDate;
   const currentYear = now.getFullYear();
   const currentWeekInfo = format(now, "RRRR-II");
   const currentMonthInfo = format(now, "yyyy-MM");
