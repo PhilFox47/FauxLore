@@ -88,13 +88,46 @@ export function analyzeHabits(data: RecapAnalyticsData) {
 export function analyzeSessionVelocity(data: RecapAnalyticsData) {
   if (data.logs.length === 0) return null;
   
-  const sessions = data.logs.map(l => {
-    const m = data.allMedia.find(x => x.id === l.mediaId);
-    return calculateScaledDelta(l.delta, m || data.media[0], data.settings);
-  });
+  // Sort logs by timestamp ascending
+  const sortedLogs = [...data.logs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   
-  const avg = sessions.reduce((a,b) => a+b, 0) / sessions.length;
-  const max = Math.max(...sessions);
+  const sessions: number[] = [];
+  
+  if (sortedLogs.length > 0) {
+    let currentSession = {
+      mediaId: sortedLogs[0].mediaId,
+      totalPages: calculateScaledDelta(sortedLogs[0].delta, data.allMedia.find(x => x.id === sortedLogs[0].mediaId), data.settings),
+      lastTimestamp: new Date(sortedLogs[0].timestamp).getTime()
+    };
+
+    for (let i = 1; i < sortedLogs.length; i++) {
+      const log = sortedLogs[i];
+      const logTimestamp = new Date(log.timestamp).getTime();
+      const m = data.allMedia.find(x => x.id === log.mediaId);
+      const pages = calculateScaledDelta(log.delta, m, data.settings);
+      
+      const hoursDiff = (logTimestamp - currentSession.lastTimestamp) / (1000 * 60 * 60);
+      
+      // If same media AND less than 5 hours since last log of this session
+      if (log.mediaId === currentSession.mediaId && hoursDiff < 5) {
+        currentSession.totalPages += pages;
+        currentSession.lastTimestamp = logTimestamp;
+      } else {
+        // Push finished session and start new one
+        sessions.push(currentSession.totalPages);
+        currentSession = {
+          mediaId: log.mediaId,
+          totalPages: pages,
+          lastTimestamp: logTimestamp
+        };
+      }
+    }
+    // Push the last session
+    sessions.push(currentSession.totalPages);
+  }
+  
+  const avg = sessions.reduce((a,b) => a+b, 0) / (sessions.length || 1);
+  const max = sessions.length > 0 ? Math.max(...sessions) : 0;
   
   // Categorize
   const snippets = sessions.filter(s => s < 10).length;
