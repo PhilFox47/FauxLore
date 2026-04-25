@@ -200,16 +200,13 @@ Total Master Pages (EXP): ${Math.round(totalMasterPages)}
 Total Logs: ${activeLogs.length}
 
 MEDIA IN PROGRESS:
-${activeMedia.filter(m => m.status !== 'Completed').map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5] ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') || 'None'}
+${activeMedia.filter(m => m.status !== 'Completed').map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') || 'None'}
 
 MEDIA COMPLETED:
-${completedMedia.length > 0 ? completedMedia.map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5] ${m.userReview ? `[User Review: "${m.userReview}"] ` : ''}${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') : 'None'}
+${completedMedia.length > 0 ? completedMedia.map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.userReview ? `[User Review: "${m.userReview}"] ` : ''}${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') : 'None'}
 
 TOP RANKED MEDIA (By Engagement/Master Pages):
 ${mediaRanking.slice(0,5).map(m => `- ${m.title} (${Math.round(m.pages)} MP)`).join('\n')}
-
-LOCATIONS TRACKED (Where the user consumed media):
-${Array.from(new Set(activeLogs.filter(l => l.location && l.location.trim().length > 0).map(l => l.location))).join(', ') || 'None'}
 
 GATHERED LOOT (Artifacts earned by finishing media!):
 ${gatheredLoot.length > 0 ? gatheredLoot.map(a => `- ${a.name} (${a.rarity}): ${a.description}`).join('\n') : 'None'}
