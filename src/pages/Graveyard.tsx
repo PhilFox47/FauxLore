@@ -40,7 +40,7 @@ export function Graveyard() {
           <div key={item.id} className="bg-[#111113] border border-red-900/20 rounded-2xl p-4 flex flex-col grayscale hover:grayscale-0 transition-all duration-500 hover:border-red-900/50">
             <div className="flex gap-4">
               <div className="w-24 shrink-0">
-                <MediaCard item={item} onClick={() => {}} />
+                <MediaCard item={item} />
               </div>
               <div className="flex flex-col flex-1">
                 <h3 className="font-bold text-white line-clamp-2 leading-tight">{item.title}</h3>

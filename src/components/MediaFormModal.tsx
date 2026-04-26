@@ -41,7 +41,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
 
   if (!isOpen) return null;
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target as any;
     let finalValue = value;
     if (type === 'number') {

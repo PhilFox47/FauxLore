@@ -131,6 +131,22 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   const [isFixing, setIsFixing] = useState(false);
   const [fixWarning, setFixWarning] = useState('');
+  
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [backupMessage, setBackupMessage] = useState({ type: '', text: '' });
+
+  const handleBackup = async () => {
+    setIsBackingUp(true);
+    setBackupMessage({ type: '', text: '' });
+    try {
+      const res = await DatabaseService.createBackup();
+      setBackupMessage({ type: 'success', text: `Backup created: ${res.file.split(/[\\/]/).pop()}` });
+    } catch (e: any) {
+      setBackupMessage({ type: 'error', text: e.message || 'Failed to create backup' });
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
 
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{success: boolean, message: string} | null>(null);
@@ -554,6 +570,31 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       {fixWarning}
                     </p>
                   )}
+                </div>
+
+                <div className="pt-6 border-t border-white/5 space-y-4">
+                  <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">Database & Backup</h3>
+                  <div className="bg-zinc-900/50 border border-white/5 rounded-xl p-5">
+                    <p className="text-sm text-zinc-400 mb-4">
+                      Daily backups are automatically created at 13:00 (up to 28 rolling backups). You can also force a manual backup right now.
+                    </p>
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleBackup}
+                        disabled={isBackingUp}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 font-bold text-sm rounded-lg transition-colors border border-blue-500/30 disabled:opacity-50"
+                      >
+                        <Save className="w-4 h-4" />
+                        {isBackingUp ? "Creating Backup..." : "Create Manual Backup"}
+                      </button>
+                    </div>
+                    {backupMessage.text && (
+                      <p className={`mt-3 text-sm font-medium ${backupMessage.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {backupMessage.text}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
               </div>

@@ -6,8 +6,8 @@ import { cn } from '../lib/utils';
 interface MediaCardProps {
   key?: string | number;
   item: MediaItem;
-  onEdit: (item: MediaItem) => void;
-  onLogProgress: (item: MediaItem) => void;
+  onEdit?: (item: MediaItem) => void;
+  onLogProgress?: (item: MediaItem) => void;
   onViewDetails?: (item: MediaItem) => void;
 }
 
@@ -159,18 +159,22 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
         )}
         
         <div className="flex gap-1.5 md:gap-2">
-          <button 
-            onClick={() => onLogProgress(item)}
-            className="flex-1 bg-white/5 hover:bg-white/10 text-white py-1.5 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-xs font-medium transition-colors flex justify-center items-center gap-1"
-          >
-            <Plus className="w-2.5 h-2.5 md:w-3 md:h-3" /> Log
-          </button>
-          <button 
-            onClick={() => onEdit(item)}
-            className="px-2 md:px-3 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white py-1.5 md:py-2 rounded-lg md:rounded-xl text-xs font-medium transition-colors flex justify-center items-center"
-          >
-            <Edit2 className="w-2.5 h-2.5 md:w-3 md:h-3" />
-          </button>
+          {onLogProgress && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onLogProgress(item); }}
+              className="flex-1 bg-white/5 hover:bg-white/10 text-white py-1.5 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-xs font-medium transition-colors flex justify-center items-center gap-1"
+            >
+              <Plus className="w-2.5 h-2.5 md:w-3 md:h-3" /> Log
+            </button>
+          )}
+          {onEdit && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+              className="px-2 md:px-3 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white py-1.5 md:py-2 rounded-lg md:rounded-xl text-xs font-medium transition-colors flex justify-center items-center"
+            >
+              <Edit2 className="w-2.5 h-2.5 md:w-3 md:h-3" />
+            </button>
+          )}
         </div>
       </div>
     </div>

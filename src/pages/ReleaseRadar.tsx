@@ -68,7 +68,7 @@ export function ReleaseRadar() {
               
               <div className="bg-[#111113] border border-white/5 rounded-2xl p-5 flex flex-col md:flex-row gap-6 items-start hover:border-blue-500/20 transition-colors">
                 <div className="w-24 md:w-32 shrink-0">
-                  <MediaCard item={item} onClick={() => {}} />
+                  <MediaCard item={item} />
                 </div>
                 
                 <div className="flex flex-col flex-1">

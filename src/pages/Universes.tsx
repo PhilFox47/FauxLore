@@ -67,7 +67,7 @@ export function Universes() {
                   <div className="absolute top-2 left-2 w-6 h-6 bg-black/80 backdrop-blur-md rounded-full z-10 flex items-center justify-center border border-white/10 text-xs font-bold text-white shadow-2xl">
                     {idx + 1}
                   </div>
-                  <MediaCard item={item} onClick={() => {}} />
+                  <MediaCard item={item} />
                 </div>
               ))}
             </div>

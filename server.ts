@@ -3,6 +3,8 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import * as dotenv from "dotenv";
 import Database from "better-sqlite3";
+import fs from "fs";
+import cron from "node-cron";
 
 dotenv.config();
 
@@ -178,6 +180,43 @@ async function startServer() {
   // Initialize SQLite Database
   const dbPath = path.join(process.cwd(), 'fauxlore.db');
   const db = new Database(dbPath);
+
+  // Backup Manager
+  const backupsDir = path.join(process.cwd(), 'backups');
+  if (!fs.existsSync(backupsDir)) {
+    fs.mkdirSync(backupsDir);
+  }
+
+  function createDatabaseBackup() {
+    try {
+      const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
+      const backupFile = path.join(backupsDir, `fauxlore-backup-${timestamp}.db`);
+      fs.copyFileSync(dbPath, backupFile);
+      
+      // Keep only last 28 backups
+      const backups = fs.readdirSync(backupsDir)
+        .filter(f => f.startsWith('fauxlore-backup-') && f.endsWith('.db'))
+        .sort();
+      
+      if (backups.length > 28) {
+        const toDelete = backups.slice(0, backups.length - 28);
+        for (const f of toDelete) {
+          fs.unlinkSync(path.join(backupsDir, f));
+        }
+      }
+      return { success: true, file: backupFile };
+    } catch (e: any) {
+      console.error("Backup failed", e);
+      return { success: false, error: e.message };
+    }
+  }
+
+  // Run daily at 13:00
+  cron.schedule('0 13 * * *', () => {
+    console.log("Running scheduled daily backup...");
+    createDatabaseBackup();
+  });
+
   
   // Automatic Migrations
   try { db.exec("ALTER TABLE media ADD COLUMN language TEXT"); } catch (e) { /* Ignore if it exists */ }
@@ -860,6 +899,15 @@ async function startServer() {
   // API Routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.post("/api/backup", (req, res) => {
+    const result = createDatabaseBackup();
+    if (result.success) {
+      res.json({ message: "Backup created successfully", file: result.file });
+    } else {
+      res.status(500).json({ error: result.error });
+    }
   });
 
   // IGDB Video Game Database Integration

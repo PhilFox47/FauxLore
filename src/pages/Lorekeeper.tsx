@@ -8,6 +8,7 @@ import { generateText } from '../services/nanoGptService';
 export function Lorekeeper() {
   const { media, logs, settings, aiTextCache, saveAiText, refreshData } = useMediaContext();
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isRegeneratingTitle, setIsRegeneratingTitle] = useState(false);
   
   const rpgState = useMemo(() => calculateRPGState(media, logs, settings), [media, logs, settings]);
 
@@ -17,6 +18,61 @@ export function Lorekeeper() {
 
   const getDynamicTitle = () => {
      return aiTextCache[`rpg_title_${rpgState.level}`] || rpgState.className;
+  };
+
+  const getLevelContext = (level: number) => {
+    if (level >= 100) return "almost unrealistic, ultimate, mythical";
+    if (level >= 50) return "epic, legendary, master-level (soft level cap)";
+    if (level > 10) return "experienced, intermediate-level";
+    return "basic, beginner-level";
+  };
+
+  const getRecentMediaContext = () => {
+    const recent = [...media]
+      .filter(m => m.status === 'Active' || m.status === 'Completed')
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 50);
+      
+    if (recent.length === 0) return 'None yet';
+
+    const top10 = recent.slice(0, 10).map(m => `"${m.title}" (${m.mediaType}, Genres: ${m.genres.join(', ')})`).join(' | ');
+    const rest = recent.slice(10).map(m => `"${m.title}" (${m.mediaType})`).join(' | ');
+    
+    return `Most Recent (High Impact): ${top10}` + (rest ? `\nOlder Recent (Low Impact): ${rest}` : '');
+  };
+
+  const handleRegenerateTitle = async () => {
+    if (!settings?.nanoGptApiKey) {
+      alert("Please configure your Nano-GPT API Key in Settings first.");
+      return;
+    }
+
+    setIsRegeneratingTitle(true);
+    try {
+      const apiKey = settings.nanoGptApiKey;
+      const model = settings.nanoGptModel || 'gpt-4o-mini';
+      const systemPrompt = "You are FauxLore, a creative AI assistant. Your task is to generate a fun, punchy title based on the user's level and their recently consumed media.";
+
+      const recentMediaStr = getRecentMediaContext();
+      const levelContext = getLevelContext(rpgState.level);
+
+      const titlePrompt = `The user is Level ${rpgState.level} (${levelContext}). 
+Their recently active/completed media are provided below. Give the "Most Recent" items significantly more weight in determining their title.
+${recentMediaStr}
+Generate a creative, punchy, and surprising title for them combining their level prestige and media tastes.
+Example: "Novice Gamer of the Fantastic Things" or "Romantic Reader of the Fine Arts".
+NO extra comments, NO quotes, just the title. 2-6 words.`;
+
+      const titleKey = `rpg_title_${rpgState.level}`;
+      const titleRes = await generateText(apiKey, model, systemPrompt, titlePrompt);
+      await saveAiText(titleKey, titleRes);
+      
+      await refreshData();
+    } catch (e: any) {
+      alert("Error regenerating title: " + e.message);
+    } finally {
+      setIsRegeneratingTitle(false);
+    }
   };
 
   const handleRegenerate = async () => {
@@ -32,8 +88,16 @@ export function Lorekeeper() {
       const systemPrompt = "You are FauxLore, a helpful and natural media tracking assistant. Keep your tone conversational, friendly, and grounded. No epic RPG or fantasy roleplay unless explicitly asked.";
 
       // 1. RPG Title
+      const recentMediaStr = getRecentMediaContext();
+      const levelContext = getLevelContext(rpgState.level);
+      const titlePrompt = `The user is Level ${rpgState.level} (${levelContext}). 
+Their recently active/completed media are provided below. Give the "Most Recent" items significantly more weight in determining their title.
+${recentMediaStr}
+Generate a creative, punchy, and surprising title for them combining their level prestige and media tastes.
+Example: "Novice Gamer of the Fantastic Things" or "Romantic Reader of the Fine Arts".
+NO extra comments, NO quotes, just the title. 2-6 words.`;
+
       const titleKey = `rpg_title_${rpgState.level}`;
-      const titlePrompt = `The user is Level ${rpgState.level} with the base title "${rpgState.className}". Generate a creative, punchy, and natural title for them. NO extra comments, just the title. 1-4 words. Avoid fantasy clichés.`;
       const titleRes = await generateText(apiKey, model, systemPrompt, titlePrompt);
       await saveAiText(titleKey, titleRes);
 
@@ -70,18 +134,33 @@ export function Lorekeeper() {
           <p className="text-zinc-400 mt-2">Your RPG progress, active quests, and lifetime experience breakdown.</p>
         </div>
         
-        <button
-          onClick={handleRegenerate}
-          disabled={isRegenerating}
-          className="flex items-center gap-2 px-6 py-3 bg-zinc-900 border border-white/10 hover:border-orange-500/50 hover:bg-zinc-800 text-white rounded-2xl transition-all shadow-xl disabled:opacity-50"
-        >
-          {isRegenerating ? (
-            <RefreshCw className="w-5 h-5 animate-spin text-orange-500" />
-          ) : (
-            <Sparkles className="w-5 h-5 text-orange-500" />
-          )}
-          <span className="font-bold text-sm">Regenerate Flavor Text</span>
-        </button>
+        <div className="flex flex-wrap gap-4 justify-end">
+          <button
+            onClick={handleRegenerateTitle}
+            disabled={isRegeneratingTitle}
+            className="flex items-center gap-2 px-6 py-3 bg-zinc-900 border border-white/10 hover:border-orange-500/50 hover:bg-zinc-800 text-white rounded-2xl transition-all shadow-xl disabled:opacity-50"
+          >
+            {isRegeneratingTitle ? (
+              <RefreshCw className="w-5 h-5 animate-spin text-orange-500" />
+            ) : (
+              <Sparkles className="w-5 h-5 text-orange-500" />
+            )}
+            <span className="font-bold text-sm">Regenerate Title</span>
+          </button>
+          
+          <button
+            onClick={handleRegenerate}
+            disabled={isRegenerating}
+            className="flex items-center gap-2 px-6 py-3 bg-zinc-900 border border-white/10 hover:border-orange-500/50 hover:bg-zinc-800 text-white rounded-2xl transition-all shadow-xl disabled:opacity-50"
+          >
+            {isRegenerating ? (
+              <RefreshCw className="w-5 h-5 animate-spin text-orange-500" />
+            ) : (
+              <Sparkles className="w-5 h-5 text-orange-500" />
+            )}
+            <span className="font-bold text-sm">Regenerate Flavor Text</span>
+          </button>
+        </div>
       </header>
 
       {/* Hero Overview */}

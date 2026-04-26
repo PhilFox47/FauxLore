@@ -188,5 +188,16 @@ export const DatabaseService = {
       const text = await res.text();
       throw new Error(`Failed to save artifact: ${text}`);
     }
+  },
+
+  async createBackup(): Promise<any> {
+    const res = await fetch('/api/backup', {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(`Backup failed: ${errorData.error || res.statusText}`);
+    }
+    return res.json();
   }
 };
