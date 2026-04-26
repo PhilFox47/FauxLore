@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, Settings, X, Presentation, BookOpen, Dice5, Shield, Flame, Gem } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Settings, X, Presentation, BookOpen, Dice5, Shield, Flame, Gem, Globe, Skull, CalendarClock } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
 import { MEDIA_COLORS } from '../types/schema';
@@ -19,6 +19,12 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
     { name: 'Roulette', path: '/roulette', icon: Dice5 },
     { name: 'Statistics', path: '/stats', icon: BarChart3 },
     { name: 'Recaps', path: '/recaps', icon: Presentation },
+  ];
+
+  const exploreItems = [
+    { name: 'Universes', path: '/universes', icon: Globe },
+    { name: 'Graveyard', path: '/graveyard', icon: Skull },
+    { name: 'Release Radar', path: '/radar', icon: CalendarClock },
   ];
 
   const libraryItems = [
@@ -70,6 +76,26 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
             }
           >
             <item.icon className="w-4 h-4" />
+            {item.name}
+          </NavLink>
+        ))}
+
+        <div className="pt-8 text-[10px] uppercase tracking-widest font-semibold text-zinc-600 mb-4">Explore</div>
+        {exploreItems.map((item) => (
+          <NavLink
+            key={item.name}
+            to={item.path}
+            onClick={onCloseMobile}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-3 px-3 py-2 rounded-md transition-colors",
+                isActive 
+                  ? "bg-white/5 text-white" 
+                  : "hover:text-white"
+              )
+            }
+          >
+            <item.icon className="w-4 h-4 text-orange-500/80" />
             {item.name}
           </NavLink>
         ))}

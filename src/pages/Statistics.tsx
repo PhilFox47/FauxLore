@@ -6,6 +6,7 @@ import { BarChart3, DatabaseZap, Clock, ListChecks, Calendar, Target, Activity, 
 import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
 import { calculateNativeUnits, NATIVE_UNIT_LABELS } from '../lib/rpgSystem';
 import { ProgressLog, MediaItem } from '../types/schema';
+import { GithubHeatmap } from '../components/Heatmap';
 
 type DateRange = '7days' | '30days' | '90days' | '1year' | 'all' | 'custom';
 
@@ -323,6 +324,8 @@ export function Statistics() {
           </div>
         </div>
       </header>
+
+      <GithubHeatmap />
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

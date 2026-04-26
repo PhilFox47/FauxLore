@@ -5,7 +5,7 @@
 export const MEDIA_TYPES = ['Game', 'Book', 'Visual Novel', 'Manga', 'Series', 'Movie', 'Comic'] as const;
 export type MediaType = typeof MEDIA_TYPES[number];
 
-export const STATUSES = ['Planning', 'Active', 'On Hold', 'Completed', 'Dropped'] as const;
+export const STATUSES = ['Planning', 'Active', 'On Hold', 'Completed', 'Dropped', 'Unreleased'] as const;
 export type Status = typeof STATUSES[number];
 
 export interface MediaItem {
@@ -30,6 +30,8 @@ export interface MediaItem {
   status: Status;
   userRating?: number; // 0-5
   userReview?: string; // Text review written by the user
+  dropReason?: string; // Used when status is 'Dropped'
+  expectedReleaseDate?: string; // ISO date string for 'Unreleased' media
   
   // Taxonomies
   genres: string[];

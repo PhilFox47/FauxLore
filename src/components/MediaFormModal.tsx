@@ -331,6 +331,34 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
               </select>
             </div>
           </div>
+          
+          {formData.status === 'Dropped' && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-red-400 mb-1">Reason for Dropping</label>
+              <textarea 
+                name="dropReason"
+                value={formData.dropReason || ''}
+                onChange={handleChange}
+                className="input-field min-h-[60px]"
+                placeholder="Why did you stop? (e.g., Too repetitive, lost interest...)"
+              />
+            </div>
+          )}
+
+          {formData.status === 'Unreleased' && (
+            <div className="mb-4 grid grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-blue-400 mb-1">Expected Release Date</label>
+                <input 
+                  type="date"
+                  name="expectedReleaseDate"
+                  value={formData.expectedReleaseDate ? formData.expectedReleaseDate.split('T')[0] : ''}
+                  onChange={(e) => setFormData(p => ({...p, expectedReleaseDate: e.target.value ? new Date(e.target.value).toISOString() : ''}))}
+                  className="input-field"
+                />
+              </div>
+            </div>
+          )}
 
           {formData.mediaType === 'Game' || formData.mediaType === 'Visual Novel' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
