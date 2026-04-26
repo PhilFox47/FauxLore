@@ -73,7 +73,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
       if (item.totalPages) progressPercent = ((item.pagesRead || 0) / item.totalPages) * 100;
       break;
     case 'Manga':
-      progressText = `${item.chaptersRead || 0} / ${item.totalChapters || '?'} ch`;
+      progressText = `${item.chaptersRead || 0} / ${item.totalChapters || (item.isOngoing ? 'Ongoing' : '?')} ch`;
       if (item.totalChapters) progressPercent = ((item.chaptersRead || 0) / item.totalChapters) * 100;
       break;
     case 'Series':

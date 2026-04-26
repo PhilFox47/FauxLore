@@ -21,6 +21,9 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
 
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
+  const [platformInput, setPlatformInput] = useState('');
+  const [isPlatformDropdownOpen, setIsPlatformDropdownOpen] = useState(false);
   const [selectedSeriesForSeasons, setSelectedSeriesForSeasons] = useState<any | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isRefetchingHltb, setIsRefetchingHltb] = useState(false);
@@ -115,12 +118,17 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
     setFormData(prev => ({
       ...prev,
       title: match.title,
+      subtitle: match.subtitle,
       description: match.description,
       creator: match.creator || match.developer || match.author, // Handle different API schemas
       publisher: match.publisher,
+      language: match.language,
+      maturityRating: match.maturityRating,
       year: match.year,
       genres: match.genres || [],
       tags: match.tags || [],
+      platforms: formData.platforms || [], // Keep existing or empty, do not auto-populate
+      franchises: match.franchises || [],
       reviewScore: match.reviewScore,
       averagePlaytime: match.averagePlaytime,
       hltbMain: match.hltbMain,
@@ -133,6 +141,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
       runtimeMinutes: match.runtimeMinutes,
       coverImageUrl: match.coverImageUrl,
     }));
+    setAvailablePlatforms(match.platforms || []);
     setSearchResults(null);
   };
 
@@ -220,6 +229,17 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   Auto-fill
                 </button>
               )}
+            </div>
+
+            <div className="relative z-10 block mt-4">
+              <label className="block text-sm font-medium text-zinc-400 mb-1">Subtitle</label>
+              <input 
+                name="subtitle"
+                value={formData.subtitle || ''}
+                onChange={handleChange}
+                className="input-field" 
+                placeholder="Optional subtitle..."
+              />
             </div>
 
             {/* Autofill Results */}
@@ -382,6 +402,86 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   placeholder="Fantasy, Story Rich"
                 />
               </div>
+              {formData.mediaType === 'Game' && (
+                <>
+                  <div className="relative">
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Platforms</label>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {formData.platforms?.map((p, i) => (
+                        <span key={i} className="text-xs px-2 py-1 bg-purple-500/20 text-purple-300 rounded flex items-center gap-1">
+                          {p}
+                          <button type="button" onClick={() => setFormData(old => ({...old, platforms: old.platforms?.filter(x => x !== p)}))} className="text-purple-400 hover:text-purple-200">
+                            &times;
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="relative flex items-center">
+                      <input 
+                        value={platformInput}
+                        onChange={(e) => {
+                          setPlatformInput(e.target.value);
+                          setIsPlatformDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsPlatformDropdownOpen(true)}
+                        onBlur={() => setTimeout(() => setIsPlatformDropdownOpen(false), 200)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && platformInput.trim()) {
+                            e.preventDefault();
+                            if (!formData.platforms?.includes(platformInput.trim())) {
+                              setFormData(old => ({...old, platforms: [...(old.platforms || []), platformInput.trim()]}));
+                            }
+                            setPlatformInput('');
+                          }
+                        }}
+                        className="input-field" 
+                        placeholder="Add platform or select from dropdown (Enter to add)"
+                      />
+                    </div>
+                    {isPlatformDropdownOpen && (availablePlatforms.length > 0 || platformInput.trim()) && (
+                      <div className="absolute z-10 w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        {platformInput.trim() && !availablePlatforms.includes(platformInput.trim()) && !formData.platforms?.includes(platformInput.trim()) && (
+                          <button
+                            type="button"
+                            className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
+                            onClick={() => {
+                              setFormData(old => ({...old, platforms: [...(old.platforms || []), platformInput.trim()]}));
+                              setPlatformInput('');
+                            }}
+                          >
+                            Add "{platformInput.trim()}"
+                          </button>
+                        )}
+                        {availablePlatforms
+                          .filter(p => !formData.platforms?.includes(p) && p.toLowerCase().includes(platformInput.toLowerCase()))
+                          .map((p, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
+                            onClick={() => {
+                              setFormData(old => ({...old, platforms: [...(old.platforms || []), p]}));
+                              setPlatformInput('');
+                            }}
+                          >
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Franchises (comma separated)</label>
+                    <input 
+                      name="franchises"
+                      value={formData.franchises?.join(', ') || ''}
+                      onChange={handleArrayChange}
+                      className="input-field" 
+                      placeholder="The Legend of Zelda, Mario"
+                    />
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -407,6 +507,40 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   }
                 />
               </div>
+              {(formData.mediaType === 'Book' || formData.mediaType === 'Manga') && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Publisher</label>
+                    <input 
+                      name="publisher"
+                      value={formData.publisher || ''}
+                      onChange={handleChange}
+                      className="input-field" 
+                      placeholder="e.g., Tor Books"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Language</label>
+                    <input 
+                      name="language"
+                      value={formData.language || ''}
+                      onChange={handleChange}
+                      className="input-field" 
+                      placeholder="e.g., en, de"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Maturity Rating</label>
+                    <input 
+                      name="maturityRating"
+                      value={formData.maturityRating || ''}
+                      onChange={handleChange}
+                      className="input-field" 
+                      placeholder="e.g., MATURE or NOT_MATURE"
+                    />
+                  </div>
+                </>
+              )}
               <div>
                 <label className="block text-sm font-medium text-zinc-400 mb-1">Release Year</label>
                 <input 
@@ -435,7 +569,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   placeholder="Leave unrated"
                 />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-2 sm:col-span-1">
                 <label className="block text-sm font-medium text-zinc-400 mb-1">Genres (comma separated)</label>
                 <input 
                   name="genres"
@@ -443,6 +577,26 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   onChange={handleArrayChange}
                   className="input-field" 
                   placeholder="Fantasy, Sci-Fi"
+                />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-zinc-400 mb-1">Tags (comma separated)</label>
+                <input 
+                  name="tags"
+                  value={formData.tags?.join(', ') || ''}
+                  onChange={handleArrayChange}
+                  className="input-field" 
+                  placeholder="Space, Magic"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-zinc-400 mb-1">Franchises (comma separated)</label>
+                <input 
+                  name="franchises"
+                  value={formData.franchises?.join(', ') || ''}
+                  onChange={handleArrayChange}
+                  className="input-field" 
+                  placeholder="Marvel Cinematic Universe, Harry Potter"
                 />
               </div>
             </div>
@@ -636,6 +790,22 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                 <div>
                   <label className="block text-sm font-medium text-zinc-400 mb-1">Total Chapters</label>
                   <input type="number" name="totalChapters" value={formData.totalChapters || ''} onChange={handleChange} className="input-field" placeholder="0" />
+                </div>
+                {formData.releaseStatus && (
+                  <div className="col-span-1 sm:col-span-2">
+                    <div className="text-xs text-zinc-500 mb-0">Release Status: {formData.releaseStatus}</div>
+                  </div>
+                )}
+                <div className="col-span-1 sm:col-span-2 flex items-center mt-2">
+                  <input 
+                    type="checkbox" 
+                    id="isOngoing" 
+                    name="isOngoing" 
+                    checked={formData.isOngoing || false} 
+                    onChange={(e) => setFormData(p => ({...p, isOngoing: e.target.checked}))} 
+                    className="mr-2 rounded bg-zinc-800 border-zinc-700 text-purple-600 focus:ring-purple-500" 
+                  />
+                  <label htmlFor="isOngoing" className="text-sm text-zinc-300">Is Ongoing (Will auto-update metadata)</label>
                 </div>
               </div>
             )}

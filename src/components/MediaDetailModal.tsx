@@ -154,10 +154,14 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
               </div>
             )}
             <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">{item.title}</h2>
+            {item.subtitle && <h3 className="text-lg text-zinc-300 mb-2 italic">{item.subtitle}</h3>}
             <p className="text-zinc-400 font-medium mb-4">{item.creator || item.publisher}</p>
             
             <div className="flex flex-wrap justify-center md:justify-start gap-2 mb-6">
               <span className="px-3 py-1 bg-white/10 text-white rounded-md text-xs font-medium backdrop-blur-sm shadow-sm">{item.mediaType}</span>
+              {item.publisher && item.creator && <span className="px-3 py-1 bg-white/10 text-white rounded-md text-xs font-medium backdrop-blur-sm shadow-sm">{item.publisher}</span>}
+              {item.language && <span className="px-3 py-1 bg-white/10 text-white rounded-md text-xs font-medium backdrop-blur-sm shadow-sm">{item.language.toUpperCase()}</span>}
+              {item.maturityRating && item.maturityRating !== 'NOT_MATURE' && <span className="px-3 py-1 bg-red-500/20 text-red-100 border border-red-500/30 rounded-md text-xs font-medium backdrop-blur-sm shadow-sm">{item.maturityRating}</span>}
               <span className="px-3 py-1 bg-white/10 text-white rounded-md text-xs font-medium backdrop-blur-sm shadow-sm">{item.status}</span>
               {item.year && <span className="px-3 py-1 bg-white/10 text-white rounded-md text-xs font-medium backdrop-blur-sm shadow-sm">{item.year}</span>}
             </div>
@@ -230,10 +234,12 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
 
           {item.genres && item.genres.length > 0 && (
             <div className="mb-8">
-              <h3 className="text-sm font-bold text-zinc-500 mb-3 tracking-wider uppercase">Genres & Tags</h3>
+              <h3 className="text-sm font-bold text-zinc-500 mb-3 tracking-wider uppercase">Taxonomy</h3>
               <div className="flex flex-wrap gap-2">
-                {item.genres.map((g, i) => <span key={i} className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">{g}</span>)}
-                {item.tags?.map((t, i) => <span key={i} className="text-xs px-2 py-1 bg-orange-500/10 text-orange-400 rounded border border-orange-500/20">{t}</span>)}
+                {item.platforms && item.platforms.map((p, i) => <span key={`p-${i}`} className="text-xs px-2 py-1 bg-purple-500/10 text-purple-400 rounded border border-purple-500/20">{p}</span>)}
+                {item.franchises && item.franchises.map((f, i) => <span key={`f-${i}`} className="text-xs px-2 py-1 bg-pink-500/10 text-pink-400 rounded border border-pink-500/20">{f}</span>)}
+                {item.genres.map((g, i) => <span key={`g-${i}`} className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">{g}</span>)}
+                {item.tags?.map((t, i) => <span key={`t-${i}`} className="text-xs px-2 py-1 bg-orange-500/10 text-orange-400 rounded border border-orange-500/20">{t}</span>)}
               </div>
             </div>
           )}

@@ -182,6 +182,8 @@ async function startServer() {
   // Automatic Migrations
   try { db.exec("ALTER TABLE media ADD COLUMN language TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN isOngoing INTEGER"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE media ADD COLUMN releaseStatus TEXT"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE media ADD COLUMN lastSyncAt TEXT"); } catch (e) { /* Ignore if it exists */ }
 
   // Create Tables
   db.exec(`
@@ -206,6 +208,10 @@ async function startServer() {
       genres TEXT,
       tags TEXT,
       tropes TEXT,
+      platforms TEXT,
+      franchises TEXT,
+      subtitle TEXT,
+      maturityRating TEXT,
       playtimeHours REAL,
       pagesRead INTEGER,
       totalPages INTEGER,
@@ -223,6 +229,8 @@ async function startServer() {
       originalMediaId TEXT,
       language TEXT,
       isOngoing INTEGER,
+      releaseStatus TEXT,
+      lastSyncAt TEXT,
       createdAt TEXT,
       updatedAt TEXT
     );
@@ -299,6 +307,8 @@ async function startServer() {
   try { db.prepare("ALTER TABLE media ADD COLUMN hltbMainExtra REAL").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN hltbCompletionist REAL").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN isReRun INTEGER").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN platforms TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN franchises TEXT").run(); } catch (e) {}
   // SQLite ALTER TABLE doesn't support adding foreign keys or multiple columns at once well,
   // but we can add columns if they are missing.
   try { db.prepare("ALTER TABLE artifacts ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run(); } catch (e) {}
@@ -307,6 +317,8 @@ async function startServer() {
   
   try { db.prepare("ALTER TABLE media ADD COLUMN originalMediaId TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN selectedHltbType TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN subtitle TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN maturityRating TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE logs ADD COLUMN location TEXT").run(); } catch (e) {}
   
   try { db.prepare("UPDATE media SET status = 'Active' WHERE status = 'Playing'").run(); } catch(e) {}
@@ -317,15 +329,87 @@ async function startServer() {
     genres: row.genres ? JSON.parse(row.genres) : [],
     tags: row.tags ? JSON.parse(row.tags) : [],
     tropes: row.tropes ? JSON.parse(row.tropes) : [],
+    platforms: row.platforms ? JSON.parse(row.platforms) : [],
+    franchises: row.franchises ? JSON.parse(row.franchises) : [],
     watched: row.watched === 1,
     isReRun: row.isReRun === 1,
-    isOngoing: row.isOngoing === 1
+    isOngoing: row.isOngoing === 1,
+    releaseStatus: row.releaseStatus || null,
+    lastSyncAt: row.lastSyncAt || null
   });
 
   // Local DB API Routes
+  
+  const syncOngoingMediaInBackground = async (userId: string) => {
+    try {
+      const now = new Date();
+      // 7 days in ms
+      const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+      
+      const rows: any[] = db.prepare(`SELECT * FROM media WHERE userId = ? AND mediaType = 'Manga' AND (isOngoing = 1 OR releaseStatus IN ('RELEASING', 'HIATUS', 'NOT_YET_RELEASED')) AND originalMediaId IS NOT NULL`).all(userId);
+      
+      for (const row of rows) {
+        let shouldSync = false;
+        if (!row.lastSyncAt) {
+          shouldSync = true;
+        } else {
+          const lastSync = new Date(row.lastSyncAt).getTime();
+          if (now.getTime() - lastSync > SEVEN_DAYS) {
+            shouldSync = true;
+          }
+        }
+        
+        if (shouldSync) {
+          const id = parseInt(row.originalMediaId);
+          if (!isNaN(id)) {
+            // Fetch Anilist
+            const graphqlQuery = `
+              query ($id: Int) {
+                Media (id: $id, type: MANGA) {
+                  status
+                  chapters
+                  volumes
+                }
+              }
+            `;
+            const aniRes = await fetch("https://graphql.anilist.co", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+              },
+              body: JSON.stringify({ query: graphqlQuery, variables: { id } })
+            });
+
+            if (aniRes.ok) {
+              const data = await aniRes.json();
+              if (data.data?.Media) {
+                const media = data.data.Media;
+                db.prepare(`UPDATE media SET totalChapters = ?, totalIssues = ?, releaseStatus = ?, isOngoing = ?, lastSyncAt = ? WHERE id = ?`)
+                  .run(
+                    media.chapters, 
+                    media.volumes || row.totalIssues, 
+                    media.status, 
+                    (media.status === "RELEASING" || media.status === "HIATUS" || media.status === "NOT_YET_RELEASED") ? 1 : 0, 
+                    now.toISOString(), 
+                    row.id
+                  );
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Background sync failed", e);
+    }
+  };
+
   app.get("/api/media", (req, res) => {
     try {
       const userId = req.query.userId || 'default_user';
+      // Fire and forget sync
+      syncOngoingMediaInBackground(userId as string);
+      
       const rows = db.prepare('SELECT * FROM media WHERE userId = ? ORDER BY updatedAt DESC').all(userId);
       res.json(rows.map(normalizeMedia));
     } catch (e) { res.status(500).json({ error: String(e) }); }
@@ -348,17 +432,19 @@ async function startServer() {
         INSERT INTO media (
           id, userId, title, mediaType, coverImageUrl, description, creator, publisher, year, 
           reviewScore, averagePlaytime, hltbMain, hltbMainExtra, hltbCompletionist, selectedHltbType,
-          status, userRating, genres, tags, tropes,
+          status, userRating, genres, tags, tropes, platforms, franchises,
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
-          issuesRead, totalIssues, isReRun, originalMediaId, language, isOngoing, createdAt, updatedAt
+          issuesRead, totalIssues, isReRun, originalMediaId, language, isOngoing, releaseStatus, lastSyncAt, createdAt, updatedAt,
+          subtitle, maturityRating
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
           @reviewScore, @averagePlaytime, @hltbMain, @hltbMainExtra, @hltbCompletionist, @selectedHltbType,
-          @status, @userRating, @genres, @tags, @tropes,
+          @status, @userRating, @genres, @tags, @tropes, @platforms, @franchises,
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
-          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @language, @isOngoing, @createdAt, @updatedAt
+          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @language, @isOngoing, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
+          @subtitle, @maturityRating
         )
         ON CONFLICT(id) DO UPDATE SET
           userId=excluded.userId, title=excluded.title, mediaType=excluded.mediaType, coverImageUrl=excluded.coverImageUrl,
@@ -367,14 +453,15 @@ async function startServer() {
           hltbMain=excluded.hltbMain, hltbMainExtra=excluded.hltbMainExtra, hltbCompletionist=excluded.hltbCompletionist,
           selectedHltbType=excluded.selectedHltbType,
           status=excluded.status, userRating=excluded.userRating, genres=excluded.genres,
-          tags=excluded.tags, tropes=excluded.tropes, playtimeHours=excluded.playtimeHours,
+          tags=excluded.tags, tropes=excluded.tropes, platforms=excluded.platforms, franchises=excluded.franchises, playtimeHours=excluded.playtimeHours,
           pagesRead=excluded.pagesRead, totalPages=excluded.totalPages, chaptersRead=excluded.chaptersRead,
           totalChapters=excluded.totalChapters, season=excluded.season, episodesWatched=excluded.episodesWatched,
           totalEpisodes=excluded.totalEpisodes, watched=excluded.watched, watchCount=excluded.watchCount,
           runtimeMinutes=excluded.runtimeMinutes, issuesRead=excluded.issuesRead, totalIssues=excluded.totalIssues,
           isReRun=excluded.isReRun, originalMediaId=excluded.originalMediaId,
           language=excluded.language, isOngoing=excluded.isOngoing,
-          updatedAt=excluded.updatedAt
+          releaseStatus=excluded.releaseStatus, lastSyncAt=excluded.lastSyncAt,
+          updatedAt=excluded.updatedAt, subtitle=excluded.subtitle, maturityRating=excluded.maturityRating
       `);
 
       stmt.run({
@@ -398,6 +485,8 @@ async function startServer() {
         genres: JSON.stringify(item.genres || []),
         tags: JSON.stringify(item.tags || []),
         tropes: JSON.stringify(item.tropes || []),
+        platforms: JSON.stringify(item.platforms || []),
+        franchises: JSON.stringify(item.franchises || []),
         playtimeHours: item.playtimeHours || null,
         pagesRead: item.pagesRead || null,
         totalPages: item.totalPages || null,
@@ -414,7 +503,11 @@ async function startServer() {
         isReRun: item.isReRun ? 1 : 0,
         originalMediaId: item.originalMediaId || null,
         language: item.language || null,
+        subtitle: item.subtitle || null,
+        maturityRating: item.maturityRating || null,
         isOngoing: item.isOngoing ? 1 : 0,
+        releaseStatus: item.releaseStatus || null,
+        lastSyncAt: item.lastSyncAt || null,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt
       });
@@ -788,7 +881,7 @@ async function startServer() {
       // We grab standard fields + involved companies (for developers/publishers) + genres
       const body = `
         search "${query}";
-        fields name, summary, cover.image_id, first_release_date, total_rating, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, genres.name, themes.name;
+        fields name, summary, cover.image_id, first_release_date, total_rating, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, genres.name, themes.name, platforms.name, franchises.name;
         limit 20;
       `;
 
@@ -848,6 +941,8 @@ async function startServer() {
           selectedHltbType: 'mainExtra' as const,
           genres: game.genres ? game.genres.map((g: any) => g.name) : [],
           tags: game.themes ? game.themes.map((t: any) => t.name) : [],
+          platforms: game.platforms ? game.platforms.map((p: any) => p.name) : [],
+          franchises: game.franchises ? game.franchises.map((f: any) => f.name) : [],
           developer,
           publisher
         };
@@ -905,9 +1000,9 @@ async function startServer() {
       const searchData = await searchRes.json();
       const topResults = (searchData.results || []).slice(0, 20);
 
-      // 2. Fetch detailed info (credits + genres) for the top 20
+      // 2. Fetch detailed info (credits + genres + keywords) for the top 20
       const detailedResults = await Promise.all(topResults.map(async (item: any) => {
-         const detailRes = await fetch(`https://api.themoviedb.org/3/${type}/${item.id}?api_key=${apiKey}&append_to_response=credits`);
+         const detailRes = await fetch(`https://api.themoviedb.org/3/${type}/${item.id}?api_key=${apiKey}&append_to_response=credits,keywords`);
          if (!detailRes.ok) return null;
          return detailRes.json();
       }));
@@ -923,6 +1018,17 @@ async function startServer() {
         }
 
         const genres = (detail.genres || []).map((g: any) => g.name);
+
+        let tags: string[] = [];
+        if (detail.keywords) {
+           const kwList = detail.keywords.keywords || detail.keywords.results || [];
+           tags = kwList.map((k: any) => k.name).filter(Boolean);
+        }
+
+        let franchises: string[] = [];
+        if (detail.belongs_to_collection) {
+           franchises.push(detail.belongs_to_collection.name);
+        }
 
         const seasons = detail.seasons ? detail.seasons.map((s: any) => ({
           id: s.id.toString(),
@@ -957,6 +1063,8 @@ async function startServer() {
           year: type === 'movie' ? (detail.release_date ? new Date(detail.release_date).getFullYear() : undefined) : (detail.first_air_date ? new Date(detail.first_air_date).getFullYear() : undefined),
           reviewScore: detail.vote_average ? Math.round(detail.vote_average) / 2 : undefined, // 0-10 -> 0-5
           genres: genres,
+          tags: tags,
+          franchises: franchises,
           creator: creator,
           totalEpisodes: type === 'tv' ? detail.number_of_episodes : undefined,
           runtimeMinutes: runtimeMinutes,
@@ -1068,7 +1176,11 @@ async function startServer() {
             return {
               id: `gb_${item.id}`,
               title: volumeInfo.title || "Unknown Title",
+              subtitle: volumeInfo.subtitle || "",
               description: volumeInfo.description || "",
+              publisher: volumeInfo.publisher || "",
+              language: volumeInfo.language || "",
+              maturityRating: volumeInfo.maturityRating || "",
               coverImageUrl: coverImageUrl,
               year: !isNaN(year as number) ? year : undefined,
               reviewScore: volumeInfo.averageRating ? Math.round(volumeInfo.averageRating * 2) / 2 : undefined,
@@ -1151,7 +1263,12 @@ async function startServer() {
               }
               averageScore
               chapters
+              volumes
               genres
+              status
+              tags {
+                name
+              }
               staff {
                 edges {
                   role
@@ -1203,6 +1320,11 @@ async function startServer() {
           }
         }
 
+        let tags: string[] = [];
+        if (m.tags) {
+          tags = m.tags.map((t: any) => t.name);
+        }
+
         return {
           id: m.id.toString(),
           title: m.title.english || m.title.romaji,
@@ -1212,8 +1334,12 @@ async function startServer() {
           // Anilist score is out of 100
           reviewScore: m.averageScore ? Math.round(m.averageScore / 10) / 2 : undefined,
           totalChapters: m.chapters,
+          totalIssues: m.volumes,
           genres: m.genres || [],
-          creator: creator
+          tags: tags,
+          creator: creator,
+          releaseStatus: m.status,
+          isOngoing: m.status === "RELEASING" || m.status === "HIATUS" || m.status === "NOT_YET_RELEASED"
         };
       });
 

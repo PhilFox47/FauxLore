@@ -13,12 +13,14 @@ export interface MediaItem {
   isReRun?: boolean;
   originalMediaId?: string;
   title: string;
+  subtitle?: string;
   mediaType: MediaType;
   coverImageUrl?: string;
   description?: string;
   creator?: string; // Developer, Author, Studio, Director
   publisher?: string;
   year?: number;
+  maturityRating?: string;
   reviewScore?: number; // 0-5
   averagePlaytime?: number; // hours
   hltbMain?: number;
@@ -33,11 +35,15 @@ export interface MediaItem {
   genres: string[];
   tags: string[];
   tropes: string[];
+  platforms?: string[];
+  franchises?: string[];
 
   // Metrics (specific mapping per type)
   // Game & Visual Novel
   playtimeHours?: number;
   isOngoing?: boolean;
+  releaseStatus?: string;
+  lastSyncAt?: string;
   
   // Book
   pagesRead?: number;
