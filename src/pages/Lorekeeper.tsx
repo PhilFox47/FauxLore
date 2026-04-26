@@ -3,6 +3,7 @@ import { useMediaContext } from '../contexts/MediaContext';
 import { calculateRPGState } from '../lib/rpgSystem';
 import { Shield, Swords, Award, TrendingDown, CheckCircle2, CircleDashed, Flame, RefreshCw, Sparkles } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { calculateScaledPages } from '../lib/scaling';
 import { generateText } from '../services/nanoGptService';
 
 export function Lorekeeper() {
@@ -33,12 +34,27 @@ export function Lorekeeper() {
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .slice(0, 50);
       
-    if (recent.length === 0) return 'None yet';
+    if (recent.length === 0) return { text: 'None yet', dominantMedia: null };
 
-    const top10 = recent.slice(0, 10).map(m => `"${m.title}" (${m.mediaType}, Genres: ${m.genres.join(', ')})`).join(' | ');
-    const rest = recent.slice(10).map(m => `"${m.title}" (${m.mediaType})`).join(' | ');
+    const top10 = recent.slice(0, 10);
+    let totalTop10Mp = 0;
+    const top10WithMp = top10.map(m => {
+       const mp = Math.floor(calculateScaledPages(m, settings));
+       totalTop10Mp += mp;
+       return { ...m, mp };
+    });
     
-    return `Most Recent (High Impact): ${top10}` + (rest ? `\nOlder Recent (Low Impact): ${rest}` : '');
+    let dominantMedia = null;
+    if (totalTop10Mp > 0) {
+       dominantMedia = top10WithMp.find(m => m.mp > totalTop10Mp * 0.5) || null;
+    }
+
+    const top10Str = top10WithMp.map(m => `"${m.title}" (${m.mediaType}, Genres: ${m.genres.join(', ')}, Master Pages: ${m.mp})`).join(' | ');
+    const restStr = recent.slice(10).map(m => `"${m.title}" (${m.mediaType})`).join(' | ');
+    
+    const text = `Most Recent (High Impact): ${top10Str}` + (restStr ? `\nOlder Recent (Low Impact): ${restStr}` : '');
+    
+    return { text, dominantMedia };
   };
 
   const handleRegenerateTitle = async () => {
@@ -53,12 +69,21 @@ export function Lorekeeper() {
       const model = settings.nanoGptModel || 'gpt-4o-mini';
       const systemPrompt = "You are FauxLore, a creative AI assistant. Your task is to generate a fun, punchy title based on the user's level and their recently consumed media.";
 
-      const recentMediaStr = getRecentMediaContext();
+      const { text: recentMediaStr, dominantMedia } = getRecentMediaContext();
       const levelContext = getLevelContext(rpgState.level);
 
+      let franchiseRule = `CRITICAL RULE: DO NOT reference any specific franchise, character, or media title by name. Use general genre or medium terms instead.`;
+      if (dominantMedia) {
+         franchiseRule = `CRITICAL RULE: You MAY reference the specific franchise or title "${dominantMedia.title}" by name, because it accounts for more than 50% of their recent Master Pages. Do NOT reference any other specific franchise by name.`;
+      }
+
       const titlePrompt = `The user is Level ${rpgState.level} (${levelContext}). 
-Their recently active/completed media are provided below. Give the "Most Recent" items significantly more weight in determining their title.
+Their recently active/completed media are provided below. Give the "Most Recent" items significantly more weight in determining their title. The user's time investment is represented by "Master Pages".
+${franchiseRule}
+
+Media Context:
 ${recentMediaStr}
+
 Generate a creative, punchy, and surprising title for them combining their level prestige and media tastes.
 Example: "Novice Gamer of the Fantastic Things" or "Romantic Reader of the Fine Arts".
 NO extra comments, NO quotes, just the title. 2-6 words.`;
@@ -88,11 +113,21 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
       const systemPrompt = "You are FauxLore, a helpful and natural media tracking assistant. Keep your tone conversational, friendly, and grounded. No epic RPG or fantasy roleplay unless explicitly asked.";
 
       // 1. RPG Title
-      const recentMediaStr = getRecentMediaContext();
+      const { text: recentMediaStr, dominantMedia } = getRecentMediaContext();
       const levelContext = getLevelContext(rpgState.level);
+
+      let franchiseRule = `CRITICAL RULE: DO NOT reference any specific franchise, character, or media title by name. Use general genre or medium terms instead.`;
+      if (dominantMedia) {
+         franchiseRule = `CRITICAL RULE: You MAY reference the specific franchise or title "${dominantMedia.title}" by name, because it accounts for more than 50% of their recent Master Pages. Do NOT reference any other specific franchise by name.`;
+      }
+
       const titlePrompt = `The user is Level ${rpgState.level} (${levelContext}). 
-Their recently active/completed media are provided below. Give the "Most Recent" items significantly more weight in determining their title.
+Their recently active/completed media are provided below. Give the "Most Recent" items significantly more weight in determining their title. The user's time investment is represented by "Master Pages".
+${franchiseRule}
+
+Media Context:
 ${recentMediaStr}
+
 Generate a creative, punchy, and surprising title for them combining their level prestige and media tastes.
 Example: "Novice Gamer of the Fantastic Things" or "Romantic Reader of the Fine Arts".
 NO extra comments, NO quotes, just the title. 2-6 words.`;
