@@ -1,5 +1,67 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
+export async function generateAiTagsWithGemini(userApiKey: string | undefined, item: any, taxonomies: any[]) {
+  const apiKey = userApiKey || process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+    throw new Error("Gemini API Key is not configured. Please set it in Settings -> API Integrations.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  const gptSystem = `You are FauxLore, an expert taxonomy system. Your job is to classify media.
+Available Genres: ${taxonomies.filter(t => t.type === 'genre').map(t => t.name).join(', ')}
+Available Tags: ${taxonomies.filter(t => t.type === 'tag').map(t => t.name).join(', ')}
+
+Rules:
+1. ONLY use exact matches from the Available lists above. DO NOT invent new words.
+2. Select between 1 and 3 Genres.
+3. Select up to 10 logical Tags.
+4. USE YOUR WEB SEARCH CAPABILITIES to confirm details about "${item.title}" (${item.mediaType}).
+5. Return ONLY a pure JSON object in this exact format:
+{"genres": ["Genre1", "Genre2"], "tags": ["Tag1", "Tag2"]}
+Do not wrap it in markdown. Do not include any explanations.`;
+
+  const gptUser = `Please tag the following media:
+Title: ${item.title}
+Type: ${item.mediaType}
+Description: ${item.description || 'N/A'}
+Legacy Context genres: ${item.genres?.join(', ') || 'N/A'}
+Legacy Context tags: ${item.tags?.join(', ') || 'N/A'}
+Legacy Context platforms: ${item.platforms?.join(', ') || 'N/A'}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        { role: 'user', parts: [{ text: gptSystem + '\n\n' + gptUser }] }
+      ],
+      config: {
+        tools: [
+          { googleSearch: {} }
+        ],
+        temperature: 0.1
+      }
+    });
+
+    let jsonText = response.text;
+    if (!jsonText) throw new Error("Gemini returned an empty response.");
+
+    const match = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
+    if (match) {
+      jsonText = match[1];
+    } else {
+      const rawMatch = jsonText.match(/```\s*([\s\S]*?)\s*```/);
+      if (rawMatch) jsonText = rawMatch[1];
+    }
+    jsonText = jsonText.trim();
+
+    return JSON.parse(jsonText);
+  } catch (error) {
+    console.error("Gemini Auto-Tag Error:", error);
+    throw error;
+  }
+}
+
 export async function generateAiArtifactWithGemini(userApiKey: string | undefined, item: any) {
   // Use the provided key from settings, fallback to environment variable
   const apiKey = userApiKey || process.env.GEMINI_API_KEY;

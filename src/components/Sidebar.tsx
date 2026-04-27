@@ -27,6 +27,7 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
     { name: 'Universes', path: '/universes', icon: Globe },
     { name: 'Graveyard', path: '/graveyard', icon: Skull },
     { name: 'Release Radar', path: '/radar', icon: CalendarClock },
+    { name: 'Taxonomy', path: '/taxonomy', icon: BookOpen },
   ];
 
   const libraryItems = [

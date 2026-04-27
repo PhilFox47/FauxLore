@@ -14,7 +14,7 @@ interface SettingsModalProps {
 export function SettingsModal({ onClose }: SettingsModalProps) {
   const { user, login } = useAuth();
   const { media, logs, settings, aiTextCache, saveAiText, refreshData } = useMediaContext();
-  const [activeTab, setActiveTab] = useState<'account'|'preferences'|'rpg'|'system'>('account');
+  const [activeTab, setActiveTab] = useState<'account'|'preferences'|'rpg'|'system'|'users'>('account');
   
   const [accountData, setAccountData] = useState({
     username: user?.username || '',
@@ -346,7 +346,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
            )}
         </div>
 
-        <div className="flex-1 flex flex-col h-full bg-[#09090B]">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#09090B]">
           <div className="p-4 md:p-6 border-b border-white/5 flex items-center justify-between sticky top-0 bg-[#09090B] z-10 md:hidden">
             <h2 className="text-xl font-bold tracking-tight text-white capitalize">{activeTab}</h2>
             <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-colors">
@@ -361,7 +361,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             </button>
           </div>
 
-          <div className="p-4 md:p-6 overflow-y-auto no-scrollbar flex-1">
+          <div className="p-4 md:p-6 overflow-y-auto no-scrollbar flex-1 min-h-0">
             {error && (
                <div className="mb-4 bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-xl text-sm">
                  {error}

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { MediaItem, MEDIA_TYPES, STATUSES, MediaType } from '../types/schema';
-import { X, Search, Loader2, RefreshCw } from 'lucide-react';
+import { X, Search, Loader2, RefreshCw, BrainCircuit } from 'lucide-react';
 import { IntegrationsService, GameMetadata } from '../services/integrations';
 import { cn } from '../lib/utils';
+import { useMediaContext } from '../contexts/MediaContext';
+import { generateAiTagsWithGemini } from '../services/geminiService';
 
 interface MediaFormModalProps {
   isOpen: boolean;
@@ -13,6 +15,7 @@ interface MediaFormModalProps {
 }
 
 export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData }: MediaFormModalProps) {
+  const { taxonomies, settings } = useMediaContext();
   const [formData, setFormData] = useState<Partial<MediaItem>>({
     title: '',
     mediaType: 'Game',
@@ -20,6 +23,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
   });
 
   const [isSearching, setIsSearching] = useState(false);
+  const [isAiTagging, setIsAiTagging] = useState(false);
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
   const [platformInput, setPlatformInput] = useState('');
@@ -28,11 +32,20 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isRefetchingHltb, setIsRefetchingHltb] = useState(false);
 
+  const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
+
   useEffect(() => {
     if (initialData) {
       setFormData(initialData);
+      setRawInputs({
+        genres: initialData.genres?.join(', ') || '',
+        tags: initialData.tags?.join(', ') || '',
+        platforms: initialData.platforms?.join(', ') || '',
+        franchises: initialData.franchises?.join(', ') || ''
+      });
     } else {
       setFormData({ title: '', mediaType: 'Game', status: 'Active' });
+      setRawInputs({ genres: '', tags: '', platforms: '', franchises: '' });
     }
     setSearchResults(null);
     setSelectedSeriesForSeasons(null);
@@ -52,6 +65,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
 
   const handleArrayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    setRawInputs(prev => ({ ...prev, [name]: value }));
     setFormData(prev => ({
       ...prev,
       [name]: value.split(',').map(s => s.trim()).filter(Boolean)
@@ -183,6 +197,38 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
       alert("Failed to find HLTB data for this title.");
     } finally {
       setIsRefetchingHltb(false);
+    }
+  };
+
+  const handleAutoTag = async () => {
+    if (!formData.title) {
+      alert("Please enter a title first to auto-tag.");
+      return;
+    }
+    
+    setIsAiTagging(true);
+    try {
+      const parsed = await generateAiTagsWithGemini(settings?.geminiApiKey, formData, taxonomies);
+
+      if (parsed && Array.isArray(parsed.genres) && Array.isArray(parsed.tags)) {
+        setFormData(prev => ({
+          ...prev,
+          genres: parsed.genres,
+          tags: parsed.tags
+        }));
+        setRawInputs(prev => ({
+          ...prev,
+          genres: parsed.genres.join(', '),
+          tags: parsed.tags.join(', ')
+        }));
+      } else {
+        throw new Error("AI returned an unexpected format.");
+      }
+    } catch (error: any) {
+      console.error("AutoTag Error:", error);
+      alert("Auto Tag Failed: " + error.message);
+    } finally {
+      setIsAiTagging(false);
     }
   };
 
@@ -410,11 +456,24 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   placeholder="Leave unrated"
                 />
               </div>
+              <div className="col-span-1 sm:col-span-2 flex items-center justify-between mt-2">
+                <label className="block text-sm font-medium text-zinc-400">Genres & Tags</label>
+                <button
+                  type="button"
+                  onClick={handleAutoTag}
+                  disabled={isAiTagging || !formData.title}
+                  className="flex items-center gap-2 text-xs bg-purple-500/20 text-purple-300 px-3 py-1.5 rounded hover:bg-purple-500/30 transition shadow border border-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Uses AI to assign genres and tags based on title"
+                >
+                  {isAiTagging ? <Loader2 className="w-3 h-3 animate-spin"/> : <BrainCircuit className="w-3 h-3"/>}
+                  Auto-Tag
+                </button>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-zinc-400 mb-1">Genres (comma separated)</label>
                 <input 
                   name="genres"
-                  value={formData.genres?.join(', ') || ''}
+                  value={rawInputs.genres ?? ''}
                   onChange={handleArrayChange}
                   className="input-field" 
                   placeholder="RPG, Open World"
@@ -424,7 +483,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                 <label className="block text-sm font-medium text-zinc-400 mb-1">Tags (comma separated)</label>
                 <input 
                   name="tags"
-                  value={formData.tags?.join(', ') || ''}
+                  value={rawInputs.tags ?? ''}
                   onChange={handleArrayChange}
                   className="input-field" 
                   placeholder="Fantasy, Story Rich"
@@ -502,7 +561,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                     <label className="block text-sm font-medium text-zinc-400 mb-1">Franchises (comma separated)</label>
                     <input 
                       name="franchises"
-                      value={formData.franchises?.join(', ') || ''}
+                      value={rawInputs.franchises ?? ''}
                       onChange={handleArrayChange}
                       className="input-field" 
                       placeholder="The Legend of Zelda, Mario"
@@ -597,11 +656,24 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   placeholder="Leave unrated"
                 />
               </div>
+              <div className="col-span-1 sm:col-span-2 flex items-center justify-between mt-2">
+                <label className="block text-sm font-medium text-zinc-400">Genres & Tags</label>
+                <button
+                  type="button"
+                  onClick={handleAutoTag}
+                  disabled={isAiTagging || !formData.title}
+                  className="flex items-center gap-2 text-xs bg-purple-500/20 text-purple-300 px-3 py-1.5 rounded hover:bg-purple-500/30 transition shadow border border-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Uses AI to assign genres and tags based on title"
+                >
+                  {isAiTagging ? <Loader2 className="w-3 h-3 animate-spin"/> : <BrainCircuit className="w-3 h-3"/>}
+                  Auto-Tag
+                </button>
+              </div>
               <div className="col-span-2 sm:col-span-1">
                 <label className="block text-sm font-medium text-zinc-400 mb-1">Genres (comma separated)</label>
                 <input 
                   name="genres"
-                  value={formData.genres?.join(', ') || ''}
+                  value={rawInputs.genres ?? ''}
                   onChange={handleArrayChange}
                   className="input-field" 
                   placeholder="Fantasy, Sci-Fi"
@@ -611,7 +683,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                 <label className="block text-sm font-medium text-zinc-400 mb-1">Tags (comma separated)</label>
                 <input 
                   name="tags"
-                  value={formData.tags?.join(', ') || ''}
+                  value={rawInputs.tags ?? ''}
                   onChange={handleArrayChange}
                   className="input-field" 
                   placeholder="Space, Magic"
@@ -621,7 +693,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                 <label className="block text-sm font-medium text-zinc-400 mb-1">Franchises (comma separated)</label>
                 <input 
                   name="franchises"
-                  value={formData.franchises?.join(', ') || ''}
+                  value={rawInputs.franchises ?? ''}
                   onChange={handleArrayChange}
                   className="input-field" 
                   placeholder="Marvel Cinematic Universe, Harry Potter"

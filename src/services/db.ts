@@ -237,5 +237,38 @@ export const DatabaseService = {
       throw new Error(`Backup failed: ${errorData.error || res.statusText}`);
     }
     return res.json();
+  },
+
+  async getTaxonomies(type?: 'genre' | 'tag'): Promise<any[]> {
+    try {
+      const url = type ? `/api/taxonomy?type=${type}` : '/api/taxonomy';
+      const res = await apiFetch(url);
+      if (!res.ok) return [];
+      return res.json();
+    } catch(e) {
+      console.error(e);
+      return [];
+    }
+  },
+
+  async addTaxonomy(name: string, type: 'genre' | 'tag'): Promise<any> {
+    const res = await apiFetch('/api/taxonomy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, type })
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(`Failed to add taxonomy: ${errorData.error || res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async deleteTaxonomy(id: string): Promise<void> {
+    const res = await apiFetch(`/api/taxonomy/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(`Failed to delete taxonomy: ${errorData.error || res.statusText}`);
+    }
   }
 };

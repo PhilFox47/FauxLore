@@ -317,6 +317,13 @@ async function startServer() {
       geminiApiKey TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS global_taxonomy (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL, -- 'genre' or 'tag'
+      name TEXT NOT NULL UNIQUE,
+      usageCount INTEGER DEFAULT 0
+    );
+
     CREATE TABLE IF NOT EXISTS settings (
       userId TEXT PRIMARY KEY,
       igdbClientId TEXT,
@@ -449,6 +456,31 @@ async function startServer() {
       db.prepare("UPDATE artifacts SET userId = ? WHERE userId = 'default_user'").run(adminId);
     }
   } catch(e) { console.error('Migration of default_user failed:', e); }
+
+  // Seed Taxonomies if empty
+  try {
+    const genreCount = db.prepare('SELECT count(*) as count FROM global_taxonomy WHERE type = ?').get('genre') as { count: number };
+    const tagCount = db.prepare('SELECT count(*) as count FROM global_taxonomy WHERE type = ?').get('tag') as { count: number };
+    
+    if (genreCount.count === 0 && tagCount.count === 0) {
+      if (fs.existsSync('taxonomy.json')) {
+         const { genres, tags } = JSON.parse(fs.readFileSync('taxonomy.json', 'utf8'));
+         const insertTaxonomy = db.prepare('INSERT INTO global_taxonomy (id, type, name) VALUES (@id, @type, @name) ON CONFLICT(name) DO NOTHING');
+         
+         db.transaction(() => {
+           for (const genre of genres) {
+              insertTaxonomy.run({ id: uuidv4(), type: 'genre', name: genre });
+           }
+           for (const tag of tags) {
+              insertTaxonomy.run({ id: uuidv4(), type: 'tag', name: tag });
+           }
+         })();
+         console.log('Seeded global taxonomies');
+      }
+    }
+  } catch (e) {
+    console.error("Taxonomy Seed Error:", e);
+  }
 
   const safeJsonParse = (str: any) => {
     try {
@@ -1374,6 +1406,69 @@ async function startServer() {
       }
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Taxonomy API
+  app.get("/api/taxonomy", (req, res) => {
+    try {
+      const type = req.query.type as string;
+      let query = 'SELECT * FROM global_taxonomy ORDER BY usageCount DESC, name ASC';
+      const params: any[] = [];
+      
+      if (type === 'genre' || type === 'tag') {
+        query = 'SELECT * FROM global_taxonomy WHERE type = ? ORDER BY usageCount DESC, name ASC';
+        params.push(type);
+      }
+      
+      const results = db.prepare(query).all(...params);
+      res.json(results);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/taxonomy", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      
+      const user: any = db.prepare('SELECT role FROM users WHERE id = ?').get(userId);
+      if (user?.role !== 'Admin') {
+        return res.status(403).json({ error: 'Only admins can modify taxonomy' });
+      }
+
+      const { name, type } = req.body;
+      if (!name || (type !== 'genre' && type !== 'tag')) {
+        return res.status(400).json({ error: 'Invalid taxonomy data' });
+      }
+
+      const id = uuidv4();
+      db.prepare('INSERT INTO global_taxonomy (id, type, name) VALUES (?, ?, ?)').run(id, type, name);
+      res.json({ id, type, name, usageCount: 0 });
+    } catch (e: any) {
+      if (e.message.includes('UNIQUE constraint')) {
+        res.status(400).json({ error: 'Taxonomy item already exists' });
+      } else {
+        res.status(500).json({ error: e.message });
+      }
+    }
+  });
+
+  app.delete("/api/taxonomy/:id", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      
+      const user: any = db.prepare('SELECT role FROM users WHERE id = ?').get(userId);
+      if (user?.role !== 'Admin') {
+        return res.status(403).json({ error: 'Only admins can modify taxonomy' });
+      }
+
+      db.prepare('DELETE FROM global_taxonomy WHERE id = ?').run(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
   });
 

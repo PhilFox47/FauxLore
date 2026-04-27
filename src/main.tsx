@@ -15,6 +15,7 @@ import { Armory } from './pages/Armory';
 import { Universes } from './pages/Universes';
 import { Graveyard } from './pages/Graveyard';
 import { ReleaseRadar } from './pages/ReleaseRadar';
+import { Taxonomy } from './pages/Taxonomy';
 import { Login } from './pages/Login';
 import './index.css';
 
@@ -44,6 +45,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="universes" element={<Universes />} />
               <Route path="graveyard" element={<Graveyard />} />
               <Route path="radar" element={<ReleaseRadar />} />
+              <Route path="taxonomy" element={<Taxonomy />} />
             </Route>
           </Routes>
         </BrowserRouter>

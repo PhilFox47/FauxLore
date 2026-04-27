@@ -12,6 +12,7 @@ interface MediaContextType {
   aiRecaps: any[];
   artifacts: Artifact[];
   aiTextCache: Record<string, string>;
+  taxonomies: any[];
   refreshData: () => Promise<void>;
   saveMediaItem: (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => Promise<void>;
   deleteMediaItem: (id: string) => Promise<void>;
@@ -22,6 +23,8 @@ interface MediaContextType {
   saveArtifact: (artifact: Artifact) => Promise<void>;
   saveAiText: (key: string, value: string) => Promise<void>;
   clearAiTextCache: (key?: string) => Promise<void>;
+  addTaxonomy: (name: string, type: 'genre'|'tag') => Promise<void>;
+  deleteTaxonomy: (id: string) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -35,6 +38,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   const [aiRecaps, setAiRecaps] = useState<any[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [aiTextCache, setAiTextCache] = useState<Record<string, string>>({});
+  const [taxonomies, setTaxonomies] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshData = useCallback(async () => {
@@ -45,18 +49,20 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       setAiRecaps([]);
       setArtifacts([]);
       setAiTextCache({});
+      setTaxonomies([]);
       setIsLoading(false);
       return;
     }
     try {
       setIsLoading(true);
-      const [mediaData, logsData, settingsData, recapsData, artifactsData, textCacheData] = await Promise.all([
+      const [mediaData, logsData, settingsData, recapsData, artifactsData, textCacheData, taxData] = await Promise.all([
         DatabaseService.getAllMedia(),
         DatabaseService.getAllLogs(),
         DatabaseService.getSettings(),
         DatabaseService.getAiRecaps(),
         DatabaseService.getArtifacts(),
-        DatabaseService.getAiTextCache()
+        DatabaseService.getAiTextCache(),
+        DatabaseService.getTaxonomies()
       ]);
       setMedia(mediaData);
       setLogs(logsData);
@@ -64,6 +70,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       setAiRecaps(recapsData);
       setArtifacts(artifactsData);
       setAiTextCache(textCacheData);
+      setTaxonomies(taxData);
     } catch (error) {
       console.error("Failed to load data from server:", error);
     } finally {
@@ -149,8 +156,18 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     await refreshData();
   }, [refreshData]);
 
+  const addTaxonomy = useCallback(async (name: string, type: 'genre'|'tag') => {
+    await DatabaseService.addTaxonomy(name, type);
+    await refreshData();
+  }, [refreshData]);
+
+  const deleteTaxonomy = useCallback(async (id: string) => {
+    await DatabaseService.deleteTaxonomy(id);
+    await refreshData();
+  }, [refreshData]);
+
   return (
-    <MediaContext.Provider value={{ media, logs, settings, aiRecaps, artifacts, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, saveAiRecap, saveArtifact, saveAiText, clearAiTextCache, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, aiRecaps, artifacts, taxonomies, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, saveAiRecap, saveArtifact, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, isLoading }}>
       {children}
     </MediaContext.Provider>
   );
