@@ -1,13 +1,24 @@
 import { MediaItem, ProgressLog, MetricType, MediaType } from '../types/schema';
 import { v4 as uuidv4 } from 'uuid';
 
+export async function apiFetch(url: string, options: RequestInit = {}) {
+  const token = localStorage.getItem('fauxlore_token');
+  const headers: any = {
+    ...options.headers,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return fetch(url, { ...options, headers });
+}
+
 /**
  * REST API client that interacts with our local Express SQLite server
  */
 export const DatabaseService = {
   async getAllMedia(): Promise<MediaItem[]> {
     try {
-      const res = await fetch('/api/media');
+      const res = await apiFetch('/api/media');
       if (!res.ok) return [];
       return res.json();
     } catch (e) {
@@ -18,7 +29,7 @@ export const DatabaseService = {
 
   async getMediaById(id: string): Promise<MediaItem | undefined> {
     try {
-      const res = await fetch(`/api/media/${id}`);
+      const res = await apiFetch(`/api/media/${id}`);
       if (res.status === 404) return undefined;
       return res.json();
     } catch (e) {
@@ -29,7 +40,7 @@ export const DatabaseService = {
 
   async saveMedia(item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }): Promise<MediaItem> {
     const payload = item.id ? { ...item, updatedAt: new Date().toISOString() } : { ...item, id: uuidv4(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-    const res = await fetch('/api/media', {
+    const res = await apiFetch('/api/media', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -43,12 +54,12 @@ export const DatabaseService = {
   },
 
   async deleteMedia(id: string): Promise<void> {
-    await fetch(`/api/media/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/media/${id}`, { method: 'DELETE' });
   },
 
   async getAllLogs(): Promise<ProgressLog[]> {
     try {
-      const res = await fetch('/api/logs');
+      const res = await apiFetch('/api/logs');
       if (!res.ok) return [];
       return res.json();
     } catch (e) {
@@ -73,7 +84,7 @@ export const DatabaseService = {
        location
      };
      
-     const res = await fetch('/api/logs', {
+     const res = await apiFetch('/api/logs', {
        method: 'POST',
        headers: { 'Content-Type': 'application/json' },
        body: JSON.stringify(newLog)
@@ -83,7 +94,7 @@ export const DatabaseService = {
   },
 
   async updateProgressLog(id: string, updates: Partial<ProgressLog>): Promise<ProgressLog> {
-    const res = await fetch(`/api/logs/${id}`, {
+    const res = await apiFetch(`/api/logs/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates)
@@ -93,15 +104,26 @@ export const DatabaseService = {
   },
 
   async deleteProgressLog(id: string): Promise<void> {
-    const res = await fetch(`/api/logs/${id}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/logs/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to delete log');
   },
 
   async getSettings(): Promise<any> {
     try {
-      const res = await fetch('/api/settings');
-      if (!res.ok) return {};
-      return res.json();
+      const authRes = await apiFetch('/api/auth/me');
+      if (!authRes.ok) return {}; // Not logged in
+
+      const res = await apiFetch('/api/settings');
+      const sysRes = await apiFetch('/api/system-settings');
+      let combined = {};
+      if (res.ok) {
+         combined = await res.json();
+      }
+      if (sysRes.ok) {
+         const sys = await sysRes.json();
+         combined = { ...sys, ...combined }; // user settings overwrite system where applicable, ideally sys has the api keys
+      }
+      return combined;
     } catch (e) {
       console.error(e);
       return {};
@@ -109,11 +131,27 @@ export const DatabaseService = {
   },
 
   async saveSettings(settings: any): Promise<any> {
-    const res = await fetch('/api/settings', {
+    const res = await apiFetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settings)
     });
+    
+    // Attempt saving system settings too if we are admin
+    try {
+      const authRes = await apiFetch('/api/auth/me');
+      if (authRes.ok) {
+         const authData = await authRes.json();
+         if (authData.user?.role === 'Admin') {
+            await apiFetch('/api/system-settings', {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify(settings)
+            });
+         }
+      }
+    } catch(e) {}
+
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
       throw new Error(`Failed to save settings: ${errorData.error || res.statusText}`);
@@ -123,7 +161,7 @@ export const DatabaseService = {
 
   async getAiRecaps(): Promise<any[]> {
     try {
-      const res = await fetch('/api/recaps');
+      const res = await apiFetch('/api/recaps');
       if (!res.ok) return [];
       return res.json();
     } catch (e) {
@@ -133,7 +171,7 @@ export const DatabaseService = {
   },
 
   async saveAiRecap(recap: any): Promise<void> {
-    const res = await fetch('/api/recaps', {
+    const res = await apiFetch('/api/recaps', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(recap)
@@ -143,7 +181,7 @@ export const DatabaseService = {
 
   async getAiTextCache(): Promise<Record<string, string>> {
     try {
-      const res = await fetch('/api/ai-text');
+      const res = await apiFetch('/api/ai-text');
       if (!res.ok) return {};
       return res.json();
     } catch (e) {
@@ -153,7 +191,7 @@ export const DatabaseService = {
   },
 
   async saveAiText(key: string, value: string): Promise<void> {
-    const res = await fetch('/api/ai-text', {
+    const res = await apiFetch('/api/ai-text', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key, value })
@@ -163,13 +201,13 @@ export const DatabaseService = {
   
   async clearAiText(key?: string): Promise<void> {
     const url = key ? `/api/ai-text?key=${encodeURIComponent(key)}` : '/api/ai-text';
-    const res = await fetch(url, { method: 'DELETE' });
+    const res = await apiFetch(url, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to clear AI text');
   },
 
   async getArtifacts(): Promise<any[]> {
     try {
-      const res = await fetch('/api/artifacts');
+      const res = await apiFetch('/api/artifacts');
       if (!res.ok) return [];
       return res.json();
     } catch(e) {
@@ -179,7 +217,7 @@ export const DatabaseService = {
   },
 
   async saveArtifact(artifact: any): Promise<void> {
-    const res = await fetch('/api/artifacts', {
+    const res = await apiFetch('/api/artifacts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(artifact)
@@ -191,7 +229,7 @@ export const DatabaseService = {
   },
 
   async createBackup(): Promise<any> {
-    const res = await fetch('/api/backup', {
+    const res = await apiFetch('/api/backup', {
       method: 'POST',
     });
     if (!res.ok) {

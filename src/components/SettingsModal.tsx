@@ -1,16 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Sparkles, RefreshCw } from 'lucide-react';
+import { X, Save, Sparkles, RefreshCw, UserCircle, Settings as SettingsIcon, Shield, Database, Users } from 'lucide-react';
 import { DatabaseService } from '../services/db';
 import { useMediaContext } from '../contexts/MediaContext';
+import { useAuth } from '../contexts/AuthContext';
 import { calculateRPGState } from '../lib/rpgSystem';
 import { generateText } from '../services/nanoGptService';
+import { UserManagement } from './UserManagement';
 
 interface SettingsModalProps {
   onClose: () => void;
 }
 
 export function SettingsModal({ onClose }: SettingsModalProps) {
+  const { user, login } = useAuth();
   const { media, logs, settings, aiTextCache, saveAiText, refreshData } = useMediaContext();
+  const [activeTab, setActiveTab] = useState<'account'|'preferences'|'rpg'|'system'>('account');
+  
+  const [accountData, setAccountData] = useState({
+    username: user?.username || '',
+    password: '',
+    profilePic: user?.profilePic || '',
+    bio: user?.bio || ''
+  });
+
   const [formData, setFormData] = useState({
     igdbClientId: '',
     igdbClientSecret: '',
@@ -223,13 +235,42 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     }
   };
 
+  const handleAccountChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setAccountData(prev => ({ ...prev, [name]: value }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     setError(null);
     try {
+      if (activeTab === 'account') {
+        const token = localStorage.getItem('fauxlore_token');
+        const res = await fetch(`/api/users/${user?.id}`, {
+           method: 'PUT',
+           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+           body: JSON.stringify({
+             username: accountData.username,
+             ...(accountData.password ? { password: accountData.password } : {}),
+             profilePic: accountData.profilePic,
+             bio: accountData.bio
+           })
+        });
+        if (!res.ok) throw new Error('Failed to update account');
+        
+        // Update auth context
+        const meRes = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` }});
+        if (meRes.ok) {
+           const me = await meRes.json();
+           login(token!, me.user);
+        }
+        onClose();
+        return;
+      }
+
       await DatabaseService.saveSettings({
-        userId: 'default_user', // Will be dynamic when auth is added
+        userId: user?.id,
         igdbClientId: formData.igdbClientId,
         igdbClientSecret: formData.igdbClientSecret,
         tmdbApiKey: formData.tmdbApiKey,
@@ -259,46 +300,121 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="bg-[#09090B] border border-white/5 rounded-2xl md:rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col relative z-50 shadow-2xl">
-        <div className="p-4 md:p-6 border-b border-white/5 flex items-center justify-between sticky top-0 bg-[#09090B] z-10">
-          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white">System Settings</h2>
-          <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-colors">
-            <X className="w-5 h-5 md:w-6 md:h-6" />
-          </button>
+      <div className="bg-[#09090B] border border-white/5 rounded-2xl md:rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row relative z-50 shadow-2xl">
+        
+        {/* Sidebar Tabs */}
+        <div className="w-full md:w-64 bg-zinc-900/50 border-r border-white/5 flex flex-row md:flex-col p-4 gap-2 overflow-x-auto no-scrollbar shrink-0">
+           <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white mb-4 hidden md:block px-2 pt-2">Settings</h2>
+           
+           <button 
+             onClick={() => setActiveTab('account')}
+             className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-sm font-medium ${activeTab === 'account' ? 'bg-orange-500/10 text-orange-400' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'}`}
+           >
+             <UserCircle className="w-5 h-5" /> Account Profile
+           </button>
+           
+           <button 
+             onClick={() => setActiveTab('preferences')}
+             className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-sm font-medium ${activeTab === 'preferences' ? 'bg-orange-500/10 text-orange-400' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'}`}
+           >
+             <SettingsIcon className="w-5 h-5" /> Base Preferences
+           </button>
+
+           <button 
+             onClick={() => setActiveTab('rpg')}
+             className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-sm font-medium ${activeTab === 'rpg' ? 'bg-orange-500/10 text-orange-400' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'}`}
+           >
+             <Shield className="w-5 h-5" /> RPG Configuration
+           </button>
+
+           {user?.role === 'Admin' && (
+             <button 
+               onClick={() => setActiveTab('users')}
+               className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-sm font-medium ${activeTab === 'users' ? 'bg-indigo-500/10 text-indigo-400' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'}`}
+             >
+               <Users className="w-5 h-5" /> User Management
+             </button>
+           )}
+
+           {user?.role === 'Admin' && (
+             <button 
+               onClick={() => setActiveTab('system')}
+               className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-sm font-medium ${activeTab === 'system' ? 'bg-red-500/10 text-red-400' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'}`}
+             >
+               <Database className="w-5 h-5" /> System & Keys (Admin)
+             </button>
+           )}
         </div>
 
-        <div className="p-4 md:p-6 overflow-y-auto no-scrollbar">
-          {error && (
-             <div className="mb-4 bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-xl text-sm">
-               {error}
-             </div>
-          )}
+        <div className="flex-1 flex flex-col h-full bg-[#09090B]">
+          <div className="p-4 md:p-6 border-b border-white/5 flex items-center justify-between sticky top-0 bg-[#09090B] z-10 md:hidden">
+            <h2 className="text-xl font-bold tracking-tight text-white capitalize">{activeTab}</h2>
+            <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          
+          <div className="hidden md:flex p-4 border-b border-white/5 justify-between items-center sticky top-0 bg-[#09090B] z-10">
+            <h2 className="text-xl font-bold tracking-tight text-white capitalize ml-2">{activeTab} Settings</h2>
+            <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
-          {isLoading ? (
-            <div className="flex justify-center items-center py-20 text-zinc-500">
-              <div className="animate-spin w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full" />
-            </div>
-          ) : (
-            <form id="settings-form" onSubmit={handleSubmit} className="space-y-8">
-              
-              <div className="space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                  <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">General Settings</h3>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Timezone</label>
-                  <input 
-                    name="timezone"
-                    value={formData.timezone}
-                    onChange={handleChange}
-                    className="input-field" 
-                    placeholder="e.g. America/Los_Angeles"
-                  />
-                  <p className="text-[10px] text-zinc-500 mt-1">Used for syncing logs to accurate local dates.</p>
-                </div>
+          <div className="p-4 md:p-6 overflow-y-auto no-scrollbar flex-1">
+            {error && (
+               <div className="mb-4 bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-xl text-sm">
+                 {error}
+               </div>
+            )}
+
+            {isLoading ? (
+              <div className="flex justify-center items-center py-20 text-zinc-500">
+                <div className="animate-spin w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full" />
               </div>
+            ) : (
+              <form id="settings-form" onSubmit={handleSubmit} className="space-y-8">
+                
+                {activeTab === 'account' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">Username</label>
+                      <input name="username" value={accountData.username} onChange={handleAccountChange} className="input-field" required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">New Password (leave blank to keep current)</label>
+                      <input type="password" name="password" value={accountData.password} onChange={handleAccountChange} className="input-field" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">Profile Picture URL</label>
+                      <input name="profilePic" value={accountData.profilePic} onChange={handleAccountChange} className="input-field" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">Bio</label>
+                      <textarea name="bio" value={accountData.bio} onChange={handleAccountChange} className="input-field h-24 resize-none" />
+                    </div>
+                  </div>
+                )}
 
-              <div className="space-y-4">
+                {activeTab === 'preferences' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">Timezone</label>
+                      <input 
+                        name="timezone"
+                        value={formData.timezone}
+                        onChange={handleChange}
+                        className="input-field" 
+                        placeholder="e.g. America/Los_Angeles"
+                      />
+                      <p className="text-[10px] text-zinc-500 mt-1">Used for syncing logs to accurate local dates.</p>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'rpg' && (
+                  <>
+                  <div className="space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-white/5">
                   <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">RPG Progression System</h3>
                 </div>
@@ -446,11 +562,19 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
                 </div>
               </div>
+              </>
+            )}
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                  <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">API Integrations</h3>
-                </div>
+            {user?.role === 'Admin' && activeTab === 'users' && (
+               <UserManagement />
+            )}
+
+            {user?.role === 'Admin' && activeTab === 'system' && (
+                  <>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                      <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">API Integrations (Global)</h3>
+                    </div>
                 <p className="text-xs text-zinc-500 mb-2">Provide keys for metadata fetching. If left empty, FauxLore will attempt to fallback to server environment variables.</p>
                 
                 <div className="grid grid-cols-1 gap-4">
@@ -571,9 +695,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     </p>
                   )}
                 </div>
+              </div>
 
-                <div className="pt-6 border-t border-white/5 space-y-4">
-                  <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">Database & Backup</h3>
+              <div className="pt-6 border-t border-white/5 space-y-4">
+                <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">Database & Backup</h3>
                   <div className="bg-zinc-900/50 border border-white/5 rounded-xl p-5">
                     <p className="text-sm text-zinc-400 mb-4">
                       Daily backups are automatically created at 13:00 (up to 28 rolling backups). You can also force a manual backup right now.
@@ -596,11 +721,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     )}
                   </div>
                 </div>
-
-              </div>
-            </form>
-          )}
-        </div>
+                </>
+              )}
+              </form>
+            )}
+          </div>
 
         <div className="p-4 md:p-6 border-t border-white/5 bg-zinc-900/50 flex justify-end gap-3 sticky bottom-0">
           <button 
@@ -608,21 +733,24 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             onClick={onClose} 
             className="px-4 py-2 text-sm font-medium text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
           >
-            Cancel
+            {activeTab === 'users' ? 'Close' : 'Cancel'}
           </button>
-          <button 
-            type="submit" 
-            form="settings-form"
-            disabled={isLoading || isSaving}
-            className="flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-lg shadow-orange-900/20"
-          >
-            {isSaving ? (
-              <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            Save Settings
-          </button>
+          {activeTab !== 'users' && (
+            <button 
+              type="submit" 
+              form="settings-form"
+              disabled={isLoading || isSaving}
+              className={`flex items-center gap-2 px-6 py-2 text-sm font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-lg ${activeTab === 'system' ? 'bg-red-600 hover:bg-red-500 shadow-red-900/20' : 'bg-orange-600 hover:bg-orange-500 shadow-orange-900/20'}`}
+            >
+              {isSaving ? (
+                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              Save {activeTab === 'system' ? 'System Settings' : activeTab === 'account' ? 'Profile' : 'Settings'}
+            </button>
+          )}
+        </div>
         </div>
       </div>
     </div>

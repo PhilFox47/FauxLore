@@ -5,6 +5,8 @@ import * as dotenv from "dotenv";
 import Database from "better-sqlite3";
 import fs from "fs";
 import cron from "node-cron";
+import { v4 as uuidv4 } from "uuid";
+import bcrypt from "bcrypt";
 
 dotenv.config();
 
@@ -286,6 +288,35 @@ async function startServer() {
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      passwordHash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'User',
+      profilePic TEXT,
+      bio TEXT,
+      createdAt TEXT,
+      updatedAt TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      expiresAt TEXT NOT NULL,
+      FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS system_settings (
+      id TEXT PRIMARY KEY DEFAULT 'system',
+      igdbClientId TEXT,
+      igdbClientSecret TEXT,
+      tmdbApiKey TEXT,
+      hardcoverApiKey TEXT,
+      nanoGptApiKey TEXT,
+      nanoGptModel TEXT,
+      geminiApiKey TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS settings (
       userId TEXT PRIMARY KEY,
       igdbClientId TEXT,
@@ -331,6 +362,49 @@ async function startServer() {
   `);
 
   // Migration steps
+  try { 
+    const adminExists = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
+    if (!adminExists) {
+      const defaultHash = bcrypt.hashSync('admin', 10);
+      db.prepare(`
+        INSERT INTO users (id, username, passwordHash, role, createdAt, updatedAt) 
+        VALUES ('default_user', 'admin', ?, 'Admin', ?, ?)
+        ON CONFLICT(id) DO UPDATE SET username=excluded.username
+      `).run(defaultHash, new Date().toISOString(), new Date().toISOString());
+    }
+  } catch (e) {
+    console.error("Migration: seed user", e);
+  }
+
+  // Migrate API keys from settings to system_settings
+  try {
+    const adminSettings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get('default_user');
+    if (adminSettings) {
+      db.prepare(`
+        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey)
+        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey)
+        ON CONFLICT(id) DO UPDATE SET
+          igdbClientId=COALESCE(system_settings.igdbClientId, excluded.igdbClientId),
+          igdbClientSecret=COALESCE(system_settings.igdbClientSecret, excluded.igdbClientSecret),
+          tmdbApiKey=COALESCE(system_settings.tmdbApiKey, excluded.tmdbApiKey),
+          hardcoverApiKey=COALESCE(system_settings.hardcoverApiKey, excluded.hardcoverApiKey),
+          nanoGptApiKey=COALESCE(system_settings.nanoGptApiKey, excluded.nanoGptApiKey),
+          nanoGptModel=COALESCE(system_settings.nanoGptModel, excluded.nanoGptModel),
+          geminiApiKey=COALESCE(system_settings.geminiApiKey, excluded.geminiApiKey)
+      `).run({
+        igdbClientId: adminSettings.igdbClientId || null,
+        igdbClientSecret: adminSettings.igdbClientSecret || null,
+        tmdbApiKey: adminSettings.tmdbApiKey || null,
+        hardcoverApiKey: adminSettings.hardcoverApiKey || null,
+        nanoGptApiKey: adminSettings.nanoGptApiKey || null,
+        nanoGptModel: adminSettings.nanoGptModel || null,
+        geminiApiKey: adminSettings.geminiApiKey || null,
+      });
+    }
+  } catch (e) {
+    console.error("Migration: system_settings", e);
+  }
+
   try { db.prepare("ALTER TABLE media ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE logs ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE ai_recaps ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run(); } catch (e) {}
@@ -377,8 +451,203 @@ async function startServer() {
     lastSyncAt: row.lastSyncAt || null
   });
 
+  // Authorization Routes
+  app.post("/api/auth/login", (req, res) => {
+    try {
+      const { username, password, stayLoggedIn } = req.body;
+      const user: any = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+      
+      let isValidPass = false;
+      if (user) {
+        // Fallback for plain text 'admin' password from before migration
+        if (user.passwordHash === 'admin' && password === 'admin') {
+           isValidPass = true;
+           // Auto-migrate the hash
+           const newHash = bcrypt.hashSync(password, 10);
+           db.prepare('UPDATE users SET passwordHash = ? WHERE id = ?').run(newHash, user.id);
+        } else {
+           isValidPass = bcrypt.compareSync(password, user.passwordHash);
+        }
+      }
+
+      if (!user || !isValidPass) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+      const token = uuidv4();
+      const expiresAt = new Date();
+      if (stayLoggedIn) {
+        expiresAt.setDate(expiresAt.getDate() + 14);
+      } else {
+        expiresAt.setHours(expiresAt.getHours() + 24);
+      }
+      
+      db.prepare('INSERT INTO sessions (token, userId, expiresAt) VALUES (?, ?, ?)').run(token, user.id, expiresAt.toISOString());
+      
+      const safeUser = { id: user.id, username: user.username, role: user.role, profilePic: user.profilePic, bio: user.bio };
+      res.json({ token, user: safeUser });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    try {
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (token) {
+         db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+      }
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.get("/api/auth/me", (req, res) => {
+    try {
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) return res.status(401).json({ error: 'No token' });
+      
+      db.prepare('DELETE FROM sessions WHERE expiresAt < ?').run(new Date().toISOString());
+      
+      const session: any = db.prepare('SELECT userId FROM sessions WHERE token = ?').get(token);
+      if (!session) return res.status(401).json({ error: 'Session expired' });
+      
+      const user: any = db.prepare('SELECT * FROM users WHERE id = ?').get(session.userId);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      
+      const safeUser = { id: user.id, username: user.username, role: user.role, profilePic: user.profilePic, bio: user.bio };
+      res.json({ user: safeUser });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.get("/api/users", (req, res) => {
+     try {
+       const actingUserId = getAuthUser(req, res);
+      if (!actingUserId) return;
+       if (!actingUserId) return res.status(401).json({ error: 'Unauthorized' });
+       
+       const rows = db.prepare('SELECT id, username, role, profilePic, bio, createdAt, updatedAt FROM users').all();
+       res.json(rows);
+     } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/users", (req, res) => {
+     try {
+       const actingUserId = getAuthUser(req, res);
+      if (!actingUserId) return;
+       const actingUser: any = db.prepare('SELECT role FROM users WHERE id = ?').get(actingUserId);
+       if (actingUser?.role !== 'Admin') {
+         return res.status(403).json({ error: 'Only admins can create users' });
+       }
+
+       const { username, password, role } = req.body;
+       const id = uuidv4();
+       const hash = bcrypt.hashSync(password, 10);
+       db.prepare(`
+         INSERT INTO users (id, username, passwordHash, role, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?)
+       `).run(id, username, hash, role || 'User', new Date().toISOString(), new Date().toISOString());
+       res.json({ id, username, role });
+     } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.put("/api/users/:id", (req, res) => {
+    try {
+      const actingUserId = getAuthUser(req, res);
+      if (!actingUserId) return;
+      const actingUser: any = db.prepare('SELECT role FROM users WHERE id = ?').get(actingUserId);
+      const id = req.params.id;
+
+      if (actingUserId !== id && actingUser?.role !== 'Admin') {
+        return res.status(403).json({ error: 'Unauthorized to modify this user' });
+      }
+
+      const { username, password, role, profilePic, bio } = req.body;
+      const user: any = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      let hash = null;
+      if (password) {
+         hash = bcrypt.hashSync(password, 10);
+      }
+
+      let finalRole = role;
+      // If user is not Admin, they cannot modify roles
+      if (actingUser?.role !== 'Admin') {
+        finalRole = null;
+      }
+
+      db.prepare(`
+        UPDATE users SET 
+          username = COALESCE(?, username),
+          passwordHash = COALESCE(?, passwordHash),
+          role = COALESCE(?, role),
+          profilePic = COALESCE(?, profilePic),
+          bio = COALESCE(?, bio),
+          updatedAt = ?
+        WHERE id = ?
+      `).run(username || null, hash, finalRole || null, profilePic || null, bio || null, new Date().toISOString(), id);
+      
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.delete("/api/users/:id", (req, res) => {
+     try {
+        db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+        res.json({ success: true });
+     } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.get("/api/system-settings", (req, res) => {
+    try {
+      const sys: any = db.prepare('SELECT * FROM system_settings WHERE id = ?').get('system') || {};
+      res.json(sys);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/system-settings", (req, res) => {
+    try {
+      const actingUserId = getAuthUser(req, res);
+      if (!actingUserId) return;
+      const actingUser: any = db.prepare('SELECT role FROM users WHERE id = ?').get(actingUserId);
+      if (actingUser?.role !== 'Admin') {
+         return res.status(403).json({ error: 'Unauthorized. Admins only.' });
+      }
+
+      const settings = req.body;
+      db.prepare(`
+        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey)
+        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey)
+        ON CONFLICT(id) DO UPDATE SET
+          igdbClientId=excluded.igdbClientId,
+          igdbClientSecret=excluded.igdbClientSecret,
+          tmdbApiKey=excluded.tmdbApiKey,
+          hardcoverApiKey=excluded.hardcoverApiKey,
+          nanoGptApiKey=excluded.nanoGptApiKey,
+          nanoGptModel=excluded.nanoGptModel,
+          geminiApiKey=excluded.geminiApiKey
+      `).run({
+        igdbClientId: settings.igdbClientId || null,
+        igdbClientSecret: settings.igdbClientSecret || null,
+        tmdbApiKey: settings.tmdbApiKey || null,
+        hardcoverApiKey: settings.hardcoverApiKey || null,
+        nanoGptApiKey: settings.nanoGptApiKey || null,
+        nanoGptModel: settings.nanoGptModel || null,
+        geminiApiKey: settings.geminiApiKey || null
+      });
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   // Local DB API Routes
   
+  // Public endpoint for Login background
+  app.get("/api/public/covers", (req, res) => {
+    try {
+      const rows = db.prepare('SELECT DISTINCT coverImageUrl FROM media WHERE coverImageUrl IS NOT NULL AND coverImageUrl != \'\' ORDER BY RANDOM() LIMIT 40').all() as {coverImageUrl: string}[];
+      res.json(rows.map(r => r.coverImageUrl));
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
   const syncOngoingMediaInBackground = async (userId: string) => {
     try {
       const now = new Date();
@@ -443,9 +712,25 @@ async function startServer() {
     }
   };
 
+  // Helper to extract authenticated user
+  const getAuthUser = (req: any, res?: any) => {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      if (res) res.status(401).json({ error: 'Unauthorized' });
+      return null;
+    }
+    const session: any = db.prepare('SELECT userId, expiresAt FROM sessions WHERE token = ?').get(token);
+    if (!session || new Date(session.expiresAt) < new Date()) {
+      if (res) res.status(401).json({ error: 'Unauthorized' });
+      return null;
+    }
+    return session.userId;
+  };
+
   app.get("/api/media", (req, res) => {
     try {
-      const userId = req.query.userId || 'default_user';
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
       // Fire and forget sync
       syncOngoingMediaInBackground(userId as string);
       
@@ -456,7 +741,8 @@ async function startServer() {
 
   app.get("/api/media/:id", (req, res) => {
     try {
-      const userId = req.query.userId || 'default_user';
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
       const row = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(req.params.id, userId);
       if (!row) return res.status(404).json({ error: 'Not found' });
       res.json(normalizeMedia(row));
@@ -466,7 +752,8 @@ async function startServer() {
   app.post("/api/media", (req, res) => {
     try {
       const item = req.body;
-      const userId = item.userId || 'default_user';
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
       const stmt = db.prepare(`
         INSERT INTO media (
           id, userId, title, mediaType, coverImageUrl, description, creator, publisher, year, 
@@ -560,7 +847,8 @@ async function startServer() {
 
   app.delete("/api/media/:id", (req, res) => {
     try {
-      const userId = req.query.userId || 'default_user';
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
       const row = db.prepare('SELECT id FROM media WHERE id = ? AND userId = ?').get(req.params.id, userId);
       if (!row) return res.status(404).json({ error: 'Not found or unauthorized' });
 
@@ -574,7 +862,8 @@ async function startServer() {
 
   app.get("/api/logs", (req, res) => {
     try {
-      const userId = req.query.userId || 'default_user';
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
       const rows = db.prepare('SELECT * FROM logs WHERE userId = ? ORDER BY timestamp DESC').all(userId);
       res.json(rows);
     } catch (e) { res.status(500).json({ error: String(e) }); }
@@ -583,7 +872,8 @@ async function startServer() {
   app.post("/api/logs", (req, res) => {
     try {
       const log = req.body;
-      const userId = log.userId || 'default_user';
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
       db.prepare(`
         INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note, location)
         VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note, @location)
@@ -671,7 +961,8 @@ async function startServer() {
     try {
       const logId = req.params.id;
       const updates = req.body;
-      const userId = req.query.userId || 'default_user';
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
 
       const existingLog = db.prepare('SELECT * FROM logs WHERE id = ? AND userId = ?').get(logId, userId) as any;
       if (!existingLog) return res.status(404).json({ error: 'Log not found or unauthorized' });
@@ -714,7 +1005,8 @@ async function startServer() {
   app.delete("/api/logs/:id", (req, res) => {
     try {
       const logId = req.params.id;
-      const userId = req.query.userId || 'default_user';
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
 
       const existingLog = db.prepare('SELECT * FROM logs WHERE id = ? AND userId = ?').get(logId, userId) as any;
       if (!existingLog) return res.status(404).json({ error: 'Log not found or unauthorized' });
@@ -743,7 +1035,8 @@ async function startServer() {
 
   app.get("/api/settings", (req, res) => {
     try {
-      const userId = req.query.userId || 'default_user';
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
       const row: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId);
       if (!row) return res.json({ userId });
       res.json({
@@ -757,7 +1050,8 @@ async function startServer() {
   app.post("/api/settings", (req, res) => {
     try {
       const settings = req.body;
-      const userId = settings.userId || 'default_user';
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
       
       db.prepare(`
         INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak)
@@ -802,7 +1096,8 @@ async function startServer() {
 
   app.get("/api/recaps", (req, res) => {
     try {
-      const userId = req.query.userId || 'default_user';
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
       const rows = db.prepare('SELECT * FROM ai_recaps WHERE userId = ?').all(userId);
       res.json(rows);
     } catch (e) { res.status(500).json({ error: String(e) }); }
@@ -811,7 +1106,8 @@ async function startServer() {
   app.post("/api/recaps", (req, res) => {
     try {
       const payload = req.body;
-      const userId = payload.userId || 'default_user';
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
       const id = payload.id || Math.random().toString(36).substr(2, 9);
       db.prepare(`
         INSERT INTO ai_recaps (id, userId, timeframe, timeId, title, summary)
@@ -868,7 +1164,8 @@ async function startServer() {
 
   app.get("/api/artifacts", (req, res) => {
     try {
-      const userId = req.query.userId || 'default_user';
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
       const rows = db.prepare('SELECT * FROM artifacts WHERE userId = ? ORDER BY earnedAt DESC').all(userId);
       res.json(rows);
     } catch (e) { res.status(500).json({ error: String(e) }); }
@@ -877,7 +1174,8 @@ async function startServer() {
   app.post("/api/artifacts", (req, res) => {
     try {
       const artifact = req.body;
-      const userId = artifact.userId || 'default_user';
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
       const stmt = db.prepare(`
         INSERT INTO artifacts (id, userId, mediaId, name, description, rarity, type, earnedAt)
         VALUES (@id, @userId, @mediaId, @name, @description, @rarity, @type, @earnedAt)
@@ -914,7 +1212,8 @@ async function startServer() {
   app.get("/api/games/search", async (req, res) => {
     try {
       const query = req.query.q as string;
-      const userId = req.query.userId as string || 'default_user';
+      const userId = getAuthUser(req, res) as string;
+      if (!userId) return;
       const settings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId) || {};
       const clientId = settings.igdbClientId || process.env.IGDB_CLIENT_ID;
       const clientSecret = settings.igdbClientSecret || process.env.IGDB_CLIENT_SECRET;
@@ -1027,7 +1326,8 @@ async function startServer() {
   // TMDB proxy integration for Movies and Series
   app.get("/api/tmdb/search", async (req, res) => {
     try {
-      const userId = req.query.userId as string || 'default_user';
+      const userId = getAuthUser(req, res) as string;
+      if (!userId) return;
       const settings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId) || {};
       const apiKey = settings.tmdbApiKey || process.env.TMDB_API_KEY;
       

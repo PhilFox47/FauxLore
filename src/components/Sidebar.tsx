@@ -1,13 +1,15 @@
 import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, Settings, X, Presentation, BookOpen, Dice5, Shield, Flame, Gem, Globe, Skull, CalendarClock } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Settings, X, Presentation, BookOpen, Dice5, Shield, Flame, Gem, Globe, Skull, CalendarClock, LogOut } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
+import { useAuth } from '../contexts/AuthContext';
 import { MEDIA_COLORS } from '../types/schema';
 import { calculateStreak } from '../lib/streak';
 
 export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () => void, onOpenSettings?: () => void }) {
   const { media, logs } = useMediaContext();
+  const { logout } = useAuth();
 
   const getCount = (type: string) => media.filter(m => m.mediaType === type).length;
 
@@ -128,10 +130,16 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
         </div>
       </nav>
 
-      <button onClick={onOpenSettings} className="mt-auto flex items-center justify-center gap-2 w-full py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-medium transition-all shadow-lg shadow-orange-900/20">
-        <Settings className="w-4 h-4" />
-        Settings
-      </button>
+      <div className="mt-auto space-y-2">
+        <button onClick={onOpenSettings} className="flex items-center justify-center gap-2 w-full py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium transition-colors border border-white/5">
+          <Settings className="w-4 h-4" />
+          Settings
+        </button>
+        <button onClick={logout} className="flex items-center justify-center gap-2 w-full py-3 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-xl font-medium transition-colors border border-red-500/20">
+          <LogOut className="w-4 h-4" />
+          Sign Out
+        </button>
+      </div>
     </aside>
   );
 }
