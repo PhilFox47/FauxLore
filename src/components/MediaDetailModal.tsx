@@ -36,7 +36,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   if (!isOpen || !item) return null;
 
   const totalMasterPages = logs
-    .filter(l => !l.isHistoric)
+    .filter(l => !l.isHistoric && l.metricType !== 'statusChange')
     .reduce((acc, log) => acc + calculateScaledDelta(log.delta, item, settings), 0);
   
   // Sort logs descending by timestamp

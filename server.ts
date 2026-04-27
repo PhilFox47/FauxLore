@@ -285,6 +285,7 @@ async function startServer() {
       delta REAL NOT NULL,
       note TEXT,
       location TEXT,
+      isHistoric INTEGER DEFAULT 0,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
     );
 
@@ -449,6 +450,7 @@ async function startServer() {
   try { db.prepare("ALTER TABLE media ADD COLUMN subtitle TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN maturityRating TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE logs ADD COLUMN location TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE logs ADD COLUMN isHistoric INTEGER DEFAULT 0").run(); } catch (e) {}
   
   try { db.prepare("UPDATE media SET status = 'Active' WHERE status = 'Playing'").run(); } catch(e) {}
   try { db.prepare("UPDATE media SET status = 'Planning' WHERE status = 'Backlog'").run(); } catch(e) {}
@@ -932,7 +934,41 @@ async function startServer() {
       const userId = getAuthUser(req, res);
       if (!userId) return;
       const rows = db.prepare('SELECT * FROM logs WHERE userId = ? ORDER BY timestamp DESC').all(userId);
-      res.json(rows);
+      res.json(rows.map((r: any) => ({
+        ...r,
+        isHistoric: r.isHistoric === 1
+      })));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.put("/api/logs/:id", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      
+      const updates = req.body;
+      const id = req.params.id;
+      
+      db.prepare(`
+        UPDATE logs SET 
+          timestamp = COALESCE(?, timestamp),
+          metricType = COALESCE(?, metricType),
+          delta = COALESCE(?, delta),
+          note = COALESCE(?, note),
+          location = COALESCE(?, location),
+          isHistoric = COALESCE(?, isHistoric)
+        WHERE id = ? AND userId = ?
+      `).run(
+        updates.timestamp || null,
+        updates.metricType || null,
+        updates.delta !== undefined ? updates.delta : null,
+        updates.note || null,
+        updates.location || null,
+        updates.isHistoric !== undefined ? (updates.isHistoric ? 1 : 0) : null,
+        id,
+        userId
+      );
+      res.json({ success: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -942,8 +978,8 @@ async function startServer() {
       const userId = getAuthUser(req, res);
       if (!userId) return;
       db.prepare(`
-        INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note, location)
-        VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note, @location)
+        INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note, location, isHistoric)
+        VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note, @location, @isHistoric)
       `).run({
         id: log.id,
         userId: userId,
@@ -952,7 +988,8 @@ async function startServer() {
         metricType: log.metricType,
         delta: log.delta,
         note: log.note || null,
-        location: log.location || null
+        location: log.location || null,
+        isHistoric: log.isHistoric ? 1 : 0
       });
 
       // Update Streak Mode

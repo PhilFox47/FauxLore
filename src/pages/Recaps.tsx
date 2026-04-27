@@ -25,7 +25,7 @@ export function Recaps() {
   const [isGenerating, setIsGenerating] = useState(false);
   const attemptedGenRef = useRef<Set<string>>(new Set());
 
-  const validLogs = useMemo(() => logs.filter(log => !log.timestamp.startsWith('1970-01-01')), [logs]);
+  const validLogs = useMemo(() => logs.filter(log => !log.isHistoric && !log.timestamp.startsWith('1970-01-01')), [logs]);
 
   const currentInterval = useMemo(() => {
     const now = new Date();
@@ -51,6 +51,10 @@ export function Recaps() {
     return validLogs.filter(log => isWithinInterval(parseISO(log.timestamp), currentInterval));
   }, [validLogs, currentInterval]);
 
+  const activeProgressLogs = useMemo(() => {
+    return activeLogs.filter(l => l.metricType !== 'statusChange');
+  }, [activeLogs]);
+
   const activeMedia = useMemo(() => {
     const mediaIds = new Set(activeLogs.map(l => l.mediaId));
     // We want to include ALL media that have progress logs in this time interval,
@@ -59,8 +63,30 @@ export function Recaps() {
   }, [activeLogs, media]);
 
   const completedMedia = useMemo(() => {
-    return activeMedia.filter(m => m.status === 'Completed' && isWithinInterval(parseISO(m.updatedAt), currentInterval));
-  }, [activeMedia, currentInterval]);
+    // 1. Find all media that have a statusChange log to 'Completed' in this interval
+    const completedLogIds = new Set(
+      activeLogs
+        .filter(l => l.metricType === 'statusChange' && l.note?.toLowerCase().includes('to completed'))
+        .map(l => l.mediaId)
+    );
+
+    // 2. Fallback for older items: completed status and updatedAt in interval
+    const completedLegacy = activeMedia.filter(m => {
+      if (completedLogIds.has(m.id)) return false;
+      
+      const hasStatusLogs = logs.some(l => l.mediaId === m.id && l.metricType === 'statusChange');
+      if (hasStatusLogs) return false; // This item uses the new system, so if it didn't have a log in the interval, it didn't finish now.
+
+      return m.status === 'Completed' && isWithinInterval(parseISO(m.updatedAt), currentInterval);
+    });
+
+    const logBasedCompleted = media.filter(m => completedLogIds.has(m.id));
+    
+    return [...logBasedCompleted, ...completedLegacy];
+  }, [activeLogs, activeMedia, currentInterval, logs, media]);
+
+  const completedMediaIds = useMemo(() => new Set(completedMedia.map(m => m.id)), [completedMedia]);
+  const inProgressMedia = useMemo(() => activeMedia.filter(m => !completedMediaIds.has(m.id)), [activeMedia, completedMediaIds]);
 
   const gatheredLoot = useMemo(() => {
     let intervalArtifacts = artifacts.filter(a => isWithinInterval(parseISO(a.earnedAt), currentInterval));
@@ -83,10 +109,10 @@ export function Recaps() {
         return weightB - weightA;
       }
       
-      const mLogsA = validLogs.filter(l => l.mediaId === a.mediaId);
+      const mLogsA = validLogs.filter(l => l.mediaId === a.mediaId && l.metricType !== 'statusChange');
       const pagesA = mLogsA.reduce((acc, l) => acc + calculateScaledDelta(l.delta, media.find(m => m.id === a.mediaId)!, settings), 0);
       
-      const mLogsB = validLogs.filter(l => l.mediaId === b.mediaId);
+      const mLogsB = validLogs.filter(l => l.mediaId === b.mediaId && l.metricType !== 'statusChange');
       const pagesB = mLogsB.reduce((acc, l) => acc + calculateScaledDelta(l.delta, media.find(m => m.id === b.mediaId)!, settings), 0);
       
       return pagesB - pagesA;
@@ -98,12 +124,12 @@ export function Recaps() {
   }, [artifacts, currentInterval, timeframe, validLogs, media, settings]);
 
   const totalMasterPages = useMemo(() => {
-    return activeLogs.reduce((acc, log) => {
+    return activeProgressLogs.reduce((acc, log) => {
       const m = media.find(x => x.id === log.mediaId);
       if (!m) return acc;
       return acc + calculateScaledDelta(log.delta || 0, m, settings);
     }, 0);
-  }, [activeLogs, media, settings]);
+  }, [activeProgressLogs, media, settings]);
 
   const currentRecap = useMemo(() => {
     return aiRecaps.find(r => r.timeframe === timeframe && r.timeId === timeId);
@@ -149,7 +175,7 @@ export function Recaps() {
       let rankingLimit = timeframe === 'week' ? 999 : (timeframe === 'month' ? 5 : 20);
       
       const mediaRanking = activeMedia.map(m => {
-        const mLogs = activeLogs.filter(l => l.mediaId === m.id);
+        const mLogs = activeProgressLogs.filter(l => l.mediaId === m.id);
         const pages = mLogs.reduce((acc, l) => acc + calculateScaledDelta(l.delta, m, settings), 0);
         return { title: m.title, type: m.mediaType, pages };
       }).sort((a,b) => b.pages - a.pages).slice(0, rankingLimit);
@@ -165,8 +191,9 @@ export function Recaps() {
 
       // Gap calculation
       let maxGapDays = 0;
-      if (activeLogs.length > 1) {
-        const sortedDates = activeLogs.map(l => parseISO(l.timestamp).getTime()).sort();
+      const progressLogs = activeProgressLogs;
+      if (progressLogs.length > 1) {
+        const sortedDates = progressLogs.map(l => parseISO(l.timestamp).getTime()).sort();
         for(let i=1; i<sortedDates.length; i++) {
            const gap = (sortedDates[i] - sortedDates[i-1]) / (1000 * 60 * 60 * 24);
            if (gap > maxGapDays) maxGapDays = gap;
@@ -200,7 +227,7 @@ Total Master Pages (EXP): ${Math.round(totalMasterPages)}
 Total Logs: ${activeLogs.length}
 
 MEDIA IN PROGRESS:
-${activeMedia.filter(m => m.status !== 'Completed').map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') || 'None'}
+${inProgressMedia.map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') || 'None'}
 
 MEDIA COMPLETED:
 ${completedMedia.length > 0 ? completedMedia.map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.userReview ? `[User Review: "${m.userReview}"] ` : ''}${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') : 'None'}
@@ -286,7 +313,7 @@ ${promptContext}`);
 
   const renderTopCreator = () => {
      const creatorPages: Record<string, number> = {};
-     activeLogs.forEach(l => {
+     activeProgressLogs.forEach(l => {
         const m = activeMedia.find(x => x.id === l.mediaId);
         if (m && m.creator) {
            creatorPages[m.creator] = (creatorPages[m.creator] || 0) + calculateScaledDelta(l.delta, m, settings);
@@ -307,7 +334,7 @@ ${promptContext}`);
   };
 
   const renderTimeTraveler = () => {
-     const avgYear = analyzeTimeTraveler({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+     const avgYear = analyzeTimeTraveler({ timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings });
      if (!avgYear) return null;
 
      return (
@@ -348,7 +375,7 @@ ${promptContext}`);
   };
 
   const renderBingeSpotlight = () => {
-     const binge = analyzeBingeFactor({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+     const binge = analyzeBingeFactor({ timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings });
      if (!binge) return null;
 
      return (
@@ -364,7 +391,7 @@ ${promptContext}`);
   };
 
   const renderSunkCost = () => {
-     const sunk = analyzeSunkCost({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+     const sunk = analyzeSunkCost({ timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings });
      if (!sunk) return null;
 
      return (
@@ -382,7 +409,7 @@ ${promptContext}`);
   const renderRanking = () => {
     const limit = timeframe === 'week' ? 999 : (timeframe === 'month' ? 5 : 20);
     let ranked = activeMedia.map(m => {
-        const mLogs = activeLogs.filter(l => l.mediaId === m.id);
+        const mLogs = activeProgressLogs.filter(l => l.mediaId === m.id);
         const pages = mLogs.reduce((acc, l) => acc + calculateScaledDelta(l.delta, m, settings), 0);
         return { item: m, pages };
     }).filter(m => m.pages > 0).sort((a,b) => b.pages - a.pages);
@@ -442,7 +469,7 @@ ${promptContext}`);
   };
 
   const renderHabitsHeatmap = () => {
-    const habits = analyzeHabits({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+    const habits = analyzeHabits({ timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings });
     if (!habits) return null;
 
     const data = habits.hourCounts.map((count, hour) => ({
@@ -484,7 +511,7 @@ ${promptContext}`);
   };
 
   const renderDNADeepDive = () => {
-    const dna = analyzeMediaDNA({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+    const dna = analyzeMediaDNA({ timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings });
     if (!dna || dna.traits.length === 0) return null;
 
     return (
@@ -536,7 +563,7 @@ ${promptContext}`);
   };
 
    const renderVelocity = () => {
-    const velocity = analyzeSessionVelocity({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+    const velocity = analyzeSessionVelocity({ timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings });
     if (!velocity) return null;
 
     const data = [
@@ -602,7 +629,7 @@ ${promptContext}`);
   };
 
   const renderArchetypesSection = () => {
-    const earned = determineArchetypes({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+    const earned = determineArchetypes({ timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings });
     if (earned.length === 0) return null;
 
     return (
@@ -631,7 +658,7 @@ ${promptContext}`);
 
   const renderTypeBreakdown = () => {
     const breakdown: Record<string, number> = {};
-    activeLogs.forEach(l => {
+    activeProgressLogs.forEach(l => {
       const m = activeMedia.find(x => x.id === l.mediaId);
       if (m) {
          breakdown[m.mediaType] = (breakdown[m.mediaType] || 0) + calculateScaledDelta(l.delta, m, settings);
@@ -656,11 +683,11 @@ ${promptContext}`);
   };
 
   const renderActiveTime = () => {
-    const habits = analyzeHabits({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+    const habits = analyzeHabits({ timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings });
     if (!habits) return null;
 
     const dayPages: Record<string, number> = {};
-    activeLogs.forEach(l => {
+    activeProgressLogs.forEach(l => {
       const day = format(parseISO(l.timestamp), 'EEEE');
       const m = activeMedia.find(x => x.id === l.mediaId);
       if (m) {
@@ -694,7 +721,7 @@ ${promptContext}`);
 
    const renderPatterns = () => {
      if (timeframe !== 'year') return null;
-     const dna = analyzeMediaDNA({ timeScale: timeframe, logs: activeLogs, media: activeMedia, allMedia: media, settings });
+     const dna = analyzeMediaDNA({ timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings });
      if (!dna || dna.traits.length === 0) return null;
      return (
         <div className="space-y-3">
@@ -789,7 +816,7 @@ ${promptContext}`);
   const renderLocationBreakdown = () => {
      const locations: Record<string, number> = {};
      let locationCount = 0;
-     activeLogs.forEach(l => {
+     activeProgressLogs.forEach(l => {
         if (l.location && l.location.trim().length > 0) {
            const loc = l.location.trim();
            const m = activeMedia.find(media => media.id === l.mediaId);

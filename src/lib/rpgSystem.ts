@@ -56,10 +56,12 @@ export function mulberry32(a: number) {
 
 export function calculateRPGState(media: MediaItem[], logs: ProgressLog[], settings: any, evalDate: Date = new Date()): RPGState {
   // Filter historical
-  const validLogs = logs.filter(l => !l.timestamp.startsWith('1970-01-01'));
+  const validLogs = logs.filter(l => !l.isHistoric && !l.timestamp.startsWith('1970-01-01'));
   
   let baseExp = 0;
   validLogs.forEach(log => {
+    if (log.metricType === 'statusChange') return; // Status changes don't grant EXP
+    
     const item = media.find(m => m.id === log.mediaId);
     if (item) {
       baseExp += calculateScaledDelta(log.delta, item, settings); // 1 Master Page = 1 EXP (removed the * 5)
@@ -252,6 +254,7 @@ export function calculateNativeUnits(logs: ProgressLog[], media: MediaItem[], me
 
 function calculateMasterPages(logs: ProgressLog[], media: MediaItem[], settings: any, specificType: MediaType | null = null) {
   return logs.reduce((acc, log) => {
+    if (log.metricType === 'statusChange') return acc;
     const item = media.find(m => m.id === log.mediaId);
     if (!item || (specificType && item.mediaType !== specificType)) return acc;
     return acc + calculateScaledDelta(log.delta, item, settings);
