@@ -49,8 +49,8 @@ export function Login() {
       <div className="absolute inset-0 pointer-events-none opacity-20">
         <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 w-[120%] h-[120%] -translate-x-[10%] -translate-y-[10%] origin-center transform -rotate-12 scale-110">
           {covers.map((url, i) => (
-            <div key={i} className="aspect-[2/3] rounded-lg overflow-hidden bg-zinc-800">
-              <img src={url} className="w-full h-full object-cover" alt="" />
+            <div key={i} className="rounded-lg overflow-hidden bg-zinc-800 relative shadow-xl" style={{ aspectRatio: '1 / 1.5' }}>
+              <img src={url} className="absolute inset-0 w-full h-full object-cover" alt="" />
             </div>
           ))}
         </div>
