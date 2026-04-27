@@ -15,9 +15,10 @@ export function Login() {
     fetch('/api/public/covers')
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) {
-          // Shuffle or multiply covers to fill grid if needed loosely
-          setCovers([...data, ...data].sort(() => Math.random() - 0.5));
+        if (Array.isArray(data) && data.length > 0) {
+          // Multiply covers to ensure grid is completely filled
+          const multiplied = Array(10).fill(data).flat().sort(() => Math.random() - 0.5);
+          setCovers(multiplied);
         }
       })
       .catch(console.error);
@@ -46,11 +47,11 @@ export function Login() {
     <div className="min-h-screen bg-[#09090B] flex items-center justify-center p-4 relative overflow-hidden">
       
       {/* Background Covers Grid */}
-      <div className="absolute inset-0 pointer-events-none opacity-20">
-        <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 w-[120%] h-[120%] -translate-x-[10%] -translate-y-[10%] origin-center transform -rotate-12 scale-110">
+      <div className="absolute top-1/2 left-1/2 w-[150vw] h-[150vh] -translate-x-1/2 -translate-y-1/2 -rotate-6 pointer-events-none opacity-[0.15]">
+        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-3 pb-32">
           {covers.map((url, i) => (
-            <div key={i} className="rounded-lg overflow-hidden bg-zinc-800 relative shadow-xl" style={{ aspectRatio: '1 / 1.5' }}>
-              <img src={url} className="absolute inset-0 w-full h-full object-cover" alt="" />
+            <div key={i} className="aspect-[2/3] w-full rounded-md overflow-hidden bg-zinc-800 shadow-xl">
+              <img src={url} className="w-full h-full object-cover" alt="" />
             </div>
           ))}
         </div>
