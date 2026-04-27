@@ -1240,9 +1240,10 @@ async function startServer() {
       const query = req.query.q as string;
       const userId = getAuthUser(req, res) as string;
       if (!userId) return;
-      const settings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId) || {};
-      const clientId = settings.igdbClientId || process.env.IGDB_CLIENT_ID;
-      const clientSecret = settings.igdbClientSecret || process.env.IGDB_CLIENT_SECRET;
+      const userSettings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId) || {};
+      const sysSettings: any = db.prepare('SELECT * FROM system_settings WHERE id = ?').get('system') || {};
+      const clientId = sysSettings.igdbClientId || process.env.IGDB_CLIENT_ID;
+      const clientSecret = sysSettings.igdbClientSecret || process.env.IGDB_CLIENT_SECRET;
 
       if (!query) {
         return res.status(400).json({ error: "Missing search query" });
@@ -1354,8 +1355,9 @@ async function startServer() {
     try {
       const userId = getAuthUser(req, res) as string;
       if (!userId) return;
-      const settings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId) || {};
-      const apiKey = settings.tmdbApiKey || process.env.TMDB_API_KEY;
+      const userSettings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId) || {};
+      const sysSettings: any = db.prepare('SELECT * FROM system_settings WHERE id = ?').get('system') || {};
+      const apiKey = sysSettings.tmdbApiKey || process.env.TMDB_API_KEY;
       
       if (!apiKey) {
         return res.status(500).json({ error: "Missing TMDB API KEY. Please configure it in Settings." });

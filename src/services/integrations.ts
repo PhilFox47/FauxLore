@@ -102,7 +102,7 @@ export const IntegrationsService = {
    */
   async searchGameMetadata(query: string): Promise<GameMetadata[]> {
     try {
-      const response = await fetch(`/api/games/search?q=${encodeURIComponent(query)}`);
+      const response = await fetch(`/api/games/search?q=${encodeURIComponent(query)}`, { headers: { Authorization: `Bearer ${localStorage.getItem('fauxlore_token')}` } });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
@@ -127,7 +127,9 @@ export const IntegrationsService = {
       if (lang) {
         url.searchParams.append('lang', lang);
       }
-      const response = await fetch(url.toString());
+      const response = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${localStorage.getItem('fauxlore_token')}` }
+      });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
@@ -148,7 +150,7 @@ export const IntegrationsService = {
   async searchTMDBMetadata(query: string, type: 'Movie' | 'Series'): Promise<MovieMetadata[] | SeriesMetadata[]> {
     try {
       const tmdbType = type === 'Movie' ? 'movie' : 'tv';
-      const response = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=${tmdbType}`);
+      const response = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=${tmdbType}`, { headers: { Authorization: `Bearer ${localStorage.getItem('fauxlore_token')}` } });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
@@ -168,7 +170,7 @@ export const IntegrationsService = {
    */
   async searchVNDBMetadata(query: string): Promise<VisualNovelMetadata[]> {
     try {
-      const response = await fetch(`/api/vndb/search?q=${encodeURIComponent(query)}`);
+      const response = await fetch(`/api/vndb/search?q=${encodeURIComponent(query)}`, { headers: { Authorization: `Bearer ${localStorage.getItem('fauxlore_token')}` } });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
@@ -188,7 +190,7 @@ export const IntegrationsService = {
    */
   async searchAnilistMetadata(query: string) {
     try {
-      const response = await fetch(`/api/anilist/search?q=${encodeURIComponent(query)}`);
+      const response = await fetch(`/api/anilist/search?q=${encodeURIComponent(query)}`, { headers: { Authorization: `Bearer ${localStorage.getItem('fauxlore_token')}` } });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
@@ -239,7 +241,7 @@ export const IntegrationsService = {
    */
   async fetchHltbData(query: string) {
     try {
-      const response = await fetch(`/api/hltb/search?q=${encodeURIComponent(query)}`);
+      const response = await fetch(`/api/hltb/search?q=${encodeURIComponent(query)}`, { headers: { Authorization: `Bearer ${localStorage.getItem('fauxlore_token')}` } });
       if (!response.ok) throw new Error("Could not find HLTB data");
       return await response.json();
     } catch (e) {
