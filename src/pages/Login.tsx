@@ -47,14 +47,16 @@ export function Login() {
     <div className="min-h-screen bg-[#09090B] flex items-center justify-center p-4 relative overflow-hidden">
       
       {/* Background Covers Grid */}
-      <div className="absolute top-1/2 left-1/2 w-[150vw] h-[150vh] -translate-x-1/2 -translate-y-1/2 -rotate-6 pointer-events-none opacity-[0.15]">
-        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-3 pb-32">
-          {covers.map((url, i) => (
-            <div key={i} className="aspect-[2/3] w-full rounded-md overflow-hidden bg-zinc-800 shadow-xl">
-              <img src={url} className="w-full h-full object-cover" alt="" />
-            </div>
-          ))}
-        </div>
+      <div className="absolute top-1/2 left-1/2 w-[150vw] h-[150vh] -translate-x-1/2 -translate-y-1/2 -rotate-6 pointer-events-none opacity-[0.15] flex flex-wrap gap-4 justify-center items-center content-center overflow-hidden">
+        {covers.map((url, i) => (
+          <img 
+            key={i} 
+            src={url} 
+            className="w-[20vw] sm:w-[14vw] md:w-[10vw] lg:w-[8vw] rounded-lg shadow-xl object-cover aspect-[2/3] shrink-0" 
+            alt="cover" 
+            loading="lazy"
+          />
+        ))}
       </div>
       
       {/* Black Fade Overlay */}

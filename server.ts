@@ -437,13 +437,39 @@ async function startServer() {
   try { db.prepare("UPDATE media SET status = 'Active' WHERE status = 'Playing'").run(); } catch(e) {}
   try { db.prepare("UPDATE media SET status = 'Planning' WHERE status = 'Backlog'").run(); } catch(e) {}
 
+  // Auto-assign default_user records to the first Admin user
+  try {
+    const firstAdmin: any = db.prepare('SELECT id FROM users WHERE role = ? ORDER BY createdAt ASC LIMIT 1').get('Admin');
+    if (firstAdmin) {
+      const adminId = firstAdmin.id;
+      db.prepare("UPDATE media SET userId = ? WHERE userId = 'default_user'").run(adminId);
+      db.prepare("UPDATE logs SET userId = ? WHERE userId = 'default_user'").run(adminId);
+      db.prepare("UPDATE settings SET userId = ? WHERE userId = 'default_user'").run(adminId);
+      db.prepare("UPDATE ai_recaps SET userId = ? WHERE userId = 'default_user'").run(adminId);
+      db.prepare("UPDATE artifacts SET userId = ? WHERE userId = 'default_user'").run(adminId);
+    }
+  } catch(e) { console.error('Migration of default_user failed:', e); }
+
+  const safeJsonParse = (str: any) => {
+    try {
+      if (typeof str === 'string') {
+        const parsed = JSON.parse(str);
+        if (Array.isArray(parsed)) return parsed;
+        return [parsed];
+      }
+      return [];
+    } catch(e) {
+      return typeof str === 'string' && str ? [str] : [];
+    }
+  };
+
   const normalizeMedia = (row: any) => ({
     ...row,
-    genres: row.genres ? JSON.parse(row.genres) : [],
-    tags: row.tags ? JSON.parse(row.tags) : [],
-    tropes: row.tropes ? JSON.parse(row.tropes) : [],
-    platforms: row.platforms ? JSON.parse(row.platforms) : [],
-    franchises: row.franchises ? JSON.parse(row.franchises) : [],
+    genres: row.genres ? safeJsonParse(row.genres) : [],
+    tags: row.tags ? safeJsonParse(row.tags) : [],
+    tropes: row.tropes ? safeJsonParse(row.tropes) : [],
+    platforms: row.platforms ? safeJsonParse(row.platforms) : [],
+    franchises: row.franchises ? safeJsonParse(row.franchises) : [],
     watched: row.watched === 1,
     isReRun: row.isReRun === 1,
     isOngoing: row.isOngoing === 1,

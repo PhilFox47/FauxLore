@@ -3,6 +3,7 @@ import { MediaItem, ProgressLog, MetricType, MediaType, Settings, Artifact } fro
 import { DatabaseService } from '../services/db';
 import { calculateRPGState } from '../lib/rpgSystem';
 import { generateText } from '../services/nanoGptService';
+import { useAuth } from './AuthContext';
 
 interface MediaContextType {
   media: MediaItem[];
@@ -27,6 +28,7 @@ interface MediaContextType {
 const MediaContext = createContext<MediaContextType | undefined>(undefined);
 
 export const MediaProvider = ({ children }: { children: ReactNode }) => {
+  const { user } = useAuth();
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [logs, setLogs] = useState<ProgressLog[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -36,6 +38,16 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshData = useCallback(async () => {
+    if (!user) {
+      setMedia([]);
+      setLogs([]);
+      setSettings(null);
+      setAiRecaps([]);
+      setArtifacts([]);
+      setAiTextCache({});
+      setIsLoading(false);
+      return;
+    }
     try {
       setIsLoading(true);
       const [mediaData, logsData, settingsData, recapsData, artifactsData, textCacheData] = await Promise.all([
@@ -57,11 +69,11 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     refreshData();
-  }, [refreshData]);
+  }, [refreshData, user?.id]);
 
   const previousLevel = useRef<number | null>(null);
 
