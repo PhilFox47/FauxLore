@@ -117,7 +117,7 @@ export function Universes() {
     
     // Calculate total hours
     const totalHours = currentFranchise.items.reduce((acc, i) => {
-      if (i.mediaType === 'Game') {
+      if (i.mediaType === 'Game' || i.mediaType === 'Visual Novel') {
         const playtime = i.playtimeHours || i.averagePlaytime || 0;
         return acc + playtime;
       }

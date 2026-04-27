@@ -84,6 +84,7 @@ export interface VisualNovelMetadata {
   averagePlaytime?: number;
   tags?: string[];
   coverImageUrl?: string;
+  franchises?: string[];
 }
 
 export interface ExternalMediaMetadata {

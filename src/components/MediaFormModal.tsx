@@ -490,85 +490,83 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                 />
               </div>
               {formData.mediaType === 'Game' && (
-                <>
-                  <div className="relative">
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Platforms</label>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {formData.platforms?.map((p, i) => (
-                        <span key={i} className="text-xs px-2 py-1 bg-purple-500/20 text-purple-300 rounded flex items-center gap-1">
-                          {p}
-                          <button type="button" onClick={() => setFormData(old => ({...old, platforms: old.platforms?.filter(x => x !== p)}))} className="text-purple-400 hover:text-purple-200">
-                            &times;
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                    <div className="relative flex items-center">
-                      <input 
-                        value={platformInput}
-                        onChange={(e) => {
-                          setPlatformInput(e.target.value);
-                          setIsPlatformDropdownOpen(true);
-                        }}
-                        onFocus={() => setIsPlatformDropdownOpen(true)}
-                        onBlur={() => setTimeout(() => setIsPlatformDropdownOpen(false), 200)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && platformInput.trim()) {
-                            e.preventDefault();
-                            if (!formData.platforms?.includes(platformInput.trim())) {
-                              setFormData(old => ({...old, platforms: [...(old.platforms || []), platformInput.trim()]}));
-                            }
-                            setPlatformInput('');
-                          }
-                        }}
-                        className="input-field" 
-                        placeholder="Add platform or select from dropdown (Enter to add)"
-                      />
-                    </div>
-                    {isPlatformDropdownOpen && (availablePlatforms.length > 0 || platformInput.trim()) && (
-                      <div className="absolute z-10 w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                        {platformInput.trim() && !availablePlatforms.includes(platformInput.trim()) && !formData.platforms?.includes(platformInput.trim()) && (
-                          <button
-                            type="button"
-                            className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
-                            onClick={() => {
-                              setFormData(old => ({...old, platforms: [...(old.platforms || []), platformInput.trim()]}));
-                              setPlatformInput('');
-                            }}
-                          >
-                            Add "{platformInput.trim()}"
-                          </button>
-                        )}
-                        {availablePlatforms
-                          .filter(p => !formData.platforms?.includes(p) && p.toLowerCase().includes(platformInput.toLowerCase()))
-                          .map((p, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
-                            onClick={() => {
-                              setFormData(old => ({...old, platforms: [...(old.platforms || []), p]}));
-                              setPlatformInput('');
-                            }}
-                          >
-                            {p}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                <div className="relative">
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">Platforms</label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {formData.platforms?.map((p, i) => (
+                      <span key={i} className="text-xs px-2 py-1 bg-purple-500/20 text-purple-300 rounded flex items-center gap-1">
+                        {p}
+                        <button type="button" onClick={() => setFormData(old => ({...old, platforms: old.platforms?.filter(x => x !== p)}))} className="text-purple-400 hover:text-purple-200">
+                          &times;
+                        </button>
+                      </span>
+                    ))}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Franchises (comma separated)</label>
+                  <div className="relative flex items-center">
                     <input 
-                      name="franchises"
-                      value={rawInputs.franchises ?? ''}
-                      onChange={handleArrayChange}
+                      value={platformInput}
+                      onChange={(e) => {
+                        setPlatformInput(e.target.value);
+                        setIsPlatformDropdownOpen(true);
+                      }}
+                      onFocus={() => setIsPlatformDropdownOpen(true)}
+                      onBlur={() => setTimeout(() => setIsPlatformDropdownOpen(false), 200)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && platformInput.trim()) {
+                          e.preventDefault();
+                          if (!formData.platforms?.includes(platformInput.trim())) {
+                            setFormData(old => ({...old, platforms: [...(old.platforms || []), platformInput.trim()]}));
+                          }
+                          setPlatformInput('');
+                        }
+                      }}
                       className="input-field" 
-                      placeholder="The Legend of Zelda, Mario"
+                      placeholder="Add platform or select from dropdown (Enter to add)"
                     />
                   </div>
-                </>
+                  {isPlatformDropdownOpen && (availablePlatforms.length > 0 || platformInput.trim()) && (
+                    <div className="absolute z-10 w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                      {platformInput.trim() && !availablePlatforms.includes(platformInput.trim()) && !formData.platforms?.includes(platformInput.trim()) && (
+                        <button
+                          type="button"
+                          className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
+                          onClick={() => {
+                            setFormData(old => ({...old, platforms: [...(old.platforms || []), platformInput.trim()]}));
+                            setPlatformInput('');
+                          }}
+                        >
+                          Add "{platformInput.trim()}"
+                        </button>
+                      )}
+                      {availablePlatforms
+                        .filter(p => !formData.platforms?.includes(p) && p.toLowerCase().includes(platformInput.toLowerCase()))
+                        .map((p, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
+                          onClick={() => {
+                            setFormData(old => ({...old, platforms: [...(old.platforms || []), p]}));
+                            setPlatformInput('');
+                          }}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-1">Franchises (comma separated)</label>
+                <input 
+                  name="franchises"
+                  value={rawInputs.franchises ?? ''}
+                  onChange={handleArrayChange}
+                  className="input-field" 
+                  placeholder={formData.mediaType === 'Visual Novel' ? "Fate, Muv-Luv" : "The Legend of Zelda, Mario"}
+                />
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
