@@ -4,7 +4,7 @@ import { MediaCard } from '../components/MediaCard';
 import { Search, Image, Activity, Clock, Edit3, X, Save, Globe, ListFilter } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { MediaItem } from '../types/schema';
-import { calculateScaledPages } from '../lib/scaling';
+import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 type SortOption = 'Alphabetical' | 'Last Activity' | 'Total Master Pages' | 'Total Entry Count';
@@ -37,7 +37,12 @@ export function Universes() {
       });
       const dbEntry = savedFranchises?.find(f => f.name === name);
       
-      const totalMasterPages = items.reduce((sum, item) => sum + calculateScaledPages(item, settings), 0);
+      const totalMasterPages = items.reduce((sum, item) => {
+        const itemTotalPages = calculateScaledPages(item, settings);
+        const itemHistoricLogs = logs.filter(l => l.mediaId === item.id && l.isHistoric);
+        const historicPages = itemHistoricLogs.reduce((hSum, l) => hSum + calculateScaledDelta(l.delta, item, settings), 0);
+        return sum + Math.max(0, itemTotalPages - historicPages);
+      }, 0);
       
       let lastActivityDate = 0;
       items.forEach(item => {

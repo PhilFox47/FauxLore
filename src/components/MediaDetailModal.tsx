@@ -35,7 +35,9 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
 
   if (!isOpen || !item) return null;
 
-  const totalMasterPages = logs.reduce((acc, log) => acc + calculateScaledDelta(log.delta, item, settings), 0);
+  const totalMasterPages = logs
+    .filter(l => !l.isHistoric)
+    .reduce((acc, log) => acc + calculateScaledDelta(log.delta, item, settings), 0);
   
   // Sort logs descending by timestamp
   const sortedLogs = [...logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -419,7 +421,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                             {new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                           <span className="text-xs font-bold text-orange-400 ml-auto bg-orange-500/10 px-2 py-0.5 rounded">
-                            +{log.delta} {log.metricType}
+                            {log.metricType === 'statusChange' ? 'Status Update' : `+${log.delta} ${log.metricType}`}
                           </span>
                           <button 
                             onClick={() => handleEditClick(log)}
@@ -438,7 +440,14 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                         </div>
                         {(log.note || log.location) && (
                           <div className="pl-4 relative z-10 mt-3 flex flex-col gap-1">
-                            {log.note && <p className="text-sm text-zinc-300 italic">"{log.note}"</p>}
+                            {log.note && (
+                              <p className={cn(
+                                "text-sm",
+                                log.metricType === 'statusChange' ? "text-orange-400 font-bold" : "text-zinc-300 italic"
+                              )}>
+                                {log.metricType === 'statusChange' ? log.note : `"${log.note}"`}
+                              </p>
+                            )}
                             {log.location && <p className="text-xs text-zinc-500 flex items-center gap-1"><MapPin className="w-3 h-3" /> {log.location}</p>}
                           </div>
                         )}

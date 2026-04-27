@@ -58,7 +58,8 @@ export function Statistics() {
     const cutoffDate = cutoffDays ? subDays(new Date(), cutoffDays) : null;
     
     return logs.filter(log => {
-      // 1. Exclude historical logs without a real date
+      // 1. Exclude historical logs
+      if (log.isHistoric) return false;
       if (log.timestamp.startsWith('1970-01-01')) return false;
 
       const logDate = new Date(log.timestamp);

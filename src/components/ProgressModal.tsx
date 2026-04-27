@@ -9,7 +9,7 @@ interface ProgressModalProps {
   isOpen: boolean;
   item: MediaItem | null;
   onClose: () => void;
-  onLog: (mediaId: string, metricType: any, delta: number, note?: string, timestamp?: string, location?: string) => void;
+  onLog: (mediaId: string, metricType: any, delta: number, note?: string, timestamp?: string, location?: string, isHistoric?: boolean) => void;
 }
 
 export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalProps) {
@@ -87,9 +87,7 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
     // Convert YYYY-MM-DD + HH:mm input to full ISO timestamp
     let finalTimestamp = new Date().toISOString();
     
-    if (isHistorical) {
-      finalTimestamp = '1970-01-01T00:00:00.000Z'; // Dummy date to bypass all future statistic recaps
-    } else if (logDate) {
+    if (logDate) {
       const selectedDate = new Date(logDate);
       if (logTime) {
         const [hours, minutes] = logTime.split(':').map(Number);
@@ -102,7 +100,7 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       localStorage.setItem('fauxlore_last_location', location);
     }
     
-    onLog(item.id, metricType, delta, note, finalTimestamp, location);
+    onLog(item.id, metricType, delta, note, finalTimestamp, location, isHistorical);
     
     let updatedItem = { ...item };
     let needsUpdate = false;

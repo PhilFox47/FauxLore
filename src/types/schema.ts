@@ -81,7 +81,8 @@ export type MetricType =
   | 'chaptersRead' 
   | 'episodesWatched' 
   | 'watchCount' 
-  | 'issuesRead';
+  | 'issuesRead'
+  | 'statusChange';
 
 export interface ProgressLog {
   id: string;
@@ -92,6 +93,7 @@ export interface ProgressLog {
   delta: number; // e.g., +2
   note?: string;
   location?: string;
+  isHistoric?: boolean;
 }
 
 export interface Artifact {

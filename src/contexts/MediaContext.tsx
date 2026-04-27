@@ -16,7 +16,7 @@ interface MediaContextType {
   refreshData: () => Promise<void>;
   saveMediaItem: (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => Promise<void>;
   deleteMediaItem: (id: string) => Promise<void>;
-  addLog: (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string, location?: string) => Promise<void>;
+  addLog: (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string, location?: string, isHistoric?: boolean) => Promise<void>;
   updateLog: (id: string, updates: Partial<ProgressLog>) => Promise<void>;
   deleteLog: (id: string) => Promise<void>;
   saveAiRecap: (recap: any) => Promise<void>;
@@ -118,17 +118,32 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [media, logs, settings, aiTextCache, isLoading, refreshData]);
 
   const saveMediaItem = useCallback(async (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => {
+    // Check for status change if editing an existing item
+    if (item.id) {
+      const existingItem = media.find(m => m.id === item.id);
+      if (existingItem && existingItem.status !== item.status) {
+        // Track status change in logs
+        await DatabaseService.addProgressLog(
+          item.id, 
+          'statusChange', 
+          0, 
+          `Status changed from ${existingItem.status} to ${item.status}`,
+          new Date().toISOString()
+        );
+      }
+    }
+    
     await DatabaseService.saveMedia(item);
     await refreshData();
-  }, [refreshData]);
+  }, [media, refreshData]);
 
   const deleteMediaItem = useCallback(async (id: string) => {
     await DatabaseService.deleteMedia(id);
     await refreshData();
   }, [refreshData]);
 
-  const addLog = useCallback(async (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string, location?: string) => {
-    await DatabaseService.addProgressLog(mediaId, metricType, delta, note, timestamp, location);
+  const addLog = useCallback(async (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string, location?: string, isHistoric?: boolean) => {
+    await DatabaseService.addProgressLog(mediaId, metricType, delta, note, timestamp, location, isHistoric);
     await refreshData();
   }, [refreshData]);
 
