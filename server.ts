@@ -1255,8 +1255,8 @@ async function startServer() {
       // We grab standard fields + involved companies (for developers/publishers) + genres
       const body = `
         search "${query}";
-        fields name, summary, cover.image_id, first_release_date, total_rating, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, genres.name, themes.name, platforms.name, franchises.name;
-        limit 20;
+        fields name, summary, cover.image_id, first_release_date, total_rating, total_rating_count, category, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, genres.name, themes.name, platforms.name, franchises.name;
+        limit 50;
       `;
 
       const igdbRes = await fetch("https://api.igdb.com/v4/games", {
@@ -1273,7 +1273,34 @@ async function startServer() {
         throw new Error(`IGDB error: ${igdbRes.statusText}`);
       }
 
-      const data = await igdbRes.json();
+      let data = await igdbRes.json();
+
+      // Sort logic: Prioritize Main Games (0), Remakes (8), Remasters (9), Standalone Expansions (4).
+      // Downgrade DLCs (1), Expansions (2), Updates (14), Episodes (6), Seasons (7), Ports (11), etc.
+      // Additionally, sort by total_rating_count to bring popular titles up.
+      data.sort((a: any, b: any) => {
+        const getPriority = (cat: number) => {
+          if (cat === 0) return 1; // main
+          if (cat === 8 || cat === 9) return 2; // remakes/remasters
+          if (cat === 4 || cat === 10) return 3; // standalone exp / expanded
+          if (cat === 11) return 4; // ports
+          if (cat === 1 || cat === 2) return 5; // dlc / exp
+          return 6; // patches, updates, mods, etc.
+        };
+        const pA = getPriority(a.category);
+        const pB = getPriority(b.category);
+        
+        if (pA !== pB) return pA - pB;
+        
+        const countA = a.total_rating_count || 0;
+        const countB = b.total_rating_count || 0;
+        if (countA !== countB) return countB - countA;
+        
+        return 0; // fallback to IGDB relevance
+      });
+
+      // Limit array back to 20 after sorting
+      data = data.slice(0, 20);
 
       const mappedResults = await Promise.all(data.map(async (game: any) => {
         let developer = "";
