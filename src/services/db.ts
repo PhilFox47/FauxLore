@@ -270,5 +270,23 @@ export const DatabaseService = {
       const errorData = await res.json().catch(() => ({}));
       throw new Error(`Failed to delete taxonomy: ${errorData.error || res.statusText}`);
     }
+  },
+
+  async getAllFranchises() {
+    try {
+      const res = await apiFetch('/api/franchises');
+      if (!res.ok) return [];
+      return res.json();
+    } catch { return []; }
+  },
+
+  async saveFranchise(franchise: any) {
+    const res = await apiFetch('/api/franchises', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(franchise)
+    });
+    if (!res.ok) throw new Error("Failed to save franchise");
+    return res.json();
   }
 };

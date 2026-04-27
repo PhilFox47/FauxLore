@@ -66,8 +66,8 @@ Available Tags: ${taxonomies.filter(t => t.type === 'tag').map(t => t.name).join
 
 Rules:
 1. ONLY use exact matches from the Available lists above. DO NOT invent new words.
-2. Select between 1 and 3 Genres.
-3. Select up to 10 logical Tags.
+2. Select between 1 and 5 Genres.
+3. Select between 5 and 30 logical Tags.
 4. Return ONLY a pure JSON object in this exact format:
 {"genres": ["Genre1", "Genre2"], "tags": ["Tag1", "Tag2"]}
 Do not wrap it in markdown. Do not include any explanations.`;

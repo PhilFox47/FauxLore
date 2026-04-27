@@ -355,6 +355,15 @@ async function startServer() {
       value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS franchises (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL DEFAULT 'default_user',
+      name TEXT NOT NULL,
+      coverImageUrl TEXT,
+      description TEXT,
+      UNIQUE(userId, name)
+    );
+
     CREATE TABLE IF NOT EXISTS artifacts (
       id TEXT PRIMARY KEY,
       userId TEXT NOT NULL,
@@ -1249,6 +1258,44 @@ async function startServer() {
         earnedAt: artifact.earnedAt
       });
       res.json({ success: true, artifact });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // --- Franchises ---
+  app.get("/api/franchises", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const f = db.prepare('SELECT * FROM franchises WHERE userId = ?').all(userId);
+      res.json(f);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/franchises", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      
+      const { name, coverImageUrl, description } = req.body;
+      if (!name) return res.status(400).json({ error: "Name is required" });
+      
+      const id = req.body.id || crypto.randomUUID();
+      
+      const stmt = db.prepare(`
+        INSERT INTO franchises (id, userId, name, coverImageUrl, description)
+        VALUES (@id, @userId, @name, @coverImageUrl, @description)
+        ON CONFLICT(userId, name) DO UPDATE SET
+          coverImageUrl=excluded.coverImageUrl,
+          description=excluded.description
+      `);
+      stmt.run({
+        id,
+        userId,
+        name,
+        coverImageUrl: coverImageUrl || null,
+        description: description || null
+      });
+      res.json({ success: true, franchise: { id, userId, name, coverImageUrl, description } });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
