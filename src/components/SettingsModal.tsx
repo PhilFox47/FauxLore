@@ -32,6 +32,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     nanoGptModel: '',
     geminiApiKey: '',
     timezone: '',
+    enemyDifficulty: 1.0,
     yearlyGoals: {
       'Game': 100,
       'Book': 5000,
@@ -65,6 +66,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
         geminiApiKey: settings.geminiApiKey || '',
         timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+        enemyDifficulty: settings.enemyDifficulty ?? 1.0,
         yearlyGoals: {
           'Game': settings.yearlyGoals?.['Game'] ?? 100,
           'Book': settings.yearlyGoals?.['Book'] ?? 5000,
@@ -96,6 +98,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
             geminiApiKey: settings.geminiApiKey || '',
             timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+            enemyDifficulty: settings.enemyDifficulty ?? 1.0,
             yearlyGoals: {
               'Game': settings.yearlyGoals?.['Game'] ?? 100,
               'Book': settings.yearlyGoals?.['Book'] ?? 5000,
@@ -139,7 +142,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     } else {
       setFormData(prev => ({
         ...prev,
-        [name]: type === 'number' ? (step ? parseFloat(value) : parseInt(value, 10)) : value
+        [name]: (type === 'number' || type === 'range') ? (step ? parseFloat(value) : parseInt(value, 10)) : value
       }));
     }
   };
@@ -282,6 +285,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         nanoGptModel: formData.nanoGptModel,
         geminiApiKey: formData.geminiApiKey,
         timezone: formData.timezone,
+        enemyDifficulty: formData.enemyDifficulty,
         masterPageConfig: {
           gamePagesPerHour: formData.gamePagesPerHour,
           vnPagesPerHour: formData.vnPagesPerHour,
@@ -445,6 +449,37 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       />
                     </div>
                   ))}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                  <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">Adventure Balance</h3>
+                </div>
+                <div className="bg-orange-500/5 border border-orange-500/10 p-4 rounded-xl">
+                  <div className="flex items-center justify-between mb-4">
+                    <label className="text-sm font-medium text-zinc-300">Enemy Difficulty (HP Multiplier)</label>
+                    <span className="text-lg font-black text-orange-400">{(formData.enemyDifficulty * 100).toFixed(0)}%</span>
+                  </div>
+                  <input 
+                    type="range"
+                    name="enemyDifficulty"
+                    min="0.1"
+                    max="2.0"
+                    step="0.1"
+                    value={formData.enemyDifficulty}
+                    onChange={handleChange}
+                    className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                  />
+                  <div className="flex justify-between mt-2">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase">Pleb (10%)</span>
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Normal (100%)</span>
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase">Mythic (200%)</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 mt-4 leading-relaxed italic">
+                    Lower difficulty reduces the "Master Pages" required to defeat active World Bosses. 
+                    Changes are applied instantly to all of your currently active encounters.
+                  </p>
                 </div>
               </div>
 

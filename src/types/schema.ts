@@ -148,6 +148,7 @@ export interface Settings {
   yearlyGoals?: Partial<Record<MediaType, number>>;
   lastActiveDate?: string;
   currentStreak?: number;
+  enemyDifficulty?: number; // 0.1 to 2.0 multiplier
   masterPageConfig?: {
     gamePagesPerHour?: number; // 5 mins = 1 page -> 12 pages per hr
     vnPagesPerHour?: number; // 2.5 mins = 1 page -> 24 pages per hr

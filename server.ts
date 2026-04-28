@@ -280,7 +280,8 @@ async function startServer() {
       }
 
       const mediaItem = activeMedia[Math.floor(Math.random() * activeMedia.length)];
-      const settings: any = db.prepare('SELECT geminiApiKey FROM settings WHERE userId = ?').get(userId);
+      const settings: any = db.prepare('SELECT geminiApiKey, enemyDifficulty FROM settings WHERE userId = ?').get(userId);
+      const difficulty = settings?.enemyDifficulty ?? 1.0;
       
       const r = Math.random();
       let level = 1;
@@ -297,6 +298,9 @@ async function startServer() {
       } else {
         level = 5; target = 720;
       }
+
+      // Apply difficulty multiplier
+      target = Math.max(1, Math.round(target * difficulty));
       
       let bossName = "";
       
@@ -378,6 +382,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   try { db.exec("ALTER TABLE media ADD COLUMN isOngoing INTEGER"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN releaseStatus TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN lastSyncAt TEXT"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE settings ADD COLUMN enemyDifficulty REAL DEFAULT 1.0"); } catch (e) { /* Ignore if it exists */ }
 
   // Create Tables
   db.exec(`
@@ -1519,10 +1524,14 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       const settings = req.body;
       const userId = getAuthUser(req, res);
       if (!userId) return;
+
+      const oldSettings: any = db.prepare('SELECT enemyDifficulty FROM settings WHERE userId = ?').get(userId);
+      const oldDifficulty = oldSettings?.enemyDifficulty ?? 1.0;
+      const newDifficulty = settings.enemyDifficulty ?? 1.0;
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -1536,7 +1545,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           masterPageConfig=excluded.masterPageConfig,
           yearlyGoals=excluded.yearlyGoals,
           lastActiveDate=excluded.lastActiveDate,
-          currentStreak=excluded.currentStreak
+          currentStreak=excluded.currentStreak,
+          enemyDifficulty=excluded.enemyDifficulty
       `).run({
         userId: userId,
         igdbClientId: settings.igdbClientId || null,
@@ -1551,8 +1561,22 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         masterPageConfig: settings.masterPageConfig ? JSON.stringify(settings.masterPageConfig) : null,
         yearlyGoals: settings.yearlyGoals ? JSON.stringify(settings.yearlyGoals) : null,
         lastActiveDate: settings.lastActiveDate || null,
-        currentStreak: settings.currentStreak || 0
+        currentStreak: settings.currentStreak || 0,
+        enemyDifficulty: newDifficulty
       });
+
+      // Update active bosses if difficulty changed
+      if (oldDifficulty !== newDifficulty) {
+        const activeBosses = db.prepare("SELECT id, level, currentProgress FROM world_bosses WHERE userId = ? AND status = 'Active'").all(userId) as any[];
+        for (const boss of activeBosses) {
+          const baseTarget = 45 * Math.pow(2, boss.level - 1);
+          const newTarget = Math.max(1, Math.round(baseTarget * newDifficulty));
+          
+          // Check if the boss is now defeated by this change
+          const newStatus = boss.currentProgress >= newTarget ? 'Defeated' : 'Active';
+          db.prepare("UPDATE world_bosses SET targetProgress = ?, status = ? WHERE id = ?").run(newTarget, newStatus, boss.id);
+        }
+      }
       
       const saved: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId);
       res.json({

@@ -1,6 +1,26 @@
 import React from 'react';
 import { MediaItem, getMetricForType, MEDIA_COLORS } from '../types/schema';
-import { Play, PlayCircle, Plus, Edit2, Popcorn, BookOpen, Star, StarHalf, RotateCcw } from 'lucide-react';
+import { 
+  Play, 
+  Pause, 
+  CheckCircle2, 
+  Clock, 
+  XCircle, 
+  Calendar, 
+  Gamepad2, 
+  Book, 
+  Tv, 
+  Clapperboard, 
+  Library, 
+  RefreshCw, 
+  MessagesSquare,
+  Plus, 
+  Edit2, 
+  Star, 
+  StarHalf, 
+  RotateCcw,
+  Sparkles
+} from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface MediaCardProps {
@@ -14,6 +34,31 @@ interface MediaCardProps {
 export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaCardProps) {
   const metricType = getMetricForType(item.mediaType);
   const colors = MEDIA_COLORS[item.mediaType];
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'Active': return <Play className="w-3 h-3 fill-blue-500 text-blue-500" />;
+      case 'On Hold': return <Pause className="w-3 h-3 fill-yellow-500 text-yellow-500" />;
+      case 'Completed': return <CheckCircle2 className="w-3 h-3 text-emerald-500" />;
+      case 'Planning': return <Clock className="w-3 h-3 text-zinc-500" />;
+      case 'Dropped': return <XCircle className="w-3 h-3 text-red-500" />;
+      case 'Unreleased': return <Calendar className="w-3 h-3 text-zinc-500" />;
+      default: return null;
+    }
+  };
+
+  const getMediaTypeIcon = (type: string, className: string) => {
+    switch (type) {
+      case 'Game': return <Gamepad2 className={className} />;
+      case 'Book': return <Book className={className} />;
+      case 'Visual Novel': return <MessagesSquare className={className} />;
+      case 'Manga': return <Library className={className} />;
+      case 'Series': return <Tv className={className} />;
+      case 'Movie': return <Clapperboard className={className} />;
+      case 'Comic': return <Library className={className} />;
+      default: return null;
+    }
+  };
   
   const renderStars = (rating: number, isUser: boolean) => {
     const stars = [];
@@ -94,9 +139,32 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
 
   return (
     <div className="bg-zinc-900/50 border border-white/5 rounded-2xl md:rounded-3xl p-4 md:p-6 flex flex-col group transition-all hover:bg-white/[0.02] shadow-sm relative overflow-hidden">
-      <span className={cn("text-[8px] md:text-[10px] font-bold uppercase tracking-wider mb-1 line-clamp-1 mt-1", colors.text)}>
-        {item.status} • {item.mediaType} {item.season ? `• S${item.season}` : ''} {item.year ? `• ${item.year}` : ''}
-      </span>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 md:gap-2">
+          <div className="bg-white/5 rounded-md p-1 shadow-inner" title={item.status}>
+            {getStatusIcon(item.status)}
+          </div>
+          <div className={cn("flex items-center gap-1", colors.text)}>
+            {getMediaTypeIcon(item.mediaType, "w-3 h-3 md:w-3.5 md:h-3.5")}
+            <span className="text-[8px] md:text-[9px] font-black uppercase tracking-wider hidden xs:inline">
+              {item.mediaType}
+            </span>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-1.5">
+          {item.isOngoing && (
+            <div className="flex items-center gap-1 bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded-full border border-emerald-500/20" title="Ongoing content">
+              <RefreshCw className="w-2.5 h-2.5 animate-spin-slow" />
+              <span className="text-[7px] md:text-[8px] font-black uppercase tracking-tight">Ongoing</span>
+            </div>
+          )}
+          <span className="text-[8px] md:text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+            {item.season ? `S${item.season} • ` : ''}{item.year}
+          </span>
+        </div>
+      </div>
+
       <h3 
         className="text-base md:text-xl font-bold mb-1 line-clamp-2 min-h-[2.5rem] md:min-h-[3.5rem] pr-2 cursor-pointer hover:text-orange-400 transition-colors" 
         title={item.title}

@@ -5,6 +5,8 @@
   --color-orange-400: #fb923c;
   --color-orange-500: #f97316;
   --color-orange-600: #ea580c;
+
+  --animate-spin-slow: spin 3s linear infinite;
 }
 
 body {
