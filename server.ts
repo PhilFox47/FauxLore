@@ -958,25 +958,60 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         }
         
         if (shouldSync) {
-          const id = parseInt(row.originalMediaId);
-          if (!isNaN(id)) {
-            // Fetch MangaDex
-            const mangaDexRes = await fetch(`https://api.mangadex.org/manga/${row.originalMediaId}`);
+          const mediaId = row.originalMediaId;
+          if (mediaId && mediaId.length > 0) {
+            try {
+              // Fetch MangaDex
+              const mangaDexRes = await fetch(`https://api.mangadex.org/manga/${mediaId}`);
 
-            if (mangaDexRes.ok) {
-              const data = await mangaDexRes.json();
-              if (data.data?.attributes) {
-                const attr = data.data.attributes;
-                db.prepare(`UPDATE media SET totalChapters = ?, totalIssues = ?, releaseStatus = ?, isOngoing = ?, lastSyncAt = ? WHERE id = ?`)
-                  .run(
-                    attr.lastChapter ? parseInt(attr.lastChapter) : row.totalChapters, 
-                    attr.lastVolume ? parseInt(attr.lastVolume) : row.totalIssues, 
-                    attr.status.toUpperCase(), 
-                    (attr.status === "ongoing") ? 1 : 0, 
-                    now.toISOString(), 
-                    row.id
-                  );
+              if (mangaDexRes.ok) {
+                const data = await mangaDexRes.json();
+                if (data.data?.attributes) {
+                  const attr = data.data.attributes;
+                  let currentChapters = attr.lastChapter ? Math.floor(parseFloat(attr.lastChapter)) : row.totalChapters;
+                  let currentVolumes = attr.lastVolume ? Math.floor(parseFloat(attr.lastVolume)) : row.totalIssues;
+
+                  // If ongoing and lastChapter is null, try to fetch aggregate to find the latest chapter
+                  if (attr.status === 'ongoing' || !attr.lastChapter) {
+                    try {
+                      const aggRes = await fetch(`https://api.mangadex.org/manga/${mediaId}/aggregate?translatedLanguage[]=en`);
+                      if (aggRes.ok) {
+                        const aggData = await aggRes.json();
+                        let maxChapter = 0;
+                        if (aggData.volumes) {
+                          Object.values(aggData.volumes).forEach((vol: any) => {
+                            if (vol.chapters) {
+                              Object.values(vol.chapters).forEach((chap: any) => {
+                                const c = parseFloat(chap.chapter);
+                                if (!isNaN(c) && c > maxChapter) {
+                                  maxChapter = c;
+                                }
+                              });
+                            }
+                          });
+                        }
+                        if (maxChapter > 0) {
+                          currentChapters = Math.floor(maxChapter);
+                        }
+                      }
+                    } catch (aggErr) {
+                      console.error("Failed to fetch MangaDex aggregate", aggErr);
+                    }
+                  }
+
+                  db.prepare(`UPDATE media SET totalChapters = ?, totalIssues = ?, releaseStatus = ?, isOngoing = ?, lastSyncAt = ? WHERE id = ?`)
+                    .run(
+                      currentChapters, 
+                      currentVolumes, 
+                      attr.status.toUpperCase(), 
+                      (attr.status === "ongoing") ? 1 : 0, 
+                      now.toISOString(), 
+                      row.id
+                    );
+                }
               }
+            } catch (fetchErr) {
+              console.error(`Failed to sync MangaDex media ${mediaId}`, fetchErr);
             }
           }
         }
@@ -2353,7 +2388,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       const data = await mangaDexRes.json();
       const mangaList = data.data || [];
 
-      const mappedResults = mangaList.map((m: any) => {
+      const mappedResults = await Promise.all(mangaList.map(async (m: any) => {
         const attr = m.attributes;
         const title = attr.title.en || attr.title.ja || attr.title["ja-ro"] || Object.values(attr.title)[0];
         const description = attr.description.en || Object.values(attr.description || {})[0] || "";
@@ -2365,6 +2400,31 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         const filename = coverRel?.attributes?.fileName;
         const coverImageUrl = filename ? `https://uploads.mangadex.org/covers/${m.id}/${filename}` : "";
 
+        let totalChapters = attr.lastChapter ? Math.floor(parseFloat(attr.lastChapter)) : undefined;
+        let totalIssues = attr.lastVolume ? Math.floor(parseFloat(attr.lastVolume)) : undefined;
+
+        // If ongoing, try a quick aggregate fetch to get current progress
+        if (attr.status === 'ongoing' && !totalChapters) {
+          try {
+            const aggRes = await fetch(`https://api.mangadex.org/manga/${m.id}/aggregate?translatedLanguage[]=en`);
+            if (aggRes.ok) {
+              const aggData = await aggRes.json();
+              let maxChap = 0;
+              if (aggData.volumes) {
+                Object.values(aggData.volumes).forEach((v: any) => {
+                  Object.values(v.chapters || {}).forEach((c: any) => {
+                    const num = parseFloat(c.chapter);
+                    if (!isNaN(num) && num > maxChap) maxChap = num;
+                  });
+                });
+              }
+              if (maxChap > 0) totalChapters = Math.floor(maxChap);
+            }
+          } catch (e) {
+            // Ignore error for search enrichment
+          }
+        }
+
         return {
           id: m.id,
           title,
@@ -2372,15 +2432,15 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           coverImageUrl,
           year: attr.year,
           reviewScore: undefined,
-          totalChapters: attr.lastChapter ? parseInt(attr.lastChapter) : undefined,
-          totalIssues: attr.lastVolume ? parseInt(attr.lastVolume) : undefined,
+          totalChapters,
+          totalIssues,
           genres: [],
           tags: attr.tags.map((t: any) => t.attributes.name.en),
           creator: author,
           releaseStatus: attr.status.toUpperCase(),
           isOngoing: attr.status === "ongoing"
         };
-      });
+      }));
 
       res.json(mappedResults);
     } catch (error: any) {
