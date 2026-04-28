@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
-import { Gem, Copy, Library, Sword, Shield, Footprints, User, Sparkle, Hammer, AlertCircle, CheckCircle2, RotateCw } from 'lucide-react';
+import { Gem, Copy, Sword, Shield, Footprints, Sparkle, Hammer, AlertCircle, CheckCircle2, RotateCw, Crown, Shirt, User } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { MEDIA_COLORS, Artifact, RARITY_COLORS } from '../types/schema';
 import { generateAiArtifactWithGemini } from '../services/geminiService';
@@ -101,6 +101,17 @@ export function Armory() {
 
   const getEquippedInSlot = (slot: Slot) => equipped.find(a => a.slot === slot);
 
+  const renderSlotIcon = (slot: string, className: string) => {
+    switch(slot) {
+      case 'Head': return <Crown className={className} />;
+      case 'Body': return <Shirt className={className} />;
+      case 'Legs': return <Footprints className={className} />;
+      case 'Primary': return <Sword className={className} />;
+      case 'Secondary': return <Shield className={className} />;
+      default: return <Gem className={className} />;
+    }
+  };
+
   const handleEquip = async (artifact: Artifact, slot: Slot) => {
     try {
       await equipArtifact(artifact.id, slot);
@@ -170,10 +181,12 @@ export function Armory() {
                         >
                            {item ? (
                              <>
-                               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Hammer className="w-3 h-3 text-red-500" />
+                               <div className="absolute top-2 right-2 text-[8px] opacity-0 group-hover:opacity-100 transition-opacity text-red-500 font-bold uppercase tracking-widest bg-red-500/10 px-2 py-1 rounded">
+                                  Unequip
                                </div>
-                               <Gem className={cn("w-6 h-6 mb-2", RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text)} />
+                               <div className="mb-2">
+                                 {renderSlotIcon(slot, cn("w-6 h-6", RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text))}
+                               </div>
                                <div className="text-[10px] font-bold text-white text-center leading-tight truncate w-full px-2">{item.name}</div>
                                
                                {/* Durability Bar */}
@@ -190,11 +203,7 @@ export function Armory() {
                              </>
                            ) : (
                              <div className="text-zinc-800">
-                                {slot === 'Head' && <User className="w-8 h-8 opacity-20" />}
-                                {slot === 'Primary' && <Sword className="w-8 h-8 opacity-20" />}
-                                {slot === 'Secondary' && <Shield className="w-8 h-8 opacity-20" />}
-                                {slot === 'Legs' && <Footprints className="w-8 h-8 opacity-20" />}
-                                {!['Head', 'Primary', 'Secondary', 'Legs'].includes(slot) && <Gem className="w-8 h-8 opacity-20" />}
+                               {renderSlotIcon(slot, "w-8 h-8 opacity-20")}
                              </div>
                            )}
                         </div>
@@ -237,9 +246,41 @@ export function Armory() {
                
                {selectedArtifact && (
                  <div className="bg-purple-600/20 shadow-2xl shadow-purple-900/20 border border-purple-500/30 rounded-[2rem] p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <h3 className="text-lg font-black text-white mb-2 italic">"{selectedArtifact.name}"</h3>
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={cn(
+                              "text-[10px] uppercase tracking-widest font-black px-2 py-0.5 rounded border shadow-sm",
+                              RARITY_COLORS[selectedArtifact.rarity]?.bg || RARITY_COLORS['Common'].bg,
+                              RARITY_COLORS[selectedArtifact.rarity]?.text || RARITY_COLORS['Common'].text,
+                              (RARITY_COLORS[selectedArtifact.rarity]?.border || RARITY_COLORS['Common'].border).replace('500', '500/30')
+                          )}>
+                              {selectedArtifact.rarity}
+                          </span>
+                        </div>
+                        <h3 className="text-lg font-black text-white italic">"{selectedArtifact.name}"</h3>
+                      </div>
+                      <div className="text-zinc-500" title={selectedArtifact.slot}>
+                        {renderSlotIcon(selectedArtifact.slot || 'Accessory', "w-6 h-6")}
+                      </div>
+                    </div>
+                    
                     <p className="text-sm text-purple-200/60 mb-4 font-medium leading-relaxed">{selectedArtifact.description}</p>
                     
+                    <div className="mb-6 flex items-center gap-2 w-full" title="Durability">
+                      <Hammer className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                      <div className="flex-1 h-2 bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+                          <div 
+                            className={cn(
+                              "h-full rounded-full transition-all",
+                              (selectedArtifact.durability / selectedArtifact.maxDurability) < 0.2 ? "bg-red-500" : "bg-emerald-500"
+                            )} 
+                            style={{ width: `${(selectedArtifact.durability / selectedArtifact.maxDurability) * 100}%` }}
+                          />
+                      </div>
+                      <span className="text-xs font-black text-zinc-400 flex-shrink-0">{selectedArtifact.durability}/{selectedArtifact.maxDurability}</span>
+                    </div>
+
                     {selectedArtifact.targetType ? (
                       <div className="mb-6 bg-purple-900/30 border border-purple-500/20 rounded-xl p-3 flex items-center justify-between">
                          <span className="text-[10px] text-purple-300 font-bold uppercase tracking-widest">{selectedArtifact.targetType}: {selectedArtifact.targetValue}</span>
@@ -317,38 +358,32 @@ export function Armory() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {filteredAndSortedInventory.map(artifact => {
                     const m = media.find(x => x.id === artifact.mediaId);
-                    return (
-                      <div 
-                        key={artifact.id} 
-                        onClick={() => setSelectedArtifact(artifact)}
-                        className={cn(
-                          "bg-zinc-900/50 border border-white/5 rounded-3xl p-6 relative overflow-hidden group hover:border-purple-500/30 transition-all cursor-pointer",
-                          selectedArtifact?.id === artifact.id && "border-purple-500 ring-4 ring-purple-500/20"
-                        )}
-                      >
-                         <div className="flex flex-col h-full">
-                            <div className="flex items-center justify-between mb-4">
-                               <span className={cn(
-                                  "text-[10px] uppercase tracking-widest font-black px-2 py-0.5 rounded border shadow-sm",
-                                  RARITY_COLORS[artifact.rarity]?.bg || RARITY_COLORS['Common'].bg,
-                                  RARITY_COLORS[artifact.rarity]?.text || RARITY_COLORS['Common'].text,
-                                  (RARITY_COLORS[artifact.rarity]?.border || RARITY_COLORS['Common'].border).replace('500', '500/30')
-                               )}>
-                                  {artifact.rarity}
-                               </span>
-                               <div className="flex items-center gap-1.5">
-                                 <div className="w-16 h-1 mt-0.5 bg-zinc-950 rounded-full overflow-hidden">
-                                    <div 
-                                      className={cn(
-                                        "h-full rounded-full transition-all",
-                                        (artifact.durability / artifact.maxDurability) < 0.2 ? "bg-red-500" : "bg-emerald-500"
-                                      )} 
-                                      style={{ width: `${(artifact.durability / artifact.maxDurability) * 100}%` }}
-                                    />
-                                 </div>
-                                 <span className="text-[10px] font-black text-zinc-500">{artifact.durability}/{artifact.maxDurability}</span>
-                               </div>
-                            </div>
+
+    return (
+      <div 
+        key={artifact.id}
+        onClick={() => setSelectedArtifact(artifact)}
+        className={cn(
+          "bg-zinc-900/50 border border-white/5 rounded-3xl p-6 relative overflow-hidden group hover:border-purple-500/30 transition-all cursor-pointer",
+          selectedArtifact?.id === artifact.id && "border-purple-500 ring-4 ring-purple-500/20"
+        )}
+      >
+         <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between mb-4">
+               <div className="flex items-center gap-2">
+                 <div className="text-zinc-500" title={artifact.slot}>
+                   {renderSlotIcon(artifact.slot || 'Accessory', "w-4 h-4")}
+                 </div>
+                 <span className={cn(
+                    "text-[10px] uppercase tracking-widest font-black px-2 py-0.5 rounded border shadow-sm",
+                    RARITY_COLORS[artifact.rarity]?.bg || RARITY_COLORS['Common'].bg,
+                    RARITY_COLORS[artifact.rarity]?.text || RARITY_COLORS['Common'].text,
+                    (RARITY_COLORS[artifact.rarity]?.border || RARITY_COLORS['Common'].border).replace('500', '500/30')
+                 )}>
+                    {artifact.rarity}
+                 </span>
+               </div>
+            </div>
                             
                             <h3 className="text-lg font-black text-white mb-2 leading-tight">
                               {artifact.name}
@@ -358,14 +393,30 @@ export function Armory() {
                               "{artifact.description}"
                             </p>
 
-                            {m && (
-                              <div className="pt-4 border-t border-white/5 flex items-center gap-3">
-                                 {m.coverImageUrl && (
-                                   <img src={m.coverImageUrl} alt="" className="w-6 h-9 rounded object-cover border border-white/10" referrerPolicy="no-referrer" />
-                                 )}
-                                 <div className="text-[10px] font-bold text-zinc-400 truncate">{m.title}</div>
+                            <div className="pt-4 border-t border-white/5 flex flex-col gap-3">
+                              <div className="flex items-center gap-1.5 w-full" title="Durability">
+                                <Hammer className="w-3 h-3 text-zinc-500 flex-shrink-0" />
+                                <div className="flex-1 h-1.5 bg-zinc-950 rounded-full overflow-hidden">
+                                   <div 
+                                     className={cn(
+                                       "h-full rounded-full transition-all",
+                                       (artifact.durability / artifact.maxDurability) < 0.2 ? "bg-red-500" : "bg-emerald-500"
+                                     )} 
+                                     style={{ width: `${(artifact.durability / artifact.maxDurability) * 100}%` }}
+                                   />
+                                </div>
+                                <span className="text-[10px] font-black text-zinc-500 flex-shrink-0 w-8 text-right">{artifact.durability}/{artifact.maxDurability}</span>
                               </div>
-                            )}
+
+                              {m && (
+                                <div className="flex items-center gap-3">
+                                   {m.coverImageUrl && (
+                                     <img src={m.coverImageUrl} alt="" className="w-6 h-9 rounded object-cover border border-white/10" referrerPolicy="no-referrer" />
+                                   )}
+                                   <div className="text-[10px] font-bold text-zinc-400 truncate">{m.title}</div>
+                                </div>
+                              )}
+                            </div>
                          </div>
                       </div>
                     );

@@ -187,11 +187,11 @@ export const IntegrationsService = {
   },
 
   /**
-   * Search Anilist for Manga
+   * Search MangaDex for Manga
    */
-  async searchAnilistMetadata(query: string) {
+  async searchMangaMetadata(query: string) {
     try {
-      const response = await fetch(`/api/anilist/search?q=${encodeURIComponent(query)}`, { headers: { Authorization: `Bearer ${localStorage.getItem('fauxlore_token')}` } });
+      const response = await fetch(`/api/manga/search?q=${encodeURIComponent(query)}`, { headers: { Authorization: `Bearer ${localStorage.getItem('fauxlore_token')}` } });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
@@ -201,7 +201,7 @@ export const IntegrationsService = {
       const results = await response.json();
       return results;
     } catch (e) {
-      console.error("Error searching Anilist metadata:", e);
+      console.error("Error searching manga metadata:", e);
       throw e; 
     }
   },
@@ -228,13 +228,13 @@ export const IntegrationsService = {
   },
 
   /**
-   * MyAnimeList / AniList / Kitsu (Planned)
+   * MyAnimeList / MangaDex / Kitsu (Planned)
    * Future injection logic:
    * 1. Pull user's lists periodically
    * 2. Merge changes intelligently by comparing updatedAt timestamps
    */
-  async syncAniList(username: string): Promise<void> {
-    console.log(`[Future] Will sync AniList library for ${username}`);
+  async syncExtraPlatforms(username: string, platform: string): Promise<void> {
+    console.log(`[Future] Will sync ${platform} library for ${username}`);
   },
   
   /**

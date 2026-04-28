@@ -960,35 +960,19 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         if (shouldSync) {
           const id = parseInt(row.originalMediaId);
           if (!isNaN(id)) {
-            // Fetch Anilist
-            const graphqlQuery = `
-              query ($id: Int) {
-                Media (id: $id, type: MANGA) {
-                  status
-                  chapters
-                  volumes
-                }
-              }
-            `;
-            const aniRes = await fetch("https://graphql.anilist.co", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-              },
-              body: JSON.stringify({ query: graphqlQuery, variables: { id } })
-            });
+            // Fetch MangaDex
+            const mangaDexRes = await fetch(`https://api.mangadex.org/manga/${row.originalMediaId}`);
 
-            if (aniRes.ok) {
-              const data = await aniRes.json();
-              if (data.data?.Media) {
-                const media = data.data.Media;
+            if (mangaDexRes.ok) {
+              const data = await mangaDexRes.json();
+              if (data.data?.attributes) {
+                const attr = data.data.attributes;
                 db.prepare(`UPDATE media SET totalChapters = ?, totalIssues = ?, releaseStatus = ?, isOngoing = ?, lastSyncAt = ? WHERE id = ?`)
                   .run(
-                    media.chapters, 
-                    media.volumes || row.totalIssues, 
-                    media.status, 
-                    (media.status === "RELEASING" || media.status === "HIATUS" || media.status === "NOT_YET_RELEASED") ? 1 : 0, 
+                    attr.lastChapter ? parseInt(attr.lastChapter) : row.totalChapters, 
+                    attr.lastVolume ? parseInt(attr.lastVolume) : row.totalIssues, 
+                    attr.status.toUpperCase(), 
+                    (attr.status === "ongoing") ? 1 : 0, 
                     now.toISOString(), 
                     row.id
                   );
@@ -2352,116 +2336,56 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
     }
   });
 
-  // Anilist API proxy for Manga
-  app.get("/api/anilist/search", async (req, res) => {
+  // MangaDex API proxy for Manga
+  app.get("/api/manga/search", async (req, res) => {
     try {
       const query = req.query.q as string;
       if (!query) {
         return res.status(400).json({ error: "Missing search query" });
       }
 
-      const graphqlQuery = `
-        query ($search: String) {
-          Page (perPage: 20) {
-            media (search: $search, type: MANGA) {
-              id
-              title {
-                romaji
-                english
-              }
-              description(asHtml: false)
-              coverImage {
-                extraLarge
-              }
-              startDate {
-                year
-              }
-              averageScore
-              chapters
-              volumes
-              genres
-              status
-              tags {
-                name
-              }
-              staff {
-                edges {
-                  role
-                  node {
-                    name {
-                      full
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      `;
+      const mangaDexRes = await fetch(`https://api.mangadex.org/manga?title=${encodeURIComponent(query)}&limit=20&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&contentRating[]=pornographic&includes[]=cover_art&includes[]=author`);
 
-      const aniRes = await fetch("https://graphql.anilist.co", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify({
-          query: graphqlQuery,
-          variables: { search: query }
-        })
-      });
-
-      if (!aniRes.ok) {
-        throw new Error(`Anilist error: ${aniRes.statusText}`);
+      if (!mangaDexRes.ok) {
+        throw new Error(`MangaDex error: ${mangaDexRes.statusText} (${mangaDexRes.status})`);
       }
 
-      const data = await aniRes.json();
-      if (data.errors) {
-        throw new Error(data.errors[0].message || "GraphQL Error from Anilist API");
-      }
+      const data = await mangaDexRes.json();
+      const mangaList = data.data || [];
 
-      const media = data.data?.Page?.media || [];
+      const mappedResults = mangaList.map((m: any) => {
+        const attr = m.attributes;
+        const title = attr.title.en || attr.title.ja || attr.title["ja-ro"] || Object.values(attr.title)[0];
+        const description = attr.description.en || Object.values(attr.description || {})[0] || "";
+        
+        const authorRel = m.relationships.find((r: any) => r.type === "author");
+        const author = authorRel?.attributes?.name || "";
 
-      const mappedResults = media.map((m: any) => {
-        // Find the creator, typically "Story & Art" or "Story"
-        let creator = "";
-        if (m.staff?.edges) {
-          const mainStaff = m.staff.edges.find((e: any) => 
-            e.role?.toLowerCase().includes("story") || 
-            e.role?.toLowerCase().includes("art")
-          );
-          if (mainStaff && mainStaff.node?.name?.full) {
-            creator = mainStaff.node.name.full;
-          }
-        }
-
-        let tags: string[] = [];
-        if (m.tags) {
-          tags = m.tags.map((t: any) => t.name);
-        }
+        const coverRel = m.relationships.find((r: any) => r.type === "cover_art");
+        const filename = coverRel?.attributes?.fileName;
+        const coverImageUrl = filename ? `https://uploads.mangadex.org/covers/${m.id}/${filename}` : "";
 
         return {
-          id: m.id.toString(),
-          title: m.title.english || m.title.romaji,
-          description: m.description,
-          coverImageUrl: m.coverImage?.extraLarge || "",
-          year: m.startDate?.year,
-          // Anilist score is out of 100
-          reviewScore: m.averageScore ? Math.round(m.averageScore / 10) / 2 : undefined,
-          totalChapters: m.chapters,
-          totalIssues: m.volumes,
+          id: m.id,
+          title,
+          description: description.replace(/\[\/?\w+\]/g, ""), // Simple BBCode removal
+          coverImageUrl,
+          year: attr.year,
+          reviewScore: undefined,
+          totalChapters: attr.lastChapter ? parseInt(attr.lastChapter) : undefined,
+          totalIssues: attr.lastVolume ? parseInt(attr.lastVolume) : undefined,
           genres: [],
-          tags: [],
-          creator: creator,
-          releaseStatus: m.status,
-          isOngoing: m.status === "RELEASING" || m.status === "HIATUS" || m.status === "NOT_YET_RELEASED"
+          tags: attr.tags.map((t: any) => t.attributes.name.en),
+          creator: author,
+          releaseStatus: attr.status.toUpperCase(),
+          isOngoing: attr.status === "ongoing"
         };
       });
 
       res.json(mappedResults);
     } catch (error: any) {
-      console.error("Error searching Anilist:", error);
-      res.status(500).json({ error: error.message || "Failed to fetch metadata from Anilist." });
+      console.error("Error searching MangaDex:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch metadata from MangaDex." });
     }
   });
 

@@ -198,7 +198,7 @@ export function MediaFormModal({
         );
         setSearchResults(results);
       } else if (formData.mediaType === "Manga") {
-        const results = await IntegrationsService.searchAnilistMetadata(
+        const results = await IntegrationsService.searchMangaMetadata(
           formData.title,
         );
         setSearchResults(results);
@@ -250,6 +250,7 @@ export function MediaFormModal({
       totalChapters: match.totalChapters,
       runtimeMinutes: match.runtimeMinutes,
       coverImageUrl: match.coverImageUrl,
+      originalMediaId: match.id,
     }));
     setAvailablePlatforms(match.platforms || []);
     setSearchResults(null);
