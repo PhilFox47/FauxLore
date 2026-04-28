@@ -7,7 +7,7 @@ import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { generateAiArtifactWithGemini } from '../services/geminiService';
 import { v4 as uuidv4 } from 'uuid';
-import { Artifact } from '../types/schema';
+import { Artifact, RARITY_COLORS } from '../types/schema';
 import { LootReveal } from './LootReveal';
 import { ForgingButton } from './ForgingButton';
 
@@ -56,6 +56,9 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
         type: generated.type || 'Trinket',
         slot: generated.slot as any || 'Accessory',
         rarity: generated.rarity as Artifact['rarity'],
+        targetType: generated.targetType,
+        targetValue: generated.targetValue,
+        bonusPercent: generated.bonusPercent,
         earnedAt: new Date().toISOString(),
         durability: 100,
         maxDurability: 100,
@@ -280,28 +283,31 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                 )}
                 {itemArtifacts.length > 0 && (
                   <div className="flex flex-col gap-3 mb-4">
-                    {itemArtifacts.map(artifact => (
-                       <div key={artifact.id} className="bg-purple-900/10 border border-purple-500/30 rounded-2xl p-5 flex items-start gap-4 shadow-lg shadow-purple-900/5 hover:border-purple-500/50 transition-colors">
-                          <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center shrink-0 border border-purple-500/40">
-                             <Gem className="w-6 h-6 text-purple-400" />
+                    {itemArtifacts.map(artifact => {
+                       const style = RARITY_COLORS[artifact.rarity] || RARITY_COLORS['Common'];
+                       return (
+                       <div key={artifact.id} className={cn("bg-purple-900/10 border rounded-2xl p-5 flex items-start gap-4 shadow-lg shadow-purple-900/5 hover:border-purple-500/50 transition-colors", style.border.replace('500', '500/30'))}>
+                          <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border", style.bg, style.border.replace('500', '500/40'))}>
+                             <Gem className={cn("w-6 h-6", style.text)} />
                           </div>
-                          <div>
+                          <div className="flex-1 min-w-0">
                              <div className="flex items-center gap-2 mb-1">
-                                <h4 className="font-black text-purple-300 text-lg">{artifact.name}</h4>
+                                <h4 className={cn("font-black text-lg truncate", style.text, style.textShadow)}>{artifact.name}</h4>
                                 <span className={cn(
-                                   "text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded",
-                                   artifact.rarity === 'Mythic' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
-                                   artifact.rarity === 'Legendary' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                                   artifact.rarity === 'Epic' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
-                                   artifact.rarity === 'Rare' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                                   artifact.rarity === 'Uncommon' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                                   'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30'
+                                   "text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded border whitespace-nowrap",
+                                   style.bg, style.text, style.border.replace('500', '500/30')
                                 )}>{artifact.rarity} {artifact.type}</span>
                              </div>
-                             <p className="text-zinc-400 text-sm leading-relaxed">{artifact.description}</p>
+                             <p className="text-zinc-400 text-sm leading-relaxed mb-2">{artifact.description}</p>
+                             {artifact.targetType && (
+                               <div className="flex items-center justify-between bg-black/40 border border-white/5 rounded p-1.5 px-3">
+                                 <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{artifact.targetType}: <span className={style.text}>{artifact.targetValue}</span></span>
+                                 <span className="text-[10px] text-green-400 font-black tracking-widest">+{artifact.bonusPercent || 20}% EXP</span>
+                               </div>
+                             )}
                           </div>
                        </div>
-                    ))}
+                    );})}
                   </div>
                 )}
                 {canLoot && (

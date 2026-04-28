@@ -1,34 +1,48 @@
-import React, { useState, useEffect } from 'react';
-import { MediaItem, MEDIA_TYPES, STATUSES, MediaType } from '../types/schema';
-import { X, Search, Loader2, RefreshCw, BrainCircuit } from 'lucide-react';
-import { IntegrationsService, GameMetadata } from '../services/integrations';
-import { cn } from '../lib/utils';
-import { useMediaContext } from '../contexts/MediaContext';
-import { generateAiTagsWithGemini } from '../services/geminiService';
+import React, { useState, useEffect } from "react";
+import { MediaItem, MEDIA_TYPES, STATUSES, MediaType } from "../types/schema";
+import { X, Search, Loader2, RefreshCw, BrainCircuit } from "lucide-react";
+import { IntegrationsService, GameMetadata } from "../services/integrations";
+import { cn } from "../lib/utils";
+import { useMediaContext } from "../contexts/MediaContext";
+import { generateAiTagsWithGemini } from "../services/geminiService";
 
 interface MediaFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => void;
+  onSave: (
+    item: Partial<MediaItem> & {
+      title: string;
+      mediaType: MediaType;
+      status: MediaItem["status"];
+    },
+  ) => void;
   onDelete?: (id: string) => void;
   initialData?: MediaItem;
 }
 
-export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData }: MediaFormModalProps) {
+export function MediaFormModal({
+  isOpen,
+  onClose,
+  onSave,
+  onDelete,
+  initialData,
+}: MediaFormModalProps) {
   const { taxonomies, settings } = useMediaContext();
   const [formData, setFormData] = useState<Partial<MediaItem>>({
-    title: '',
-    mediaType: 'Game',
-    status: 'Active',
+    title: "",
+    mediaType: "Game",
+    status: "Active",
   });
 
   const [isSearching, setIsSearching] = useState(false);
   const [isAiTagging, setIsAiTagging] = useState(false);
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
-  const [platformInput, setPlatformInput] = useState('');
+  const [platformInput, setPlatformInput] = useState("");
   const [isPlatformDropdownOpen, setIsPlatformDropdownOpen] = useState(false);
-  const [selectedSeriesForSeasons, setSelectedSeriesForSeasons] = useState<any | null>(null);
+  const [selectedSeriesForSeasons, setSelectedSeriesForSeasons] = useState<
+    any | null
+  >(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isRefetchingHltb, setIsRefetchingHltb] = useState(false);
 
@@ -38,37 +52,92 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
     if (initialData) {
       setFormData(initialData);
       setRawInputs({
-        genres: initialData.genres?.join(', ') || '',
-        tags: initialData.tags?.join(', ') || '',
-        platforms: initialData.platforms?.join(', ') || '',
-        franchises: initialData.franchises?.join(', ') || ''
+        genres: initialData.genres?.join(", ") || "",
+        tags: initialData.tags?.join(", ") || "",
+        platforms: initialData.platforms?.join(", ") || "",
+        franchises: initialData.franchises?.join(", ") || "",
       });
     } else {
-      setFormData({ title: '', mediaType: 'Game', status: 'Active' });
-      setRawInputs({ genres: '', tags: '', platforms: '', franchises: '' });
+      setFormData({ title: "", mediaType: "Game", status: "Active" });
+      setRawInputs({ genres: "", tags: "", platforms: "", franchises: "" });
     }
     setSearchResults(null);
     setSelectedSeriesForSeasons(null);
     setIsConfirmingDelete(false);
   }, [initialData, isOpen]);
 
+  // Auto-complete status logic
+  useEffect(() => {
+    let isComplete = false;
+
+    if (formData.mediaType === "Movie") {
+      if (formData.watched) isComplete = true;
+    } else if (
+      formData.mediaType === "Series" &&
+      formData.totalEpisodes &&
+      (formData.episodesWatched || 0) >= formData.totalEpisodes
+    ) {
+      isComplete = true;
+    } else if (
+      formData.mediaType === "Manga" &&
+      formData.totalChapters &&
+      (formData.chaptersRead || 0) >= formData.totalChapters
+    ) {
+      isComplete = true;
+    } else if (
+      formData.mediaType === "Book" &&
+      formData.totalPages &&
+      (formData.pagesRead || 0) >= formData.totalPages
+    ) {
+      isComplete = true;
+    } else if (
+      formData.mediaType === "Comic" &&
+      formData.totalIssues &&
+      (formData.issuesRead || 0) >= formData.totalIssues
+    ) {
+      isComplete = true;
+    }
+
+    if (isComplete && formData.status !== "Completed") {
+      setFormData((p) => ({ ...p, status: "Completed" }));
+    }
+  }, [
+    formData.watched,
+    formData.mediaType,
+    formData.totalEpisodes,
+    formData.episodesWatched,
+    formData.totalChapters,
+    formData.chaptersRead,
+    formData.totalPages,
+    formData.pagesRead,
+    formData.totalIssues,
+    formData.issuesRead,
+  ]);
+
   if (!isOpen) return null;
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >,
+  ) => {
     const { name, value, type } = e.target as any;
     let finalValue = value;
-    if (type === 'number') {
-      finalValue = value === '' ? undefined : Number(value);
+    if (type === "number") {
+      finalValue = value === "" ? undefined : Number(value);
     }
-    setFormData(prev => ({ ...prev, [name]: finalValue }));
+    setFormData((prev) => ({ ...prev, [name]: finalValue }));
   };
 
   const handleArrayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setRawInputs(prev => ({ ...prev, [name]: value }));
-    setFormData(prev => ({
+    setRawInputs((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({
       ...prev,
-      [name]: value.split(',').map(s => s.trim()).filter(Boolean)
+      [name]: value
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
     }));
   };
 
@@ -78,8 +147,13 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
 
     let finalData = { ...formData };
 
-    if (finalData.status === 'Completed' && typeof finalData.userRating !== 'number') {
-      const ratingStr = window.prompt(`You've completed ${finalData.title}! How would you rate it from 1 to 5?`);
+    if (
+      finalData.status === "Completed" &&
+      typeof finalData.userRating !== "number"
+    ) {
+      const ratingStr = window.prompt(
+        `You've completed ${finalData.title}! How would you rate it from 1 to 5?`,
+      );
       if (ratingStr && !isNaN(Number(ratingStr))) {
         let rating = Number(ratingStr);
         if (rating < 0) rating = 0;
@@ -98,38 +172,60 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
     setSearchResults(null);
     setSelectedSeriesForSeasons(null);
     try {
-      if (formData.mediaType === 'Game') {
-        const results = await IntegrationsService.searchGameMetadata(formData.title);
+      if (formData.mediaType === "Game") {
+        const results = await IntegrationsService.searchGameMetadata(
+          formData.title,
+        );
         setSearchResults(results);
-      } else if (formData.mediaType === 'Visual Novel') {
-        const results = await IntegrationsService.searchVNDBMetadata(formData.title);
+      } else if (formData.mediaType === "Visual Novel") {
+        const results = await IntegrationsService.searchVNDBMetadata(
+          formData.title,
+        );
         setSearchResults(results);
-      } else if (formData.mediaType === 'Book') {
-        const results = await IntegrationsService.searchBookMetadata(formData.title, formData.language);
+      } else if (formData.mediaType === "Book") {
+        const results = await IntegrationsService.searchBookMetadata(
+          formData.title,
+          formData.language,
+        );
         setSearchResults(results);
-      } else if (formData.mediaType === 'Movie' || formData.mediaType === 'Series') {
-        const results = await IntegrationsService.searchTMDBMetadata(formData.title, formData.mediaType);
+      } else if (
+        formData.mediaType === "Movie" ||
+        formData.mediaType === "Series"
+      ) {
+        const results = await IntegrationsService.searchTMDBMetadata(
+          formData.title,
+          formData.mediaType,
+        );
         setSearchResults(results);
-      } else if (formData.mediaType === 'Manga') {
-        const results = await IntegrationsService.searchAnilistMetadata(formData.title);
+      } else if (formData.mediaType === "Manga") {
+        const results = await IntegrationsService.searchAnilistMetadata(
+          formData.title,
+        );
         setSearchResults(results);
       }
     } catch (err: any) {
       console.error(err);
-      alert(err.message || 'Failed to search metadata. Please ensure API keys are configured in Settings > Environment Variables.');
+      alert(
+        err.message ||
+          "Failed to search metadata. Please ensure API keys are configured in Settings > Environment Variables.",
+      );
     } finally {
       setIsSearching(false);
     }
   };
 
   const applySearchResult = (match: any) => {
-    if (formData.mediaType === 'Series' && match.seasons && match.seasons.length > 0) {
+    if (
+      formData.mediaType === "Series" &&
+      match.seasons &&
+      match.seasons.length > 0
+    ) {
       setSelectedSeriesForSeasons(match);
       setSearchResults(null);
       return;
     }
 
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       title: match.title,
       subtitle: match.subtitle,
@@ -148,7 +244,7 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
       hltbMain: match.hltbMain,
       hltbMainExtra: match.hltbMainExtra,
       hltbCompletionist: match.hltbCompletionist,
-      selectedHltbType: match.selectedHltbType || 'mainExtra',
+      selectedHltbType: match.selectedHltbType || "mainExtra",
       totalPages: match.totalPages,
       totalEpisodes: match.totalEpisodes,
       totalChapters: match.totalChapters,
@@ -160,16 +256,20 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
   };
 
   const applySeason = (series: any, season: any) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       title: `${series.title} - ${season.name}`,
       description: season.overview || series.description,
       creator: series.creator || series.developer || series.author,
       publisher: series.publisher,
-      year: season.airDate ? new Date(season.airDate).getFullYear() : series.year,
+      year: season.airDate
+        ? new Date(season.airDate).getFullYear()
+        : series.year,
       genres: series.genres || [],
       tags: series.tags || [],
-      reviewScore: season.voteAverage ? Math.round(season.voteAverage) / 2 : series.reviewScore,
+      reviewScore: season.voteAverage
+        ? Math.round(season.voteAverage) / 2
+        : series.reviewScore,
       totalEpisodes: season.episodeCount,
       runtimeMinutes: series.runtimeMinutes,
       coverImageUrl: season.posterPath || series.coverImageUrl,
@@ -179,18 +279,25 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
   };
 
   const handleRefetchHltb = async () => {
-    if (!formData.title || !['Game', 'Visual Novel'].includes(formData.mediaType)) return;
+    if (
+      !formData.title ||
+      !["Game", "Visual Novel"].includes(formData.mediaType)
+    )
+      return;
     setIsRefetchingHltb(true);
     try {
       const data = await IntegrationsService.fetchHltbData(formData.title);
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         hltbMain: data.hltbMain,
         hltbMainExtra: data.hltbMainExtra,
         hltbCompletionist: data.hltbCompletionist,
-        averagePlaytime: prev.selectedHltbType === 'main' ? data.hltbMain : 
-                        prev.selectedHltbType === 'completionist' ? data.hltbCompletionist : 
-                        data.hltbMainExtra
+        averagePlaytime:
+          prev.selectedHltbType === "main"
+            ? data.hltbMain
+            : prev.selectedHltbType === "completionist"
+              ? data.hltbCompletionist
+              : data.hltbMainExtra,
       }));
     } catch (e) {
       console.error(e);
@@ -205,21 +312,29 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
       alert("Please enter a title first to auto-tag.");
       return;
     }
-    
+
     setIsAiTagging(true);
     try {
-      const parsed = await generateAiTagsWithGemini(settings?.geminiApiKey, formData, taxonomies);
+      const parsed = await generateAiTagsWithGemini(
+        settings?.geminiApiKey,
+        formData,
+        taxonomies,
+      );
 
-      if (parsed && Array.isArray(parsed.genres) && Array.isArray(parsed.tags)) {
-        setFormData(prev => ({
+      if (
+        parsed &&
+        Array.isArray(parsed.genres) &&
+        Array.isArray(parsed.tags)
+      ) {
+        setFormData((prev) => ({
           ...prev,
           genres: parsed.genres,
-          tags: parsed.tags
+          tags: parsed.tags,
         }));
-        setRawInputs(prev => ({
+        setRawInputs((prev) => ({
           ...prev,
-          genres: parsed.genres.join(', '),
-          tags: parsed.tags.join(', ')
+          genres: parsed.genres.join(", "),
+          tags: parsed.tags.join(", "),
         }));
       } else {
         throw new Error("AI returned an unexpected format.");
@@ -237,63 +352,79 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
       <div className="bg-zinc-900 border border-white/10 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl relative">
         <div className="flex justify-between items-center p-6 border-b border-white/5">
           <h2 className="text-xl font-bold text-white">
-            {initialData ? 'Edit Media' : 'Add Media'}
+            {initialData ? "Edit Media" : "Add Media"}
           </h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white transition">
+          <button
+            onClick={onClose}
+            className="text-zinc-500 hover:text-white transition"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+        <form
+          onSubmit={handleSubmit}
+          className="p-6 space-y-4 max-h-[70vh] overflow-y-auto"
+        >
           <div className="relative z-10 block">
-            <label className="block text-sm font-medium text-zinc-400 mb-1">Title *</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-1">
+              Title *
+            </label>
             <div className="flex gap-2">
-              <input 
+              <input
                 required
                 name="title"
                 value={formData.title}
                 onChange={handleChange}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
+                  if (e.key === "Enter") {
                     e.preventDefault(); // Prevent form submission
                     if (formData.title && !isSearching) {
                       handleSearchMetadata();
                     }
                   }
                 }}
-                className="input-field" 
+                className="input-field"
                 placeholder="E.g., The Witcher 3"
               />
-              {['Game', 'Book', 'Movie', 'Series', 'Visual Novel', 'Manga'].includes(formData.mediaType) && (
+              {[
+                "Game",
+                "Book",
+                "Movie",
+                "Series",
+                "Visual Novel",
+                "Manga",
+              ].includes(formData.mediaType) && (
                 <button
                   type="button"
                   onClick={handleSearchMetadata}
                   disabled={isSearching || !formData.title}
                   className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-medium rounded-xl transition flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  {isSearching ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Search className="w-4 h-4" />
+                  )}
                   Auto-fill
                 </button>
               )}
-            </div>
-
-            <div className="relative z-10 block mt-4">
-              <label className="block text-sm font-medium text-zinc-400 mb-1">Subtitle</label>
-              <input 
-                name="subtitle"
-                value={formData.subtitle || ''}
-                onChange={handleChange}
-                className="input-field" 
-                placeholder="Optional subtitle..."
-              />
             </div>
 
             {/* Autofill Results */}
             {searchResults && searchResults.length > 0 && (
               <div className="absolute top-full left-0 w-full mt-2 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl p-2 z-50 flex flex-col gap-1 max-h-64 overflow-y-auto">
                 <div className="flex justify-between items-center px-2 py-1 mb-1">
-                   <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Select Match</span>
-                   <button type="button" onClick={() => setSearchResults(null)} className="text-zinc-500 hover:text-white"><X className="w-4 h-4" /></button>
+                  <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                    Select Match
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSearchResults(null)}
+                    className="text-zinc-500 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
                 {searchResults.map((res, i) => (
                   <button
@@ -304,19 +435,80 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   >
                     <div className="min-w-0">
                       <div className="font-bold text-white line-clamp-2 group-hover:text-orange-400 transition-colors">
-                        {res.title} <span className="text-zinc-500 font-normal">({res.year})</span>
+                        {res.title}{" "}
+                        <span className="text-zinc-500 font-normal">
+                          ({res.year})
+                        </span>
                       </div>
                       <div className="text-xs text-zinc-400 truncate mt-0.5">
-                        {formData.mediaType === 'Game' || formData.mediaType === 'Visual Novel' ? (
-                          <>{res.developer || res.creator} • {res.reviewScore ? `${res.reviewScore}/5` : 'No Rating'} • {res.averagePlaytime ? `${res.averagePlaytime}h` : 'N/A'}</>
-                        ) : formData.mediaType === 'Movie' ? (
-                           <>{res.creator || 'Unknown Director'} • {res.reviewScore ? `${res.reviewScore}/5` : 'No Rating'} • {res.runtimeMinutes ? `${res.runtimeMinutes} mins` : 'N/A'}</>
-                        ) : formData.mediaType === 'Series' ? (
-                           <>{res.creator || 'Unknown Creator'} • {res.reviewScore ? `${res.reviewScore}/5` : 'No Rating'} • {res.seasons ? `${res.seasons.length} Seasons` : 'N/A'} • {res.runtimeMinutes ? `~${res.runtimeMinutes}m/ep` : 'N/A'}</>
-                        ) : formData.mediaType === 'Manga' ? (
-                          <>{res.creator || 'Unknown Creator'} • {res.reviewScore ? `${res.reviewScore}/5` : 'No Rating'} • {res.totalChapters ? `${res.totalChapters} Ch` : 'Ongoing/Unknown'}</>
+                        {formData.mediaType === "Game" ||
+                        formData.mediaType === "Visual Novel" ? (
+                          <>
+                            {res.developer || res.creator} •{" "}
+                            {res.reviewScore
+                              ? `${res.reviewScore}/5`
+                              : "No Rating"}{" "}
+                            •{" "}
+                            {res.averagePlaytime
+                              ? `${res.averagePlaytime}h`
+                              : "N/A"}
+                          </>
+                        ) : formData.mediaType === "Movie" ? (
+                          <>
+                            {res.creator || "Unknown Director"} •{" "}
+                            {res.reviewScore
+                              ? `${res.reviewScore}/5`
+                              : "No Rating"}{" "}
+                            •{" "}
+                            {res.runtimeMinutes
+                              ? `${res.runtimeMinutes} mins`
+                              : "N/A"}
+                          </>
+                        ) : formData.mediaType === "Series" ? (
+                          <>
+                            {res.creator || "Unknown Creator"} •{" "}
+                            {res.reviewScore
+                              ? `${res.reviewScore}/5`
+                              : "No Rating"}{" "}
+                            •{" "}
+                            {res.seasons
+                              ? `${res.seasons.length} Seasons`
+                              : "N/A"}{" "}
+                            •{" "}
+                            {res.runtimeMinutes
+                              ? `~${res.runtimeMinutes}m/ep`
+                              : "N/A"}
+                          </>
+                        ) : formData.mediaType === "Manga" ? (
+                          <>
+                            {res.creator || "Unknown Creator"} •{" "}
+                            {res.reviewScore
+                              ? `${res.reviewScore}/5`
+                              : "No Rating"}{" "}
+                            •{" "}
+                            {res.totalChapters
+                              ? `${res.totalChapters} Ch`
+                              : "Ongoing/Unknown"}
+                          </>
+                        ) : formData.mediaType === "Book" ? (
+                          <>
+                            {res.language ? `[${res.language}] ` : ""}
+                            {res.creator || "Unknown Author"} •{" "}
+                            {res.reviewScore
+                              ? `${res.reviewScore}/5`
+                              : "No Rating"}{" "}
+                            •{" "}
+                            {res.totalPages ? `${res.totalPages} pages` : "N/A"}
+                          </>
                         ) : (
-                          <>{res.creator || 'Unknown Author'} • {res.reviewScore ? `${res.reviewScore}/5` : 'No Rating'} • {res.totalPages ? `${res.totalPages} pages` : 'N/A'}</>
+                          <>
+                            {res.creator || "Unknown Author"} •{" "}
+                            {res.reviewScore
+                              ? `${res.reviewScore}/5`
+                              : "No Rating"}{" "}
+                            •{" "}
+                            {res.totalPages ? `${res.totalPages} pages` : "N/A"}
+                          </>
                         )}
                       </div>
                     </div>
@@ -329,8 +521,16 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
             {selectedSeriesForSeasons && (
               <div className="absolute top-full left-0 w-full mt-2 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl p-2 z-50 flex flex-col gap-1 max-h-64 overflow-y-auto">
                 <div className="flex justify-between items-center px-2 py-1 mb-1">
-                   <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Select Season for {selectedSeriesForSeasons.title}</span>
-                   <button type="button" onClick={() => setSelectedSeriesForSeasons(null)} className="text-zinc-500 hover:text-white"><X className="w-4 h-4" /></button>
+                  <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                    Select Season for {selectedSeriesForSeasons.title}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSeriesForSeasons(null)}
+                    className="text-zinc-500 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
                 {selectedSeriesForSeasons.seasons.map((s: any) => (
                   <button
@@ -341,10 +541,20 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   >
                     <div className="min-w-0">
                       <div className="font-bold text-white line-clamp-2 group-hover:text-orange-400 transition-colors">
-                        {s.name} <span className="text-zinc-500 font-normal">({s.seasonNumber})</span>
+                        {s.name}{" "}
+                        <span className="text-zinc-500 font-normal">
+                          ({s.seasonNumber})
+                        </span>
                       </div>
                       <div className="text-xs text-zinc-400 truncate mt-0.5">
-                        {s.episodeCount} Episodes • {s.airDate ? new Date(s.airDate).getFullYear() : 'Unknown Year'} • {s.voteAverage ? `${Math.round(s.voteAverage) / 2}/5` : 'No Rating'}
+                        {s.episodeCount} Episodes •{" "}
+                        {s.airDate
+                          ? new Date(s.airDate).getFullYear()
+                          : "Unknown Year"}{" "}
+                        •{" "}
+                        {s.voteAverage
+                          ? `${Math.round(s.voteAverage) / 2}/5`
+                          : "No Rating"}
                       </div>
                     </div>
                   </button>
@@ -353,37 +563,82 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-0">
-            <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">Type *</label>
-              <select 
-                name="mediaType" 
-                value={formData.mediaType} 
+          <div className="block mt-4 relative z-0">
+            <label className="block text-sm font-medium text-zinc-400 mb-1">
+              Subtitle
+            </label>
+            <input
+              name="subtitle"
+              value={formData.subtitle || ""}
+              onChange={handleChange}
+              className="input-field"
+              placeholder="Optional subtitle..."
+            />
+          </div>
+
+          {formData.mediaType === "Book" && (
+            <div className="block mt-4 relative z-0">
+              <label className="block text-sm font-medium text-zinc-400 mb-1">
+                Language (For Metadata Search)
+              </label>
+              <select
+                name="language"
+                value={formData.language || ""}
                 onChange={handleChange}
                 className="input-field"
               >
-                {MEDIA_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                <option value="">Any Language</option>
+                <option value="en">English</option>
+                <option value="de">German</option>
+              </select>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-0">
+            <div>
+              <label className="block text-sm font-medium text-zinc-400 mb-1">
+                Type *
+              </label>
+              <select
+                name="mediaType"
+                value={formData.mediaType}
+                onChange={handleChange}
+                className="input-field"
+              >
+                {MEDIA_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">Status *</label>
-              <select 
-                name="status" 
-                value={formData.status} 
+              <label className="block text-sm font-medium text-zinc-400 mb-1">
+                Status *
+              </label>
+              <select
+                name="status"
+                value={formData.status}
                 onChange={handleChange}
                 className="input-field"
               >
-                {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
-          
-          {formData.status === 'Dropped' && (
+
+          {formData.status === "Dropped" && (
             <div className="mb-4">
-              <label className="block text-sm font-medium text-red-400 mb-1">Reason for Dropping</label>
-              <textarea 
+              <label className="block text-sm font-medium text-red-400 mb-1">
+                Reason for Dropping
+              </label>
+              <textarea
                 name="dropReason"
-                value={formData.dropReason || ''}
+                value={formData.dropReason || ""}
                 onChange={handleChange}
                 className="input-field min-h-[60px]"
                 placeholder="Why did you stop? (e.g., Too repetitive, lost interest...)"
@@ -391,73 +646,100 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
             </div>
           )}
 
-          {formData.status === 'Unreleased' && (
+          {formData.status === "Unreleased" && (
             <div className="mb-4 grid grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-blue-400 mb-1">Expected Release Date</label>
-                <input 
+                <label className="block text-sm font-medium text-blue-400 mb-1">
+                  Expected Release Date
+                </label>
+                <input
                   type="date"
                   name="expectedReleaseDate"
-                  value={formData.expectedReleaseDate ? formData.expectedReleaseDate.split('T')[0] : ''}
-                  onChange={(e) => setFormData(p => ({...p, expectedReleaseDate: e.target.value ? new Date(e.target.value).toISOString() : ''}))}
+                  value={
+                    formData.expectedReleaseDate
+                      ? formData.expectedReleaseDate.split("T")[0]
+                      : ""
+                  }
+                  onChange={(e) =>
+                    setFormData((p) => ({
+                      ...p,
+                      expectedReleaseDate: e.target.value
+                        ? new Date(e.target.value).toISOString()
+                        : "",
+                    }))
+                  }
                   className="input-field"
                 />
               </div>
             </div>
           )}
 
-          {formData.mediaType === 'Game' || formData.mediaType === 'Visual Novel' ? (
+          {formData.mediaType === "Game" ||
+          formData.mediaType === "Visual Novel" ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Developer</label>
-                <input 
+                <label className="block text-sm font-medium text-zinc-400 mb-1">
+                  Developer
+                </label>
+                <input
                   name="creator"
-                  value={formData.creator || ''}
+                  value={formData.creator || ""}
                   onChange={handleChange}
-                  className="input-field" 
+                  className="input-field"
                   placeholder="CD Projekt Red"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Publisher</label>
-                <input 
+                <label className="block text-sm font-medium text-zinc-400 mb-1">
+                  Publisher
+                </label>
+                <input
                   name="publisher"
-                  value={formData.publisher || ''}
+                  value={formData.publisher || ""}
                   onChange={handleChange}
-                  className="input-field" 
+                  className="input-field"
                   placeholder="Warner Bros"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Release Year</label>
-                <input 
+                <label className="block text-sm font-medium text-zinc-400 mb-1">
+                  Release Year
+                </label>
+                <input
                   type="number"
                   name="year"
-                  value={formData.year || ''}
+                  value={formData.year || ""}
                   onChange={handleChange}
-                  className="input-field" 
+                  className="input-field"
                   placeholder="2015"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Review Score (0-5)</label>
-                <input 
+                <label className="block text-sm font-medium text-zinc-400 mb-1">
+                  Review Score (0-5)
+                </label>
+                <input
                   type="number"
                   name="reviewScore"
                   step="0.5"
                   min="0"
                   max="5"
-                  value={formData.reviewScore ?? ''}
+                  value={formData.reviewScore ?? ""}
                   onChange={(e) => {
                     const val = e.target.value;
-                    setFormData(p => ({...p, reviewScore: val === '' ? undefined : Number(val) }));
-                  }} 
-                  className="input-field" 
+                    setFormData((p) => ({
+                      ...p,
+                      reviewScore: val === "" ? undefined : Number(val),
+                    }));
+                  }}
+                  className="input-field"
                   placeholder="Leave unrated"
                 />
               </div>
               <div className="col-span-1 sm:col-span-2 flex items-center justify-between mt-2">
-                <label className="block text-sm font-medium text-zinc-400">Genres & Tags</label>
+                <label className="block text-sm font-medium text-zinc-400">
+                  Genres & Tags
+                </label>
                 <button
                   type="button"
                   onClick={handleAutoTag}
@@ -465,106 +747,164 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   className="flex items-center gap-2 text-xs bg-purple-500/20 text-purple-300 px-3 py-1.5 rounded hover:bg-purple-500/30 transition shadow border border-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Uses AI to assign genres and tags based on title"
                 >
-                  {isAiTagging ? <Loader2 className="w-3 h-3 animate-spin"/> : <BrainCircuit className="w-3 h-3"/>}
+                  {isAiTagging ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <BrainCircuit className="w-3 h-3" />
+                  )}
                   Auto-Tag
                 </button>
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Genres (comma separated)</label>
-                <input 
+                <label className="block text-sm font-medium text-zinc-400 mb-1">
+                  Genres (comma separated)
+                </label>
+                <input
                   name="genres"
-                  value={rawInputs.genres ?? ''}
+                  value={rawInputs.genres ?? ""}
                   onChange={handleArrayChange}
-                  className="input-field" 
+                  className="input-field"
                   placeholder="RPG, Open World"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Tags (comma separated)</label>
-                <input 
+                <label className="block text-sm font-medium text-zinc-400 mb-1">
+                  Tags (comma separated)
+                </label>
+                <input
                   name="tags"
-                  value={rawInputs.tags ?? ''}
+                  value={rawInputs.tags ?? ""}
                   onChange={handleArrayChange}
-                  className="input-field" 
+                  className="input-field"
                   placeholder="Fantasy, Story Rich"
                 />
               </div>
-              {formData.mediaType === 'Game' && (
+              {formData.mediaType === "Game" && (
                 <div className="relative">
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Platforms</label>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Platforms
+                  </label>
                   <div className="flex flex-wrap gap-2 mb-2">
                     {formData.platforms?.map((p, i) => (
-                      <span key={i} className="text-xs px-2 py-1 bg-purple-500/20 text-purple-300 rounded flex items-center gap-1">
+                      <span
+                        key={i}
+                        className="text-xs px-2 py-1 bg-purple-500/20 text-purple-300 rounded flex items-center gap-1"
+                      >
                         {p}
-                        <button type="button" onClick={() => setFormData(old => ({...old, platforms: old.platforms?.filter(x => x !== p)}))} className="text-purple-400 hover:text-purple-200">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData((old) => ({
+                              ...old,
+                              platforms: old.platforms?.filter((x) => x !== p),
+                            }))
+                          }
+                          className="text-purple-400 hover:text-purple-200"
+                        >
                           &times;
                         </button>
                       </span>
                     ))}
                   </div>
                   <div className="relative flex items-center">
-                    <input 
+                    <input
                       value={platformInput}
                       onChange={(e) => {
                         setPlatformInput(e.target.value);
                         setIsPlatformDropdownOpen(true);
                       }}
                       onFocus={() => setIsPlatformDropdownOpen(true)}
-                      onBlur={() => setTimeout(() => setIsPlatformDropdownOpen(false), 200)}
+                      onBlur={() =>
+                        setTimeout(() => setIsPlatformDropdownOpen(false), 200)
+                      }
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && platformInput.trim()) {
+                        if (e.key === "Enter" && platformInput.trim()) {
                           e.preventDefault();
-                          if (!formData.platforms?.includes(platformInput.trim())) {
-                            setFormData(old => ({...old, platforms: [...(old.platforms || []), platformInput.trim()]}));
+                          if (
+                            !formData.platforms?.includes(platformInput.trim())
+                          ) {
+                            setFormData((old) => ({
+                              ...old,
+                              platforms: [
+                                ...(old.platforms || []),
+                                platformInput.trim(),
+                              ],
+                            }));
                           }
-                          setPlatformInput('');
+                          setPlatformInput("");
                         }
                       }}
-                      className="input-field" 
+                      className="input-field"
                       placeholder="Add platform or select from dropdown (Enter to add)"
                     />
                   </div>
-                  {isPlatformDropdownOpen && (availablePlatforms.length > 0 || platformInput.trim()) && (
-                    <div className="absolute z-10 w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                      {platformInput.trim() && !availablePlatforms.includes(platformInput.trim()) && !formData.platforms?.includes(platformInput.trim()) && (
-                        <button
-                          type="button"
-                          className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
-                          onClick={() => {
-                            setFormData(old => ({...old, platforms: [...(old.platforms || []), platformInput.trim()]}));
-                            setPlatformInput('');
-                          }}
-                        >
-                          Add "{platformInput.trim()}"
-                        </button>
-                      )}
-                      {availablePlatforms
-                        .filter(p => !formData.platforms?.includes(p) && p.toLowerCase().includes(platformInput.toLowerCase()))
-                        .map((p, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
-                          onClick={() => {
-                            setFormData(old => ({...old, platforms: [...(old.platforms || []), p]}));
-                            setPlatformInput('');
-                          }}
-                        >
-                          {p}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {isPlatformDropdownOpen &&
+                    (availablePlatforms.length > 0 || platformInput.trim()) && (
+                      <div className="absolute z-10 w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        {platformInput.trim() &&
+                          !availablePlatforms.includes(platformInput.trim()) &&
+                          !formData.platforms?.includes(
+                            platformInput.trim(),
+                          ) && (
+                            <button
+                              type="button"
+                              className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
+                              onClick={() => {
+                                setFormData((old) => ({
+                                  ...old,
+                                  platforms: [
+                                    ...(old.platforms || []),
+                                    platformInput.trim(),
+                                  ],
+                                }));
+                                setPlatformInput("");
+                              }}
+                            >
+                              Add "{platformInput.trim()}"
+                            </button>
+                          )}
+                        {availablePlatforms
+                          .filter(
+                            (p) =>
+                              !formData.platforms?.includes(p) &&
+                              p
+                                .toLowerCase()
+                                .includes(platformInput.toLowerCase()),
+                          )
+                          .map((p, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              className="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
+                              onClick={() => {
+                                setFormData((old) => ({
+                                  ...old,
+                                  platforms: [...(old.platforms || []), p],
+                                }));
+                                setPlatformInput("");
+                              }}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                      </div>
+                    )}
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Franchises (comma separated)</label>
-                <input 
+                <label className="block text-sm font-medium text-zinc-400 mb-1">
+                  Franchises (comma separated)
+                </label>
+                <input
                   name="franchises"
-                  value={rawInputs.franchises ?? ''}
+                  value={rawInputs.franchises ?? ""}
                   onChange={handleArrayChange}
-                  className="input-field" 
-                  placeholder={formData.mediaType === 'Visual Novel' ? "Fate, Muv-Luv" : "The Legend of Zelda, Mario"}
+                  className="input-field"
+                  placeholder={
+                    formData.mediaType === "Visual Novel"
+                      ? "Fate, Muv-Luv"
+                      : "The Legend of Zelda, Mario"
+                  }
                 />
               </div>
             </div>
@@ -572,90 +912,102 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="col-span-1 sm:col-span-2">
                 <label className="block text-sm font-medium text-zinc-400 mb-1">
-                  {formData.mediaType === 'Movie' ? 'Director' : 
-                   formData.mediaType === 'Series' ? 'Creator / Showrunner' : 
-                   formData.mediaType === 'Book' ? 'Author' : 
-                   formData.mediaType === 'Manga' ? 'Mangaka (Writer / Artist)' :
-                   'Creator / Author / Studio'}
+                  {formData.mediaType === "Movie"
+                    ? "Director"
+                    : formData.mediaType === "Series"
+                      ? "Creator / Showrunner"
+                      : formData.mediaType === "Book"
+                        ? "Author"
+                        : formData.mediaType === "Manga"
+                          ? "Mangaka (Writer / Artist)"
+                          : "Creator / Author / Studio"}
                 </label>
-                <input 
+                <input
                   name="creator"
-                  value={formData.creator || ''}
+                  value={formData.creator || ""}
                   onChange={handleChange}
-                  className="input-field" 
+                  className="input-field"
                   placeholder={
-                    formData.mediaType === 'Movie' ? 'e.g., Christopher Nolan' : 
-                    formData.mediaType === 'Series' ? 'e.g., Craig Mazin' : 
-                    formData.mediaType === 'Book' ? 'e.g., Brandon Sanderson' : 
-                    formData.mediaType === 'Manga' ? 'e.g., Kentaro Miura' :
-                    'Enter creator name'
+                    formData.mediaType === "Movie"
+                      ? "e.g., Christopher Nolan"
+                      : formData.mediaType === "Series"
+                        ? "e.g., Craig Mazin"
+                        : formData.mediaType === "Book"
+                          ? "e.g., Brandon Sanderson"
+                          : formData.mediaType === "Manga"
+                            ? "e.g., Kentaro Miura"
+                            : "Enter creator name"
                   }
                 />
               </div>
-              {(formData.mediaType === 'Book' || formData.mediaType === 'Manga') && (
+              {(formData.mediaType === "Book" ||
+                formData.mediaType === "Manga") && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Publisher</label>
-                    <input 
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">
+                      Publisher
+                    </label>
+                    <input
                       name="publisher"
-                      value={formData.publisher || ''}
+                      value={formData.publisher || ""}
                       onChange={handleChange}
-                      className="input-field" 
+                      className="input-field"
                       placeholder="e.g., Tor Books"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Language</label>
-                    <input 
-                      name="language"
-                      value={formData.language || ''}
-                      onChange={handleChange}
-                      className="input-field" 
-                      placeholder="e.g., en, de"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Maturity Rating</label>
-                    <input 
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">
+                      Maturity Rating
+                    </label>
+                    <input
                       name="maturityRating"
-                      value={formData.maturityRating || ''}
+                      value={formData.maturityRating || ""}
                       onChange={handleChange}
-                      className="input-field" 
+                      className="input-field"
                       placeholder="e.g., MATURE or NOT_MATURE"
                     />
                   </div>
                 </>
               )}
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Release Year</label>
-                <input 
+                <label className="block text-sm font-medium text-zinc-400 mb-1">
+                  Release Year
+                </label>
+                <input
                   type="number"
                   name="year"
-                  value={formData.year || ''}
+                  value={formData.year || ""}
                   onChange={handleChange}
-                  className="input-field" 
+                  className="input-field"
                   placeholder="2015"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Review Score (0-5)</label>
-                <input 
+                <label className="block text-sm font-medium text-zinc-400 mb-1">
+                  Review Score (0-5)
+                </label>
+                <input
                   type="number"
                   name="reviewScore"
                   step="0.5"
                   min="0"
                   max="5"
-                  value={formData.reviewScore ?? ''}
+                  value={formData.reviewScore ?? ""}
                   onChange={(e) => {
                     const val = e.target.value;
-                    setFormData(p => ({...p, reviewScore: val === '' ? undefined : Number(val) }));
-                  }} 
-                  className="input-field" 
+                    setFormData((p) => ({
+                      ...p,
+                      reviewScore: val === "" ? undefined : Number(val),
+                    }));
+                  }}
+                  className="input-field"
                   placeholder="Leave unrated"
                 />
               </div>
               <div className="col-span-1 sm:col-span-2 flex items-center justify-between mt-2">
-                <label className="block text-sm font-medium text-zinc-400">Genres & Tags</label>
+                <label className="block text-sm font-medium text-zinc-400">
+                  Genres & Tags
+                </label>
                 <button
                   type="button"
                   onClick={handleAutoTag}
@@ -663,37 +1015,47 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                   className="flex items-center gap-2 text-xs bg-purple-500/20 text-purple-300 px-3 py-1.5 rounded hover:bg-purple-500/30 transition shadow border border-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Uses AI to assign genres and tags based on title"
                 >
-                  {isAiTagging ? <Loader2 className="w-3 h-3 animate-spin"/> : <BrainCircuit className="w-3 h-3"/>}
+                  {isAiTagging ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <BrainCircuit className="w-3 h-3" />
+                  )}
                   Auto-Tag
                 </button>
               </div>
               <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Genres (comma separated)</label>
-                <input 
+                <label className="block text-sm font-medium text-zinc-400 mb-1">
+                  Genres (comma separated)
+                </label>
+                <input
                   name="genres"
-                  value={rawInputs.genres ?? ''}
+                  value={rawInputs.genres ?? ""}
                   onChange={handleArrayChange}
-                  className="input-field" 
+                  className="input-field"
                   placeholder="Fantasy, Sci-Fi"
                 />
               </div>
               <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Tags (comma separated)</label>
-                <input 
+                <label className="block text-sm font-medium text-zinc-400 mb-1">
+                  Tags (comma separated)
+                </label>
+                <input
                   name="tags"
-                  value={rawInputs.tags ?? ''}
+                  value={rawInputs.tags ?? ""}
                   onChange={handleArrayChange}
-                  className="input-field" 
+                  className="input-field"
                   placeholder="Space, Magic"
                 />
               </div>
               <div className="col-span-2">
-                <label className="block text-sm font-medium text-zinc-400 mb-1">Franchises (comma separated)</label>
-                <input 
+                <label className="block text-sm font-medium text-zinc-400 mb-1">
+                  Franchises (comma separated)
+                </label>
+                <input
                   name="franchises"
-                  value={rawInputs.franchises ?? ''}
+                  value={rawInputs.franchises ?? ""}
                   onChange={handleArrayChange}
-                  className="input-field" 
+                  className="input-field"
                   placeholder="Marvel Cinematic Universe, Harry Potter"
                 />
               </div>
@@ -701,23 +1063,29 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
           )}
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-1">Description</label>
-            <textarea 
+            <label className="block text-sm font-medium text-zinc-400 mb-1">
+              Description
+            </label>
+            <textarea
               name="description"
-              value={formData.description || ''}
-              onChange={(e) => setFormData(p => ({...p, description: e.target.value}))}
-              className="input-field min-h-[80px]" 
+              value={formData.description || ""}
+              onChange={(e) =>
+                setFormData((p) => ({ ...p, description: e.target.value }))
+              }
+              className="input-field min-h-[80px]"
               placeholder="A brief summary..."
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-1">Cover Image URL</label>
-            <input 
+            <label className="block text-sm font-medium text-zinc-400 mb-1">
+              Cover Image URL
+            </label>
+            <input
               name="coverImageUrl"
-              value={formData.coverImageUrl || ''}
+              value={formData.coverImageUrl || ""}
               onChange={handleChange}
-              className="input-field" 
+              className="input-field"
               placeholder="https://..."
             />
           </div>
@@ -725,96 +1093,151 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
           {/* Dynamic Fields Based on MediaType */}
           <div className="pt-4 border-t border-white/5 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest">Tracking Metrics</h3>
+              <h3 className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest">
+                Tracking Metrics
+              </h3>
             </div>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-amber-500/80 mb-1">Your Rating (0-5)</label>
-                <input 
-                  type="number" 
-                  name="userRating" 
-                  step="0.5" 
-                  min="0" 
-                  max="5" 
-                  value={formData.userRating ?? ''} 
+                <label className="block text-sm font-medium text-amber-500/80 mb-1">
+                  Your Rating (0-5)
+                </label>
+                <input
+                  type="number"
+                  name="userRating"
+                  step="0.5"
+                  min="0"
+                  max="5"
+                  value={formData.userRating ?? ""}
                   onChange={(e) => {
                     const val = e.target.value;
-                    setFormData(p => ({...p, userRating: val === '' ? undefined : Number(val) }));
-                  }} 
-                  className="input-field border-amber-500/20 focus:border-amber-500/50" 
-                  placeholder="Leave blank for unrated" 
+                    setFormData((p) => ({
+                      ...p,
+                      userRating: val === "" ? undefined : Number(val),
+                    }));
+                  }}
+                  className="input-field border-amber-500/20 focus:border-amber-500/50"
+                  placeholder="Leave blank for unrated"
                 />
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-amber-500/80 mb-1">Your Review</label>
-                <textarea 
-                  name="userReview" 
-                  value={formData.userReview ?? ''} 
-                  onChange={(e) => setFormData(p => ({...p, userReview: e.target.value }))} 
-                  className="input-field border-amber-500/20 focus:border-amber-500/50 min-h-[80px]" 
-                  placeholder="What did you think of it overall?" 
+                <label className="block text-sm font-medium text-amber-500/80 mb-1">
+                  Your Review
+                </label>
+                <textarea
+                  name="userReview"
+                  value={formData.userReview ?? ""}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, userReview: e.target.value }))
+                  }
+                  className="input-field border-amber-500/20 focus:border-amber-500/50 min-h-[80px]"
+                  placeholder="What did you think of it overall?"
                 />
               </div>
             </div>
 
-            {(formData.mediaType === 'Game' || formData.mediaType === 'Visual Novel') && (
+            {(formData.mediaType === "Game" ||
+              formData.mediaType === "Visual Novel") && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {formData.mediaType === 'Game' && (
+                {formData.mediaType === "Game" && (
                   <div className="col-span-1 sm:col-span-2 flex items-center gap-2">
-                    <input 
-                      type="checkbox" 
-                      id="isOngoing" 
-                      name="isOngoing" 
-                      checked={formData.isOngoing || false} 
-                      onChange={(e) => setFormData(prev => ({ ...prev, isOngoing: e.target.checked }))}
-                      className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-zinc-900" 
+                    <input
+                      type="checkbox"
+                      id="isOngoing"
+                      name="isOngoing"
+                      checked={formData.isOngoing || false}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          isOngoing: e.target.checked,
+                        }))
+                      }
+                      className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-zinc-900"
                     />
-                    <label htmlFor="isOngoing" className="text-sm font-medium text-zinc-300">
+                    <label
+                      htmlFor="isOngoing"
+                      className="text-sm font-medium text-zinc-300"
+                    >
                       Ongoing Game (e.g. Live Service, Multiplayer)
                     </label>
                   </div>
                 )}
                 <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Your Playtime (Hours)</label>
-                  <input type="number" name="playtimeHours" value={formData.playtimeHours || ''} onChange={handleChange} className="input-field" placeholder="0" />
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Your Playtime (Hours)
+                  </label>
+                  <input
+                    type="number"
+                    name="playtimeHours"
+                    value={formData.playtimeHours || ""}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="0"
+                  />
                 </div>
-                {(formData.mediaType === 'Game' || formData.mediaType === 'Visual Novel') && (
+                {(formData.mediaType === "Game" ||
+                  formData.mediaType === "Visual Novel") && (
                   <div className="col-span-1 sm:col-span-2 space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-zinc-400 mb-1">Target Playtime (Hours)</label>
-                      <input type="number" name="averagePlaytime" value={formData.averagePlaytime || ''} onChange={handleChange} className="input-field" placeholder="0" />
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">
+                        Target Playtime (Hours)
+                      </label>
+                      <input
+                        type="number"
+                        name="averagePlaytime"
+                        value={formData.averagePlaytime || ""}
+                        onChange={handleChange}
+                        className="input-field"
+                        placeholder="0"
+                      />
                     </div>
                     {formData.hltbMain !== undefined && (
                       <div className="bg-zinc-800/30 p-4 rounded-2xl space-y-3 border border-white/5">
-                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Select HLTB Target</p>
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                          Select HLTB Target
+                        </p>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                           {[
-                             { id: 'main', label: 'Main', value: formData.hltbMain },
-                             { id: 'mainExtra', label: 'Main + Extras', value: formData.hltbMainExtra },
-                             { id: 'completionist', label: 'Completionist', value: formData.hltbCompletionist }
-                           ].map(type => (
-                             <button
-                               key={type.id}
-                               type="button"
-                               onClick={() => {
-                                 setFormData(prev => ({
-                                   ...prev,
-                                   selectedHltbType: type.id as any,
-                                   averagePlaytime: type.value
-                                 }));
-                               }}
-                               className={cn(
-                                 "flex flex-col items-center justify-center p-2 rounded-xl text-[10px] transition-all border",
-                                 formData.selectedHltbType === type.id 
-                                   ? "bg-orange-500 text-white border-orange-400" 
-                                   : "bg-black/20 text-zinc-400 border-white/5 hover:border-white/10"
-                               )}
-                             >
-                               <span className="opacity-70">{type.label}</span>
-                               <span className="font-black text-sm">{type.value}h</span>
-                             </button>
-                           ))}
+                          {[
+                            {
+                              id: "main",
+                              label: "Main",
+                              value: formData.hltbMain,
+                            },
+                            {
+                              id: "mainExtra",
+                              label: "Main + Extras",
+                              value: formData.hltbMainExtra,
+                            },
+                            {
+                              id: "completionist",
+                              label: "Completionist",
+                              value: formData.hltbCompletionist,
+                            },
+                          ].map((type) => (
+                            <button
+                              key={type.id}
+                              type="button"
+                              onClick={() => {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  selectedHltbType: type.id as any,
+                                  averagePlaytime: type.value,
+                                }));
+                              }}
+                              className={cn(
+                                "flex flex-col items-center justify-center p-2 rounded-xl text-[10px] transition-all border",
+                                formData.selectedHltbType === type.id
+                                  ? "bg-orange-500 text-white border-orange-400"
+                                  : "bg-black/20 text-zinc-400 border-white/5 hover:border-white/10",
+                              )}
+                            >
+                              <span className="opacity-70">{type.label}</span>
+                              <span className="font-black text-sm">
+                                {type.value}h
+                              </span>
+                            </button>
+                          ))}
                         </div>
                         <button
                           type="button"
@@ -822,8 +1245,15 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
                           disabled={isRefetchingHltb}
                           className="w-full flex items-center justify-center gap-2 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-colors border border-white/5"
                         >
-                          <RefreshCw className={cn("w-3 h-3", isRefetchingHltb && "animate-spin")} />
-                          {isRefetchingHltb ? 'Updating...' : 'Re-Fetch HLTB Data'}
+                          <RefreshCw
+                            className={cn(
+                              "w-3 h-3",
+                              isRefetchingHltb && "animate-spin",
+                            )}
+                          />
+                          {isRefetchingHltb
+                            ? "Updating..."
+                            : "Re-Fetch HLTB Data"}
                         </button>
                       </div>
                     )}
@@ -832,110 +1262,213 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
               </div>
             )}
 
-            {formData.mediaType === 'Series' && (
+            {formData.mediaType === "Series" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Season</label>
-                  <input type="number" name="season" value={formData.season || ''} onChange={handleChange} className="input-field" placeholder="1" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Episode Runtime (mins)</label>
-                  <input type="number" name="runtimeMinutes" value={formData.runtimeMinutes || ''} onChange={handleChange} className="input-field" placeholder="30" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Episodes Watched</label>
-                  <input type="number" name="episodesWatched" value={formData.episodesWatched || ''} onChange={handleChange} className="input-field" placeholder="0" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Total Episodes</label>
-                  <input type="number" name="totalEpisodes" value={formData.totalEpisodes || ''} onChange={handleChange} className="input-field" placeholder="0" />
-                </div>
-              </div>
-            )}
-
-            {formData.mediaType === 'Book' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="col-span-1 sm:col-span-2">
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Language (For Metadata Search)</label>
-                  <select
-                    name="language"
-                    value={formData.language || ''}
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Season
+                  </label>
+                  <input
+                    type="number"
+                    name="season"
+                    value={formData.season || ""}
                     onChange={handleChange}
                     className="input-field"
-                  >
-                    <option value="">Any Language</option>
-                    <option value="en">English</option>
-                    <option value="de">German</option>
-                  </select>
+                    placeholder="1"
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Pages Read</label>
-                  <input type="number" name="pagesRead" value={formData.pagesRead || ''} onChange={handleChange} className="input-field" placeholder="0" />
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Episode Runtime (mins)
+                  </label>
+                  <input
+                    type="number"
+                    name="runtimeMinutes"
+                    value={formData.runtimeMinutes || ""}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="30"
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Total Pages</label>
-                  <input type="number" name="totalPages" value={formData.totalPages || ''} onChange={handleChange} className="input-field" placeholder="0" />
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Episodes Watched
+                  </label>
+                  <input
+                    type="number"
+                    name="episodesWatched"
+                    value={formData.episodesWatched || ""}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Total Episodes
+                  </label>
+                  <input
+                    type="number"
+                    name="totalEpisodes"
+                    value={formData.totalEpisodes || ""}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="0"
+                  />
                 </div>
               </div>
             )}
 
-            {formData.mediaType === 'Manga' && (
+            {formData.mediaType === "Book" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Chapters Read</label>
-                  <input type="number" name="chaptersRead" value={formData.chaptersRead || ''} onChange={handleChange} className="input-field" placeholder="0" />
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Pages Read
+                  </label>
+                  <input
+                    type="number"
+                    name="pagesRead"
+                    value={formData.pagesRead || ""}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="0"
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Total Chapters</label>
-                  <input type="number" name="totalChapters" value={formData.totalChapters || ''} onChange={handleChange} className="input-field" placeholder="0" />
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Total Pages
+                  </label>
+                  <input
+                    type="number"
+                    name="totalPages"
+                    value={formData.totalPages || ""}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            )}
+
+            {formData.mediaType === "Manga" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Chapters Read
+                  </label>
+                  <input
+                    type="number"
+                    name="chaptersRead"
+                    value={formData.chaptersRead || ""}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Total Chapters
+                  </label>
+                  <input
+                    type="number"
+                    name="totalChapters"
+                    value={formData.totalChapters || ""}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="0"
+                  />
                 </div>
                 {formData.releaseStatus && (
                   <div className="col-span-1 sm:col-span-2">
-                    <div className="text-xs text-zinc-500 mb-0">Release Status: {formData.releaseStatus}</div>
+                    <div className="text-xs text-zinc-500 mb-0">
+                      Release Status: {formData.releaseStatus}
+                    </div>
                   </div>
                 )}
                 <div className="col-span-1 sm:col-span-2 flex items-center mt-2">
-                  <input 
-                    type="checkbox" 
-                    id="isOngoing" 
-                    name="isOngoing" 
-                    checked={formData.isOngoing || false} 
-                    onChange={(e) => setFormData(p => ({...p, isOngoing: e.target.checked}))} 
-                    className="mr-2 rounded bg-zinc-800 border-zinc-700 text-purple-600 focus:ring-purple-500" 
+                  <input
+                    type="checkbox"
+                    id="isOngoing"
+                    name="isOngoing"
+                    checked={formData.isOngoing || false}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        isOngoing: e.target.checked,
+                      }))
+                    }
+                    className="mr-2 rounded bg-zinc-800 border-zinc-700 text-purple-600 focus:ring-purple-500"
                   />
-                  <label htmlFor="isOngoing" className="text-sm text-zinc-300">Is Ongoing (Will auto-update metadata)</label>
-                </div>
-              </div>
-            )}
-
-            {formData.mediaType === 'Comic' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Issues Read</label>
-                  <input type="number" name="issuesRead" value={formData.issuesRead || ''} onChange={handleChange} className="input-field" placeholder="0" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Total Issues</label>
-                  <input type="number" name="totalIssues" value={formData.totalIssues || ''} onChange={handleChange} className="input-field" placeholder="0" />
-                </div>
-              </div>
-            )}
-
-            {formData.mediaType === 'Movie' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Watch Count</label>
-                  <input type="number" name="watchCount" value={formData.watchCount || ''} onChange={handleChange} className="input-field" placeholder="0" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1">Runtime (mins)</label>
-                  <input type="number" name="runtimeMinutes" value={formData.runtimeMinutes || ''} onChange={handleChange} className="input-field" placeholder="120" />
-                </div>
-                <div className="col-span-1 sm:col-span-2 flex items-end pb-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" name="watched" checked={!!formData.watched} onChange={(e) => setFormData(p => ({...p, watched: e.target.checked}))} className="w-5 h-5 accent-orange-500 rounded bg-zinc-800" />
-                    <span className="text-sm font-medium text-zinc-400">Watched?</span>
+                  <label htmlFor="isOngoing" className="text-sm text-zinc-300">
+                    Is Ongoing (Will auto-update metadata)
                   </label>
+                </div>
+              </div>
+            )}
+
+            {formData.mediaType === "Comic" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Issues Read
+                  </label>
+                  <input
+                    type="number"
+                    name="issuesRead"
+                    value={formData.issuesRead || ""}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Total Issues
+                  </label>
+                  <input
+                    type="number"
+                    name="totalIssues"
+                    value={formData.totalIssues || ""}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            )}
+
+            {formData.mediaType === "Movie" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border border-white/5 p-4 rounded-xl bg-zinc-900/50">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="watched"
+                    id="watched-checkbox"
+                    checked={!!formData.watched}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, watched: e.target.checked }))
+                    }
+                    className="w-5 h-5 accent-orange-500 rounded bg-zinc-800"
+                  />
+                  <label
+                    htmlFor="watched-checkbox"
+                    className="text-sm font-bold text-zinc-300 cursor-pointer"
+                  >
+                    Watched?
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Runtime (mins)
+                  </label>
+                  <input
+                    type="number"
+                    name="runtimeMinutes"
+                    value={formData.runtimeMinutes || ""}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="120"
+                  />
                 </div>
               </div>
             )}
@@ -944,43 +1477,51 @@ export function MediaFormModal({ isOpen, onClose, onSave, onDelete, initialData 
 
         <div className="p-6 border-t border-white/5 flex justify-between items-center bg-[#09090B] relative z-20">
           <div>
-            {initialData && onDelete && (
-              isConfirmingDelete ? (
+            {initialData &&
+              onDelete &&
+              (isConfirmingDelete ? (
                 <div className="flex gap-2">
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => {
                       onDelete(initialData.id);
                       onClose();
-                    }} 
+                    }}
                     className="px-4 py-2 rounded-xl font-medium bg-red-600 text-white hover:bg-red-500 transition shadow-lg shadow-red-900/20"
                   >
                     Confirm Delete
                   </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setIsConfirmingDelete(false)} 
+                  <button
+                    type="button"
+                    onClick={() => setIsConfirmingDelete(false)}
                     className="px-4 py-2 rounded-xl font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition"
                   >
                     Cancel
                   </button>
                 </div>
               ) : (
-                <button 
-                  type="button" 
-                  onClick={() => setIsConfirmingDelete(true)} 
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingDelete(true)}
                   className="px-4 py-2 rounded-xl font-medium text-red-500 hover:text-white hover:bg-red-500/20 transition"
                 >
                   Delete
                 </button>
-              )
-            )}
+              ))}
           </div>
           <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition"
+            >
               Cancel
             </button>
-            <button type="button" onClick={handleSubmit} className="px-4 py-2 rounded-xl font-medium bg-orange-600 text-white hover:bg-orange-500 transition shadow-lg shadow-orange-900/20">
+            <button
+              type="button"
+              onClick={handleSubmit}
+              className="px-4 py-2 rounded-xl font-medium bg-orange-600 text-white hover:bg-orange-500 transition shadow-lg shadow-orange-900/20"
+            >
               Save Media
             </button>
           </div>

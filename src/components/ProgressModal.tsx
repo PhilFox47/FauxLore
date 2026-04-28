@@ -36,7 +36,11 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       setCurrentVal(cv);
       
       setMode('set');
-      setInputValue(cv + 1); // UX Default: One increment above current total
+      if (item.mediaType === 'Movie') {
+        setInputValue(item.watched || cv > 0 ? 1 : 1); // For movies, default to 1 (checked) to easily mark as watched
+      } else {
+        setInputValue(cv + 1); // UX Default: One increment above current total
+      }
       setNote('');
       setStatus(item.status);
       setUserRating(item.userRating ?? '');
@@ -47,6 +51,30 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       setIsHistorical(false);
     }
   }, [isOpen, item]);
+
+  // Auto-complete status logic
+  useEffect(() => {
+    if (!item) return;
+
+    let isComplete = false;
+    
+    if (item.mediaType === 'Movie') {
+        if (inputValue === 1) isComplete = true;
+    } else {
+        if (typeof inputValue === 'number') {
+            const newTotal = mode === 'set' ? inputValue : currentVal + inputValue;
+            
+            if (item.mediaType === 'Series' && item.totalEpisodes && newTotal >= item.totalEpisodes) isComplete = true;
+            if (item.mediaType === 'Manga' && item.totalChapters && newTotal >= item.totalChapters) isComplete = true;
+            if (item.mediaType === 'Book' && item.totalPages && newTotal >= item.totalPages) isComplete = true;
+            if (item.mediaType === 'Comic' && item.totalIssues && newTotal >= item.totalIssues) isComplete = true;
+        }
+    }
+
+    if (isComplete) {
+        setStatus('Completed');
+    }
+  }, [inputValue, mode, currentVal, item?.mediaType, item?.totalEpisodes, item?.totalChapters, item?.totalPages, item?.totalIssues]);
 
   if (!isOpen || !item || !colors) return null;
 
@@ -82,7 +110,7 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       delta = inputValue;
     }
 
-    if (delta === 0 && !note) return; // Ignore completely blank / no-change submits
+    if (delta === 0 && !note && status === item.status && item.mediaType !== 'Movie') return; // Ignore completely blank submits
     
     // Convert YYYY-MM-DD + HH:mm input to full ISO timestamp
     let finalTimestamp = new Date().toISOString();
@@ -100,11 +128,27 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       localStorage.setItem('fauxlore_last_location', location);
     }
     
-    onLog(item.id, metricType, delta, note, finalTimestamp, location, isHistorical);
+    // For movies, if delta is 0 but we want to assure watched is true
+    let modifiedDelta = delta;
+    if (item.mediaType === 'Movie' && inputValue === 1 && currentVal === 0) {
+      modifiedDelta = 1;
+    }
+
+    if (modifiedDelta !== 0 || note || status !== item.status) {
+      onLog(item.id, metricType, modifiedDelta, note, finalTimestamp, location, isHistorical);
+    }
     
     let updatedItem = { ...item };
     let needsUpdate = false;
     
+    if (item.mediaType === 'Movie' && inputValue === 1 && !item.watched) {
+      updatedItem.watched = true;
+      needsUpdate = true;
+    } else if (item.mediaType === 'Movie' && inputValue === 0 && item.watched) {
+      updatedItem.watched = false;
+      needsUpdate = true;
+    }
+
     if (status !== item.status) {
       updatedItem.status = status;
       needsUpdate = true;
@@ -142,64 +186,80 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
 
         <div className="p-6 space-y-5">
           {/* Mode Toggle */}
-          <div className="flex p-1 bg-zinc-800/50 rounded-xl relative">
-            <button
-               type="button"
-               onClick={() => handleModeChange('set')}
-               className={cn("flex-1 py-1.5 text-xs font-bold rounded-lg transition-all relative z-10", mode === 'set' ? "text-white shadow-sm bg-zinc-700" : "text-zinc-500 hover:text-zinc-300")}
-            >
-              Set Total
-            </button>
-            <button
-               type="button"
-               onClick={() => handleModeChange('add')}
-               className={cn("flex-1 py-1.5 text-xs font-bold rounded-lg transition-all relative z-10", mode === 'add' ? "text-white shadow-sm bg-zinc-700" : "text-zinc-500 hover:text-zinc-300")}
-            >
-              Add Amount
-            </button>
-          </div>
+          {item.mediaType !== 'Movie' && (
+            <div className="flex p-1 bg-zinc-800/50 rounded-xl relative">
+              <button
+                 type="button"
+                 onClick={() => handleModeChange('set')}
+                 className={cn("flex-1 py-1.5 text-xs font-bold rounded-lg transition-all relative z-10", mode === 'set' ? "text-white shadow-sm bg-zinc-700" : "text-zinc-500 hover:text-zinc-300")}
+              >
+                Set Total
+              </button>
+              <button
+                 type="button"
+                 onClick={() => handleModeChange('add')}
+                 className={cn("flex-1 py-1.5 text-xs font-bold rounded-lg transition-all relative z-10", mode === 'add' ? "text-white shadow-sm bg-zinc-700" : "text-zinc-500 hover:text-zinc-300")}
+              >
+                Add Amount
+              </button>
+            </div>
+          )}
 
           {/* Value Input */}
           <div>
-            <div className="flex justify-between items-end mb-2">
-              <label className="block text-sm font-medium text-zinc-300">
-                {mode === 'set' ? `Set Total ${getMetricLabel()}` : `Add ${getMetricLabel()}`}
-              </label>
-              {mode === 'set' && (
-                <span className="text-xs text-zinc-500 font-mono">Current: {currentVal}</span>
-              )}
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <button 
-                type="button"
-                onClick={() => setInputValue(prev => typeof prev === 'number' ? prev - 1 : -1)}
-                className="shrink-0 p-3 bg-zinc-800 rounded-xl hover:bg-zinc-700 text-zinc-300 transition-colors"
-              >
-                <Minus className="w-4 h-4" />
-              </button>
-              <input 
-                type="number"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value === '' ? '' : Number(e.target.value))}
-                className={cn("flex-1 min-w-0 bg-[#18181b] border border-white/10 rounded-xl px-3 py-3 text-center text-white focus:outline-none font-bold", `focus:border-${colors.bg.split('-')[1]}-500`)}
-              />
-              <button 
-                type="button"
-                onClick={() => setInputValue(prev => typeof prev === 'number' ? prev + 1 : 1)}
-                className="shrink-0 p-3 bg-zinc-800 rounded-xl hover:bg-zinc-700 text-zinc-300 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
-            
-            {mode === 'set' && typeof inputValue === 'number' && (inputValue - currentVal) !== 0 && (
-               <p className="text-xs text-center mt-2 font-medium">
-                 <span className={inputValue > currentVal ? "text-emerald-400" : "text-rose-400"}>
-                   {inputValue > currentVal ? '+' : ''}{inputValue - currentVal}
-                 </span>
-                 <span className="text-zinc-500"> difference will be logged</span>
-               </p>
+            {item.mediaType === 'Movie' ? (
+                <div className="flex items-center gap-3 bg-[#18181b] border border-white/10 p-4 rounded-xl">
+                  <input 
+                    type="checkbox" 
+                    className={cn("w-5 h-5 rounded cursor-pointer", `accent-${colors.bg.split('-')[1]}-500`)}
+                    checked={inputValue === 1}
+                    onChange={(e) => setInputValue(e.target.checked ? 1 : 0)}
+                  />
+                  <span className="text-zinc-300 font-bold text-sm">Watched?</span>
+                </div>
+            ) : (
+              <>
+                <div className="flex justify-between items-end mb-2">
+                  <label className="block text-sm font-medium text-zinc-300">
+                    {mode === 'set' ? `Set Total ${getMetricLabel()}` : `Add ${getMetricLabel()}`}
+                  </label>
+                  {mode === 'set' && (
+                    <span className="text-xs text-zinc-500 font-mono">Current: {currentVal}</span>
+                  )}
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button 
+                    type="button"
+                    onClick={() => setInputValue(prev => typeof prev === 'number' ? prev - 1 : -1)}
+                    className="shrink-0 p-3 bg-zinc-800 rounded-xl hover:bg-zinc-700 text-zinc-300 transition-colors"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <input 
+                    type="number"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value === '' ? '' : Number(e.target.value))}
+                    className={cn("flex-1 min-w-0 bg-[#18181b] border border-white/10 rounded-xl px-3 py-3 text-center text-white focus:outline-none font-bold", `focus:border-${colors.bg.split('-')[1]}-500`)}
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setInputValue(prev => typeof prev === 'number' ? prev + 1 : 1)}
+                    className="shrink-0 p-3 bg-zinc-800 rounded-xl hover:bg-zinc-700 text-zinc-300 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                
+                {mode === 'set' && typeof inputValue === 'number' && (inputValue - currentVal) !== 0 && (
+                   <p className="text-xs text-center mt-2 font-medium">
+                     <span className={inputValue > currentVal ? "text-emerald-400" : "text-rose-400"}>
+                       {inputValue > currentVal ? '+' : ''}{inputValue - currentVal}
+                     </span>
+                     <span className="text-zinc-500"> difference will be logged</span>
+                   </p>
+                )}
+              </>
             )}
           </div>
 

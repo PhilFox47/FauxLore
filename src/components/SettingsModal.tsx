@@ -27,6 +27,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     igdbClientId: '',
     igdbClientSecret: '',
     tmdbApiKey: '',
+    googleBooksApiKey: '',
     nanoGptApiKey: '',
     nanoGptModel: '',
     geminiApiKey: '',
@@ -59,6 +60,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         igdbClientId: settings.igdbClientId || '',
         igdbClientSecret: settings.igdbClientSecret || '',
         tmdbApiKey: settings.tmdbApiKey || '',
+        googleBooksApiKey: settings.googleBooksApiKey || '',
         nanoGptApiKey: settings.nanoGptApiKey || '',
         nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
         geminiApiKey: settings.geminiApiKey || '',
@@ -89,6 +91,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             igdbClientId: settings.igdbClientId || '',
             igdbClientSecret: settings.igdbClientSecret || '',
             tmdbApiKey: settings.tmdbApiKey || '',
+            googleBooksApiKey: settings.googleBooksApiKey || '',
             nanoGptApiKey: settings.nanoGptApiKey || '',
             nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
             geminiApiKey: settings.geminiApiKey || '',
@@ -274,6 +277,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         igdbClientId: formData.igdbClientId,
         igdbClientSecret: formData.igdbClientSecret,
         tmdbApiKey: formData.tmdbApiKey,
+        googleBooksApiKey: formData.googleBooksApiKey,
         nanoGptApiKey: formData.nanoGptApiKey,
         nanoGptModel: formData.nanoGptModel,
         geminiApiKey: formData.geminiApiKey,
@@ -608,6 +612,17 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       onChange={handleChange}
                       className="input-field" 
                       placeholder="eyJhbG..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Google Books API Key (Books)</label>
+                    <input 
+                      type="password"
+                      name="googleBooksApiKey"
+                      value={formData.googleBooksApiKey}
+                      onChange={handleChange}
+                      className="input-field" 
+                      placeholder="AIzaSy..."
                     />
                   </div>
                   <div>

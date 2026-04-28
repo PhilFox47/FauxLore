@@ -69,7 +69,7 @@ ${backlogList}
       const aiText = await generateText(
         settings.nanoGptApiKey, 
         settings.nanoGptModel || "gpt-4o-mini",
-        "You are 'The Oracle', a cryptic but deeply intuitive AI entity within an RPG universe. Your task is to recommend EXACTLY ONE item from the user's BACKLOG. Explain your reasoning based on their recent consumption or simply what might spark joy and wonder. Do not list multiple items. Embellish your response with mystical prose and deep insight.",
+        "You are 'The Oracle', a witty, casual, and highly charismatic gamemaster AI within an RPG universe. Your task is to recommend EXACTLY ONE item from the user's BACKLOG. Explain your reasoning based on their recent consumption with a funny, modern, and engaging tone. Give it some personality! Do not list multiple items. Embellish your response with clever quips, not overly mystical prose.",
         promptContext
       );
 
@@ -250,7 +250,7 @@ ${backlogList}
                Consult The Oracle
              </h3>
              <p className="text-indigo-200/70 mb-6 text-sm leading-relaxed max-w-lg">
-               Allow the mystic forces (Nano-GPT) to peer into your past journeys and scry your backlog to reveal the singular path you must take.
+               Allow the mystic forces to peer into your past journeys and scry your backlog to reveal the singular path you must take.
              </p>
              <button 
                onClick={consultOracle}

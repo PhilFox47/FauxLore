@@ -242,6 +242,19 @@ export const DatabaseService = {
     }
   },
 
+  async spawnBoss(): Promise<any[]> {
+    const res = await apiFetch('/api/world-bosses/spawn', { method: 'POST' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to spawn boss');
+    }
+    return res.json();
+  },
+
+  async rerollBoss(id: string): Promise<void> {
+    await apiFetch(`/api/world-bosses/${id}/reroll`, { method: 'POST' });
+  },
+
   async getOracleMessages(): Promise<any[]> {
     try {
       const res = await apiFetch('/api/oracle');
@@ -267,6 +280,18 @@ export const DatabaseService = {
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`Failed to save artifact: ${text}`);
+    }
+  },
+
+  async updateArtifact(id: string, artifact: any): Promise<void> {
+    const res = await apiFetch(`/api/artifacts/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(artifact)
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Failed to update artifact: ${text}`);
     }
   },
 

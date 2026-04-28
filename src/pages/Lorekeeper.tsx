@@ -17,11 +17,13 @@ import {
 import { cn } from '../lib/utils';
 import { calculateScaledPages } from '../lib/scaling';
 import { generateText } from '../services/nanoGptService';
+import { Loader2 } from 'lucide-react';
 
 export function Lorekeeper() {
-  const { media, logs, settings, aiTextCache, saveAiText, refreshData, worldBosses, artifacts } = useMediaContext();
+  const { media, logs, settings, aiTextCache, saveAiText, refreshData, worldBosses, artifacts, rerollBoss, spawnBoss } = useMediaContext();
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isRegeneratingTitle, setIsRegeneratingTitle] = useState(false);
+  const [isSpawningBoss, setIsSpawningBoss] = useState(false);
   
   const rpgState = useMemo(() => calculateRPGState(media, logs, settings, worldBosses, artifacts), [media, logs, settings, worldBosses, artifacts]);
 
@@ -253,6 +255,27 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                <p className="text-zinc-500 text-sm font-medium">Weekly challenges linked to your currently active media.</p>
             </div>
             <div className="flex gap-4">
+               <button 
+                  onClick={async () => {
+                    setIsSpawningBoss(true);
+                    try {
+                      await spawnBoss();
+                    } catch (e: any) {
+                      alert(e.message || "Failed to spawn boss");
+                    } finally {
+                      setIsSpawningBoss(false);
+                    }
+                  }}
+                  disabled={isSpawningBoss}
+                  className="bg-black/40 hover:bg-zinc-800 border border-white/5 px-6 py-3 rounded-2xl flex items-center justify-center gap-2 hover:border-red-500/30 transition-all font-bold text-white group disabled:opacity-50 disabled:cursor-not-allowed"
+               >
+                  {isSpawningBoss ? (
+                    <Loader2 className="w-5 h-5 text-red-500 animate-spin" />
+                  ) : (
+                    <Swords className="w-5 h-5 text-red-500 group-hover:scale-110 transition-transform" />
+                  )}
+                  Encore
+               </button>
                <div className="bg-zinc-950 px-6 py-3 rounded-2xl border border-white/5 text-center">
                   <div className="text-[10px] text-zinc-600 font-black uppercase tracking-widest mb-1">Total Defeated</div>
                   <div className="text-xl font-black text-white">{worldBosses.filter(b => b.status === 'Defeated').length}</div>
@@ -288,7 +311,26 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                         <span className="text-[10px] font-black text-zinc-600 uppercase">Lv. {boss.level}</span>
                      </div>
                      
-                     <h4 className="text-lg font-black text-white mb-1">{boss.name}</h4>
+                     <div className="flex items-start justify-between gap-2 mb-1">
+                       <h4 className="text-lg font-black text-white">{boss.name}</h4>
+                       {boss.status === 'Active' && (
+                         <button 
+                           onClick={async (e) => {
+                             const btn = e.currentTarget;
+                             btn.disabled = true;
+                             const icon = btn.querySelector('svg');
+                             if(icon) icon.classList.add('animate-spin', 'text-amber-500');
+                             await rerollBoss(boss.id);
+                             btn.disabled = false;
+                             if(icon) icon.classList.remove('animate-spin', 'text-amber-500');
+                           }} 
+                           className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50" 
+                           title="Reroll Boss Name"
+                         >
+                           <RefreshCw className="w-4 h-4 text-zinc-500" />
+                         </button>
+                       )}
+                     </div>
                      <p className="text-xs text-zinc-500 mb-6 truncate italic">Target: {mediaItem?.title || 'Unknown'}</p>
 
                      <div className="space-y-2">

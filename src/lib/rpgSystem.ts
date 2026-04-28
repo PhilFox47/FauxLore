@@ -69,13 +69,44 @@ export function calculateRPGState(
   // Filter historical
   const validLogs = logs.filter(l => !l.isHistoric && !l.timestamp.startsWith('1970-01-01'));
   
+  // First we calculate the base EXP per log, applying artifacts per-log.
   let baseExp = 0;
+  const equipped = artifacts.filter((a: any) => a.isEquipped);
+
   validLogs.forEach(log => {
     if (log.metricType === 'statusChange') return; // Status changes don't grant EXP
     
     const item = media.find(m => m.id === log.mediaId);
     if (item) {
-      baseExp += calculateScaledDelta(log.delta, item, settings); // 1 Master Page = 1 EXP (removed the * 5)
+      let logExp = calculateScaledDelta(log.delta, item, settings);
+      
+      let multiplier = 1.0;
+      equipped.forEach((a: any) => {
+        const durabilityRatio = (a.durability || 100) / (a.maxDurability || 100);
+        let applies = false;
+        
+        // If targetType is set, it's a specific bonus
+        if (a.targetType) {
+          if (a.targetType === 'Genre' && item.genres?.includes(a.targetValue)) applies = true;
+          else if (a.targetType === 'MediaType' && item.mediaType === a.targetValue) applies = true;
+          else if (a.targetType === 'Franchise') {
+            applies = true;
+            if (!item.franchises?.includes(a.targetValue || '') && !item.title.toLowerCase().includes(a.targetValue?.toLowerCase() || '')) {
+               applies = false;
+            }
+          }
+        } else {
+          // Backward compatibility or generic artifacts apply a flat baseline
+          applies = true;
+        }
+
+        if (applies) {
+          const itemBonusPct = (a.bonusPercent || 20) / 100;
+          multiplier += itemBonusPct * durabilityRatio;
+        }
+      });
+      
+      baseExp += logExp * multiplier;
     }
   });
 
@@ -177,19 +208,7 @@ export function calculateRPGState(
     if (week === currentWeekInfo) quests.push(...tempQuests);
   }
 
-  // Equipment bonuses (Gradual effectiveness based on durability)
-  const equipped = artifacts.filter((a: any) => a.isEquipped);
-  let equipMultiplier = 1.0;
-  equipped.forEach((a: any) => {
-    // Artifact provides bonus relative to its durability
-    const durabilityRatio = (a.durability || 100) / (a.maxDurability || 100);
-    // Base 5% bonus per item slot at full durability. 
-    // Linear degradation: 100% dur = 5% boost, 0% dur = 0% boost.
-    const itemBonus = 0.05 * durabilityRatio; 
-    equipMultiplier += itemBonus;
-  });
-
-  const totalExp = Math.max(0, baseExp + questExp + bossExp + decayExp + penaltyExp) * equipMultiplier;
+  const totalExp = Math.max(0, baseExp + questExp + bossExp + decayExp + penaltyExp);
   const level = getLevelForExp(totalExp);
   
   const currentLevelExp = getExpForLevel(level);

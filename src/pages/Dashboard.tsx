@@ -14,7 +14,7 @@ import { format, parseISO } from 'date-fns';
 import { cn } from '../lib/utils';
 
 export function Dashboard() {
-  const { media, logs, settings, saveMediaItem, addLog, deleteMediaItem, aiTextCache, worldBosses, artifacts, oracleMessages, fetchOracleMessage } = useMediaContext();
+  const { media, logs, settings, saveMediaItem, addLog, deleteMediaItem, aiTextCache, worldBosses, artifacts, oracleMessages, fetchOracleMessage, rerollBoss } = useMediaContext();
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MediaItem | undefined>(undefined);
@@ -122,8 +122,16 @@ export function Dashboard() {
                         )}
                       </h4>
                       <button 
-                        onClick={() => fetchOracleMessage()}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-purple-400 hover:text-purple-300 p-1"
+                        onClick={async (e) => {
+                          const btn = e.currentTarget;
+                          btn.disabled = true;
+                          const icon = btn.querySelector('svg');
+                          if(icon) icon.classList.add('animate-spin', 'text-purple-300');
+                          await fetchOracleMessage();
+                          btn.disabled = false;
+                          if(icon) icon.classList.remove('animate-spin', 'text-purple-300');
+                        }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-purple-400 hover:text-purple-300 p-1 disabled:opacity-50"
                       >
                          <RefreshCw className="w-4 h-4" />
                       </button>
@@ -166,9 +174,26 @@ export function Dashboard() {
                           )}>
                              <AlertTriangle className="w-5 h-5" />
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                              <div className="text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Level {boss.level} BOSS</div>
-                             <h4 className="text-sm font-black text-white truncate">{boss.name}</h4>
+                             <div className="flex items-center justify-between gap-2">
+                               <h4 className="text-sm font-black text-white truncate">{boss.name}</h4>
+                               <button 
+                                  onClick={async (e) => {
+                                    const btn = e.currentTarget;
+                                    btn.disabled = true;
+                                    const icon = btn.querySelector('svg');
+                                    if(icon) icon.classList.add('animate-spin', 'text-amber-500');
+                                    await rerollBoss(boss.id);
+                                    btn.disabled = false;
+                                    if(icon) icon.classList.remove('animate-spin', 'text-amber-500');
+                                  }} 
+                                  className="shrink-0 p-1 bg-white/5 hover:bg-white/10 rounded border border-white/5 transition-colors disabled:opacity-50" 
+                                  title="Reroll Boss Name"
+                                >
+                                  <RefreshCw className="w-3 h-3 text-zinc-400" />
+                                </button>
+                             </div>
                           </div>
                        </div>
                        

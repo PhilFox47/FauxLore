@@ -109,6 +109,9 @@ export interface Artifact {
   maxDurability: number;
   slot?: 'Head' | 'Body' | 'Legs' | 'Primary' | 'Secondary' | 'Accessory';
   isEquipped?: boolean;
+  targetType?: string;
+  targetValue?: string;
+  bonusPercent?: number;
 }
 
 export interface WorldBoss {
@@ -137,6 +140,7 @@ export interface Settings {
   igdbClientId?: string;
   igdbClientSecret?: string;
   tmdbApiKey?: string;
+  googleBooksApiKey?: string;
   nanoGptApiKey?: string;
   nanoGptModel?: string;
   geminiApiKey?: string;
@@ -177,4 +181,14 @@ export const MEDIA_COLORS: Record<MediaType, { text: string, bg: string, progres
   'Series': { text: 'text-red-400', bg: 'bg-red-600', progress: 'bg-red-500', shadow: 'shadow-[0_0_12px_rgba(239,68,68,0.5)]', glow: 'bg-red-500/30' },
   'Movie': { text: 'text-yellow-400', bg: 'bg-yellow-600', progress: 'bg-yellow-500', shadow: 'shadow-[0_0_12px_rgba(234,179,8,0.5)]', glow: 'bg-yellow-500/30' },
   'Comic': { text: 'text-green-400', bg: 'bg-green-600', progress: 'bg-green-500', shadow: 'shadow-[0_0_12px_rgba(34,197,94,0.5)]', glow: 'bg-green-500/30' },
+};
+
+export const RARITY_COLORS: Record<string, { border: string, bg: string, text: string, textShadow: string }> = {
+  'Common': { border: 'border-zinc-500', bg: 'bg-zinc-500/10', text: 'text-zinc-400', textShadow: 'drop-shadow-[0_0_8px_rgba(161,161,170,0.5)]' },
+  'Uncommon': { border: 'border-green-500', bg: 'bg-green-500/10', text: 'text-green-400', textShadow: 'drop-shadow-[0_0_8px_rgba(74,222,128,0.5)]' },
+  'Rare': { border: 'border-blue-500', bg: 'bg-blue-500/10', text: 'text-blue-400', textShadow: 'drop-shadow-[0_0_8px_rgba(96,165,250,0.5)]' },
+  'Super Rare': { border: 'border-purple-500', bg: 'bg-purple-500/10', text: 'text-purple-400', textShadow: 'drop-shadow-[0_0_8px_rgba(192,132,252,0.5)]' },
+  'Epic': { border: 'border-pink-500', bg: 'bg-pink-500/10', text: 'text-pink-400', textShadow: 'drop-shadow-[0_0_8px_rgba(244,114,182,0.5)]' },
+  'Legendary': { border: 'border-yellow-500', bg: 'bg-yellow-500/10', text: 'text-yellow-400', textShadow: 'drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]' },
+  'Mythic': { border: 'border-red-500', bg: 'bg-red-500/10', text: 'text-red-400', textShadow: 'drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]' },
 };

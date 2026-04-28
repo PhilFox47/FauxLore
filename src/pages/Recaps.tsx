@@ -9,7 +9,8 @@ import {
 } from 'date-fns';
 import { calculateScaledDelta } from '../lib/scaling';
 import { calculateRPGState } from '../lib/rpgSystem';
-import { MediaItem, MEDIA_COLORS, ProgressLog } from '../types/schema';
+import { MediaItem, MEDIA_COLORS, ProgressLog, RARITY_COLORS } from '../types/schema';
+import { cn } from '../lib/utils';
 import { generateAiRecapText } from '../services/nanoGptService';
 import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon } from 'lucide-react';
 import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog } from '../lib/recapAnalytics';
@@ -780,16 +781,6 @@ ${promptContext}`);
   const renderGatheredLoot = () => {
      if (gatheredLoot.length === 0) return null;
 
-     const rarityColors: Record<string, string> = {
-       'Mythic': 'text-rose-500 border-rose-500/30 bg-rose-500/10 shadow-[0_0_15px_rgba(244,63,94,0.3)]',
-       'Legendary': 'text-amber-400 border-amber-400/30 bg-amber-400/10 shadow-[0_0_15px_rgba(251,191,36,0.3)]',
-       'Epic': 'text-fuchsia-400 border-fuchsia-400/30 bg-fuchsia-400/10 shadow-[0_0_15px_rgba(232,121,249,0.3)]',
-       'Super Rare': 'text-violet-400 border-violet-400/30 bg-violet-400/10',
-       'Rare': 'text-blue-400 border-blue-400/30 bg-blue-400/10',
-       'Uncommon': 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10',
-       'Common': 'text-zinc-300 border-white/10 bg-white/5',
-     };
-
      return (
         <div className="bg-zinc-900/50 border border-white/5 p-6 rounded-3xl">
            <h3 className="text-lg font-black text-white mb-6 flex items-center gap-3">
@@ -797,17 +788,25 @@ ${promptContext}`);
              Gathered Loot
            </h3>
            <div className="space-y-4">
-              {gatheredLoot.map((artifact, idx) => (
+              {gatheredLoot.map((artifact, idx) => {
+                 const style = RARITY_COLORS[artifact.rarity] || RARITY_COLORS['Common'];
+                 return (
                  <div key={idx} className="flex flex-col gap-2 p-3 bg-black/40 rounded-2xl border border-white/5 relative overflow-hidden group">
                     <div className="flex justify-between items-start gap-4 z-10 relative">
-                       <span className="font-bold text-white text-sm line-clamp-2">{artifact.name}</span>
-                       <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full border whitespace-nowrap ${rarityColors[artifact.rarity] || rarityColors['Common']}`}>
+                       <span className={cn("font-bold text-sm line-clamp-2", style.text)}>{artifact.name}</span>
+                       <span className={cn("text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full border whitespace-nowrap", style.text, style.bg, style.border.replace('500', '500/30'))}>
                           {artifact.rarity}
                        </span>
                     </div>
                     <p className="text-xs text-zinc-500 z-10 relative line-clamp-2">{artifact.description}</p>
+                    {artifact.targetType && (
+                       <div className="flex items-center justify-between mt-1 opacity-70">
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{artifact.targetType}: {artifact.targetValue}</span>
+                          <span className="text-[10px] text-green-400 font-black tracking-widest">+{artifact.bonusPercent || 20}%</span>
+                       </div>
+                    )}
                  </div>
-              ))}
+              );})}
            </div>
         </div>
      );

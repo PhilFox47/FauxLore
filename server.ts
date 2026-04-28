@@ -223,38 +223,47 @@ async function startServer() {
   async function generateOracleMessage(userId: string, type: 'morning' | 'evening') {
     try {
       const settings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId);
-      if (!settings || !settings.geminiApiKey) return;
+      const apiKey = settings?.nanoGptApiKey;
+      if (!apiKey) return;
 
       const logs: any[] = db.prepare('SELECT * FROM logs WHERE userId = ? AND timestamp > ?').all(userId, new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
       const media: any[] = db.prepare('SELECT * FROM media WHERE userId = ?').all(userId).map(normalizeMedia);
       
-      const prompt = `You are the Narrative Oracle, a mystical entity in a life-tracking RPG. 
-      You comment on the user's recent progress and offer cryptic yet helpful guidance for the day ahead.
+      const systemPrompt = `You are the Narrative Oracle, a witty, casual, and highly charismatic gamemaster AI in a life-tracking RPG. 
+      You comment on the user's recent progress and offer guidance for the day ahead. Your tone is like an entertaining podcaster or gamemaster—fun, modern, slightly sarcastic but very encouraging. Give it personality!`;
       
-      Time: ${type === 'morning' ? '09:00 AM' : '09:00 PM'}
+      const userPrompt = `Time: ${type === 'morning' ? '09:00 AM' : '09:00 PM'}
       Recent Logs: ${logs.map(l => {
         const m = media.find(x => x.id === l.mediaId);
         return `${m?.title} (${l.metricType}: +${l.delta})`;
       }).join(', ')}
       
-      Keep it short (under 300 characters). Be atmospheric, encouraging, and game-like.
-      If it's morning, give a theme for the day. If evening, summarize the spirit of their achievements.`;
+      Keep it short (under 300 characters). Don't be too cryptic—be charismatic and witty!
+      If it's morning, give a fun theme for the day. If evening, summarize their achievements with a clever quip.`;
 
-      const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${settings.geminiApiKey}`, {
+      const aiRes = await fetch("https://nano-gpt.com/api/v1/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 100, temperature: 0.7 }
+          model: settings?.nanoGptModel || "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ]
         })
       });
 
       if (aiRes.ok) {
         const data = await aiRes.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const text = data.choices?.[0]?.message?.content;
         if (text) {
           db.prepare('INSERT INTO oracle_messages (id, userId, message, type, timestamp) VALUES (?, ?, ?, ?, ?)').run(uuidv4(), userId, text.trim(), type, new Date().toISOString());
         }
+      } else {
+        console.error("Oracle generation API error", await aiRes.text());
       }
     } catch (e) {
       console.error("Oracle generation failed", e);
@@ -262,10 +271,13 @@ async function startServer() {
   }
 
   // World Boss Spawner
-  async function spawnWorldBoss(userId: string) {
+  async function spawnWorldBoss(userId: string, throwOnEmpty = false) {
     try {
       const activeMedia = db.prepare("SELECT id, title, mediaType FROM media WHERE userId = ? AND status = 'Active'").all(userId) as any[];
-      if (activeMedia.length === 0) return;
+      if (activeMedia.length === 0) {
+        if (throwOnEmpty) throw new Error("No active media found. Start consuming a Media Item to spawn a boss!");
+        return;
+      }
 
       const mediaItem = activeMedia[Math.floor(Math.random() * activeMedia.length)];
       const settings: any = db.prepare('SELECT geminiApiKey FROM settings WHERE userId = ?').get(userId);
@@ -288,26 +300,36 @@ async function startServer() {
       
       let bossName = "";
       
-      if (settings?.geminiApiKey) {
+      const apiKey = settings?.geminiApiKey || process.env.GEMINI_API_KEY;
+      if (apiKey) {
         try {
-          const prompt = `Generate a creative boss name and title for a world boss encounter in an RPG. 
-          The boss MUST be specifically themed after the following media: "${mediaItem.title}" (Type: ${mediaItem.mediaType}).
-          Difficulty Level: ${level}/5 (1=Pleb, 5=World Boss).
-          The name should sound like a character or entity that would actually exist or be a corrupt version of something in that specific universe.
-          Format: Just the name and title (e.g., "Sephiroth, the One-Winged Angel"). Under 40 characters. No markdown.`;
+          const prompt = `You are an RPG boss generator.
+Task: Create ONE boss name and title that perfectly fits the universe of "${mediaItem.title}" (Type: ${mediaItem.mediaType}).
+Difficulty: Level ${level} out of 5.
 
-          const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${settings.geminiApiKey}`, {
+Instructions:
+1. USE WEB SEARCH to find actual characters, creatures, villains, or lore from exactly "${mediaItem.title}".
+2. Pick an appropriate entity from that media.
+3. Make them an RPG boss. If the media doesn't have obvious bosses, create a funny or thematic boss out of a main character/concept from it.
+4. Return ONLY the name and title. No explanations, no markdown.
+5. Example format: "Bowser, King of the Koopas".
+
+It MUST directly reference "${mediaItem.title}". Do not use generic fantasy names.`;
+
+          const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { maxOutputTokens: 20, temperature: 0.9 }
+              tools: [{ googleSearch: {} }],
+              generationConfig: { temperature: 0.9 }
             })
           });
 
           if (aiRes.ok) {
             const data = await aiRes.json();
-            bossName = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.replace(/\*\*/g, '').replace(/\"/g, '').trim() || "";
+            if (text) bossName = text;
           }
         } catch (e) { console.error("Boss name generation failed", e); }
       }
@@ -325,7 +347,10 @@ async function startServer() {
         INSERT INTO world_bosses (id, userId, mediaId, name, level, targetProgress, currentProgress, expiresAt, createdAt)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(uuidv4(), userId, mediaItem.id, bossName, level, target, 0, nextMonday.toISOString(), new Date().toISOString());
-    } catch (e) { console.error("Boss spawn failed", e); }
+    } catch (e) { 
+        console.error("Boss spawn failed", e); 
+        if (throwOnEmpty) throw e;
+    }
   }
 
   // Cron schedule for Oracle messages (09:00 and 21:00)
@@ -444,7 +469,8 @@ async function startServer() {
       hardcoverApiKey TEXT,
       nanoGptApiKey TEXT,
       nanoGptModel TEXT,
-      geminiApiKey TEXT
+      geminiApiKey TEXT,
+      googleBooksApiKey TEXT
     );
 
     CREATE TABLE IF NOT EXISTS global_taxonomy (
@@ -463,6 +489,7 @@ async function startServer() {
       nanoGptApiKey TEXT,
       nanoGptModel TEXT,
       geminiApiKey TEXT,
+      googleBooksApiKey TEXT,
       timezone TEXT,
       masterPageConfig TEXT,
       yearlyGoals TEXT,
@@ -507,6 +534,9 @@ async function startServer() {
       maxDurability INTEGER DEFAULT 100,
       slot TEXT,
       isEquipped INTEGER DEFAULT 0,
+      targetType TEXT,
+      targetValue TEXT,
+      bonusPercent INTEGER,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
     );
 
@@ -553,8 +583,8 @@ async function startServer() {
     const adminSettings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get('default_user');
     if (adminSettings) {
       db.prepare(`
-        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey)
-        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey)
+        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey)
+        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey)
         ON CONFLICT(id) DO UPDATE SET
           igdbClientId=COALESCE(system_settings.igdbClientId, excluded.igdbClientId),
           igdbClientSecret=COALESCE(system_settings.igdbClientSecret, excluded.igdbClientSecret),
@@ -562,7 +592,8 @@ async function startServer() {
           hardcoverApiKey=COALESCE(system_settings.hardcoverApiKey, excluded.hardcoverApiKey),
           nanoGptApiKey=COALESCE(system_settings.nanoGptApiKey, excluded.nanoGptApiKey),
           nanoGptModel=COALESCE(system_settings.nanoGptModel, excluded.nanoGptModel),
-          geminiApiKey=COALESCE(system_settings.geminiApiKey, excluded.geminiApiKey)
+          geminiApiKey=COALESCE(system_settings.geminiApiKey, excluded.geminiApiKey),
+          googleBooksApiKey=COALESCE(system_settings.googleBooksApiKey, excluded.googleBooksApiKey)
       `).run({
         igdbClientId: adminSettings.igdbClientId || null,
         igdbClientSecret: adminSettings.igdbClientSecret || null,
@@ -571,6 +602,7 @@ async function startServer() {
         nanoGptApiKey: adminSettings.nanoGptApiKey || null,
         nanoGptModel: adminSettings.nanoGptModel || null,
         geminiApiKey: adminSettings.geminiApiKey || null,
+        googleBooksApiKey: adminSettings.googleBooksApiKey || null,
       });
     }
   } catch (e) {
@@ -586,9 +618,14 @@ async function startServer() {
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptApiKey TEXT").run(); console.log("Migration: Added nanoGptApiKey"); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptModel TEXT").run(); console.log("Migration: Added nanoGptModel"); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN geminiApiKey TEXT").run(); console.log("Migration: Added geminiApiKey"); } catch (e) {}
+  try { db.prepare("ALTER TABLE system_settings ADD COLUMN googleBooksApiKey TEXT").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE settings ADD COLUMN googleBooksApiKey TEXT").run(); } catch(e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN lastActiveDate TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN currentStreak INTEGER").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN hltbMain REAL").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE artifacts ADD COLUMN targetType TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE artifacts ADD COLUMN targetValue TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE artifacts ADD COLUMN bonusPercent INTEGER").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN hltbMainExtra REAL").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN hltbCompletionist REAL").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN isReRun INTEGER").run(); } catch (e) {}
@@ -864,8 +901,8 @@ async function startServer() {
 
       const settings = req.body;
       db.prepare(`
-        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey)
-        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey)
+        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey)
+        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey)
         ON CONFLICT(id) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -873,7 +910,8 @@ async function startServer() {
           hardcoverApiKey=excluded.hardcoverApiKey,
           nanoGptApiKey=excluded.nanoGptApiKey,
           nanoGptModel=excluded.nanoGptModel,
-          geminiApiKey=excluded.geminiApiKey
+          geminiApiKey=excluded.geminiApiKey,
+          googleBooksApiKey=excluded.googleBooksApiKey
       `).run({
         igdbClientId: settings.igdbClientId || null,
         igdbClientSecret: settings.igdbClientSecret || null,
@@ -881,7 +919,8 @@ async function startServer() {
         hardcoverApiKey: settings.hardcoverApiKey || null,
         nanoGptApiKey: settings.nanoGptApiKey || null,
         nanoGptModel: settings.nanoGptModel || null,
-        geminiApiKey: settings.geminiApiKey || null
+        geminiApiKey: settings.geminiApiKey || null,
+        googleBooksApiKey: settings.googleBooksApiKey || null
       });
       res.json({ success: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
@@ -1463,8 +1502,8 @@ async function startServer() {
       if (!userId) return;
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -1473,6 +1512,7 @@ async function startServer() {
           nanoGptApiKey=excluded.nanoGptApiKey,
           nanoGptModel=excluded.nanoGptModel,
           geminiApiKey=excluded.geminiApiKey,
+          googleBooksApiKey=excluded.googleBooksApiKey,
           timezone=excluded.timezone,
           masterPageConfig=excluded.masterPageConfig,
           yearlyGoals=excluded.yearlyGoals,
@@ -1487,6 +1527,7 @@ async function startServer() {
         nanoGptApiKey: settings.nanoGptApiKey || null,
         nanoGptModel: settings.nanoGptModel || null,
         geminiApiKey: settings.geminiApiKey || null,
+        googleBooksApiKey: settings.googleBooksApiKey || null,
         timezone: settings.timezone || null,
         masterPageConfig: settings.masterPageConfig ? JSON.stringify(settings.masterPageConfig) : null,
         yearlyGoals: settings.yearlyGoals ? JSON.stringify(settings.yearlyGoals) : null,
@@ -1586,8 +1627,8 @@ async function startServer() {
       const userId = getAuthUser(req, res);
       if (!userId) return;
       const stmt = db.prepare(`
-        INSERT INTO artifacts (id, userId, mediaId, name, description, rarity, type, earnedAt, durability, maxDurability, slot, isEquipped)
-        VALUES (@id, @userId, @mediaId, @name, @description, @rarity, @type, @earnedAt, @durability, @maxDurability, @slot, @isEquipped)
+        INSERT INTO artifacts (id, userId, mediaId, name, description, rarity, type, earnedAt, durability, maxDurability, slot, isEquipped, targetType, targetValue, bonusPercent)
+        VALUES (@id, @userId, @mediaId, @name, @description, @rarity, @type, @earnedAt, @durability, @maxDurability, @slot, @isEquipped, @targetType, @targetValue, @bonusPercent)
       `);
       stmt.run({
         id: artifact.id,
@@ -1601,7 +1642,37 @@ async function startServer() {
         durability: artifact.durability || 100,
         maxDurability: artifact.maxDurability || 100,
         slot: artifact.slot || null,
-        isEquipped: artifact.isEquipped ? 1 : 0
+        isEquipped: artifact.isEquipped ? 1 : 0,
+        targetType: artifact.targetType || null,
+        targetValue: artifact.targetValue || null,
+        bonusPercent: artifact.bonusPercent || 0
+      });
+      res.json({ success: true, artifact });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.put("/api/artifacts/:id", (req, res) => {
+    try {
+      const artifact = req.body;
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const stmt = db.prepare(`
+        UPDATE artifacts SET 
+          name = @name, description = @description, rarity = @rarity, type = @type, 
+          slot = @slot, targetType = @targetType, targetValue = @targetValue, bonusPercent = @bonusPercent
+        WHERE id = @id AND userId = @userId
+      `);
+      stmt.run({
+        id: req.params.id,
+        userId: userId,
+        name: artifact.name,
+        description: artifact.description,
+        rarity: artifact.rarity,
+        type: artifact.type,
+        slot: artifact.slot || null,
+        targetType: artifact.targetType || null,
+        targetValue: artifact.targetValue || null,
+        bonusPercent: artifact.bonusPercent || 0
       });
       res.json({ success: true, artifact });
     } catch (e) { res.status(500).json({ error: String(e) }); }
@@ -1611,11 +1682,18 @@ async function startServer() {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
-      const { slot } = req.body;
+      
       const id = req.params.id;
+      // Get the artifact to find its intended slot
+      const artifact = db.prepare('SELECT slot FROM artifacts WHERE id = ? AND userId = ?').get(id, userId) as any;
+      if (!artifact || !artifact.slot) {
+         return res.status(400).json({ error: "Invalid artifact" });
+      }
+      
+      const slot = artifact.slot;
       db.prepare("UPDATE artifacts SET isEquipped = 0 WHERE userId = ? AND slot = ?").run(userId, slot);
-      db.prepare("UPDATE artifacts SET isEquipped = 1, slot = ? WHERE id = ? AND userId = ?").run(slot, id, userId);
-      res.json({ success: true });
+      db.prepare("UPDATE artifacts SET isEquipped = 1 WHERE id = ? AND userId = ?").run(id, userId);
+      res.json({ success: true, slot });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -1637,6 +1715,17 @@ async function startServer() {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  app.post("/api/oracle/generate", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const hour = new Date().getHours();
+      const type = hour < 12 ? 'morning' : 'evening';
+      await generateOracleMessage(userId, type);
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   app.get("/api/world-bosses", async (req, res) => {
     try {
       const userId = getAuthUser(req, res);
@@ -1644,12 +1733,77 @@ async function startServer() {
       db.prepare("UPDATE world_bosses SET status = 'Failed' WHERE userId = ? AND status = 'Active' AND expiresAt < ?").run(userId, new Date().toISOString());
       
       let rows = db.prepare('SELECT * FROM world_bosses WHERE userId = ? ORDER BY createdAt DESC').all(userId) as any[];
-      const hasActive = rows.some(r => r.status === 'Active');
-      if (!hasActive) {
+      if (rows.length === 0) {
         await spawnWorldBoss(userId);
         rows = db.prepare('SELECT * FROM world_bosses WHERE userId = ? ORDER BY createdAt DESC').all(userId) as any[];
       }
       res.json(rows);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/world-bosses/spawn", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      
+      await spawnWorldBoss(userId, true);
+      const rows = db.prepare('SELECT * FROM world_bosses WHERE userId = ? ORDER BY createdAt DESC').all(userId) as any[];
+      res.json(rows);
+    } catch (e: any) { 
+        res.status(500).json({ error: e.message || String(e) }); 
+    }
+  });
+
+  app.post("/api/world-bosses/:id/reroll", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      
+      const boss = db.prepare('SELECT * FROM world_bosses WHERE id = ? AND userId = ?').get(req.params.id, userId) as any;
+      if (!boss) return res.status(404).json({ error: "Not found" });
+      
+      const mediaItem = db.prepare('SELECT * FROM media WHERE id = ?').get(boss.mediaId) as any;
+      const settings = db.prepare('SELECT geminiApiKey FROM settings WHERE userId = ?').get(userId) as any;
+      
+      let newName = "Void Stalker"; // fallback
+      const apiKey = settings?.geminiApiKey || process.env.GEMINI_API_KEY;
+      if (mediaItem && apiKey) {
+        try {
+          const prompt = `You are an RPG boss generator.
+Task: Create ONE boss name and title that perfectly fits the universe of "${mediaItem.title}" (Type: ${mediaItem.mediaType}).
+Difficulty: Level ${boss.level} out of 5.
+
+Instructions:
+1. USE WEB SEARCH to find actual characters, creatures, villains, or lore from exactly "${mediaItem.title}".
+2. Pick an appropriate entity from that media.
+3. Make them an RPG boss. If the media doesn't have obvious bosses, create a funny or thematic boss out of a main character/concept from it.
+4. Return ONLY the name and title. No explanations, no markdown.
+5. Example format: "Bowser, King of the Koopas".
+
+It MUST directly reference "${mediaItem.title}". Do not use generic fantasy names.`;
+
+          const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              tools: [{ googleSearch: {} }],
+              generationConfig: { temperature: 0.9 }
+            })
+          });
+
+          if (aiRes.ok) {
+            const data = await aiRes.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.replace(/\*\*/g, '').replace(/\"/g, '').trim() || "";
+            if (text) newName = text;
+          } else {
+            console.error("Gemini API error", await aiRes.text());
+          }
+        } catch (e) { console.error("Reroll failed", e); }
+      }
+      
+      db.prepare("UPDATE world_bosses SET name = ? WHERE id = ? AND userId = ?").run(newName, boss.id, userId);
+      res.json(db.prepare('SELECT * FROM world_bosses WHERE id = ? AND userId = ?').get(boss.id, userId));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -1812,8 +1966,8 @@ async function startServer() {
           hltbMainExtra,
           hltbCompletionist,
           selectedHltbType: 'mainExtra' as const,
-          genres: game.genres ? game.genres.map((g: any) => g.name) : [],
-          tags: game.themes ? game.themes.map((t: any) => t.name) : [],
+          genres: [],
+          tags: [],
           platforms: game.platforms ? game.platforms.map((p: any) => p.name) : [],
           franchises: game.franchises ? game.franchises.map((f: any) => f.name) : [],
           developer,
@@ -2000,8 +2154,8 @@ async function startServer() {
           coverImageUrl: detail.poster_path ? `https://image.tmdb.org/t/p/w500${detail.poster_path}` : "",
           year: type === 'movie' ? (detail.release_date ? new Date(detail.release_date).getFullYear() : undefined) : (detail.first_air_date ? new Date(detail.first_air_date).getFullYear() : undefined),
           reviewScore: detail.vote_average ? Math.round(detail.vote_average) / 2 : undefined, // 0-10 -> 0-5
-          genres: genres,
-          tags: tags,
+          genres: [],
+          tags: [],
           franchises: franchises,
           creator: creator,
           totalEpisodes: type === 'tv' ? detail.number_of_episodes : undefined,
@@ -2041,11 +2195,6 @@ async function startServer() {
       
       const mappedResults = (searchData.results || []).map((vn: any) => {
         const developer = (vn.developers && vn.developers.length > 0) ? vn.developers[0].name : "Unknown Developer";
-        
-        let genres: string[] = [];
-        if (vn.tags) {
-           genres = vn.tags.slice(0, 5).map((t: any) => t.name).filter(Boolean);
-        }
 
         return {
           id: vn.id,
@@ -2056,7 +2205,7 @@ async function startServer() {
           year: vn.released ? new Date(vn.released).getFullYear() : undefined,
           reviewScore: vn.rating ? Math.round(vn.rating / 10) / 2 : undefined, // Convert 1-100 to 0-5
           averagePlaytime: vn.length_minutes ? Math.round(vn.length_minutes / 60) : undefined,
-          genres: genres
+          genres: []
         };
       });
 
@@ -2070,6 +2219,12 @@ async function startServer() {
   // Google Books Integration
   app.get("/api/books/search", async (req, res) => {
     try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const userSettings: any = db.prepare('SELECT googleBooksApiKey FROM settings WHERE userId = ?').get(userId) || {};
+      const sysSettings: any = db.prepare('SELECT googleBooksApiKey FROM system_settings WHERE id = ?').get('system') || {};
+      const apiKey = sysSettings.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
+
       const query = req.query.q as string;
       const lang = req.query.lang as string;
 
@@ -2082,20 +2237,74 @@ async function startServer() {
 
       // Try Google Books First
       try {
-        let googleUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=20`;
-        if (lang) {
-          googleUrl += `&langRestrict=${lang}`;
-        }
-        const googleRes = await fetch(googleUrl, {
-          headers: {
-            'User-Agent': 'FauxLoreMediaTracker/1.0'
+        const pages = [0, 40, 80];
+        const fetchPromises = pages.map(startIndex => {
+          let googleUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=40&startIndex=${startIndex}`;
+          if (lang) {
+            googleUrl += `&langRestrict=${lang}`;
           }
+          if (apiKey) {
+            googleUrl += `&key=${apiKey}`;
+          }
+          return fetch(googleUrl, {
+            headers: {
+              'User-Agent': 'FauxLoreMediaTracker/1.0'
+            }
+          });
         });
 
-        if (googleRes.ok) {
-          const data = await googleRes.json();
-          mappedResults = (data.items || []).map((item: any) => {
-            const volumeInfo = item.volumeInfo || {};
+        const responses = await Promise.all(fetchPromises);
+        let allItems: any[] = [];
+        let allOk = true;
+        let lastStatus = 200;
+
+        for (const res of responses) {
+          if (!res.ok) {
+            allOk = false;
+            lastStatus = res.status;
+            break;
+          }
+          const data = await res.json();
+          if (data.items) {
+            allItems = allItems.concat(data.items);
+          }
+        }
+
+        if (allOk) {
+          // Deduplicate by ID
+          const uniqueItems = Array.from(new Map(allItems.map(item => [item.id, item])).values());
+          
+          mappedResults = uniqueItems
+            .filter((item: any) => {
+              const l = item.volumeInfo?.language?.toLowerCase();
+              if (lang) {
+                return l === lang.toLowerCase();
+              }
+              return l === 'en' || l === 'de'; // Only English & German by default
+            })
+            .sort((a: any, b: any) => {
+              const titleA = (a.volumeInfo?.title || '').toLowerCase();
+              const titleB = (b.volumeInfo?.title || '').toLowerCase();
+              const queryLower = query.toLowerCase();
+              
+              const aExact = titleA === queryLower ? 1 : 0;
+              const bExact = titleB === queryLower ? 1 : 0;
+              if (aExact !== bExact) return bExact - aExact;
+              
+              const aStarts = titleA.startsWith(queryLower) ? 1 : 0;
+              const bStarts = titleB.startsWith(queryLower) ? 1 : 0;
+              if (aStarts !== bStarts) return bStarts - aStarts;
+
+              const aIncludes = titleA.includes(queryLower) ? 1 : 0;
+              const bIncludes = titleB.includes(queryLower) ? 1 : 0;
+              if (aIncludes !== bIncludes) return bIncludes - aIncludes;
+
+              const aRatingsCount = a.volumeInfo?.ratingsCount || 0;
+              const bRatingsCount = b.volumeInfo?.ratingsCount || 0;
+              return bRatingsCount - aRatingsCount;
+            })
+            .map((item: any) => {
+              const volumeInfo = item.volumeInfo || {};
             
             let creator = "Unknown Author";
             if (volumeInfo.authors && volumeInfo.authors.length > 0) {
@@ -2117,55 +2326,23 @@ async function startServer() {
               subtitle: volumeInfo.subtitle || "",
               description: volumeInfo.description || "",
               publisher: volumeInfo.publisher || "",
-              language: volumeInfo.language || "",
+              language: volumeInfo.language ? volumeInfo.language.toUpperCase() : "",
               maturityRating: volumeInfo.maturityRating || "",
               coverImageUrl: coverImageUrl,
               year: !isNaN(year as number) ? year : undefined,
               reviewScore: volumeInfo.averageRating ? Math.round(volumeInfo.averageRating * 2) / 2 : undefined,
               totalPages: volumeInfo.pageCount,
               creator: creator,
-              genres: volumeInfo.categories || []
+              genres: []
             };
           });
-          fetchSuccess = true;
         } else {
-          console.warn(`Google Books API HTTP Error: ${googleRes.status}, falling back to OpenLibrary...`);
+          console.warn(`Google Books API HTTP Error: ${lastStatus}`);
+          throw new Error(`Google Books API Error: ${lastStatus}`);
         }
       } catch (err) {
-        console.warn(`Google Books fetch failed: ${err}, falling back to OpenLibrary...`);
-      }
-
-      // Fallback to OpenLibrary
-      if (!fetchSuccess) {
-        const olRes = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=20`);
-        if (!olRes.ok) {
-          throw new Error(`OpenLibrary API Error: ${olRes.status}`);
-        }
-        const data = await olRes.json();
-        
-        mappedResults = (data.docs || []).map((doc: any) => {
-          let coverImageUrl = "";
-          if (doc.cover_i) {
-            coverImageUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`;
-          }
-
-          let creator = "Unknown Author";
-          if (doc.author_name && doc.author_name.length > 0) {
-             creator = doc.author_name.join(", ");
-          }
-
-          return {
-            id: `ol_${doc.key}`,
-            title: doc.title || "Unknown Title",
-            description: "",
-            coverImageUrl: coverImageUrl,
-            year: doc.first_publish_year,
-            reviewScore: undefined,
-            totalPages: doc.number_of_pages_median,
-            creator: creator,
-            genres: doc.subject ? doc.subject.slice(0, 5) : []
-          };
-        });
+        console.error(`Google Books fetch failed: ${err}`);
+        throw err;
       }
 
       res.json(mappedResults);
@@ -2273,8 +2450,8 @@ async function startServer() {
           reviewScore: m.averageScore ? Math.round(m.averageScore / 10) / 2 : undefined,
           totalChapters: m.chapters,
           totalIssues: m.volumes,
-          genres: m.genres || [],
-          tags: tags,
+          genres: [],
+          tags: [],
           creator: creator,
           releaseStatus: m.status,
           isOngoing: m.status === "RELEASING" || m.status === "HIATUS" || m.status === "NOT_YET_RELEASED"

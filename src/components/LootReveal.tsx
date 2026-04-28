@@ -1,16 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Artifact } from '../types/schema';
+import { Artifact, RARITY_COLORS } from '../types/schema';
 import { Sparkles, Gem, X } from 'lucide-react';
-
-const ARTIFACT_RARITY_COLORS: Record<string, string> = {
-  Common: 'text-zinc-400',
-  Uncommon: 'text-green-400',
-  Rare: 'text-blue-400',
-  'Super Rare': 'text-red-500',
-  Legendary: 'text-orange-500',
-  Mythic: 'text-fuchsia-500' // Base fallback color, mythic will override styles specifically below
-};
 import { cn } from '../lib/utils';
 import Confetti from 'react-confetti';
 
@@ -49,9 +40,10 @@ export function LootReveal({ artifact, onClose }: LootRevealProps) {
 
   if (!artifact) return null;
 
-  const colorCls = ARTIFACT_RARITY_COLORS[artifact.rarity] || 'text-zinc-400';
-  let borderCls = colorCls.replace('text-', 'border-').replace('500', '500/50').replace('400', '400/50');
-  let bgCls = colorCls.replace('text-', 'bg-').replace('400', '400/10').replace('500', '500/10');
+  const colorConfig = RARITY_COLORS[artifact.rarity] || RARITY_COLORS['Common'];
+  const colorCls = colorConfig.text;
+  let borderCls = colorConfig.border.replace('500', '500/50');
+  let bgCls = colorConfig.bg;
   
   if (artifact.rarity === 'Mythic') {
      borderCls = 'border-fuchsia-500/50';
@@ -170,10 +162,29 @@ export function LootReveal({ artifact, onClose }: LootRevealProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: showDetails ? 1 : 0 }}
               transition={{ duration: 0.5, delay: 0.4 }}
-              className="text-zinc-400 text-sm mb-8 leading-relaxed px-4"
+              className="text-zinc-400 text-sm mb-4 leading-relaxed px-4"
             >
               "{artifact.description}"
             </motion.p>
+            
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: showDetails ? 1 : 0 }}
+              transition={{ duration: 0.5, delay: 0.5 }}
+              className="mb-8 px-6 py-2 rounded-xl bg-black/40 border border-white/10"
+            >
+              {artifact.targetType ? (
+                 <div className="flex flex-col items-center gap-1">
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">{artifact.targetType}: {artifact.targetValue}</span>
+                    <span className="text-sm text-green-400 font-black">+{artifact.bonusPercent}% EXP Bonus</span>
+                 </div>
+              ) : (
+                 <div className="flex flex-col items-center gap-1">
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Base Effect</span>
+                    <span className="text-sm text-green-400 font-black">+20% EXP Bonus</span>
+                 </div>
+              )}
+            </motion.div>
 
             <motion.button
               initial={{ opacity: 0, y: 10 }}
