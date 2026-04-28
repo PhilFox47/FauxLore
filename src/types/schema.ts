@@ -105,6 +105,31 @@ export interface Artifact {
   rarity: 'Common' | 'Uncommon' | 'Rare' | 'Super Rare' | 'Epic' | 'Legendary' | 'Mythic';
   type: string;
   earnedAt: string;
+  durability: number;
+  maxDurability: number;
+  slot?: 'Head' | 'Body' | 'Legs' | 'Primary' | 'Secondary' | 'Accessory';
+  isEquipped?: boolean;
+}
+
+export interface WorldBoss {
+  id: string;
+  userId: string;
+  mediaId: string;
+  name: string;
+  level: number; // 1-5
+  targetProgress: number;
+  currentProgress: number;
+  status: 'Active' | 'Defeated' | 'Failed';
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface OracleMessage {
+  id: string;
+  userId: string;
+  message: string;
+  type: 'morning' | 'evening';
+  timestamp: string;
 }
 
 export interface Settings {

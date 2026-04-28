@@ -1,4 +1,4 @@
-import { MediaItem, ProgressLog, getMetricForType, MediaType } from '../types/schema';
+import { MediaItem, ProgressLog, getMetricForType, MediaType, WorldBoss } from '../types/schema';
 import { calculateScaledDelta } from './scaling';
 import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, differenceInDays } from 'date-fns';
 
@@ -26,6 +26,7 @@ export interface RPGState {
   expBreakdown: {
     baseExp: number;
     questExp: number;
+    bossExp: number;
     decayExp: number;
     penaltyExp: number;
   };
@@ -54,7 +55,17 @@ export function mulberry32(a: number) {
 }
 
 
-export function calculateRPGState(media: MediaItem[], logs: ProgressLog[], settings: any, evalDate: Date = new Date()): RPGState {
+export function calculateRPGState(
+  media: MediaItem[], 
+  logs: ProgressLog[], 
+  settings: any, 
+  worldBosses: WorldBoss[] = [], 
+  artifacts: any[] = [],
+  evalDate: any = new Date()
+): RPGState {
+  // Ensure evalDate is a Date object
+  const now = evalDate instanceof Date ? evalDate : new Date(evalDate);
+  
   // Filter historical
   const validLogs = logs.filter(l => !l.isHistoric && !l.timestamp.startsWith('1970-01-01'));
   
@@ -73,6 +84,24 @@ export function calculateRPGState(media: MediaItem[], logs: ProgressLog[], setti
     if (m.status === 'Dropped') penaltyExp -= 500;
   });
 
+  let bossExp = 0;
+  // Boss Rewards and Penalties
+  worldBosses.forEach(boss => {
+    // level: 1(50exp), 2(100), 3(200), 4(400), 5(1000)
+    let bExp = 0;
+    if (boss.level === 1) bExp = 50;
+    else if (boss.level === 2) bExp = 100;
+    else if (boss.level === 3) bExp = 200;
+    else if (boss.level === 4) bExp = 400;
+    else if (boss.level === 5) bExp = 1000;
+
+    if (boss.status === 'Defeated') {
+      bossExp += bExp;
+    } else if (boss.status === 'Failed') {
+      penaltyExp -= bExp;
+    }
+  });
+
   let decayExp = 0;
   if (validLogs.length > 0) {
     const dates = validLogs.map(l => parseISO(l.timestamp).getTime()).sort((a, b) => a - b);
@@ -80,13 +109,12 @@ export function calculateRPGState(media: MediaItem[], logs: ProgressLog[], setti
       const days = differenceInDays(dates[i], dates[i-1]);
       if (days > 3) decayExp -= (days - 3) * 50;
     }
-    const daysSinceLast = differenceInDays(evalDate, dates[dates.length - 1]);
+    const daysSinceLast = differenceInDays(now, dates[dates.length - 1]);
     if (daysSinceLast > 3) decayExp -= (daysSinceLast - 3) * 50;
   }
 
   let questExp = 0;
   
-  const now = evalDate;
   const currentYear = now.getFullYear();
   const currentWeekInfo = format(now, "RRRR-II");
   const currentMonthInfo = format(now, "yyyy-MM");
@@ -149,7 +177,19 @@ export function calculateRPGState(media: MediaItem[], logs: ProgressLog[], setti
     if (week === currentWeekInfo) quests.push(...tempQuests);
   }
 
-  const totalExp = Math.max(0, baseExp + questExp + decayExp + penaltyExp);
+  // Equipment bonuses (Gradual effectiveness based on durability)
+  const equipped = artifacts.filter((a: any) => a.isEquipped);
+  let equipMultiplier = 1.0;
+  equipped.forEach((a: any) => {
+    // Artifact provides bonus relative to its durability
+    const durabilityRatio = (a.durability || 100) / (a.maxDurability || 100);
+    // Base 5% bonus per item slot at full durability. 
+    // Linear degradation: 100% dur = 5% boost, 0% dur = 0% boost.
+    const itemBonus = 0.05 * durabilityRatio; 
+    equipMultiplier += itemBonus;
+  });
+
+  const totalExp = Math.max(0, baseExp + questExp + bossExp + decayExp + penaltyExp) * equipMultiplier;
   const level = getLevelForExp(totalExp);
   
   const currentLevelExp = getExpForLevel(level);
@@ -179,7 +219,7 @@ export function calculateRPGState(media: MediaItem[], logs: ProgressLog[], setti
     expProgress,
     className: prefix + classNames[classIdx],
     quests,
-    expBreakdown: { baseExp, questExp, decayExp, penaltyExp }
+    expBreakdown: { baseExp, questExp, bossExp, decayExp, penaltyExp }
   };
 }
 

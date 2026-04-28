@@ -48,14 +48,18 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
     setIsLooting(true);
     try {
       const generated = await generateAiArtifactWithGemini(settings?.geminiApiKey, item);
-      const newArtifact = {
+      const newArtifact: Artifact = {
         id: uuidv4(),
         mediaId: item.id,
         name: generated.name,
         description: generated.description,
         type: generated.type || 'Trinket',
+        slot: generated.slot as any || 'Accessory',
         rarity: generated.rarity as Artifact['rarity'],
-        earnedAt: new Date().toISOString()
+        earnedAt: new Date().toISOString(),
+        durability: 100,
+        maxDurability: 100,
+        isEquipped: false
       };
       await saveArtifact(newArtifact);
       setLootedArtifact(newArtifact);

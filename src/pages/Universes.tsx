@@ -38,10 +38,9 @@ export function Universes() {
       const dbEntry = savedFranchises?.find(f => f.name === name);
       
       const totalMasterPages = items.reduce((sum, item) => {
-        const itemTotalPages = calculateScaledPages(item, settings);
-        const itemHistoricLogs = logs.filter(l => l.mediaId === item.id && l.isHistoric);
-        const historicPages = itemHistoricLogs.reduce((hSum, l) => hSum + calculateScaledDelta(l.delta, item, settings), 0);
-        return sum + Math.max(0, itemTotalPages - historicPages);
+        const itemLogs = logs.filter(l => l.mediaId === item.id && !l.isHistoric && l.metricType !== 'statusChange');
+        const nonHistoricPages = itemLogs.reduce((acc, log) => acc + calculateScaledDelta(log.delta, item, settings), 0);
+        return sum + nonHistoricPages;
       }, 0);
       
       let lastActivityDate = 0;

@@ -113,7 +113,8 @@ Return EXACTLY and ONLY a JSON object with the following keys:
 {
   "name": "The item name",
   "description": "The flavor text",
-  "type": "The RPG item type"
+  "type": "The RPG item type",
+  "slot": "Pick exactly one of: Head, Body, Legs, Primary, Secondary, Accessory"
 }`;
 
   try {
@@ -151,6 +152,7 @@ Return EXACTLY and ONLY a JSON object with the following keys:
       name: parsed.name || "Mysterious Artifact",
       description: parsed.description || "An item of unknown origin.",
       type: parsed.type || "Trinket",
+      slot: parsed.slot || "Accessory",
       rarity
     };
   } catch (error) {

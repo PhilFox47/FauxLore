@@ -1,4 +1,4 @@
-import { MediaItem, ProgressLog, MetricType, MediaType } from '../types/schema';
+import { MediaItem, ProgressLog, MetricType, MediaType, Artifact } from '../types/schema';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function apiFetch(url: string, options: RequestInit = {}) {
@@ -39,7 +39,7 @@ export const DatabaseService = {
   },
 
   async saveMedia(item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }): Promise<MediaItem> {
-    const payload = item.id ? { ...item, updatedAt: new Date().toISOString() } : { ...item, id: uuidv4(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const payload = item.id ? { ...item } : { ...item, id: uuidv4(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     const res = await apiFetch('/api/media', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -206,7 +206,7 @@ export const DatabaseService = {
     if (!res.ok) throw new Error('Failed to clear AI text');
   },
 
-  async getArtifacts(): Promise<any[]> {
+  async getArtifacts(): Promise<Artifact[]> {
     try {
       const res = await apiFetch('/api/artifacts');
       if (!res.ok) return [];
@@ -215,6 +215,47 @@ export const DatabaseService = {
       console.error(e);
       return [];
     }
+  },
+
+  async equipArtifact(id: string, slot: string): Promise<void> {
+    const res = await apiFetch(`/api/artifacts/${id}/equip`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slot })
+    });
+    if (!res.ok) throw new Error('Failed to equip artifact');
+  },
+
+  async unequipArtifact(id: string): Promise<void> {
+    const res = await apiFetch(`/api/artifacts/${id}/unequip`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to unequip artifact');
+  },
+
+  async getWorldBosses(): Promise<any[]> {
+    try {
+      const res = await apiFetch('/api/world-bosses');
+      if (!res.ok) return [];
+      return res.json();
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  },
+
+  async getOracleMessages(): Promise<any[]> {
+    try {
+      const res = await apiFetch('/api/oracle');
+      if (!res.ok) return [];
+      return res.json();
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  },
+
+  async generateOracleMessage(): Promise<void> {
+    const res = await apiFetch('/api/oracle/generate', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to generate oracle message');
   },
 
   async saveArtifact(artifact: any): Promise<void> {

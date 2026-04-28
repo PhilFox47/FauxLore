@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Search, Plus, Trash2, Tag, BookOpen, Hexagon, BarChart, Settings, BrainCircuit } from 'lucide-react';
+import { Search, Plus, Trash2, Tag, BookOpen, Hexagon, BarChart, Settings, BrainCircuit, ListFilter } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { DatabaseService } from '../services/db';
 import { generateText } from '../services/nanoGptService';
@@ -16,14 +16,22 @@ export function Taxonomy() {
   const [isAdding, setIsAdding] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
   const [migratingId, setMigratingId] = useState<string|null>(null);
+  const [sortBy, setSortBy] = useState<'Alphabetical' | 'Usage Count'>('Alphabetical');
 
   const isAdmin = user?.role === 'Admin';
 
   const filteredItems = useMemo(() => {
-    return taxonomies
+    let result = taxonomies
       .filter(t => t.type === activeTab)
       .filter(t => t.name.toLowerCase().includes(search.toLowerCase()));
-  }, [taxonomies, activeTab, search]);
+
+    if (sortBy === 'Alphabetical') {
+      result.sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+      result.sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0));
+    }
+    return result;
+  }, [taxonomies, activeTab, search, sortBy]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,6 +175,32 @@ Return JSON only.`;
                 className="w-full bg-[#09090B] border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-orange-500/50"
               />
             </div>
+            
+            <div className="flex bg-[#09090B] border border-white/10 rounded-xl p-1 gap-1">
+              <button
+                onClick={() => setSortBy('Alphabetical')}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-lg transition-all flex items-center gap-2",
+                  sortBy === 'Alphabetical' 
+                    ? "bg-white/10 text-white shadow-lg" 
+                    : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
+                )}
+              >
+                ABC
+              </button>
+              <button
+                onClick={() => setSortBy('Usage Count')}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-lg transition-all flex items-center gap-2",
+                  sortBy === 'Usage Count' 
+                    ? "bg-white/10 text-white shadow-lg" 
+                    : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
+                )}
+              >
+                Usage
+              </button>
+            </div>
+
             {isAdmin && (
               <form onSubmit={handleAdd} className="flex gap-2 w-1/3">
                 <input 

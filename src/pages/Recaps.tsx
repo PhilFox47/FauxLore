@@ -202,10 +202,10 @@ export function Recaps() {
 
       // Lorekeeper Stats
       const historyLogsAtEnd = validLogs.filter(l => parseISO(l.timestamp).getTime() <= currentInterval.end.getTime());
-      const rpgStateAtEnd = calculateRPGState(media, historyLogsAtEnd, settings, currentInterval.end);
+      const rpgStateAtEnd = calculateRPGState(media, historyLogsAtEnd, settings, [], [], currentInterval.end);
       
       const historyLogsAtStart = validLogs.filter(l => parseISO(l.timestamp).getTime() < currentInterval.start.getTime());
-      const rpgStateAtStart = calculateRPGState(media, historyLogsAtStart, settings, new Date(currentInterval.start.getTime() - 1000));
+      const rpgStateAtStart = calculateRPGState(media, historyLogsAtStart, settings, [], [], new Date(currentInterval.start.getTime() - 1000));
 
       const levelUps = Math.max(0, rpgStateAtEnd.level - rpgStateAtStart.level);
       const activeQuests = rpgStateAtEnd.quests.filter(q => q.type.startsWith(timeframe));
@@ -740,7 +740,7 @@ ${promptContext}`);
 
   const renderLorekeeper = () => {
      const historyLogsAtEnd = validLogs.filter(l => parseISO(l.timestamp).getTime() <= currentInterval.end.getTime());
-     const rpgStateAtEnd = calculateRPGState(media, historyLogsAtEnd, settings, currentInterval.end);
+     const rpgStateAtEnd = calculateRPGState(media, historyLogsAtEnd, settings, [], [], currentInterval.end);
      const activeQuests = rpgStateAtEnd.quests.filter(q => q.type.startsWith(timeframe));
      const completedQuests = activeQuests.filter(q => q.isCompleted);
      const missedQuests = activeQuests.filter(q => !q.isCompleted);

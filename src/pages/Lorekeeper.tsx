@@ -1,17 +1,29 @@
 import React, { useMemo, useState } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { calculateRPGState } from '../lib/rpgSystem';
-import { Shield, Swords, Award, TrendingDown, CheckCircle2, CircleDashed, Flame, RefreshCw, Sparkles } from 'lucide-react';
+import { 
+  Shield, 
+  Swords, 
+  Award, 
+  TrendingDown, 
+  CheckCircle2, 
+  CircleDashed, 
+  Flame, 
+  RefreshCw, 
+  Sparkles,
+  ShieldAlert,
+  Target
+} from 'lucide-react';
 import { cn } from '../lib/utils';
 import { calculateScaledPages } from '../lib/scaling';
 import { generateText } from '../services/nanoGptService';
 
 export function Lorekeeper() {
-  const { media, logs, settings, aiTextCache, saveAiText, refreshData } = useMediaContext();
+  const { media, logs, settings, aiTextCache, saveAiText, refreshData, worldBosses, artifacts } = useMediaContext();
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isRegeneratingTitle, setIsRegeneratingTitle] = useState(false);
   
-  const rpgState = useMemo(() => calculateRPGState(media, logs, settings), [media, logs, settings]);
+  const rpgState = useMemo(() => calculateRPGState(media, logs, settings, worldBosses, artifacts), [media, logs, settings, worldBosses, artifacts]);
 
   const weeklyQuests = rpgState.quests.filter(q => q.type === 'weekly');
   const monthlyQuests = rpgState.quests.filter(q => q.type === 'monthly');
@@ -228,6 +240,84 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
             />
           </div>
         </div>
+      </section>
+
+      {/* World Bosses Section */}
+      <section className="bg-zinc-900/50 border border-white/5 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden">
+         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+            <div>
+               <h2 className="text-3xl font-black text-white italic tracking-tight mb-2 flex items-center gap-3">
+                  <Swords className="w-8 h-8 text-red-500" />
+                  Legendary Encounters
+               </h2>
+               <p className="text-zinc-500 text-sm font-medium">Weekly challenges linked to your currently active media.</p>
+            </div>
+            <div className="flex gap-4">
+               <div className="bg-zinc-950 px-6 py-3 rounded-2xl border border-white/5 text-center">
+                  <div className="text-[10px] text-zinc-600 font-black uppercase tracking-widest mb-1">Total Defeated</div>
+                  <div className="text-xl font-black text-white">{worldBosses.filter(b => b.status === 'Defeated').length}</div>
+               </div>
+            </div>
+         </div>
+
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {worldBosses.length === 0 ? (
+              <div className="col-span-full py-12 text-center text-zinc-600 font-bold uppercase tracking-widest text-sm">
+                No active boss encounters
+              </div>
+            ) : (
+              worldBosses.map(boss => {
+                const mediaItem = media.find(m => m.id === boss.mediaId);
+                const progress = (boss.currentProgress / boss.targetProgress) * 100;
+                return (
+                  <div key={boss.id} className={cn(
+                    "p-6 rounded-3xl border transition-all relative overflow-hidden group",
+                    boss.status === 'Defeated' ? "bg-emerald-500/5 border-emerald-500/20" :
+                    boss.status === 'Failed' ? "bg-red-500/5 border-red-500/20 opacity-60" :
+                    "bg-zinc-950/50 border-white/10"
+                  )}>
+                     <div className="flex items-center justify-between mb-4">
+                        <span className={cn(
+                           "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded",
+                           boss.status === 'Defeated' ? "bg-emerald-500/20 text-emerald-400" :
+                           boss.status === 'Failed' ? "bg-red-500/20 text-red-400" :
+                           "bg-zinc-500/20 text-zinc-400"
+                        )}>
+                           {boss.status}
+                        </span>
+                        <span className="text-[10px] font-black text-zinc-600 uppercase">Lv. {boss.level}</span>
+                     </div>
+                     
+                     <h4 className="text-lg font-black text-white mb-1">{boss.name}</h4>
+                     <p className="text-xs text-zinc-500 mb-6 truncate italic">Target: {mediaItem?.title || 'Unknown'}</p>
+
+                     <div className="space-y-2">
+                        <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden border border-white/5">
+                           <div 
+                             className={cn(
+                               "h-full rounded-full transition-all duration-700",
+                               boss.status === 'Defeated' ? "bg-emerald-500" : "bg-red-500"
+                             )} 
+                             style={{ width: `${Math.max(4, progress)}%` }} 
+                           />
+                        </div>
+                        <div className="flex justify-between text-[8px] font-black text-zinc-600 uppercase tracking-widest">
+                           <span>{Math.floor(boss.currentProgress)} / {boss.targetProgress}</span>
+                           <span>{Math.floor(progress)}%</span>
+                        </div>
+                     </div>
+
+                     {boss.status === 'Active' && (
+                       <div className="mt-4 flex items-center gap-2 text-[9px] font-black text-amber-500 uppercase tracking-widest">
+                          <ShieldAlert className="w-3 h-3" />
+                          Expires {new Date(boss.expiresAt).toLocaleDateString()}
+                       </div>
+                     )}
+                  </div>
+                );
+              })
+            )}
+         </div>
       </section>
 
       {/* Breakdown Grid */}

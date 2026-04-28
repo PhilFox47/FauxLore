@@ -13,7 +13,7 @@ interface SettingsModalProps {
 
 export function SettingsModal({ onClose }: SettingsModalProps) {
   const { user, login } = useAuth();
-  const { media, logs, settings, aiTextCache, saveAiText, refreshData } = useMediaContext();
+  const { media, logs, settings, aiTextCache, saveAiText, refreshData, artifacts } = useMediaContext();
   const [activeTab, setActiveTab] = useState<'account'|'preferences'|'rpg'|'system'|'users'>('account');
   
   const [accountData, setAccountData] = useState({
@@ -201,7 +201,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       const apiKey = formData.nanoGptApiKey;
       const model = formData.nanoGptModel || 'gpt-4o-mini';
 
-      const rpgState = calculateRPGState(media, logs, settings);
+      const rpgState = calculateRPGState(media, logs, settings, [], artifacts);
       const systemPrompt = "You are FauxLore, a helpful and natural media tracking assistant. Keep your tone conversational, friendly, and grounded. No epic RPG or fantasy roleplay unless explicitly asked.";
 
       // 1. RPG Title

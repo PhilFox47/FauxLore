@@ -219,6 +219,134 @@ async function startServer() {
     createDatabaseBackup();
   });
 
+  // Oracle generation logic
+  async function generateOracleMessage(userId: string, type: 'morning' | 'evening') {
+    try {
+      const settings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId);
+      if (!settings || !settings.geminiApiKey) return;
+
+      const logs: any[] = db.prepare('SELECT * FROM logs WHERE userId = ? AND timestamp > ?').all(userId, new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+      const media: any[] = db.prepare('SELECT * FROM media WHERE userId = ?').all(userId).map(normalizeMedia);
+      
+      const prompt = `You are the Narrative Oracle, a mystical entity in a life-tracking RPG. 
+      You comment on the user's recent progress and offer cryptic yet helpful guidance for the day ahead.
+      
+      Time: ${type === 'morning' ? '09:00 AM' : '09:00 PM'}
+      Recent Logs: ${logs.map(l => {
+        const m = media.find(x => x.id === l.mediaId);
+        return `${m?.title} (${l.metricType}: +${l.delta})`;
+      }).join(', ')}
+      
+      Keep it short (under 300 characters). Be atmospheric, encouraging, and game-like.
+      If it's morning, give a theme for the day. If evening, summarize the spirit of their achievements.`;
+
+      const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${settings.geminiApiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 100, temperature: 0.7 }
+        })
+      });
+
+      if (aiRes.ok) {
+        const data = await aiRes.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          db.prepare('INSERT INTO oracle_messages (id, userId, message, type, timestamp) VALUES (?, ?, ?, ?, ?)').run(uuidv4(), userId, text.trim(), type, new Date().toISOString());
+        }
+      }
+    } catch (e) {
+      console.error("Oracle generation failed", e);
+    }
+  }
+
+  // World Boss Spawner
+  async function spawnWorldBoss(userId: string) {
+    try {
+      const activeMedia = db.prepare("SELECT id, title, mediaType FROM media WHERE userId = ? AND status = 'Active'").all(userId) as any[];
+      if (activeMedia.length === 0) return;
+
+      const mediaItem = activeMedia[Math.floor(Math.random() * activeMedia.length)];
+      const settings: any = db.prepare('SELECT geminiApiKey FROM settings WHERE userId = ?').get(userId);
+      
+      const r = Math.random();
+      let level = 1;
+      let target = 45;
+      
+      if (r < 0.10) {
+        level = 1; target = 45;
+      } else if (r < 0.50) {
+        level = 2; target = 90;
+      } else if (r < 0.80) {
+        level = 3; target = 180;
+      } else if (r < 0.95) {
+        level = 4; target = 360;
+      } else {
+        level = 5; target = 720;
+      }
+      
+      let bossName = "";
+      
+      if (settings?.geminiApiKey) {
+        try {
+          const prompt = `Generate a creative boss name and title for a world boss encounter in an RPG. 
+          The boss MUST be specifically themed after the following media: "${mediaItem.title}" (Type: ${mediaItem.mediaType}).
+          Difficulty Level: ${level}/5 (1=Pleb, 5=World Boss).
+          The name should sound like a character or entity that would actually exist or be a corrupt version of something in that specific universe.
+          Format: Just the name and title (e.g., "Sephiroth, the One-Winged Angel"). Under 40 characters. No markdown.`;
+
+          const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${settings.geminiApiKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { maxOutputTokens: 20, temperature: 0.9 }
+            })
+          });
+
+          if (aiRes.ok) {
+            const data = await aiRes.json();
+            bossName = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+          }
+        } catch (e) { console.error("Boss name generation failed", e); }
+      }
+
+      if (!bossName) {
+        const fallbackNames = ["Void Stalker", "Doom Herald", "Chaos Reaver", "Eternal Echo"];
+        bossName = fallbackNames[Math.floor(Math.random() * fallbackNames.length)];
+      }
+
+      let nextMonday = new Date();
+      nextMonday.setDate(nextMonday.getDate() + ((1 + 7 - nextMonday.getDay()) % 7 || 7));
+      nextMonday.setHours(0, 0, 0, 0);
+
+      db.prepare(`
+        INSERT INTO world_bosses (id, userId, mediaId, name, level, targetProgress, currentProgress, expiresAt, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(uuidv4(), userId, mediaItem.id, bossName, level, target, 0, nextMonday.toISOString(), new Date().toISOString());
+    } catch (e) { console.error("Boss spawn failed", e); }
+  }
+
+  // Cron schedule for Oracle messages (09:00 and 21:00)
+  cron.schedule('0 9 * * *', () => {
+    const users = db.prepare('SELECT id FROM users').all() as {id: string}[];
+    for (const u of users) generateOracleMessage(u.id, 'morning');
+  });
+  cron.schedule('0 21 * * *', () => {
+    const users = db.prepare('SELECT id FROM users').all() as {id: string}[];
+    for (const u of users) generateOracleMessage(u.id, 'evening');
+  });
+
+  // Weekly boss spawn (Mondays)
+  cron.schedule('0 0 * * 1', () => {
+    const users = db.prepare('SELECT id FROM users').all() as {id: string}[];
+    for (const u of users) {
+       db.prepare("UPDATE world_bosses SET status = 'Failed' WHERE userId = ? AND status = 'Active' AND expiresAt < ?").run(u.id, new Date().toISOString());
+       spawnWorldBoss(u.id);
+    }
+  });
+
   
   // Automatic Migrations
   try { db.exec("ALTER TABLE media ADD COLUMN language TEXT"); } catch (e) { /* Ignore if it exists */ }
@@ -268,6 +396,7 @@ async function startServer() {
       totalIssues INTEGER,
       isReRun INTEGER,
       originalMediaId TEXT,
+      expectedReleaseDate TEXT,
       language TEXT,
       isOngoing INTEGER,
       releaseStatus TEXT,
@@ -374,7 +503,33 @@ async function startServer() {
       rarity TEXT NOT NULL, 
       type TEXT NOT NULL,
       earnedAt TEXT NOT NULL,
+      durability INTEGER DEFAULT 100,
+      maxDurability INTEGER DEFAULT 100,
+      slot TEXT,
+      isEquipped INTEGER DEFAULT 0,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS world_bosses (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      mediaId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      level INTEGER NOT NULL, -- 1=Pleb, 2=Easy, 3=Medium, 4=Hard, 5=World Boss
+      targetProgress REAL NOT NULL,
+      currentProgress REAL DEFAULT 0,
+      status TEXT DEFAULT 'Active',
+      expiresAt TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS oracle_messages (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      message TEXT NOT NULL,
+      type TEXT, -- 'morning', 'evening'
+      timestamp TEXT NOT NULL
     );
   `);
 
@@ -445,8 +600,14 @@ async function startServer() {
   try { db.prepare("ALTER TABLE artifacts ADD COLUMN rarity TEXT DEFAULT 'Common'").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE artifacts ADD COLUMN type TEXT DEFAULT 'Trinket'").run(); } catch (e) {}
   
+  try { db.prepare("ALTER TABLE artifacts ADD COLUMN durability INTEGER DEFAULT 100").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE artifacts ADD COLUMN maxDurability INTEGER DEFAULT 100").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE artifacts ADD COLUMN slot TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE artifacts ADD COLUMN isEquipped INTEGER DEFAULT 0").run(); } catch (e) {}
+  
   try { db.prepare("ALTER TABLE media ADD COLUMN originalMediaId TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN selectedHltbType TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN expectedReleaseDate TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN subtitle TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN maturityRating TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE logs ADD COLUMN location TEXT").run(); } catch (e) {}
@@ -467,6 +628,25 @@ async function startServer() {
       db.prepare("UPDATE artifacts SET userId = ? WHERE userId = 'default_user'").run(adminId);
     }
   } catch(e) { console.error('Migration of default_user failed:', e); }
+
+  // Auto-migrate artifacts slots/durability
+  try {
+    db.prepare(`
+      UPDATE artifacts SET 
+        durability = CASE WHEN durability IS NULL THEN 100 ELSE durability END,
+        maxDurability = CASE WHEN maxDurability IS NULL THEN 100 ELSE maxDurability END,
+        slot = CASE 
+          WHEN slot IS NOT NULL THEN slot
+          WHEN name LIKE '%Sword%' OR name LIKE '%Blade%' OR name LIKE '%Axe%' THEN 'Primary'
+          WHEN name LIKE '%Shield%' OR name LIKE '%Book%' OR name LIKE '%Tome%' THEN 'Secondary'
+          WHEN name LIKE '%Helm%' OR name LIKE '%Crest%' THEN 'Head'
+          WHEN name LIKE '%Armor%' OR name LIKE '%Robe%' THEN 'Body'
+          WHEN name LIKE '%Boots%' OR name LIKE '%Greaves%' THEN 'Legs'
+          ELSE 'Accessory'
+        END
+      WHERE durability IS NULL OR slot IS NULL
+    `).run();
+  } catch(e) { console.error('Migration of artifacts failed:', e); }
 
   // Seed Taxonomies if empty
   try {
@@ -516,6 +696,7 @@ async function startServer() {
     watched: row.watched === 1,
     isReRun: row.isReRun === 1,
     isOngoing: row.isOngoing === 1,
+    expectedReleaseDate: row.expectedReleaseDate || null,
     releaseStatus: row.releaseStatus || null,
     lastSyncAt: row.lastSyncAt || null
   });
@@ -581,6 +762,7 @@ async function startServer() {
       if (!user) return res.status(404).json({ error: 'User not found' });
       
       const safeUser = { id: user.id, username: user.username, role: user.role, profilePic: user.profilePic, bio: user.bio };
+      
       res.json({ user: safeUser });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -796,6 +978,34 @@ async function startServer() {
     return session.userId;
   };
 
+  // Recalculate Taxonomy Usage Counts on startup
+  try {
+    const mediaItems = db.prepare('SELECT genres, tags FROM media').all() as any[];
+    const counts: Record<string, number> = {};
+    const types: Record<string, string> = {};
+
+    mediaItems.forEach(item => {
+      const g = safeJsonParse(item.genres);
+      const t = safeJsonParse(item.tags);
+      g.forEach((name: string) => {
+        counts[name] = (counts[name] || 0) + 1;
+        types[name] = 'genre';
+      });
+      t.forEach((name: string) => {
+        counts[name] = (counts[name] || 0) + 1;
+        types[name] = 'tag';
+      });
+    });
+
+    db.prepare('UPDATE global_taxonomy SET usageCount = 0').run();
+    const updateStmt = db.prepare('UPDATE global_taxonomy SET usageCount = ? WHERE name = ? AND type = ?');
+    Object.entries(counts).forEach(([name, count]) => {
+      updateStmt.run(count, name, types[name]);
+    });
+  } catch (e) {
+    console.error("Failed to recalculate taxonomy counts", e);
+  }
+
   app.get("/api/media", (req, res) => {
     try {
       const userId = getAuthUser(req, res);
@@ -823,6 +1033,28 @@ async function startServer() {
       const item = req.body;
       const userId = getAuthUser(req, res);
       if (!userId) return;
+
+      // Handle Taxonomy Usage Counts
+      try {
+        const oldItem = db.prepare('SELECT genres, tags FROM media WHERE id = ? AND userId = ?').get(item.id, userId) as any;
+        const oldGenres = oldItem ? safeJsonParse(oldItem.genres) : [];
+        const oldTags = oldItem ? safeJsonParse(oldItem.tags) : [];
+        
+        const newGenres = item.genres || [];
+        const newTags = item.tags || [];
+
+        const updateCount = db.prepare('UPDATE global_taxonomy SET usageCount = usageCount + ? WHERE name = ? AND type = ?');
+
+        // Decrement old
+        oldGenres.forEach((g: string) => updateCount.run(-1, g, 'genre'));
+        oldTags.forEach((t: string) => updateCount.run(-1, t, 'tag'));
+        // Increment new
+        newGenres.forEach((g: string) => updateCount.run(1, g, 'genre'));
+        newTags.forEach((t: string) => updateCount.run(1, t, 'tag'));
+      } catch (e) {
+        console.error("Failed to update taxonomy counts", e);
+      }
+
       const stmt = db.prepare(`
         INSERT INTO media (
           id, userId, title, mediaType, coverImageUrl, description, creator, publisher, year, 
@@ -830,7 +1062,7 @@ async function startServer() {
           status, userRating, genres, tags, tropes, platforms, franchises,
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
-          issuesRead, totalIssues, isReRun, originalMediaId, language, isOngoing, releaseStatus, lastSyncAt, createdAt, updatedAt,
+          issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, language, isOngoing, releaseStatus, lastSyncAt, createdAt, updatedAt,
           subtitle, maturityRating
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
@@ -838,7 +1070,7 @@ async function startServer() {
           @status, @userRating, @genres, @tags, @tropes, @platforms, @franchises,
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
-          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @language, @isOngoing, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
+          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @language, @isOngoing, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
           @subtitle, @maturityRating
         )
         ON CONFLICT(id) DO UPDATE SET
@@ -853,10 +1085,10 @@ async function startServer() {
           totalChapters=excluded.totalChapters, season=excluded.season, episodesWatched=excluded.episodesWatched,
           totalEpisodes=excluded.totalEpisodes, watched=excluded.watched, watchCount=excluded.watchCount,
           runtimeMinutes=excluded.runtimeMinutes, issuesRead=excluded.issuesRead, totalIssues=excluded.totalIssues,
-          isReRun=excluded.isReRun, originalMediaId=excluded.originalMediaId,
+          isReRun=excluded.isReRun, originalMediaId=excluded.originalMediaId, expectedReleaseDate=excluded.expectedReleaseDate,
           language=excluded.language, isOngoing=excluded.isOngoing,
           releaseStatus=excluded.releaseStatus, lastSyncAt=excluded.lastSyncAt,
-          updatedAt=excluded.updatedAt, subtitle=excluded.subtitle, maturityRating=excluded.maturityRating
+          subtitle=excluded.subtitle, maturityRating=excluded.maturityRating
       `);
 
       stmt.run({
@@ -897,6 +1129,7 @@ async function startServer() {
         totalIssues: item.totalIssues || null,
         isReRun: item.isReRun ? 1 : 0,
         originalMediaId: item.originalMediaId || null,
+        expectedReleaseDate: item.expectedReleaseDate || null,
         language: item.language || null,
         subtitle: item.subtitle || null,
         maturityRating: item.maturityRating || null,
@@ -906,6 +1139,17 @@ async function startServer() {
         createdAt: item.createdAt,
         updatedAt: item.updatedAt
       });
+
+      if (item.status === 'Completed') {
+        try {
+          db.prepare(`
+            UPDATE world_bosses 
+            SET status = 'Defeated', currentProgress = targetProgress 
+            WHERE userId = ? AND mediaId = ? AND status = 'Active'
+          `).run(userId, item.id);
+        } catch (e) { console.error("Could not defeat boss on media completion", e); }
+      }
+
       const saved = db.prepare('SELECT * FROM media WHERE id = ?').get(item.id);
       res.json(normalizeMedia(saved));
     } catch (e) { 
@@ -918,8 +1162,20 @@ async function startServer() {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
-      const row = db.prepare('SELECT id FROM media WHERE id = ? AND userId = ?').get(req.params.id, userId);
+      const row = db.prepare('SELECT id, genres, tags FROM media WHERE id = ? AND userId = ?').get(req.params.id, userId) as any;
       if (!row) return res.status(404).json({ error: 'Not found or unauthorized' });
+
+      // Handle Taxonomy Usage Counts (Decrement)
+      try {
+        const genres = safeJsonParse(row.genres);
+        const tags = safeJsonParse(row.tags);
+        const updateCount = db.prepare('UPDATE global_taxonomy SET usageCount = usageCount - 1 WHERE name = ? AND type = ?');
+        
+        genres.forEach((g: string) => updateCount.run(g, 'genre'));
+        tags.forEach((t: string) => updateCount.run(t, 'tag'));
+      } catch (e) {
+        console.error("Failed to decrement taxonomy counts", e);
+      }
 
       db.prepare('DELETE FROM media WHERE id = ? AND userId = ?').run(req.params.id, userId);
       // SQLite CASCADE will handle deleting the logs attached to this mediaId, 
@@ -1052,11 +1308,60 @@ async function startServer() {
         }
         
         if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {
-          db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, updatedAt = ?, status = ? WHERE id = ? AND userId = ?`).run(log.delta, now, newStatus, log.mediaId, userId);
+          if (log.isHistoric) {
+            db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, status = ? WHERE id = ? AND userId = ?`).run(log.delta, newStatus, log.mediaId, userId);
+          } else {
+            db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, updatedAt = ?, status = ? WHERE id = ? AND userId = ?`).run(log.delta, now, newStatus, log.mediaId, userId);
+          }
         } else {
-          db.prepare(`UPDATE media SET updatedAt = ?, status = ? WHERE id = ? AND userId = ?`).run(now, newStatus, log.mediaId, userId);
+          if (log.isHistoric) {
+            db.prepare(`UPDATE media SET status = ? WHERE id = ? AND userId = ?`).run(newStatus, log.mediaId, userId);
+          } else {
+            db.prepare(`UPDATE media SET updatedAt = ?, status = ? WHERE id = ? AND userId = ?`).run(now, newStatus, log.mediaId, userId);
+          }
         }
       }
+      // Durability Loss & Boss Progress
+      if (mediaRow) {
+        try {
+          const settingsRow: any = db.prepare('SELECT masterPageConfig FROM settings WHERE userId = ?').get(userId);
+          const mpConfig = settingsRow?.masterPageConfig ? JSON.parse(settingsRow.masterPageConfig) : {};
+          
+          let scaledPages = log.delta;
+          if (log.metricType === 'playtimeHours') {
+            scaledPages = log.delta * (mediaRow.mediaType === 'Visual Novel' ? (mpConfig.vnPagesPerHour || 24) : (mpConfig.gamePagesPerHour || 12));
+          } else if (log.metricType === 'chaptersRead') {
+            scaledPages = log.delta * (mpConfig.mangaPagesPerChapter || 5);
+          } else if (log.metricType === 'episodesWatched') {
+            scaledPages = log.delta * (mpConfig.episodesWatchedMultiplier || 30);
+          } else if (log.metricType === 'watchCount') {
+            scaledPages = log.delta * (mpConfig.moviePagesPerMovie || 100);
+          } else if (log.metricType === 'issuesRead') {
+            scaledPages = log.delta * (mpConfig.comicPagesPerIssue || 20);
+          }
+
+          // 1. Wear out equipment (Equipped items lose durability based on progress)
+          const equippedItems: any[] = db.prepare("SELECT id, durability FROM artifacts WHERE userId = ? AND isEquipped = 1 AND durability > 0").all(userId);
+          if (equippedItems.length > 0) {
+            const updateDurability = db.prepare("UPDATE artifacts SET durability = MAX(0, durability - ?) WHERE id = ?");
+            // Each log hit reduces 1 random item durability or all? Let's do 1 random item per log to be fair.
+            const randomItem = equippedItems[Math.floor(Math.random() * equippedItems.length)];
+            updateDurability.run(1, randomItem.id);
+          }
+
+          // 2. Boss Progress
+          const boss: any = db.prepare("SELECT * FROM world_bosses WHERE userId = ? AND mediaId = ? AND status = 'Active'").get(userId, log.mediaId);
+          if (boss) {
+            const newProgress = boss.currentProgress + scaledPages;
+            if (newProgress >= boss.targetProgress) {
+              db.prepare("UPDATE world_bosses SET currentProgress = ?, status = 'Defeated' WHERE id = ?").run(boss.targetProgress, boss.id);
+            } else {
+              db.prepare("UPDATE world_bosses SET currentProgress = ? WHERE id = ?").run(newProgress, boss.id);
+            }
+          }
+        } catch(e) { console.error("Durability/Boss update failed", e); }
+      }
+
       res.json(db.prepare('SELECT * FROM logs WHERE id = ?').get(log.id));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -1271,7 +1576,7 @@ async function startServer() {
       const userId = getAuthUser(req, res);
       if (!userId) return;
       const rows = db.prepare('SELECT * FROM artifacts WHERE userId = ? ORDER BY earnedAt DESC').all(userId);
-      res.json(rows);
+      res.json(rows.map((r: any) => ({ ...r, isEquipped: r.isEquipped === 1 })));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -1281,8 +1586,8 @@ async function startServer() {
       const userId = getAuthUser(req, res);
       if (!userId) return;
       const stmt = db.prepare(`
-        INSERT INTO artifacts (id, userId, mediaId, name, description, rarity, type, earnedAt)
-        VALUES (@id, @userId, @mediaId, @name, @description, @rarity, @type, @earnedAt)
+        INSERT INTO artifacts (id, userId, mediaId, name, description, rarity, type, earnedAt, durability, maxDurability, slot, isEquipped)
+        VALUES (@id, @userId, @mediaId, @name, @description, @rarity, @type, @earnedAt, @durability, @maxDurability, @slot, @isEquipped)
       `);
       stmt.run({
         id: artifact.id,
@@ -1292,9 +1597,59 @@ async function startServer() {
         description: artifact.description,
         rarity: artifact.rarity,
         type: artifact.type,
-        earnedAt: artifact.earnedAt
+        earnedAt: artifact.earnedAt,
+        durability: artifact.durability || 100,
+        maxDurability: artifact.maxDurability || 100,
+        slot: artifact.slot || null,
+        isEquipped: artifact.isEquipped ? 1 : 0
       });
       res.json({ success: true, artifact });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/artifacts/:id/equip", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const { slot } = req.body;
+      const id = req.params.id;
+      db.prepare("UPDATE artifacts SET isEquipped = 0 WHERE userId = ? AND slot = ?").run(userId, slot);
+      db.prepare("UPDATE artifacts SET isEquipped = 1, slot = ? WHERE id = ? AND userId = ?").run(slot, id, userId);
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/artifacts/:id/unequip", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      db.prepare("UPDATE artifacts SET isEquipped = 0 WHERE id = ? AND userId = ?").run(req.params.id, userId);
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.get("/api/oracle", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const rows = db.prepare('SELECT * FROM oracle_messages WHERE userId = ? ORDER BY timestamp DESC LIMIT 5').all(userId);
+      res.json(rows);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.get("/api/world-bosses", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      db.prepare("UPDATE world_bosses SET status = 'Failed' WHERE userId = ? AND status = 'Active' AND expiresAt < ?").run(userId, new Date().toISOString());
+      
+      let rows = db.prepare('SELECT * FROM world_bosses WHERE userId = ? ORDER BY createdAt DESC').all(userId) as any[];
+      const hasActive = rows.some(r => r.status === 'Active');
+      if (!hasActive) {
+        await spawnWorldBoss(userId);
+        rows = db.prepare('SELECT * FROM world_bosses WHERE userId = ? ORDER BY createdAt DESC').all(userId) as any[];
+      }
+      res.json(rows);
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -1450,6 +1805,7 @@ async function startServer() {
           description: game.summary,
           coverImageUrl: game.cover?.image_id ? `https://images.igdb.com/igdb/image/upload/t_cover_big/${game.cover.image_id}.jpg` : "",
           year: game.first_release_date ? new Date(game.first_release_date * 1000).getFullYear() : undefined,
+          expectedReleaseDate: game.first_release_date ? new Date(game.first_release_date * 1000).toISOString() : undefined,
           reviewScore: game.total_rating ? Math.round(game.total_rating / 10) / 2 : undefined,
           averagePlaytime: hltbMainExtra || hltbMain || 0,
           hltbMain,
