@@ -209,7 +209,7 @@ export function Dashboard() {
                              />
                           </div>
                           <div className="flex items-center justify-between text-[8px] font-black text-zinc-600 uppercase tracking-widest px-1">
-                             <span>{boss.currentProgress} / {boss.targetProgress}</span>
+                             <span>{boss.currentProgress} / {boss.targetProgress} {boss.unit}</span>
                              <div className="flex items-center gap-1">
                                 <Clock className="w-2.5 h-2.5" />
                                 <span>{format(parseISO(boss.expiresAt), 'MMM d')}</span>

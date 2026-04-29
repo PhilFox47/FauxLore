@@ -477,7 +477,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     <span className="text-[10px] text-zinc-500 font-bold uppercase">Mythic (200%)</span>
                   </div>
                   <p className="text-[10px] text-zinc-500 mt-4 leading-relaxed italic">
-                    Lower difficulty reduces the "Master Pages" required to defeat active World Bosses. 
+                    Lower difficulty reduces the progress required (Hours, Chapters, Pages, etc.) to defeat active World Bosses. 
                     Changes are applied instantly to all of your currently active encounters.
                   </p>
                 </div>

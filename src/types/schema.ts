@@ -122,6 +122,7 @@ export interface WorldBoss {
   level: number; // 1-5
   targetProgress: number;
   currentProgress: number;
+  unit: string;
   status: 'Active' | 'Defeated' | 'Failed';
   expiresAt: string;
   createdAt: string;

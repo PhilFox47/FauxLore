@@ -273,9 +273,10 @@ async function startServer() {
   // World Boss Spawner
   async function spawnWorldBoss(userId: string, throwOnEmpty = false) {
     try {
-      const activeMedia = db.prepare("SELECT id, title, mediaType FROM media WHERE userId = ? AND status = 'Active'").all(userId) as any[];
+      // Exclude Movies from boss spawns as they are either watched or unwatched (not ongoing)
+      const activeMedia = db.prepare("SELECT id, title, mediaType FROM media WHERE userId = ? AND status = 'Active' AND mediaType != 'Movie'").all(userId) as any[];
       if (activeMedia.length === 0) {
-        if (throwOnEmpty) throw new Error("No active media found. Start consuming a Media Item to spawn a boss!");
+        if (throwOnEmpty) throw new Error("No active media found (excluding Movies). Start consuming a Media Item to spawn a boss!");
         return;
       }
 
@@ -285,22 +286,37 @@ async function startServer() {
       
       const r = Math.random();
       let level = 1;
-      let target = 45;
-      
-      if (r < 0.10) {
-        level = 1; target = 45;
-      } else if (r < 0.50) {
-        level = 2; target = 90;
-      } else if (r < 0.80) {
-        level = 3; target = 180;
-      } else if (r < 0.95) {
-        level = 4; target = 360;
-      } else {
-        level = 5; target = 720;
-      }
+      if (r < 0.20) level = 1;
+      else if (r < 0.50) level = 2;
+      else if (r < 0.80) level = 3;
+      else if (r < 0.95) level = 4;
+      else level = 5;
 
-      // Apply difficulty multiplier
-      target = Math.max(1, Math.round(target * difficulty));
+      const getBaseTarget = (type: string, lv: number) => {
+        const levels = {
+          'Game': [1, 2.5, 5, 10, 20],
+          'Visual Novel': [1, 2.5, 5, 10, 20],
+          'Book': [20, 50, 100, 200, 400],
+          'Manga': [3, 6, 10, 17, 30],
+          'Series': [1, 3, 6, 12, 20],
+          'Comic': [2, 4, 7, 12, 15]
+        }[type] || [45, 90, 180, 360, 720]; // Fallback to old Master Pages scale
+
+        return levels[lv - 1];
+      };
+
+      const getUnit = (type: string) => ({
+        'Game': 'Hours',
+        'Visual Novel': 'Hours',
+        'Book': 'Pages',
+        'Manga': 'Chapters',
+        'Series': 'Episodes',
+        'Comic': 'Issues'
+      }[type] || 'Units');
+
+      const baseTarget = getBaseTarget(mediaItem.mediaType, level);
+      const target = Math.max(0.1, baseTarget * difficulty);
+      const unit = getUnit(mediaItem.mediaType);
       
       let bossName = "";
       
@@ -348,9 +364,9 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       nextMonday.setHours(0, 0, 0, 0);
 
       db.prepare(`
-        INSERT INTO world_bosses (id, userId, mediaId, name, level, targetProgress, currentProgress, expiresAt, createdAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(uuidv4(), userId, mediaItem.id, bossName, level, target, 0, nextMonday.toISOString(), new Date().toISOString());
+        INSERT INTO world_bosses (id, userId, mediaId, name, level, targetProgress, currentProgress, expiresAt, createdAt, unit)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(uuidv4(), userId, mediaItem.id, bossName, level, target, 0, nextMonday.toISOString(), new Date().toISOString(), unit);
     } catch (e) { 
         console.error("Boss spawn failed", e); 
         if (throwOnEmpty) throw e;
@@ -383,6 +399,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   try { db.exec("ALTER TABLE media ADD COLUMN releaseStatus TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN lastSyncAt TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE settings ADD COLUMN enemyDifficulty REAL DEFAULT 1.0"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE world_bosses ADD COLUMN unit TEXT"); } catch (e) { /* Ignore if it exists */ }
 
   // Create Tables
   db.exec(`
@@ -1415,7 +1432,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           // 2. Boss Progress
           const boss: any = db.prepare("SELECT * FROM world_bosses WHERE userId = ? AND mediaId = ? AND status = 'Active'").get(userId, log.mediaId);
           if (boss) {
-            const newProgress = boss.currentProgress + scaledPages;
+            // Use native log delta instead of scaledPages for media-specific boss goals
+            const newProgress = boss.currentProgress + log.delta;
             if (newProgress >= boss.targetProgress) {
               db.prepare("UPDATE world_bosses SET currentProgress = ?, status = 'Defeated' WHERE id = ?").run(boss.targetProgress, boss.id);
             } else {
@@ -1567,10 +1585,28 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
 
       // Update active bosses if difficulty changed
       if (oldDifficulty !== newDifficulty) {
-        const activeBosses = db.prepare("SELECT id, level, currentProgress FROM world_bosses WHERE userId = ? AND status = 'Active'").all(userId) as any[];
+        const activeBosses = db.prepare(`
+          SELECT wb.id, wb.level, wb.currentProgress, m.mediaType 
+          FROM world_bosses wb
+          JOIN media m ON wb.mediaId = m.id
+          WHERE wb.userId = ? AND wb.status = 'Active'
+        `).all(userId) as any[];
+
+        const getBaseTarget = (type: string, lv: number) => {
+          const levels = {
+            'Game': [1, 2.5, 5, 10, 20],
+            'Visual Novel': [1, 2.5, 5, 10, 20],
+            'Book': [20, 50, 100, 200, 400],
+            'Manga': [3, 6, 10, 17, 30],
+            'Series': [1, 3, 6, 12, 20],
+            'Comic': [2, 4, 7, 12, 15]
+          }[type] || [45, 90, 180, 360, 720]; 
+          return levels[lv - 1];
+        };
+
         for (const boss of activeBosses) {
-          const baseTarget = 45 * Math.pow(2, boss.level - 1);
-          const newTarget = Math.max(1, Math.round(baseTarget * newDifficulty));
+          const baseTarget = getBaseTarget(boss.mediaType, boss.level);
+          const newTarget = Math.max(0.1, baseTarget * newDifficulty);
           
           // Check if the boss is now defeated by this change
           const newStatus = boss.currentProgress >= newTarget ? 'Defeated' : 'Active';

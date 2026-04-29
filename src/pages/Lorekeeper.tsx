@@ -344,7 +344,7 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                            />
                         </div>
                         <div className="flex justify-between text-[8px] font-black text-zinc-600 uppercase tracking-widest">
-                           <span>{Math.floor(boss.currentProgress)} / {boss.targetProgress}</span>
+                           <span>{Math.floor(boss.currentProgress)} / {boss.targetProgress} {boss.unit}</span>
                            <span>{Math.floor(progress)}%</span>
                         </div>
                      </div>
