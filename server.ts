@@ -591,13 +591,12 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
 
   // Migration steps
   try { 
-    const adminExists = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
-    if (!adminExists) {
+    const defaultUserExists = db.prepare('SELECT id FROM users WHERE id = ?').get('default_user');
+    if (!defaultUserExists) {
       const defaultHash = bcrypt.hashSync('admin', 10);
       db.prepare(`
         INSERT INTO users (id, username, passwordHash, role, createdAt, updatedAt) 
         VALUES ('default_user', 'admin', ?, 'Admin', ?, ?)
-        ON CONFLICT(id) DO UPDATE SET username=excluded.username
       `).run(defaultHash, new Date().toISOString(), new Date().toISOString());
     }
   } catch (e) {

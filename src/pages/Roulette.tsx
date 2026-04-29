@@ -5,7 +5,7 @@ import { MediaCard } from '../components/MediaCard';
 import { MediaItem, MEDIA_TYPES, MediaType } from '../types/schema';
 import { MediaDetailModal } from '../components/MediaDetailModal';
 import { MediaFormModal } from '../components/MediaFormModal';
-import { generateText } from '../services/nanoGptService';
+import { generateText, getPersonaDescription } from '../services/nanoGptService';
 import Markdown from 'react-markdown';
 
 export function Roulette() {
@@ -66,10 +66,12 @@ USER'S BACKLOG:
 ${backlogList}
       `;
 
+      const personaDesc = getPersonaDescription(settings.aiPersona);
+
       const aiText = await generateText(
         settings.nanoGptApiKey, 
         settings.nanoGptModel || "gpt-4o-mini",
-        "You are 'The Oracle', a witty, casual, and highly charismatic gamemaster AI within an RPG universe. Your task is to recommend EXACTLY ONE item from the user's BACKLOG. Explain your reasoning based on their recent consumption with a funny, modern, and engaging tone. Give it some personality! Do not list multiple items. Embellish your response with clever quips, not overly mystical prose.",
+        `You are 'The Oracle' inside an RPG media tracker. ${personaDesc} Your task is to recommend EXACTLY ONE item from the user's BACKLOG. Explain your reasoning based on their recent consumption. Make your overarching tone match your persona perfectly. Do not list multiple items. Embellish your response according to your character, keeping it highly thematic and entertaining.`,
         promptContext
       );
 

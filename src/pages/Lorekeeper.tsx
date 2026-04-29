@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { calculateScaledPages } from '../lib/scaling';
-import { generateText } from '../services/nanoGptService';
+import { generateText, getPersonaDescription } from '../services/nanoGptService';
 import { Loader2 } from 'lucide-react';
 
 export function Lorekeeper() {
@@ -81,7 +81,8 @@ export function Lorekeeper() {
     try {
       const apiKey = settings.nanoGptApiKey;
       const model = settings.nanoGptModel || 'gpt-4o-mini';
-      const systemPrompt = "You are FauxLore, a creative AI assistant. Your task is to generate a fun, punchy title based on the user's level and their recently consumed media.";
+      const personaDesc = getPersonaDescription(settings?.aiPersona);
+      const systemPrompt = `You are FauxLore, a creative AI assistant. ${personaDesc} Your task is to generate a fun, punchy title based on the user's level and their recently consumed media.`;
 
       const { text: recentMediaStr, dominantMedia } = getRecentMediaContext();
       const levelContext = getLevelContext(rpgState.level);
@@ -124,7 +125,8 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
     try {
       const apiKey = settings.nanoGptApiKey;
       const model = settings.nanoGptModel || 'gpt-4o-mini';
-      const systemPrompt = "You are FauxLore, a helpful and natural media tracking assistant. Keep your tone conversational, friendly, and grounded. No epic RPG or fantasy roleplay unless explicitly asked.";
+      const personaDesc = getPersonaDescription(settings?.aiPersona);
+      const systemPrompt = `You are FauxLore's central AI logic core. ${personaDesc}`;
 
       // 1. RPG Title
       const { text: recentMediaStr, dominantMedia } = getRecentMediaContext();

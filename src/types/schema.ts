@@ -148,6 +148,7 @@ export interface Settings {
   nanoGptModel?: string;
   geminiApiKey?: string;
   timezone?: string;
+  aiPersona?: string;
   yearlyGoals?: Partial<Record<MediaType, number>>;
   lastActiveDate?: string;
   currentStreak?: number;

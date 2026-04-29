@@ -1,5 +1,23 @@
-export async function generateAiRecapText(apiKey: string, model: string, prompt: string) {
+export function getPersonaDescription(personaStr?: string): string {
+  switch (personaStr) {
+    case 'mystic':
+      return "You are mystical, poetic, and write like an ancient fantasy oracle or dungeon master. Use metaphors of magic, quests, and cosmic destiny.";
+    case 'archivist':
+      return "You are a scholarly archivist. You write with the dry, intellectual, yet deeply fascinated tone of a historian examining sacred texts, keeping things slightly formal but full of wonder.";
+    case 'noir':
+      return "You are a cynical, hardboiled noir detective. You narrate the user's actions like you're piecing together a gritty case file in a rain-slicked city. Very dry and dramatic.";
+    case 'cyberpunk':
+      return "You are a slick cyberpunk netrunner AI. You use tech slang, talk about 'jacking in', 'data streams', 'corpos', and write in a fast, hyper-digital, edgy street tone.";
+    case 'witty':
+    default:
+      return "You are witty, charismatic, naturally sarcastic, and modern. You act as an entertaining, hyper-aware geek podcaster analyzing the user's media habits.";
+  }
+}
+
+export async function generateAiRecapText(apiKey: string, model: string, prompt: string, persona?: string) {
   if (!apiKey) throw new Error("Nano-GPT API Key is missing. Please configure it in Settings.");
+  
+  const personaDesc = getPersonaDescription(persona);
   
   const res = await fetch("https://nano-gpt.com/api/v1/chat/completions", {
     method: "POST",
@@ -10,7 +28,7 @@ export async function generateAiRecapText(apiKey: string, model: string, prompt:
     body: JSON.stringify({
       model: model || "gpt-4o-mini", // Cost efficient model fallback
       messages: [
-        { role: "system", content: "You are FauxLore's AI recap generator. You are witty, charismatic, naturally sarcastic, and modern. You act as an entertaining, hyper-aware geek podcaster analyzing the user's media habits. You MUST return a JSON object with exactly two keys: 'title' (a short, punchy title) and 'summary' (a detailed Markdown-formatted narrative). DO NOT include any other text besides the JSON object. VERY IMPORTANT: Escape all double quotes in your summary with backslashes." },
+        { role: "system", content: `You are FauxLore's AI recap generator. ${personaDesc} You MUST return a JSON object with exactly two keys: 'title' (a short, punchy title) and 'summary' (a detailed Markdown-formatted narrative). DO NOT include any other text besides the JSON object. VERY IMPORTANT: Escape all double quotes in your summary with backslashes.` },
         { role: "user", content: prompt }
       ],
       response_format: { type: "json_object" }

@@ -46,8 +46,11 @@ export function Layout() {
           </button>
         </div>
 
-        <div className="flex-1 p-4 md:p-8 bg-gradient-to-br from-[#09090B] to-[#121214] overflow-y-auto">
-          <div className="flex flex-col gap-6 w-full min-h-full max-w-7xl mx-auto">
+        <div className="flex-1 p-4 md:p-8 bg-gradient-to-br from-[#09090B] to-[#121214] overflow-y-auto relative">
+          <div className="fixed top-0 right-0 bottom-0 left-0 md:left-60 pointer-events-none z-0">
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.08] mix-blend-screen"></div>
+          </div>
+          <div className="flex flex-col gap-6 w-full min-h-full max-w-7xl mx-auto relative z-10">
             <Outlet />
           </div>
         </div>

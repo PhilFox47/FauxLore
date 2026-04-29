@@ -12,7 +12,7 @@ import {
   Tv, 
   Clapperboard, 
   Library, 
-  RefreshCw, 
+  Ghost, 
   MessagesSquare,
   Plus, 
   Edit2, 
@@ -67,7 +67,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
   switch(item.mediaType) {
     case 'Game':
       if (item.isOngoing) {
-        progressText = `Ongoing (${item.playtimeHours || 0}h)`;
+        progressText = `${item.playtimeHours || 0}h`;
         progressPercent = 0;
       } else {
         progressText = `${item.playtimeHours || 0}h`;
@@ -80,24 +80,29 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
       }
       break;
     case 'Visual Novel':
-      progressText = `${item.playtimeHours || 0}h`;
-      if (item.averagePlaytime && item.averagePlaytime > 0) {
-        progressText += ` / ${item.averagePlaytime}h`;
-        progressPercent = ((item.playtimeHours || 0) / item.averagePlaytime) * 100;
-      } else {
+      if (item.isOngoing) {
+        progressText = `${item.playtimeHours || 0}h`;
         progressPercent = 0;
+      } else {
+        progressText = `${item.playtimeHours || 0}h`;
+        if (item.averagePlaytime && item.averagePlaytime > 0) {
+          progressText += ` / ${item.averagePlaytime}h`;
+          progressPercent = ((item.playtimeHours || 0) / item.averagePlaytime) * 100;
+        } else {
+          progressPercent = 0;
+        }
       }
       break;
     case 'Book':
-      progressText = `${item.pagesRead || 0} / ${item.totalPages || '?'} p`;
+      progressText = item.isOngoing ? `${item.pagesRead || 0} p` : `${item.pagesRead || 0} / ${item.totalPages || '?'} p`;
       if (item.totalPages) progressPercent = ((item.pagesRead || 0) / item.totalPages) * 100;
       break;
     case 'Manga':
-      progressText = `${item.chaptersRead || 0} / ${item.totalChapters || (item.isOngoing ? 'Ongoing' : '?')} ch`;
+      progressText = item.isOngoing ? `${item.chaptersRead || 0} ch` : `${item.chaptersRead || 0} / ${item.totalChapters || '?'} ch`;
       if (item.totalChapters) progressPercent = ((item.chaptersRead || 0) / item.totalChapters) * 100;
       break;
     case 'Series':
-      progressText = `${item.episodesWatched || 0} / ${item.totalEpisodes || '?'} ep`;
+      progressText = item.isOngoing ? `${item.episodesWatched || 0} ep` : `${item.episodesWatched || 0} / ${item.totalEpisodes || '?'} ep`;
       if (item.totalEpisodes) progressPercent = ((item.episodesWatched || 0) / item.totalEpisodes) * 100;
       break;
     case 'Movie':
@@ -105,7 +110,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
       progressPercent = item.watched ? 100 : 0;
       break;
     case 'Comic':
-      progressText = `${item.issuesRead || 0} / ${item.totalIssues || '?'} iss`;
+      progressText = item.isOngoing ? `${item.issuesRead || 0} iss` : `${item.issuesRead || 0} / ${item.totalIssues || '?'} iss`;
       if (item.totalIssues) progressPercent = ((item.issuesRead || 0) / item.totalIssues) * 100;
       break;
   }
@@ -166,9 +171,9 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
               </span>
             </div>
             
-            {item.isOngoing && (
-              <div className="flex items-center justify-center bg-emerald-500/20 text-emerald-400 backdrop-blur-md w-7 h-7 rounded-full border border-emerald-500/20 shadow-lg">
-                <RefreshCw className="w-3 h-3 animate-spin-slow" />
+            {item.noEnemies && (
+              <div className="flex items-center justify-center bg-orange-500/20 text-orange-400 backdrop-blur-md w-7 h-7 rounded-full border border-orange-500/20 shadow-lg" title="Enemy Generation Disabled">
+                <Ghost className="w-3.5 h-3.5 opacity-80" />
               </div>
             )}
          </div>
@@ -195,17 +200,19 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
 
          {/* Progress Bar */}
          <div className="mt-auto">
-            {!(item.mediaType === 'Game' && item.isOngoing) && (
-              <div className="h-1.5 bg-black rounded-full overflow-hidden shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)] border border-white/5 relative">
-                {progressPercent > 0 ? (
-                  <div 
-                    className={cn("absolute top-0 left-0 h-full rounded-full transition-all duration-500", colors.progress, `shadow-[0_0_10px_var(--color-${colors.progress.split('-')[1]}-500)]`)} 
-                    style={{ width: `${Math.min(progressPercent, 100)}%` }} 
-                  />
-                ) : item.mediaType === 'Game' || item.mediaType === 'Visual Novel' ? (
-                  <div className={cn("h-full w-full animate-pulse rounded-full opacity-30", colors.glow)} />
-                ) : null}
-              </div>
+            {item.isOngoing ? (
+               <div className="text-[10px] sm:text-xs font-black text-zinc-500/80 uppercase tracking-widest text-center w-full font-display">Ongoing</div>
+            ) : (
+               <div className="h-1.5 bg-black rounded-full overflow-hidden shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)] border border-white/5 relative">
+                 {progressPercent > 0 ? (
+                   <div 
+                     className={cn("absolute top-0 left-0 h-full rounded-full transition-all duration-500", colors.progress, `shadow-[0_0_10px_var(--color-${colors.progress.split('-')[1]}-500)]`)} 
+                     style={{ width: `${Math.min(progressPercent, 100)}%` }} 
+                   />
+                 ) : item.mediaType === 'Game' || item.mediaType === 'Visual Novel' ? (
+                   <div className={cn("h-full w-full animate-pulse rounded-full opacity-30", colors.glow)} />
+                 ) : null}
+               </div>
             )}
          </div>
 

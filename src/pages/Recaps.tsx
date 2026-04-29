@@ -306,11 +306,11 @@ PREVIOUS RECAPS (Chronological):
 ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title}): \n${r.summary}`).join('\n\n') : 'No past recaps available.'}
 `;
 
-      const aiResponsePromise = generateAiRecapText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', `Based on the following data, generate a title and a creative, witty, and highly energetic recap of this ${timeframe}'s media consumption.
+      const aiResponsePromise = generateAiRecapText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', `Based on the following data, generate a title and a creative, highly energetic recap of this ${timeframe}'s media consumption.
       
 CRITICAL INSTRUCTIONS:
 1. TITLE: Must be a punchy, clever name (1-5 words max). DO NOT include descriptions.
-2. VIBE & TONE: Be charming, sarcastic, witty, and charismatic! Sound natural, modern and casual. Feel free to roast or tease the user playfully about their habits (e.g., spending too much time on one thing, slow reading, weird combos). Less "classic prose" and more like an entertaining, hyper-aware gamer/geek podcaster talking to the user.
+2. VIBE & TONE: Follow your specified persona instructions exactly. Weave the persona deeply into the narrative structure.
 3. STRUCTURE & FOCUS: The core structure and primary focus of your recap MUST be the 'MEDIA COMPLETED' list (if any). Let what they finished dictate your narrative flow. After completing media, cover their 'MEDIA IN PROGRESS' as ongoing obsessions or endless slogs.
 4. ORGANIC WEAVING: You MUST organically weave Journal Notes, Locations, Gathered Loot, Ratings (Critic and User Ratings), Bosses Defeated, and Lorekeeper Leveling stats (Level ups, Quests) directly into the discussion of the specific media. DO NOT create standalone paragraphs for locations, lorekeeper info, gathered loot, ratings or notes. Examples: "Reading some One Piece this month really helped you finish the 'Read some Manga' Quest!", "Glad to see you followed your weekly quest and went to watch a Comedy Movie!", "You clearly enjoyed your time reading [Book] in [Location] based on your notes.", "It's no surprise you gave it an 4/5, considering critics loved it with a 92/100!", or "Finishing [Media] gave you that sweet [Loot Name]!".
 5. ACCURACY: DO NOT assume a media item is completed unless it explicitly is in the 'MEDIA COMPLETED' list! If it's just 'IN PROGRESS', treat it as their current ongoing obsession or slog.
@@ -320,7 +320,7 @@ CRITICAL INSTRUCTIONS:
 9. PR ALERT: If the user hit a Personal Record (PR) in Master Pages, definitely celebrate it with some hype!
 
 Context: 
-${promptContext}`);
+${promptContext}`, settings.aiPersona);
 
       const roastPromise = generateText(
         settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini',

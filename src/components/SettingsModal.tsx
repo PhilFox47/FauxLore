@@ -32,6 +32,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     nanoGptModel: '',
     geminiApiKey: '',
     timezone: '',
+    aiPersona: 'witty',
     enemyDifficulty: 1.0,
     yearlyGoals: {
       'Game': 100,
@@ -66,6 +67,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
         geminiApiKey: settings.geminiApiKey || '',
         timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+        aiPersona: settings.aiPersona || 'witty',
         enemyDifficulty: settings.enemyDifficulty ?? 1.0,
         yearlyGoals: {
           'Game': settings.yearlyGoals?.['Game'] ?? 100,
@@ -98,6 +100,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
             geminiApiKey: settings.geminiApiKey || '',
             timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+            aiPersona: settings.aiPersona || 'witty',
             enemyDifficulty: settings.enemyDifficulty ?? 1.0,
             yearlyGoals: {
               'Game': settings.yearlyGoals?.['Game'] ?? 100,
@@ -285,6 +288,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         nanoGptModel: formData.nanoGptModel,
         geminiApiKey: formData.geminiApiKey,
         timezone: formData.timezone,
+        aiPersona: formData.aiPersona,
         enemyDifficulty: formData.enemyDifficulty,
         masterPageConfig: {
           gamePagesPerHour: formData.gamePagesPerHour,
@@ -416,6 +420,28 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         placeholder="e.g. America/Los_Angeles"
                       />
                       <p className="text-[10px] text-zinc-500 mt-1">Used for syncing logs to accurate local dates.</p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">AI Persona (Recaps & Oracles)</label>
+                      <div className="relative">
+                        <select
+                          name="aiPersona"
+                          value={formData.aiPersona}
+                          onChange={handleChange}
+                          className="input-field appearance-none w-full bg-[#121214] text-white outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer pr-10"
+                        >
+                          <option value="witty">Witty & Casual (Default)</option>
+                          <option value="mystic">Mystic & Fantasy-like</option>
+                          <option value="archivist">Scholarly Archivist</option>
+                          <option value="noir">Cynical Noir Detective</option>
+                          <option value="cyberpunk">Cyberpunk Netrunner</option>
+                        </select>
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                          <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-zinc-500 mt-1">Change the personality of the Oracle and Weekly Recaps.</p>
                     </div>
                   </div>
                 )}
