@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MediaItem, getMetricForType, MEDIA_COLORS } from '../types/schema';
 import { X, Plus, Minus, Calendar, History, Check, Clock, MapPin } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { calculateLogExp } from '../lib/rpgSystem';
 import { format } from 'date-fns';
 import { useMediaContext } from '../contexts/MediaContext';
 
@@ -13,7 +14,7 @@ interface ProgressModalProps {
 }
 
 export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalProps) {
-  const { saveMediaItem, logs } = useMediaContext();
+  const { saveMediaItem, logs, settings, artifacts } = useMediaContext();
   const [mode, setMode] = useState<'set' | 'add'>('set');
   const [inputValue, setInputValue] = useState<number | ''>(1);
   const [note, setNote] = useState('');
@@ -289,11 +290,27 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
                  </div>
                  
                  {mode === 'set' && typeof inputValue === 'number' && (inputValue - currentVal) !== 0 && (
-                    <div className="mt-4 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest">
-                       <span className={cn("px-2 py-0.5 rounded", inputValue > currentVal ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400")}>
-                         {inputValue > currentVal ? 'HEAL +' : 'DMG '}{inputValue - currentVal}
-                       </span>
-                       <span className="text-zinc-600">Delta</span>
+                    <div className="mt-4 flex flex-col items-center justify-center gap-2">
+                       <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest">
+                          <span className={cn("px-2 py-0.5 rounded", inputValue > currentVal ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400")}>
+                            {inputValue > currentVal ? '+' : ''}{inputValue - currentVal}
+                          </span>
+                          <span className="text-zinc-600">Delta</span>
+                       </div>
+                       {inputValue > currentVal && (
+                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 uppercase font-black bg-zinc-900/50 px-3 py-1 rounded-full border border-white/5 shadow-inner">
+                             <span>Estimated Yield:</span>
+                             <span className="text-emerald-400 font-mono">+{Math.floor(calculateLogExp(inputValue - currentVal, item, settings, artifacts?.filter(a => a?.isEquipped) || []))} EXP</span>
+                          </div>
+                       )}
+                    </div>
+                 )}
+                 {mode === 'add' && typeof inputValue === 'number' && inputValue > 0 && (
+                    <div className="mt-4 flex flex-col items-center justify-center gap-2">
+                       <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 uppercase font-black bg-zinc-900/50 px-3 py-1 rounded-full border border-white/5 shadow-inner">
+                          <span>Estimated Yield:</span>
+                          <span className="text-emerald-400 font-mono">+{Math.floor(calculateLogExp(inputValue, item, settings, artifacts?.filter(a => a?.isEquipped) || []))} EXP</span>
+                       </div>
                     </div>
                  )}
                </div>

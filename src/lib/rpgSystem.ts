@@ -55,6 +55,36 @@ export function mulberry32(a: number) {
 }
 
 
+export function calculateLogExp(delta: number, item: MediaItem, settings: any, equippedArtifacts: any[]): number {
+  let logExp = calculateScaledDelta(delta, item, settings);
+  let multiplier = 1.0;
+  equippedArtifacts.forEach((a: any) => {
+    let applies = false;
+    
+    // If targetType is set, it's a specific bonus
+    if (a.targetType) {
+      if (a.targetType === 'Genre' && item.genres?.includes(a.targetValue)) applies = true;
+      else if (a.targetType === 'MediaType' && item.mediaType === a.targetValue) applies = true;
+      else if (a.targetType === 'Franchise') {
+        applies = true;
+        if (!item.franchises?.includes(a.targetValue || '') && !item.title.toLowerCase().includes(a.targetValue?.toLowerCase() || '')) {
+           applies = false;
+        }
+      }
+    } else {
+      // Backward compatibility or generic artifacts apply a flat baseline
+      applies = true;
+    }
+
+    if (applies) {
+      const durabilityRatio = (a.durability || 100) / (a.maxDurability || 100);
+      const itemBonusPct = (a.bonusPercent || 20) / 100;
+      multiplier += itemBonusPct * durabilityRatio;
+    }
+  });
+  return logExp * multiplier;
+}
+
 export function calculateRPGState(
   media: MediaItem[], 
   logs: ProgressLog[], 
@@ -78,35 +108,7 @@ export function calculateRPGState(
     
     const item = media.find(m => m.id === log.mediaId);
     if (item) {
-      let logExp = calculateScaledDelta(log.delta, item, settings);
-      
-      let multiplier = 1.0;
-      equipped.forEach((a: any) => {
-        const durabilityRatio = (a.durability || 100) / (a.maxDurability || 100);
-        let applies = false;
-        
-        // If targetType is set, it's a specific bonus
-        if (a.targetType) {
-          if (a.targetType === 'Genre' && item.genres?.includes(a.targetValue)) applies = true;
-          else if (a.targetType === 'MediaType' && item.mediaType === a.targetValue) applies = true;
-          else if (a.targetType === 'Franchise') {
-            applies = true;
-            if (!item.franchises?.includes(a.targetValue || '') && !item.title.toLowerCase().includes(a.targetValue?.toLowerCase() || '')) {
-               applies = false;
-            }
-          }
-        } else {
-          // Backward compatibility or generic artifacts apply a flat baseline
-          applies = true;
-        }
-
-        if (applies) {
-          const itemBonusPct = (a.bonusPercent || 20) / 100;
-          multiplier += itemBonusPct * durabilityRatio;
-        }
-      });
-      
-      baseExp += logExp * multiplier;
+      baseExp += calculateLogExp(log.delta, item, settings, equipped);
     }
   });
 

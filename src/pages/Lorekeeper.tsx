@@ -227,12 +227,12 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
 
         <div className="flex-1 w-full z-10 text-center md:text-left">
           <h3 className="text-4xl font-black text-white italic tracking-tight mb-2">{getDynamicTitle()}</h3>
-          <p className="text-zinc-400 text-lg font-medium mb-6">{rpgState.currentExp.toLocaleString()} Total EXP</p>
+          <p className="text-zinc-400 text-lg font-medium mb-6">{Math.floor(rpgState.currentExp).toLocaleString()} Total EXP</p>
 
           <div className="flex justify-between items-end mb-2">
             <span className="text-sm text-orange-400 font-bold tracking-wider uppercase">Progress to Level {rpgState.level + 1}</span>
             <div className="text-sm text-zinc-500 font-mono">
-              {(rpgState.currentExp - rpgState.currentLevelExp).toLocaleString()} / {(rpgState.nextLevelExp - rpgState.currentLevelExp).toLocaleString()} EXP
+              {Math.floor(rpgState.currentExp - rpgState.currentLevelExp).toLocaleString()} / {Math.floor(rpgState.nextLevelExp - rpgState.currentLevelExp).toLocaleString()} EXP
             </div>
           </div>
           <div className="h-4 bg-zinc-950 rounded-full overflow-hidden shadow-inner border border-white/5 relative">

@@ -87,7 +87,7 @@ export function Dashboard() {
              </h3>
              <p className="text-zinc-400 text-sm sm:text-base font-medium flex items-center gap-2">
                <Sparkles className="w-4 h-4 text-orange-400/50" />
-               {rpgState.currentExp.toLocaleString()} Total EXP
+               {Math.floor(rpgState.currentExp).toLocaleString()} Total EXP
              </p>
           </div>
 
@@ -95,7 +95,7 @@ export function Dashboard() {
             <div className="flex justify-between items-end mb-3">
                <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Next Rank</span>
                <div className="text-xs font-mono text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded shadow-inner border border-white/5">
-                  {(rpgState.currentExp - rpgState.currentLevelExp).toLocaleString()} / {(rpgState.nextLevelExp - rpgState.currentLevelExp).toLocaleString()}
+                  {Math.floor(rpgState.currentExp - rpgState.currentLevelExp).toLocaleString()} / {Math.floor(rpgState.nextLevelExp - rpgState.currentLevelExp).toLocaleString()}
                </div>
             </div>
             <div className="h-4 w-full bg-black/60 rounded-full overflow-hidden shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)] border border-white/5 relative p-[2px]">

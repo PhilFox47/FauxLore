@@ -284,7 +284,7 @@ Missed Quests: ${missedQuests.length > 0 ? missedQuests.map(q => `${q.title} - $
 BOSSES DEFEATED:
 ${defeatedBosses.length > 0 ? defeatedBosses.map(b => `- ${b.name} (LV ${b.level})`).join('\n') : 'None'}
 
-Total Master Pages (EXP): ${Math.round(totalMasterPages)} ${isNewPR ? "(PERSONAL RECORD! Highlight this!)" : ""}
+Total Master Pages (EXP): ${Math.floor(totalMasterPages)} ${isNewPR ? "(PERSONAL RECORD! Highlight this!)" : ""}
 Total Logs: ${activeLogs.length}
 
 MEDIA IN PROGRESS:
@@ -1149,7 +1149,7 @@ ${promptContext}`);
               </div>
               <div>
                  <div className="text-sm font-bold text-zinc-300">{rpgStateAtEnd.className}</div>
-                 <div className="text-xs text-zinc-500">{Math.round(rpgStateAtEnd.currentExp)} Total EXP</div>
+                 <div className="text-xs text-zinc-500">{Math.floor(rpgStateAtEnd.currentExp)} Total EXP</div>
               </div>
            </div>
            
