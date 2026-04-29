@@ -32,8 +32,17 @@ export function Dashboard() {
     setSortBy,
     searchQuery,
     setSearchQuery,
-    filteredAndSortedMedia: activeMedia,
+    filteredAndSortedMedia: rawActiveMedia,
   } = useMediaFilterSort(media, 'Active');
+
+  const activeMedia = useMemo(() => {
+    return [...rawActiveMedia].sort((a, b) => {
+      // Sort Non-Ongoing (falsy) before Ongoing (truthy)
+      if (a.isOngoing && !b.isOngoing) return 1;
+      if (!a.isOngoing && b.isOngoing) return -1;
+      return 0; // Maintain original sort order for the rest
+    });
+  }, [rawActiveMedia]);
 
   const currentStreak = useMemo(() => calculateStreak(logs), [logs]);
 
