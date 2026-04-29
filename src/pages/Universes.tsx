@@ -14,7 +14,7 @@ export function Universes() {
   const [selectedUniverse, setSelectedUniverse] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({ coverImageUrl: '', description: '' });
-  const [sortBy, setSortBy] = useState<SortOption>('Alphabetical');
+  const [sortBy, setSortBy] = useState<SortOption>('Total Master Pages');
 
   const COLORS = ['#f97316', '#3b82f6', '#8b5cf6', '#10b981', '#ef4444', '#eab308'];
 
