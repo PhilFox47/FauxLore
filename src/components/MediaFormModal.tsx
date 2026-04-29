@@ -632,6 +632,28 @@ export function MediaFormModal({
             </div>
           </div>
 
+          <div className="flex items-center gap-2 mb-4 bg-orange-500/5 border border-orange-500/10 p-3 rounded-xl">
+            <input
+              type="checkbox"
+              id="noEnemies"
+              name="noEnemies"
+              checked={formData.noEnemies || false}
+              onChange={(e) =>
+                setFormData((p) => ({
+                  ...p,
+                  noEnemies: e.target.checked,
+                }))
+              }
+              className="w-4 h-4 rounded bg-zinc-800 border-zinc-700 text-orange-500 focus:ring-orange-500 cursor-pointer"
+            />
+            <label htmlFor="noEnemies" className="text-xs font-semibold text-orange-200 cursor-pointer select-none">
+              Disable Enemy Generation
+              <span className="block text-[10px] font-normal text-zinc-500 mt-0.5">
+                Check this if you want to track this media without spawning World Bosses.
+              </span>
+            </label>
+          </div>
+
           {formData.status === "Dropped" && (
             <div className="mb-4">
               <label className="block text-sm font-medium text-red-400 mb-1">

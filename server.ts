@@ -274,9 +274,10 @@ async function startServer() {
   async function spawnWorldBoss(userId: string, throwOnEmpty = false) {
     try {
       // Exclude Movies from boss spawns as they are either watched or unwatched (not ongoing)
-      const activeMedia = db.prepare("SELECT id, title, mediaType FROM media WHERE userId = ? AND status = 'Active' AND mediaType != 'Movie'").all(userId) as any[];
+      // Also exclude media where user explicitly disabled enemies
+      const activeMedia = db.prepare("SELECT id, title, mediaType FROM media WHERE userId = ? AND status = 'Active' AND mediaType != 'Movie' AND (noEnemies = 0 OR noEnemies IS NULL)").all(userId) as any[];
       if (activeMedia.length === 0) {
-        if (throwOnEmpty) throw new Error("No active media found (excluding Movies). Start consuming a Media Item to spawn a boss!");
+        if (throwOnEmpty) throw new Error("No active media found (excluding Movies & disabled enemies). Start consuming a Media Item to spawn a boss!");
         return;
       }
 
@@ -364,9 +365,9 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       nextMonday.setHours(0, 0, 0, 0);
 
       db.prepare(`
-        INSERT INTO world_bosses (id, userId, mediaId, name, level, targetProgress, currentProgress, expiresAt, createdAt, unit)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(uuidv4(), userId, mediaItem.id, bossName, level, target, 0, nextMonday.toISOString(), new Date().toISOString(), unit);
+        INSERT INTO world_bosses (id, userId, mediaId, name, level, targetProgress, currentProgress, expiresAt, createdAt, updatedAt, unit)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(uuidv4(), userId, mediaItem.id, bossName, level, target, 0, nextMonday.toISOString(), new Date().toISOString(), new Date().toISOString(), unit);
     } catch (e) { 
         console.error("Boss spawn failed", e); 
         if (throwOnEmpty) throw e;
@@ -398,8 +399,11 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   try { db.exec("ALTER TABLE media ADD COLUMN isOngoing INTEGER"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN releaseStatus TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN lastSyncAt TEXT"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE media ADD COLUMN noEnemies INTEGER DEFAULT 0"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE settings ADD COLUMN enemyDifficulty REAL DEFAULT 1.0"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE world_bosses ADD COLUMN unit TEXT"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE ai_recaps ADD COLUMN data TEXT"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE world_bosses ADD COLUMN updatedAt TEXT"); } catch (e) { /* Ignore if it exists */ }
 
   // Create Tables
   db.exec(`
@@ -755,6 +759,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
     watched: row.watched === 1,
     isReRun: row.isReRun === 1,
     isOngoing: row.isOngoing === 1,
+    noEnemies: row.noEnemies === 1,
     expectedReleaseDate: row.expectedReleaseDate || null,
     releaseStatus: row.releaseStatus || null,
     lastSyncAt: row.lastSyncAt || null
@@ -1142,7 +1147,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           status, userRating, genres, tags, tropes, platforms, franchises,
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
-          issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, language, isOngoing, releaseStatus, lastSyncAt, createdAt, updatedAt,
+          issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, language, isOngoing, noEnemies, releaseStatus, lastSyncAt, createdAt, updatedAt,
           subtitle, maturityRating
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
@@ -1150,7 +1155,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           @status, @userRating, @genres, @tags, @tropes, @platforms, @franchises,
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
-          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @language, @isOngoing, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
+          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @language, @isOngoing, @noEnemies, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
           @subtitle, @maturityRating
         )
         ON CONFLICT(id) DO UPDATE SET
@@ -1166,7 +1171,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           totalEpisodes=excluded.totalEpisodes, watched=excluded.watched, watchCount=excluded.watchCount,
           runtimeMinutes=excluded.runtimeMinutes, issuesRead=excluded.issuesRead, totalIssues=excluded.totalIssues,
           isReRun=excluded.isReRun, originalMediaId=excluded.originalMediaId, expectedReleaseDate=excluded.expectedReleaseDate,
-          language=excluded.language, isOngoing=excluded.isOngoing,
+          language=excluded.language, isOngoing=excluded.isOngoing, noEnemies=excluded.noEnemies,
           releaseStatus=excluded.releaseStatus, lastSyncAt=excluded.lastSyncAt,
           subtitle=excluded.subtitle, maturityRating=excluded.maturityRating
       `);
@@ -1214,6 +1219,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         subtitle: item.subtitle || null,
         maturityRating: item.maturityRating || null,
         isOngoing: item.isOngoing ? 1 : 0,
+        noEnemies: item.noEnemies ? 1 : 0,
         releaseStatus: item.releaseStatus || null,
         lastSyncAt: item.lastSyncAt || null,
         createdAt: item.createdAt,
@@ -1435,9 +1441,9 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
             // Use native log delta instead of scaledPages for media-specific boss goals
             const newProgress = boss.currentProgress + log.delta;
             if (newProgress >= boss.targetProgress) {
-              db.prepare("UPDATE world_bosses SET currentProgress = ?, status = 'Defeated' WHERE id = ?").run(boss.targetProgress, boss.id);
+              db.prepare("UPDATE world_bosses SET currentProgress = ?, status = 'Defeated', updatedAt = ? WHERE id = ?").run(boss.targetProgress, new Date().toISOString(), boss.id);
             } else {
-              db.prepare("UPDATE world_bosses SET currentProgress = ? WHERE id = ?").run(newProgress, boss.id);
+              db.prepare("UPDATE world_bosses SET currentProgress = ?, updatedAt = ? WHERE id = ?").run(newProgress, new Date().toISOString(), boss.id);
             }
           }
         } catch(e) { console.error("Durability/Boss update failed", e); }
@@ -1610,7 +1616,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           
           // Check if the boss is now defeated by this change
           const newStatus = boss.currentProgress >= newTarget ? 'Defeated' : 'Active';
-          db.prepare("UPDATE world_bosses SET targetProgress = ?, status = ? WHERE id = ?").run(newTarget, newStatus, boss.id);
+          db.prepare("UPDATE world_bosses SET targetProgress = ?, status = ?, updatedAt = ? WHERE id = ?").run(newTarget, newStatus, new Date().toISOString(), boss.id);
         }
       }
       
@@ -1627,8 +1633,11 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
-      const rows = db.prepare('SELECT * FROM ai_recaps WHERE userId = ?').all(userId);
-      res.json(rows);
+      const rows = db.prepare('SELECT * FROM ai_recaps WHERE userId = ?').all(userId) as any[];
+      res.json(rows.map(r => ({
+        ...r,
+        data: r.data ? JSON.parse(r.data) : null
+      })));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -1639,17 +1648,18 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       if (!userId) return;
       const id = payload.id || Math.random().toString(36).substr(2, 9);
       db.prepare(`
-        INSERT INTO ai_recaps (id, userId, timeframe, timeId, title, summary)
-        VALUES (@id, @userId, @timeframe, @timeId, @title, @summary)
+        INSERT INTO ai_recaps (id, userId, timeframe, timeId, title, summary, data)
+        VALUES (@id, @userId, @timeframe, @timeId, @title, @summary, @data)
         ON CONFLICT(userId, timeframe, timeId) DO UPDATE SET
-          title=excluded.title, summary=excluded.summary
+          title=excluded.title, summary=excluded.summary, data=excluded.data
       `).run({
         id,
         userId,
         timeframe: payload.timeframe,
         timeId: payload.timeId,
         title: payload.title || null,
-        summary: payload.summary || null
+        summary: payload.summary || null,
+        data: payload.data ? JSON.stringify(payload.data) : null
       });
       res.json({ success: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }

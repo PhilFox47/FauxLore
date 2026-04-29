@@ -44,6 +44,7 @@ export interface MediaItem {
   // Game & Visual Novel
   playtimeHours?: number;
   isOngoing?: boolean;
+  noEnemies?: boolean;
   releaseStatus?: string;
   lastSyncAt?: string;
   
@@ -126,6 +127,7 @@ export interface WorldBoss {
   status: 'Active' | 'Defeated' | 'Failed';
   expiresAt: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface OracleMessage {

@@ -11,16 +11,16 @@ import { calculateScaledDelta } from '../lib/scaling';
 import { calculateRPGState } from '../lib/rpgSystem';
 import { MediaItem, MEDIA_COLORS, ProgressLog, RARITY_COLORS } from '../types/schema';
 import { cn } from '../lib/utils';
-import { generateAiRecapText } from '../services/nanoGptService';
+import { generateAiRecapText, generateText } from '../services/nanoGptService';
 import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon } from 'lucide-react';
-import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog } from '../lib/recapAnalytics';
+import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog, analyzeContrarian } from '../lib/recapAnalytics';
 import Markdown from 'react-markdown';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 
 type Timeframe = 'week' | 'month' | 'year';
 
 export function Recaps() {
-  const { media, logs, settings, aiRecaps, saveAiRecap, artifacts } = useMediaContext();
+  const { media, logs, settings, aiRecaps, saveAiRecap, artifacts, worldBosses } = useMediaContext();
   const [timeframe, setTimeframe] = useState<Timeframe>('week');
   const [offsetOffset, setOffsetOffset] = useState(1); 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -181,6 +181,44 @@ export function Recaps() {
         return { title: m.title, type: m.mediaType, pages };
       }).sort((a,b) => b.pages - a.pages).slice(0, rankingLimit);
 
+      // Defeated Bosses in this interval
+      const defeatedBosses = worldBosses.filter(b => 
+        b.status === 'Defeated' && 
+        b.updatedAt && 
+        isWithinInterval(parseISO(b.updatedAt), currentInterval)
+      );
+
+      // PR Calculation
+      const previousIntervalRecaps = aiRecaps.filter(r => r.timeframe === timeframe && r.timeId < timeId);
+      const pastMaxPages = previousIntervalRecaps.reduce((max, r) => Math.max(max, r.data?.totalMasterPages || 0), 0);
+      const isNewPR = totalMasterPages > pastMaxPages && previousIntervalRecaps.length > 0;
+
+      // Genre Distribution
+      const calculateGenres = (logsToProcess: ProgressLog[]) => {
+        const dist: Record<string, number> = {};
+        logsToProcess.forEach(l => {
+          const m = media.find(x => x.id === l.mediaId);
+          if (!m) return;
+          const pages = calculateScaledDelta(l.delta, m, settings);
+          m.genres.forEach(g => {
+            dist[g] = (dist[g] || 0) + pages;
+          });
+        });
+        return dist;
+      };
+
+      const currentGenreDist = calculateGenres(activeProgressLogs);
+      
+      // Previous interval genre dist for shift analysis
+      const prevTarget = timeframe === 'week' ? subWeeks(currentInterval.start, 1) : 
+                        timeframe === 'month' ? subMonths(currentInterval.start, 1) : subYears(currentInterval.start, 1);
+      const prevInterval = timeframe === 'week' ? { start: startOfWeek(prevTarget, { weekStartsOn: 1 }), end: endOfWeek(prevTarget, { weekStartsOn: 1 }) } :
+                          timeframe === 'month' ? { start: startOfMonth(prevTarget), end: endOfMonth(prevTarget) } :
+                          { start: startOfYear(prevTarget), end: endOfYear(prevTarget) };
+      
+      const prevLogs = validLogs.filter(log => isWithinInterval(parseISO(log.timestamp), prevInterval) && log.metricType !== 'statusChange');
+      const prevGenreDist = calculateGenres(prevLogs);
+
       // Previous recaps for continuity
       const previousRecaps = aiRecaps
         .filter(r => r.timeframe === timeframe && r.timeId !== timeId && r.timeId < timeId)
@@ -213,6 +251,25 @@ export function Recaps() {
       const completedQuests = activeQuests.filter(q => q.isCompleted);
       const missedQuests = activeQuests.filter(q => !q.isCompleted);
 
+      // Failed Bosses in this interval
+      const failedBosses = worldBosses.filter(b => 
+        b.status === 'Failed' && 
+        b.expiresAt && 
+        isWithinInterval(parseISO(b.expiresAt), currentInterval)
+      );
+
+      // Add analytics for specific new modules
+      const recapDataConfig = { timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings };
+      const contrarianMedia = analyzeContrarian(recapDataConfig);
+      const backlogVelocity = analyzeBacklog(recapDataConfig);
+      const habitsDetails = analyzeHabits(recapDataConfig);
+
+      // Count loot frequency by rarity
+      const lootDist: Record<string, number> = {};
+      gatheredLoot.forEach(a => {
+        lootDist[a.rarity] = (lootDist[a.rarity] || 0) + 1;
+      });
+
       const promptContext = `
 Timeframe: ${timeframe} (${formatIntervalLabel()})
 Is First Ever Recap?: ${isFirstRecap ? "YES. Welcome the user to their first recap!" : "NO"}
@@ -224,7 +281,10 @@ Levels Gained this ${timeframe}: ${levelUps}
 Quests Completed this ${timeframe}: ${completedQuests.length > 0 ? completedQuests.map(q => `${q.title} - ${q.description}`).join(' | ') : 'None'}
 Missed Quests: ${missedQuests.length > 0 ? missedQuests.map(q => `${q.title} - ${q.description} (${q.currentAmount}/${q.targetAmount})`).join(' | ') : 'None'}
 
-Total Master Pages (EXP): ${Math.round(totalMasterPages)}
+BOSSES DEFEATED:
+${defeatedBosses.length > 0 ? defeatedBosses.map(b => `- ${b.name} (LV ${b.level})`).join('\n') : 'None'}
+
+Total Master Pages (EXP): ${Math.round(totalMasterPages)} ${isNewPR ? "(PERSONAL RECORD! Highlight this!)" : ""}
 Total Logs: ${activeLogs.length}
 
 MEDIA IN PROGRESS:
@@ -246,20 +306,39 @@ PREVIOUS RECAPS (Chronological):
 ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title}): \n${r.summary}`).join('\n\n') : 'No past recaps available.'}
 `;
 
-      const aiResponse = await generateAiRecapText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', `Based on the following data, generate a title and a creative, witty, and highly energetic recap of this ${timeframe}'s media consumption.
+      const aiResponsePromise = generateAiRecapText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', `Based on the following data, generate a title and a creative, witty, and highly energetic recap of this ${timeframe}'s media consumption.
       
 CRITICAL INSTRUCTIONS:
 1. TITLE: Must be a punchy, clever name (1-5 words max). DO NOT include descriptions.
 2. VIBE & TONE: Be charming, sarcastic, witty, and charismatic! Sound natural, modern and casual. Feel free to roast or tease the user playfully about their habits (e.g., spending too much time on one thing, slow reading, weird combos). Less "classic prose" and more like an entertaining, hyper-aware gamer/geek podcaster talking to the user.
 3. STRUCTURE & FOCUS: The core structure and primary focus of your recap MUST be the 'MEDIA COMPLETED' list (if any). Let what they finished dictate your narrative flow. After completing media, cover their 'MEDIA IN PROGRESS' as ongoing obsessions or endless slogs.
-4. ORGANIC WEAVING: You MUST organically weave Journal Notes, Locations, Gathered Loot, Ratings (Critic and User Ratings), and Lorekeeper Leveling stats (Level ups, Quests) directly into the discussion of the specific media. DO NOT create standalone paragraphs for locations, lorekeeper info, gathered loot, ratings or notes. Examples: "Reading some One Piece this month really helped you finish the 'Read some Manga' Quest!", "Glad to see you followed your weekly quest and went to watch a Comedy Movie!", "You clearly enjoyed your time reading [Book] in [Location] based on your notes.", "It's no surprise you gave it an 4/5, considering critics loved it with a 92/100!", or "Finishing [Media] gave you that sweet [Loot Name]!".
+4. ORGANIC WEAVING: You MUST organically weave Journal Notes, Locations, Gathered Loot, Ratings (Critic and User Ratings), Bosses Defeated, and Lorekeeper Leveling stats (Level ups, Quests) directly into the discussion of the specific media. DO NOT create standalone paragraphs for locations, lorekeeper info, gathered loot, ratings or notes. Examples: "Reading some One Piece this month really helped you finish the 'Read some Manga' Quest!", "Glad to see you followed your weekly quest and went to watch a Comedy Movie!", "You clearly enjoyed your time reading [Book] in [Location] based on your notes.", "It's no surprise you gave it an 4/5, considering critics loved it with a 92/100!", or "Finishing [Media] gave you that sweet [Loot Name]!".
 5. ACCURACY: DO NOT assume a media item is completed unless it explicitly is in the 'MEDIA COMPLETED' list! If it's just 'IN PROGRESS', treat it as their current ongoing obsession or slog.
 6. FORMATTING: Use Markdown beautifully (bolding, italics, blockquotes, bullet points). Make it very readable.
 7. LENGTH: Give a detailed recap (Weekly: 2-3 paragraphs. Monthly/Yearly: 4-6 paragraphs) highlighting their key moments, weird obsessions, or big wins.
 8. CONTINUITY: Read the "PREVIOUS RECAPS" section and if relevant, comment on running themes, jokes, or unbroken streaks. Keep the lore alive.
+9. PR ALERT: If the user hit a Personal Record (PR) in Master Pages, definitely celebrate it with some hype!
 
 Context: 
 ${promptContext}`);
+
+      const roastPromise = generateText(
+        settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini',
+        "You are an AI roasting bot inside a media tracking app. Keep it fun and lighthearted, but throw some serious shade at the user's media habits. Just return the string directly, max 2 sentences.",
+        promptContext
+      );
+
+      const themePromise = generateText(
+        settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini',
+        "You are an AI summarizing bot. Name the 'Theme of the Period' based on the user's media consumption. Provide just the theme name (max 5 words).",
+        promptContext
+      );
+
+      const [aiResponse, aiRoast, aiTheme] = await Promise.all([
+        aiResponsePromise,
+        timeframe === 'month' || timeframe === 'year' ? roastPromise.catch(e => "Error loading roast.") : Promise.resolve(null),
+        timeframe === 'month' || timeframe === 'year' ? themePromise.catch(e => "Error loading theme.") : Promise.resolve(null)
+      ]);
       
       if (!aiResponse.summary || String(aiResponse.summary).trim().length === 0) {
         throw new Error("The AI failed to generate a narrative summary.");
@@ -269,13 +348,323 @@ ${promptContext}`);
         timeframe,
         timeId,
         title: aiResponse.title,
-        summary: aiResponse.summary
+        summary: aiResponse.summary,
+        data: {
+          totalMasterPages,
+          isNewPR,
+          defeatedBosses: defeatedBosses.map(b => ({ name: b.name, level: b.level, mediaId: b.mediaId })),
+          failedBosses: failedBosses.map(b => ({ name: b.name, level: b.level, mediaId: b.mediaId })),
+          currentGenreDist,
+          prevGenreDist,
+          levelUps,
+          rpgLevel: rpgStateAtEnd.level,
+          rpgClass: rpgStateAtEnd.className,
+          exp: rpgStateAtEnd.currentExp, 
+          nextLevelExp: rpgStateAtEnd.nextLevelExp,
+          aiRoast,
+          aiTheme,
+          lootDist,
+          backlogVelocity,
+          midnightOil: habitsDetails?.timeSegments?.night || 0,
+          totalLogs: activeLogs.length,
+          contrarian: contrarianMedia ? {
+            title: contrarianMedia.media.title,
+            mediaType: contrarianMedia.media.mediaType,
+            userRating: contrarianMedia.media.userRating,
+            reviewScore: contrarianMedia.media.reviewScore,
+            type: contrarianMedia.type
+          } : null
+        }
       });
     } catch (e: any) {
       alert("Failed to generate AI Recap: " + e.message);
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const renderThemeOfTheMonth = () => {
+    const themeText = currentRecap?.data?.aiTheme;
+    if (!themeText) return null;
+    return (
+      <div className="w-full text-center py-6">
+        <div className="inline-block relative">
+           <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full"></div>
+           <h3 className="relative text-[10px] uppercase tracking-[0.4em] text-blue-400 font-bold mb-2">Theme of the Period</h3>
+           <p className="relative text-2xl md:text-3xl font-black text-white px-8">"{themeText}"</p>
+        </div>
+      </div>
+    );
+  };
+
+  const renderAIRoast = () => {
+    const roastText = currentRecap?.data?.aiRoast;
+    if (!roastText) return null;
+    return (
+      <div className="bg-rose-950/30 border border-rose-500/10 p-8 rounded-[2rem] mt-6 relative overflow-hidden group">
+        <div className="absolute top-0 left-0 w-1 h-full bg-rose-600"></div>
+        <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity">
+          <Flame className="w-48 h-48 text-rose-500" />
+        </div>
+        <div className="relative z-10 flex flex-col md:flex-row gap-6 items-start">
+           <div className="bg-rose-500/10 p-3 rounded-2xl shrink-0">
+             <BrainCircuit className="w-8 h-8 text-rose-500" />
+           </div>
+           <div>
+             <h3 className="text-rose-500 font-black text-[11px] uppercase tracking-[0.2em] mb-2">The AI Roast</h3>
+             <p className="text-zinc-300 text-lg md:text-xl font-light italic leading-relaxed">"{roastText}"</p>
+           </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderMonthlyStats = () => {
+    const d = currentRecap?.data;
+    if (!d || timeframe !== 'month') return null;
+
+    const velocity = d.backlogVelocity;
+    const isAccumulating = velocity && velocity.net > 0;
+    
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+        
+        {/* Midnight Oil */}
+        {d.midnightOil !== undefined && (
+          <div className="bg-indigo-950/40 border border-indigo-500/10 p-6 rounded-3xl flex flex-col items-center justify-center text-center">
+             <Moon className="w-6 h-6 text-indigo-400 mb-3" />
+             <div className="text-2xl font-black text-white">{d.midnightOil}</div>
+             <div className="text-[9px] uppercase tracking-widest text-indigo-500/70 mt-1 font-bold">Midnight Sessions</div>
+          </div>
+        )}
+
+        {/* Backlog Velocity */}
+        {velocity && (
+          <div className="bg-zinc-900/50 border border-white/5 p-6 rounded-3xl flex flex-col items-center justify-center text-center relative overflow-hidden">
+             <Library className="w-6 h-6 text-zinc-500 mb-3" />
+             <div className={cn("text-2xl font-black", isAccumulating ? "text-rose-400" : "text-emerald-400")}>
+               {isAccumulating ? '+' : ''}{velocity.net}
+             </div>
+             <div className="text-[9px] uppercase tracking-widest text-zinc-500 mt-1 font-bold">Backlog Change</div>
+             {isAccumulating && <div className="absolute top-0 right-0 w-2 h-2 bg-rose-500 rounded-full m-3 animate-pulse"></div>}
+          </div>
+        )}
+
+        {/* Global XP Milestone */}
+        {d.nextLevelExp !== undefined && d.exp !== undefined && (
+          <div className="col-span-2 bg-zinc-900/50 border border-white/5 p-6 rounded-3xl flex flex-col justify-center">
+             <div className="flex items-center gap-2 mb-3">
+                <Target className="w-4 h-4 text-emerald-400" />
+                <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold">Global XP Milestone • LV {d.rpgLevel || 1}</div>
+             </div>
+             <div className="w-full bg-black rounded-full h-3 border border-white/10 overflow-hidden relative">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(100, Math.max(0, (d.exp / d.nextLevelExp) * 100))}%` }}
+                  className="absolute left-0 top-0 h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full"
+                />
+             </div>
+             <div className="flex justify-between items-center mt-2">
+                <span className="text-[10px] font-bold text-emerald-500/70">{Math.round(d.exp).toLocaleString()} XP</span>
+                <span className="text-[10px] font-bold text-zinc-600">{Math.round(d.nextLevelExp).toLocaleString()} XP</span>
+             </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderCriticDisparity = () => {
+    const d = currentRecap?.data?.contrarian;
+    if (!d || timeframe !== 'month') return null;
+
+    return (
+      <div className="bg-zinc-900/50 border border-white/5 p-6 rounded-3xl mt-4 flex items-center justify-between">
+        <div>
+          <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold mb-1">The Contrarian Award</div>
+          <div className="text-sm font-black text-white">{d.title}</div>
+          <div className="text-[10px] text-zinc-400">{d.type === 'loved' ? 'You loved it, critics hated it.' : 'You hated it, critics loved it.'}</div>
+        </div>
+        <div className="flex gap-4">
+           <div className="text-center">
+              <div className="text-lg font-black text-rose-400">{d.reviewScore}</div>
+              <div className="text-[8px] uppercase text-zinc-600 font-bold">Critic</div>
+           </div>
+           <div className="w-px bg-white/10"></div>
+           <div className="text-center">
+              <div className="text-lg font-black text-emerald-400">{d.userRating}</div>
+              <div className="text-[8px] uppercase text-zinc-600 font-bold">You</div>
+           </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderLootDistribution = () => {
+    const d = currentRecap?.data?.lootDist;
+    if (!d || Object.keys(d).length === 0 || timeframe !== 'month') return null;
+    
+    // Sort logic to order rarities
+    const order = ['Common', 'Uncommon', 'Rare', 'Super Rare', 'Legendary', 'Mythic'];
+    const entries = Object.entries(d).sort((a,b) => order.indexOf(a[0]) - order.indexOf(b[0]));
+
+    return (
+      <div className="mt-8 bg-black/30 border border-white/5 p-6 rounded-[2rem]">
+         <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-6 text-center">Loot Rarity Distribution</div>
+         <div className="flex justify-center gap-2 flex-wrap">
+           {entries.map(([rarity, count]) => (
+             <div key={rarity} className="flex flex-col items-center justify-center p-3 rounded-2xl bg-zinc-900 border border-white/5 min-w-[70px]">
+                <div className={cn("text-lg font-black", (RARITY_COLORS as any)[rarity] || "text-zinc-400")}>
+                  {count as number}
+                </div>
+                <div className={cn("text-[8px] uppercase tracking-wider mt-1 opacity-70", (RARITY_COLORS as any)[rarity] || "text-zinc-500")}>{rarity}</div>
+             </div>
+           ))}
+         </div>
+      </div>
+    );
+  };
+
+  const renderFailedBosses = () => {
+    const bosses = currentRecap?.data?.failedBosses;
+    if (!bosses || bosses.length === 0) return null;
+
+    return (
+      <div className="mt-6 bg-rose-950/10 border border-rose-500/10 p-6 rounded-3xl">
+        <div className="text-[10px] uppercase tracking-widest text-rose-500/50 font-bold mb-4 flex items-center gap-2">
+           <ZapOff className="w-3 h-3" /> The Ones That Got Away
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {bosses.map((boss: any, idx: number) => (
+             <div key={idx} className="bg-black/50 border border-rose-500/20 px-4 py-2 rounded-xl flex items-center gap-2">
+                <span className="text-zinc-500 text-sm">☠️</span>
+                <div>
+                   <div className="text-xs font-bold text-zinc-300">{boss.name}</div>
+                   <div className="text-[9px] uppercase tracking-widest text-rose-500/50">LV {boss.level} BOSS</div>
+                </div>
+             </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderPRBadge = () => {
+    if (!currentRecap?.data?.isNewPR) return null;
+    return (
+      <motion.div 
+        initial={{ scale: 0, rotate: -20 }}
+        animate={{ scale: 1, rotate: 0 }}
+        className="absolute -top-4 -right-4 bg-yellow-500 text-black px-4 py-2 rounded-full font-black text-xs shadow-[0_0_20px_rgba(234,179,8,0.4)] z-30 uppercase tracking-[0.2em] border-2 border-black"
+      >
+        Personal Record!
+      </motion.div>
+    );
+  };
+
+  const renderBossTrophyRoom = () => {
+    const bosses = currentRecap?.data?.defeatedBosses;
+    if (!bosses || bosses.length === 0) return null;
+
+    return (
+      <div className="bg-black/50 border border-white/5 p-10 rounded-[3rem] mt-8">
+        <h3 className="text-xl font-black text-white mb-8 flex items-center gap-4">
+          <Trophy className="w-8 h-8 text-amber-500" />
+          Boss Trophy Room
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+          {bosses.map((boss: any, idx: number) => {
+            const m = media.find(x => x.id === boss.mediaId);
+            return (
+              <div key={idx} className="group relative bg-zinc-900 border border-white/5 rounded-3xl p-6 flex flex-col items-center justify-center text-center hover:border-white/20 transition-all">
+                <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mb-4 border border-red-500/20 group-hover:scale-110 transition-transform">
+                  <Ghost className="w-8 h-8 text-red-500/50" />
+                </div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1">LV {boss.level} BOSS</div>
+                <div className="text-sm font-black text-white leading-tight mb-2">{boss.name}</div>
+                {m && <div className={`text-[8px] font-black uppercase tracking-widest opacity-60 ${MEDIA_COLORS[m.mediaType]?.text}`}>{m.title}</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderGenreRadar = () => {
+    const dist = currentRecap?.data?.currentGenreDist;
+    if (!dist || Object.keys(dist).length < 3) return null;
+
+    const data = Object.entries(dist)
+      .map(([name, value]) => ({ name, value: Math.round(value as number) }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+
+    return (
+      <div className="bg-zinc-900/50 border border-white/5 p-8 rounded-[2.5rem] flex flex-col items-center">
+        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-8 self-start">Genre Fusion Map</h4>
+        <div className="w-full h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data}>
+              <PolarGrid stroke="#ffffff10" />
+              <PolarAngleAxis dataKey="name" tick={{ fill: '#71717a', fontSize: 10, fontWeight: 900 }} />
+              <Radar
+                name="Pages"
+                dataKey="value"
+                stroke={theme.text.replace('text-', '') === 'orange-500' ? '#f97316' : theme.text.replace('text-', '') === 'indigo-400' ? '#818cf8' : '#34d399'}
+                fill={theme.text.replace('text-', '') === 'orange-500' ? '#f97316' : theme.text.replace('text-', '') === 'indigo-400' ? '#818cf8' : '#34d399'}
+                fillOpacity={0.4}
+              />
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#000', border: '1px solid #ffffff10', borderRadius: '12px' }}
+                itemStyle={{ color: '#fff', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}
+              />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    );
+  };
+
+  const renderFocusShift = () => {
+    const cur = currentRecap?.data?.currentGenreDist || {};
+    const prev = currentRecap?.data?.prevGenreDist || {};
+    
+    const allGenres = Array.from(new Set([...Object.keys(cur), ...Object.keys(prev)]));
+    const shifts = allGenres.map(g => {
+      const cVal = cur[g] || 0;
+      const pVal = prev[g] || 0;
+      const diff = cVal - pVal;
+      const pct = pVal > 0 ? (diff / pVal) * 100 : 100;
+      return { genre: g, diff, pct, current: cVal };
+    }).sort((a,b) => Math.abs(b.diff) - Math.abs(a.diff)).slice(0, 5);
+
+    if (shifts.length === 0) return null;
+
+    return (
+      <div className="bg-zinc-900/50 border border-white/5 p-8 rounded-[2.5rem]">
+        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-6">Focus Shift Analysis</h4>
+        <div className="space-y-4">
+          {shifts.map(s => (
+            <div key={s.genre} className="flex items-center justify-between">
+              <div>
+                <div className="text-xs font-black text-white uppercase tracking-wider">{s.genre}</div>
+                <div className="text-[9px] font-bold text-zinc-500 uppercase">{Math.round(s.current)} Pages</div>
+              </div>
+              <div className={cn(
+                "text-[10px] font-black px-2 py-1 rounded-lg border",
+                s.diff > 0 ? "text-emerald-400 bg-emerald-400/5 border-emerald-400/10" : "text-rose-400 bg-rose-400/5 border-rose-400/10"
+              )}>
+                {s.diff > 0 ? '+' : ''}{Math.round(s.pct)}%
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-[9px] text-zinc-600 mt-6 leading-relaxed italic">
+          Comparing engagement against the previous equivalent interval.
+        </p>
+      </div>
+    );
   };
 
   const getTheme = () => {
@@ -912,8 +1301,9 @@ ${promptContext}`);
                            <span className={`${theme.text} font-black tracking-[0.3em] uppercase text-[10px] flex items-center gap-2 px-4 py-1.5 rounded-full border ${theme.border} bg-black/50 w-fit backdrop-blur-md`}>
                              <Sparkles className="w-4 h-4" /> {timeframe}ly narrative
                            </span>
-                           <h2 className="text-5xl md:text-8xl font-black text-white tracking-tighter leading-[0.9]">
+                           <h2 className="text-5xl md:text-8xl font-black text-white tracking-tighter leading-[0.9] relative">
                              {currentRecap ? currentRecap.title : "Unwritten History"}
+                             {renderPRBadge()}
                            </h2>
                          </div>
                          <button 
@@ -926,11 +1316,19 @@ ${promptContext}`);
                          </button>
                       </div>
 
+                      {renderThemeOfTheMonth()}
+
                       <div className="text-xl md:text-2xl text-zinc-400 relative z-10 leading-relaxed font-light">
                          {currentRecap ? (
-                            <div className={`prose prose-invert prose-lg md:prose-xl max-w-none prose-p:leading-relaxed prose-strong:text-white prose-headings:text-white prose-a:text-white prose-blockquote:border-l-4 ${timeframe === 'week' ? 'prose-orange' : (timeframe === 'month' ? 'prose-indigo' : 'prose-emerald')} prose-blockquote:bg-white/5 prose-blockquote:px-8 prose-blockquote:py-4 prose-blockquote:rounded-r-3xl`}>
+                             <>
+                             <div className={`prose prose-invert prose-lg md:prose-xl max-w-none prose-p:leading-relaxed prose-strong:text-white prose-headings:text-white prose-a:text-white prose-blockquote:border-l-4 ${timeframe === 'week' ? 'prose-orange' : (timeframe === 'month' ? 'prose-indigo' : 'prose-emerald')} prose-blockquote:bg-white/5 prose-blockquote:px-8 prose-blockquote:py-4 prose-blockquote:rounded-r-3xl`}>
                                <Markdown>{currentRecap.summary}</Markdown>
                             </div>
+                            {renderAIRoast()}
+                            {renderMonthlyStats()}
+                            {renderBossTrophyRoom()}
+                            {renderFailedBosses()}
+                             </>
                          ) : (
                             <div className="flex flex-col items-center justify-center text-center py-20 border-2 border-dashed border-white/5 rounded-[2rem] bg-white/[0.02]">
                                <motion.div animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }}>
@@ -983,6 +1381,7 @@ ${promptContext}`);
                          
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {renderHabitsHeatmap()}
+                             {renderGenreRadar()}
                             <div className="space-y-6">
                                {renderTopCreator()}
                                {renderBingeSpotlight()}
@@ -992,7 +1391,8 @@ ${promptContext}`);
  
                       {/* Right Side: Micro stats & Deep Dives */}
                       <div className="lg:col-span-4 space-y-6">
-                         {renderActiveTime()}
+                         {renderFocusShift()}
+                          {renderActiveTime()}
                          {renderVelocity()}
                          {renderDNADeepDive()}
                          {renderBacklogHealth()}
@@ -1007,7 +1407,9 @@ ${promptContext}`);
                             </div>
                          </div>
                          {renderLocationBreakdown()}
+                         {renderCriticDisparity()}
                          {renderGatheredLoot()}
+                         {renderLootDistribution()}
                          {renderSunkCost()}
                       </div>
                    </div>
