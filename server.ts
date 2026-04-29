@@ -603,6 +603,29 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
     console.error("Migration: seed user", e);
   }
 
+  // Synchronize media progress with logs
+  try {
+    const allMedia = db.prepare('SELECT id, userId FROM media').all() as any[];
+    for (const m of allMedia) {
+      const logs = db.prepare('SELECT metricType, delta FROM logs WHERE mediaId = ? AND userId = ?').all(m.id, m.userId) as any[];
+      
+      const sums: Record<string, number> = {};
+      for (const l of logs) {
+        if (!sums[l.metricType]) sums[l.metricType] = 0;
+        sums[l.metricType] += l.delta;
+      }
+      
+      for (const [metric, total] of Object.entries(sums)) {
+        if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(metric)) {
+          // If total logs > 0, or if total is 0 but we had logs
+          db.prepare(`UPDATE media SET ${metric} = MAX(0, ?) WHERE id = ? AND userId = ?`).run(total, m.id, m.userId);
+        }
+      }
+    }
+  } catch(e) {
+    console.error("Migration: sync media progress", e);
+  }
+
   // Migrate API keys from settings to system_settings
   try {
     const adminSettings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get('default_user');
@@ -1282,36 +1305,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.put("/api/logs/:id", (req, res) => {
-    try {
-      const userId = getAuthUser(req, res);
-      if (!userId) return;
-      
-      const updates = req.body;
-      const id = req.params.id;
-      
-      db.prepare(`
-        UPDATE logs SET 
-          timestamp = COALESCE(?, timestamp),
-          metricType = COALESCE(?, metricType),
-          delta = COALESCE(?, delta),
-          note = COALESCE(?, note),
-          location = COALESCE(?, location),
-          isHistoric = COALESCE(?, isHistoric)
-        WHERE id = ? AND userId = ?
-      `).run(
-        updates.timestamp || null,
-        updates.metricType || null,
-        updates.delta !== undefined ? updates.delta : null,
-        updates.note || null,
-        updates.location || null,
-        updates.isHistoric !== undefined ? (updates.isHistoric ? 1 : 0) : null,
-        id,
-        userId
-      );
-      res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
-  });
+
 
   app.post("/api/logs", (req, res) => {
     try {
@@ -1387,22 +1381,26 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         const type = log.metricType;
         const now = new Date().toISOString();
         
-        let newStatus = mediaRow.status;
+        let newStatus = log.status !== undefined ? log.status : mediaRow.status;
         if (newStatus === 'Planning' && log.delta > 0) {
            newStatus = 'Active';
         }
         
+        let newUserRating = log.userRating !== undefined ? log.userRating : mediaRow.userRating;
+        let newUserReview = log.userReview !== undefined ? log.userReview : mediaRow.userReview;
+        let newWatched = log.watched !== undefined ? (log.watched ? 1 : 0) : mediaRow.watched;
+        
         if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {
           if (log.isHistoric) {
-            db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, status = ? WHERE id = ? AND userId = ?`).run(log.delta, newStatus, log.mediaId, userId);
+            db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, status = ?, userRating = ?, userReview = ?, watched = ? WHERE id = ? AND userId = ?`).run(log.delta, newStatus, newUserRating, newUserReview, newWatched, log.mediaId, userId);
           } else {
-            db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, updatedAt = ?, status = ? WHERE id = ? AND userId = ?`).run(log.delta, now, newStatus, log.mediaId, userId);
+            db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, updatedAt = ?, status = ?, userRating = ?, userReview = ?, watched = ? WHERE id = ? AND userId = ?`).run(log.delta, now, newStatus, newUserRating, newUserReview, newWatched, log.mediaId, userId);
           }
         } else {
           if (log.isHistoric) {
-            db.prepare(`UPDATE media SET status = ? WHERE id = ? AND userId = ?`).run(newStatus, log.mediaId, userId);
+            db.prepare(`UPDATE media SET status = ?, userRating = ?, userReview = ?, watched = ? WHERE id = ? AND userId = ?`).run(newStatus, newUserRating, newUserReview, newWatched, log.mediaId, userId);
           } else {
-            db.prepare(`UPDATE media SET updatedAt = ?, status = ? WHERE id = ? AND userId = ?`).run(now, newStatus, log.mediaId, userId);
+            db.prepare(`UPDATE media SET updatedAt = ?, status = ?, userRating = ?, userReview = ?, watched = ? WHERE id = ? AND userId = ?`).run(now, newStatus, newUserRating, newUserReview, newWatched, log.mediaId, userId);
           }
         }
       }

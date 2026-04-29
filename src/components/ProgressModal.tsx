@@ -139,39 +139,29 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       modifiedDelta = 1;
     }
 
-    if (modifiedDelta !== 0 || note || status !== item.status) {
-      onLog(item.id, metricType, modifiedDelta, note, finalTimestamp, location, isHistorical);
-    }
-    
-    let updatedItem = { ...item };
-    let needsUpdate = false;
+    let extraUpdates: any = {};
     
     if (item.mediaType === 'Movie' && inputValue === 1 && !item.watched) {
-      updatedItem.watched = true;
-      needsUpdate = true;
+      extraUpdates.watched = true;
     } else if (item.mediaType === 'Movie' && inputValue === 0 && item.watched) {
-      updatedItem.watched = false;
-      needsUpdate = true;
+      extraUpdates.watched = false;
     }
 
     if (status !== item.status) {
-      updatedItem.status = status;
-      needsUpdate = true;
+      extraUpdates.status = status;
     }
     
     if (status === 'Completed') {
       if (userRating !== '' && userRating !== item.userRating) {
-        updatedItem.userRating = userRating;
-        needsUpdate = true;
+        extraUpdates.userRating = userRating;
       }
       if (userReview !== item.userReview) {
-        updatedItem.userReview = userReview;
-        needsUpdate = true;
+        extraUpdates.userReview = userReview;
       }
     }
 
-    if (needsUpdate) {
-      saveMediaItem(updatedItem);
+    if (modifiedDelta !== 0 || note || Object.keys(extraUpdates).length > 0) {
+      onLog(item.id, metricType, modifiedDelta, note, finalTimestamp, location, isHistorical, extraUpdates);
     }
     
     onClose();
