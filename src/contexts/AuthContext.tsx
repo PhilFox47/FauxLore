@@ -44,16 +44,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (res.ok) {
            return res.json();
         } else {
-           throw new Error('Invalid session');
+           localStorage.removeItem('fauxlore_token');
+           localStorage.removeItem('fauxlore_user');
+           return null;
         }
       })
       .then(data => {
-        setToken(storedToken);
-        setUser(data.user);
-        localStorage.setItem('fauxlore_user', JSON.stringify(data.user));
+        if (data) {
+          setToken(storedToken);
+          setUser(data.user);
+          localStorage.setItem('fauxlore_user', JSON.stringify(data.user));
+        }
       })
       .catch((e) => {
-        console.error(e);
+        console.error("Session verification failed", e);
         localStorage.removeItem('fauxlore_token');
         localStorage.removeItem('fauxlore_user');
       })

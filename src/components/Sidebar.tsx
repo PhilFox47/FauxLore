@@ -62,8 +62,8 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
         )}
       </div>
 
-      <nav className="flex-1 space-y-2 text-sm overflow-y-auto">
-        <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-600 mb-4">Main</div>
+      <nav className="flex-1 space-y-2 text-sm overflow-y-auto no-scrollbar">
+        <div className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-600 mb-4 font-display">Main HQ</div>
         {mainItems.map((item) => (
           <NavLink
             key={item.name}
@@ -71,19 +71,23 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
             onClick={onCloseMobile}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md transition-colors",
+                "flex items-center gap-3 px-3 py-2 rounded-lg transition-all font-medium",
                 isActive 
-                  ? "bg-white/5 text-white" 
-                  : "hover:text-white"
+                  ? "bg-gradient-to-r from-orange-500/20 to-transparent text-white border-l-2 border-orange-500 shadow-inner" 
+                  : "hover:text-white hover:bg-white/5 border-l-2 border-transparent"
               )
             }
           >
-            <item.icon className="w-4 h-4" />
-            {item.name}
+            {({ isActive }) => (
+              <>
+                <item.icon className={cn("w-4 h-4", isActive ? "text-orange-400" : "")} />
+                {item.name}
+              </>
+            )}
           </NavLink>
         ))}
 
-        <div className="pt-8 text-[10px] uppercase tracking-widest font-semibold text-zinc-600 mb-4">Explore</div>
+        <div className="pt-8 text-[10px] uppercase tracking-[0.2em] font-black text-zinc-600 mb-4 font-display">Explore</div>
         {exploreItems.map((item) => (
           <NavLink
             key={item.name}
@@ -91,19 +95,23 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
             onClick={onCloseMobile}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md transition-colors",
+                "flex items-center gap-3 px-3 py-2 rounded-lg transition-all font-medium",
                 isActive 
-                  ? "bg-white/5 text-white" 
-                  : "hover:text-white"
+                  ? "bg-gradient-to-r from-indigo-500/20 to-transparent text-white border-l-2 border-indigo-500 shadow-inner" 
+                  : "hover:text-white hover:bg-white/5 border-l-2 border-transparent"
               )
             }
           >
-            <item.icon className="w-4 h-4 text-orange-500/80" />
-            {item.name}
+            {({ isActive }) => (
+              <>
+                <item.icon className={cn("w-4 h-4", isActive ? "text-indigo-400" : "")} />
+                {item.name}
+              </>
+            )}
           </NavLink>
         ))}
 
-        <div className="pt-8 text-[10px] uppercase tracking-widest font-semibold text-zinc-600 mb-4">Library</div>
+        <div className="pt-8 text-[10px] uppercase tracking-[0.2em] font-black text-zinc-600 mb-4 font-display">Vaults</div>
         <div className="space-y-1">
           {libraryItems.map((item) => (
             <NavLink
@@ -112,33 +120,33 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
               onClick={onCloseMobile}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center justify-between px-3 py-2 rounded-md transition-all group",
+                  "flex items-center justify-between px-3 py-2 rounded-lg transition-all group font-medium",
                   isActive 
-                    ? "bg-white/5 text-white" 
+                    ? "bg-white/10 text-white shadow-inner" 
                     : "hover:text-white hover:bg-white/5"
                 )
               }
             >
               <div className="flex items-center gap-3">
-                <div className={cn("w-2 h-2 rounded-full", item.color.bg)} />
+                 <div className={cn("w-2 h-2 rounded-full", item.color.bg, item.color.shadow)} />
                 <span>{item.name}</span>
               </div>
               {item.count > 0 && (
-                <span className="text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-300 font-mono transition-colors group-hover:bg-zinc-700">{item.count}</span>
+                <span className="text-[10px] bg-black/50 px-2 py-0.5 rounded text-zinc-400 font-mono transition-colors group-hover:text-white shadow-inner border border-white/5">{item.count}</span>
               )}
             </NavLink>
           ))}
         </div>
       </nav>
 
-      <div className="mt-auto space-y-2">
-        <button onClick={onOpenSettings} className="flex items-center justify-center gap-2 w-full py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium transition-colors border border-white/5">
-          <Settings className="w-4 h-4" />
+      <div className="mt-auto space-y-3 pt-6 border-t border-white/5">
+        <button onClick={onOpenSettings} className="flex items-center justify-center gap-2 w-full py-3 bg-zinc-900 border border-white/5 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-xl text-xs uppercase font-black tracking-widest transition-colors font-display shadow-inner">
+          <Settings className="w-4 h-4 text-zinc-500" />
           Settings
         </button>
-        <button onClick={logout} className="flex items-center justify-center gap-2 w-full py-3 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-xl font-medium transition-colors border border-red-500/20">
-          <LogOut className="w-4 h-4" />
-          Sign Out
+        <button onClick={logout} className="flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-red-950/40 to-transparent border border-red-900/30 hover:border-red-500/50 hover:bg-red-900/40 text-red-500 hover:text-red-400 rounded-xl text-xs uppercase font-black tracking-widest transition-colors font-display">
+          <LogOut className="w-4 h-4 opacity-70" />
+          Disconnect
         </button>
       </div>
     </aside>

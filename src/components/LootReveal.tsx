@@ -1,7 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Artifact, RARITY_COLORS } from '../types/schema';
-import { Sparkles, Gem, X } from 'lucide-react';
+import { Sparkles, Gem, X, Crown, Shirt, Footprints, Sword, Shield } from 'lucide-react';
+
+const renderSlotIcon = (slot: string, className: string) => {
+  switch(slot) {
+    case 'Head': return <Crown className={className} />;
+    case 'Body': return <Shirt className={className} />;
+    case 'Legs': return <Footprints className={className} />;
+    case 'Primary': return <Sword className={className} />;
+    case 'Secondary': return <Shield className={className} />;
+    default: return <Gem className={className} />;
+  }
+};
 import { cn } from '../lib/utils';
 import Confetti from 'react-confetti';
 
@@ -61,6 +72,31 @@ export function LootReveal({ artifact, onClose }: LootRevealProps) {
 
   const config = rarityConfig[artifact.rarity] || rarityConfig.Common;
   const isRainbow = artifact.rarity === 'Mythic';
+  const isLegendary = artifact.rarity === 'Legendary';
+  const isHighTier = isRainbow || isLegendary;
+
+  // Enhance colors for Mythic holographic look
+  const getCardStyle = () => {
+     if (isRainbow) {
+       return {
+         background: 'linear-gradient(135deg, rgba(20,20,24,0.95) 0%, rgba(10,10,12,0.95) 100%)',
+         boxShadow: shake ? '0 0 100px -20px #a855f7, inset 0 0 40px rgba(168,85,247,0.3)' : '0 0 80px -10px #a855f7, inset 0 0 20px rgba(168,85,247,0.2)',
+         borderColor: 'rgba(216,180,254,0.4)',
+       };
+     } else if (isLegendary) {
+       return {
+         background: 'linear-gradient(135deg, rgba(24,20,10,0.95) 0%, rgba(12,10,5,0.95) 100%)',
+         boxShadow: shake ? '0 0 80px -20px #fbbf24, inset 0 0 40px rgba(251,191,36,0.2)' : '0 0 60px -10px #f59e0b, inset 0 0 20px rgba(251,191,36,0.1)',
+         borderColor: 'rgba(251,191,36,0.4)',
+       };
+     }
+     
+     // Generic fallback that uses the rarity color softly
+     return {
+         backgroundColor: 'rgba(9,9,11,0.95)',
+         boxShadow: `0 30px 60px -15px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.05)`,
+     };
+  };
 
   return (
     <AnimatePresence>
@@ -68,136 +104,209 @@ export function LootReveal({ artifact, onClose }: LootRevealProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 overflow-hidden"
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/90 backdrop-blur-md p-4 sm:p-8 overflow-hidden perspective-1000"
       >
-        {(!shake) && (
+        {/* Confetti Celebration */}
+        {showDetails && (
           <Confetti
             width={windowDimensions.width}
             height={windowDimensions.height}
             colors={config.colors}
             numberOfPieces={config.confettiCount}
             recycle={false}
-            gravity={isRainbow ? 0.2 : 0.15}
+            gravity={isHighTier ? 0.2 : 0.15}
+            initialVelocityY={isHighTier ? 20 : 10}
+            className="z-0"
           />
         )}
 
+        {/* Ambient background glow for high tier */}
+        {showDetails && isHighTier && (
+          <motion.div
+             initial={{ opacity: 0, scale: 0.5 }}
+             animate={{ opacity: 0.4, scale: 1.5 }}
+             transition={{ duration: 1.5, ease: "easeOut" }}
+             className={cn("absolute top-1/2 left-1/2 w-[80vw] h-[80vw] max-w-[800px] max-h-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[100px] z-0")}
+             style={{
+                background: isRainbow 
+                  ? 'radial-gradient(circle, rgba(168,85,247,0.8) 0%, rgba(239,68,68,0.4) 50%, transparent 70%)'
+                  : 'radial-gradient(circle, rgba(251,191,36,0.8) 0%, rgba(245,158,11,0.4) 50%, transparent 70%)'
+             }}
+          />
+        )}
+
+        {/* The Card */}
         <motion.div
-          initial={{ scale: 0.8, y: 50, opacity: 0 }}
+          initial={{ scale: 0.4, y: 150, opacity: 0, rotateX: 45 }}
           animate={
             shake 
-              ? { x: [-config.shakeIntensity, config.shakeIntensity, -config.shakeIntensity, config.shakeIntensity, 0], scale: 1, opacity: 1 }
-              : { scale: 1, y: 0, opacity: 1 }
+              ? { x: [-config.shakeIntensity, config.shakeIntensity, -config.shakeIntensity, config.shakeIntensity, 0], scale: 1.05, opacity: 1, rotateX: 0 }
+              : { scale: 1, y: 0, opacity: 1, rotateX: 0 }
           }
           transition={
             shake 
-              ? { repeat: Infinity, duration: 0.1 }
-              : { type: "spring", duration: 0.8, bounce: 0.5 }
+              ? { repeat: Infinity, duration: 0.08, ease: "linear" }
+              : { type: "spring", duration: 0.8, bounce: 0.4 }
           }
           className={cn(
-            "relative w-full max-w-sm rounded-[2rem] border-2 p-8 text-center bg-zinc-950 flex flex-col items-center justify-center overflow-hidden",
-            borderCls
+            "relative w-full max-w-[320px] sm:max-w-sm rounded-[2rem] border p-6 sm:p-8 text-center flex flex-col items-center justify-center overflow-hidden z-20 group",
+            !isHighTier && borderCls
           )}
-          style={{
-            boxShadow: `0 0 ${isRainbow ? '60px' : '40px'} -10px var(--tw-shadow-color)`,
-          }}
+          style={getCardStyle()}
         >
-          {/* Background rays effect */}
-          {!shake && (
+          {/* Card inner background texture */}
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03] mix-blend-overlay pointer-events-none"></div>
+
+          {/* Dramatic light sweep effect for legendary/mythic */}
+          {showDetails && isHighTier && (
              <motion.div 
-               animate={{ rotate: 360 }}
-               transition={{ duration: isRainbow ? 10 : 20, repeat: Infinity, ease: "linear" }}
-               className={cn("absolute inset-0 pointer-events-none", isRainbow ? 'opacity-40' : 'opacity-20')}
+               initial={{ left: '-100%' }}
+               animate={{ left: '200%' }}
+               transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 3, ease: "easeInOut" }}
+               className="absolute top-0 bottom-0 w-1/2 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12 pointer-events-none mix-blend-overlay"
+             />
+          )}
+
+          {/* Holographic shifting glow (Mythic only) */}
+          {!shake && isRainbow && (
+             <motion.div 
+               animate={{ rotate: [0, 360] }}
+               transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+               className="absolute -inset-[100%] pointer-events-none opacity-30 mix-blend-color-dodge"
                style={{
-                 background: isRainbow 
-                   ? 'conic-gradient(from 0deg, #ef4444 0 60deg, #f97316 60deg 120deg, #eab308 120deg 180deg, #22c55e 180deg 240deg, #3b82f6 240deg 300deg, #a855f7 300deg 360deg)'
-                   : `conic-gradient(from 0deg, transparent 0 45deg, currentColor 45deg 90deg, transparent 90deg 135deg, currentColor 135deg 180deg, transparent 180deg 225deg, currentColor 225deg 270deg, transparent 270deg 315deg, currentColor 315deg 360deg)`
+                 background: 'conic-gradient(from 0deg, transparent 0deg, #ef4444 30deg, #eab308 90deg, #22c55e 150deg, #3b82f6 210deg, #a855f7 270deg, transparent 330deg)'
                }}
              />
           )}
 
-          <button onClick={onClose} className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white/50 hover:text-white transition-colors">
+          <button onClick={onClose} className="absolute top-4 right-4 z-50 p-2.5 rounded-full bg-black/40 text-zinc-400 hover:text-white hover:bg-black/60 transition-colors backdrop-blur-md border border-white/5 disabled:opacity-0"
+            disabled={shake}
+          >
             <X className="w-5 h-5" />
           </button>
 
-          <div className="relative z-10 flex flex-col items-center w-full">
+          <div className="relative z-30 flex flex-col items-center w-full">
+            
+            {/* The Gem Icon Container */}
             <motion.div
               animate={shake ? {} : { 
-                y: [0, -10, 0],
-                scale: [1, 1.1, 1]
+                y: [0, -8, 0],
               }}
               transition={{ 
-                duration: isRainbow ? 1 : 2,
+                duration: 3,
                 repeat: Infinity,
                 ease: "easeInOut"
               }}
-              className={cn("p-6 rounded-full border mb-6", borderCls, bgCls)}
-              style={isRainbow && !shake ? { background: 'linear-gradient(to right, #ef4444, #eab308, #3b82f6)' } : {}}
+              className="relative mb-8 mt-4"
             >
-              <Gem className={cn("w-16 h-16", isRainbow ? 'text-white' : colorCls)} />
+               {/* Under glow */}
+               <div className={cn("absolute inset-0 blur-2xl rounded-full opacity-60", bgCls)}></div>
+               
+               <div className={cn(
+                 "relative p-5 sm:p-6 rounded-[1.5rem] border shadow-2xl flex items-center justify-center backdrop-blur-xl transition-all duration-700",
+                 shake ? "scale-90 brightness-150" : "scale-100",
+                 isRainbow ? "border-purple-500/50 bg-gradient-to-br from-purple-900/40 to-black/80" : cn(borderCls, bgCls)
+               )}>
+                 {renderSlotIcon(artifact.slot || 'Accessory', cn(
+                   "w-16 h-16 sm:w-20 sm:h-20 transition-all duration-700 drop-shadow-xl",
+                   shake ? "animate-pulse" : "",
+                   isRainbow ? 'text-purple-300 drop-shadow-[0_0_15px_rgba(216,180,254,0.8)]' : colorCls
+                 ))}
+               </div>
             </motion.div>
 
+            {/* Rarity & Item Type Badge */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: showDetails ? 1 : 0, y: showDetails ? 0 : 20 }}
-              transition={{ duration: 0.5 }}
-              className="w-full flex justify-center items-center gap-2 mb-2"
+              initial={{ opacity: 0, scale: 0.8, y: 10 }}
+              animate={{ opacity: showDetails ? 1 : 0, scale: showDetails ? 1 : 0.8, y: showDetails ? 0 : 10 }}
+              transition={{ duration: 0.6, delay: 0.1, type: "spring" }}
+              className="w-full flex justify-center items-center gap-2 mb-3"
             >
-              <Sparkles className={cn("w-4 h-4", isRainbow ? 'text-yellow-400' : colorCls)} />
-              <span className={cn("font-bold uppercase tracking-wider text-sm", isRainbow ? 'text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-yellow-400 to-blue-400' : colorCls)}>
+              <Sparkles className={cn("w-4 h-4", isRainbow ? 'text-yellow-400 animate-pulse' : colorCls)} />
+              <span className={cn(
+                "font-black uppercase tracking-[0.2em] text-xs sm:text-sm font-display", 
+                isRainbow ? 'text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-yellow-400 to-blue-400 drop-shadow-sm' : colorCls
+              )}>
                 {artifact.rarity} {artifact.type}
               </span>
-              <Sparkles className={cn("w-4 h-4", isRainbow ? 'text-yellow-400' : colorCls)} />
+              <Sparkles className={cn("w-4 h-4", isRainbow ? 'text-yellow-400 animate-pulse' : colorCls)} />
             </motion.div>
 
+            {/* Item Name */}
             <motion.h2
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: showDetails ? 1 : 0, scale: showDetails ? 1 : 0.9 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="text-2xl font-black text-white mb-4 leading-tight"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: showDetails ? 1 : 0, y: showDetails ? 0 : 20 }}
+              transition={{ duration: 0.6, delay: 0.2, type: "spring" }}
+              className={cn(
+                "text-2xl sm:text-3xl font-black text-white mb-6 leading-tight tracking-tight px-2 drop-shadow-lg",
+                isRainbow && "text-transparent bg-clip-text bg-gradient-to-b from-white to-purple-200"
+              )}
             >
               {artifact.name}
             </motion.h2>
 
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: showDetails ? 1 : 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              className="text-zinc-400 text-sm mb-4 leading-relaxed px-4"
-            >
-              "{artifact.description}"
-            </motion.p>
-            
+            {/* Item Description block */}
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: showDetails ? 1 : 0 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
-              className="mb-8 px-6 py-2 rounded-xl bg-black/40 border border-white/10"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: showDetails ? 1 : 0, y: showDetails ? 0 : 20 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="w-full relative mb-6"
             >
-              {artifact.targetType ? (
-                 <div className="flex flex-col items-center gap-1">
-                    <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">{artifact.targetType}: {artifact.targetValue}</span>
-                    <span className="text-sm text-green-400 font-black">+{artifact.bonusPercent}% EXP Bonus</span>
-                 </div>
-              ) : (
-                 <div className="flex flex-col items-center gap-1">
-                    <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Base Effect</span>
-                    <span className="text-sm text-green-400 font-black">+20% EXP Bonus</span>
-                 </div>
-              )}
+               <div className="absolute left-0 top-0 bottom-0 w-1 rounded-full bg-gradient-to-b from-transparent via-white/20 to-transparent"></div>
+               <div className="absolute right-0 top-0 bottom-0 w-1 rounded-full bg-gradient-to-b from-transparent via-white/20 to-transparent"></div>
+               <p className="text-zinc-300 font-medium text-xs sm:text-sm leading-relaxed px-4 italic text-center text-shadow-sm">
+                 "{artifact.description}"
+               </p>
+            </motion.div>
+            
+            {/* Stats Block */}
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: showDetails ? 1 : 0, y: showDetails ? 0 : 20, scale: showDetails ? 1 : 0.95 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              className="w-full mb-8 relative p-[1px] rounded-2xl overflow-hidden group/stats"
+            >
+              {/* Animated border line */}
+              <div className={cn("absolute inset-0 opacity-50", isRainbow ? "bg-gradient-to-r from-purple-500 via-pink-500 to-yellow-500" : bgCls.replace('/10', '/50'))}></div>
+              
+              <div className="relative bg-zinc-950/90 backdrop-blur-3xl px-4 py-3 rounded-[15px] border border-white/5 w-full flex flex-col items-center shadow-inner">
+                 {artifact.targetType ? (
+                    <div className="flex flex-col items-center gap-1.5">
+                       <span className={cn("text-[9px] font-black uppercase tracking-[0.2em] font-display", isRainbow ? "text-purple-300" : "text-zinc-400")}>
+                          Affinity: <span className="text-white">{artifact.targetType}</span>
+                       </span>
+                       <span className="text-sm sm:text-base text-emerald-400 font-black drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]">
+                          +{artifact.bonusPercent}% {artifact.targetValue} EXP
+                       </span>
+                    </div>
+                 ) : (
+                    <div className="flex flex-col items-center gap-1.5">
+                       <span className={cn("text-[9px] font-black uppercase tracking-[0.2em] font-display", isRainbow ? "text-purple-300" : "text-zinc-400")}>
+                          Global Affinity
+                       </span>
+                       <span className="text-sm sm:text-base text-emerald-400 font-black drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]">
+                          +{artifact.bonusPercent || 20}% Base EXP
+                       </span>
+                    </div>
+                 )}
+              </div>
             </motion.div>
 
+            {/* Collect Button */}
             <motion.button
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: showDetails ? 1 : 0, y: showDetails ? 0 : 10 }}
-              transition={{ duration: 0.5, delay: 0.6 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: showDetails ? 1 : 0, y: showDetails ? 0 : 20 }}
+              transition={{ duration: 0.6, delay: 0.5 }}
               onClick={onClose}
+              disabled={!showDetails}
               className={cn(
-                "px-8 py-3 rounded-full font-bold text-white shadow-lg transition-transform hover:scale-105 active:scale-95",
-                bgCls.replace('/10', ''), borderCls
+                "w-full px-6 py-3 rounded-xl font-black text-xs uppercase tracking-[0.2em] shadow-lg transition-all font-display hover:-translate-y-1 hover:shadow-xl active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed",
+                isRainbow 
+                  ? "bg-white text-purple-900 border border-white shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:shadow-[0_0_50px_rgba(255,255,255,0.6)]" 
+                  : cn("bg-zinc-800 text-white hover:bg-zinc-700 border border-white/10", "hover:border-" + colorConfig.border.split('-')[1] + "-500/50")
               )}
-              style={isRainbow ? { background: 'linear-gradient(to right, #3b82f6, #a855f7)' } : { backgroundColor: 'var(--tw-shadow-color)' }}
             >
-              Collect
+              Collect Relic
             </motion.button>
           </div>
         </motion.div>

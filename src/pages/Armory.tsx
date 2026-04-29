@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
-import { Gem, Copy, Sword, Shield, Footprints, Sparkle, Hammer, AlertCircle, CheckCircle2, RotateCw, Crown, Shirt, User } from 'lucide-react';
+import { Gem, Copy, Sword, Shield, Footprints, Sparkles, Hammer, AlertCircle, CheckCircle2, RotateCw, Crown, Shirt, User } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { MEDIA_COLORS, Artifact, RARITY_COLORS } from '../types/schema';
 import { generateAiArtifactWithGemini } from '../services/geminiService';
+import { v4 as uuidv4 } from 'uuid';
+import { LootReveal } from '../components/LootReveal';
 
 import { MediaDetailModal } from '../components/MediaDetailModal';
 import { MediaFormModal } from '../components/MediaFormModal';
@@ -12,14 +14,46 @@ type Slot = 'Head' | 'Body' | 'Legs' | 'Primary' | 'Secondary' | 'Accessory';
 const SLOTS: Slot[] = ['Head', 'Body', 'Legs', 'Primary', 'Secondary', 'Accessory'];
 
 export function Armory() {
-  const { artifacts, media, settings, equipArtifact, unequipArtifact, updateArtifact, logs } = useMediaContext();
+  const { artifacts, media, settings, equipArtifact, unequipArtifact, updateArtifact, saveArtifact, logs } = useMediaContext();
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const [selectedMediaForDetails, setSelectedMediaForDetails] = useState<any | null>(null);
   const [editingMedia, setEditingMedia] = useState<any | null>(null);
   const [isMigrating, setIsMigrating] = useState(false);
+  const [isLootingMediaId, setIsLootingMediaId] = useState<string | null>(null);
+  const [lootedArtifact, setLootedArtifact] = useState<Artifact | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortType, setSortType] = useState<'Recent' | 'Rarity' | 'Durability'>('Recent');
   const [filterSlot, setFilterSlot] = useState<Slot | 'All'>('All');
+
+  const handleClaimLoot = async (item: any) => {
+    setIsLootingMediaId(item.id);
+    try {
+      const generated = await generateAiArtifactWithGemini(settings?.geminiApiKey, item);
+      const newArtifact: Artifact = {
+        id: uuidv4(),
+        mediaId: item.id,
+        name: generated.name,
+        description: generated.description,
+        type: generated.type || 'Trinket',
+        slot: generated.slot as any || 'Accessory',
+        rarity: generated.rarity as Artifact['rarity'],
+        targetType: generated.targetType,
+        targetValue: generated.targetValue,
+        bonusPercent: generated.bonusPercent,
+        earnedAt: new Date().toISOString(),
+        durability: 100,
+        maxDurability: 100,
+        isEquipped: false
+      };
+      await saveArtifact(newArtifact);
+      setLootedArtifact(newArtifact);
+    } catch(e: any) {
+      console.error("Failed to loot: " + e.message);
+      alert("Failed to loot: " + e.message + "\n\nNote: Ensure your Gemini API Key is set in AI Studio Secrets.");
+    } finally {
+      setIsLootingMediaId(null);
+    }
+  };
 
   const RARITY_WEIGHT = {
     'Mythic': 7,
@@ -152,58 +186,62 @@ export function Armory() {
       <div className="flex-1 overflow-y-auto no-scrollbar p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-12">
           
-          {/* Character Paper Doll Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-            <div className="bg-zinc-900/40 border border-white/5 rounded-[2.5rem] p-8 relative overflow-hidden">
-               <div className="absolute top-0 right-0 p-8 opacity-5">
-                  <User className="w-64 h-64 text-white" />
+          {/* Character Paper Doll Section & Unlooted */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-12">
+            
+            {/* Paper Doll */}
+            <div className="bg-gradient-to-br from-zinc-950 to-black border border-white/5 rounded-[2.5rem] p-8 sm:p-10 relative overflow-hidden shadow-[inset_0_2px_4px_rgba(255,255,255,0.02),0_20px_40px_-10px_rgba(0,0,0,0.8)]">
+               <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none">
+                  <User className="w-96 h-96 text-white translate-x-1/4 -translate-y-1/4" />
                </div>
                
-               <h2 className="text-lg font-black text-white mb-8 flex items-center gap-2">
-                 <Sparkle className="w-5 h-5 text-amber-500" />
-                 Currently Equipped
+               <h2 className="text-xl sm:text-2xl font-black text-white mb-8 flex items-center gap-3 font-display uppercase tracking-widest drop-shadow-md">
+                 <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500" />
+                 Active Loadout
                </h2>
 
                <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 relative z-10">
                  {SLOTS.map(slot => {
                    const item = getEquippedInSlot(slot);
                    return (
-                     <div key={slot} className="space-y-2">
-                        <div className="text-[10px] text-zinc-500 font-black uppercase tracking-widest px-2">{slot}</div>
+                     <div key={slot} className="space-y-2 group/slot">
+                        <div className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] px-2 font-display">{slot}</div>
                         <div 
                           className={cn(
-                            "aspect-square rounded-2xl border flex flex-col items-center justify-center p-4 transition-all group relative cursor-pointer",
+                            "aspect-square rounded-2xl border flex flex-col items-center justify-center p-3 sm:p-4 transition-all group/item relative cursor-pointer shadow-inner",
                             item 
-                              ? "bg-zinc-800/80 border-white/10 hover:border-white/20" 
-                              : "bg-zinc-950/50 border-white/5 border-dashed"
+                              ? "bg-gradient-to-t from-zinc-900 to-zinc-800/80 border-white/10 hover:border-white/20 hover:scale-105 duration-300" 
+                              : "bg-black/50 border-white/5 border-dashed"
                           )}
                           onClick={() => item && handleUnequip(item)}
                         >
                            {item ? (
                              <>
-                               <div className="absolute top-2 right-2 text-[8px] opacity-0 group-hover:opacity-100 transition-opacity text-red-500 font-bold uppercase tracking-widest bg-red-500/10 px-2 py-1 rounded">
-                                  Unequip
+                               <div className="absolute top-2 right-2 text-[8px] opacity-0 group-hover/item:opacity-100 transition-opacity text-red-400 font-bold uppercase tracking-widest bg-red-500/10 px-2 py-1 rounded shadow-sm border border-red-500/20 backdrop-blur-sm z-20">
+                                  Remove
                                </div>
-                               <div className="mb-2">
-                                 {renderSlotIcon(slot, cn("w-6 h-6", RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text))}
+                               <div className="mb-2 relative">
+                                 {/* Glow effect */}
+                                 <div className={cn("absolute inset-0 blur-xl opacity-40", RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text)}></div>
+                                 {renderSlotIcon(slot, cn("w-6 h-6 sm:w-8 sm:h-8 relative z-10 drop-shadow-lg", RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text))}
                                </div>
-                               <div className="text-[10px] font-bold text-white text-center leading-tight truncate w-full px-2">{item.name}</div>
+                               <div className="text-[9px] sm:text-[10px] font-black text-white text-center leading-tight truncate w-full px-1 font-display tracking-wide">{item.name}</div>
                                
                                {/* Durability Bar */}
-                               <div className="w-full mt-3 h-1 bg-zinc-950 rounded-full overflow-hidden">
+                               <div className="w-full mt-3 h-1.5 bg-black rounded-full overflow-hidden border border-white/5 shadow-inner p-[1px]">
                                   <div 
                                     className={cn(
-                                      "h-full rounded-full transition-all",
-                                      (item.durability / item.maxDurability) < 0.2 ? "bg-red-500" : "bg-emerald-500"
+                                      "h-full rounded-full transition-all shadow-inner",
+                                      (item.durability / item.maxDurability) < 0.2 ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"
                                     )} 
                                     style={{ width: `${(item.durability / item.maxDurability) * 100}%` }}
                                   />
                                </div>
-                               <div className="text-[8px] text-zinc-600 font-black mt-1 uppercase">{item.durability}/{item.maxDurability}</div>
+                               <div className="text-[8px] text-zinc-500 font-black mt-1.5 uppercase font-mono">{item.durability}/{item.maxDurability}</div>
                              </>
                            ) : (
                              <div className="text-zinc-800">
-                               {renderSlotIcon(slot, "w-8 h-8 opacity-20")}
+                               {renderSlotIcon(slot, "w-8 h-8 sm:w-10 sm:h-10 opacity-[0.15] drop-shadow-sm")}
                              </div>
                            )}
                         </div>
@@ -213,44 +251,65 @@ export function Armory() {
                </div>
             </div>
 
+            {/* Unlooted Treasures & selected artifact details */}
             <div className="space-y-6">
-               {unlootedCompletedMedia.length > 0 && (
-                 <div className="bg-zinc-900/40 border border-white/5 rounded-[2rem] p-6 shadow-xl">
-                   <h3 className="text-sm font-black text-white mb-4 uppercase tracking-widest flex items-center gap-2">
-                     <Sparkle className="w-4 h-4 text-purple-500" />
-                     Unlooted Treasures
-                   </h3>
-                   <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-4 gap-3">
-                     {unlootedCompletedMedia.map(item => (
-                       <div 
-                         key={item.id}
-                         onClick={() => setSelectedMediaForDetails(item)}
-                         className="aspect-[2/3] rounded-lg overflow-hidden bg-zinc-800 cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all relative group"
-                         title={item.title}
-                       >
-                         {item.coverImageUrl ? (
-                           <img src={item.coverImageUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                         ) : (
-                           <div className="w-full h-full flex items-center justify-center p-2 text-center text-[10px] font-bold text-zinc-500">
-                             {item.title}
-                           </div>
-                         )}
-                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                           <Gem className="w-4 h-4 text-purple-400" />
-                         </div>
-                       </div>
-                     ))}
+               <div className={cn("transition-all duration-500", selectedArtifact ? "opacity-30 pointer-events-none scale-95" : "opacity-100 scale-100")}>
+                 {unlootedCompletedMedia.length > 0 ? (
+                   <div className="bg-gradient-to-br from-indigo-950/20 to-black border border-indigo-500/20 shadow-[0_0_40px_rgba(99,102,241,0.1)] rounded-[2.5rem] p-8 sm:p-10 relative overflow-hidden">
+                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03] mix-blend-overlay"></div>
+                     <h3 className="text-sm sm:text-base font-black text-white mb-6 uppercase tracking-[0.2em] flex items-center gap-2 font-display">
+                       <Gem className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />
+                       Unidentified Loot
+                       <span className="ml-2 px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded text-[10px] tracking-widest">{unlootedCompletedMedia.length} Pending</span>
+                     </h3>
+                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 gap-4 relative z-10">
+                       {unlootedCompletedMedia.map(item => (
+                         <button 
+                           key={item.id}
+                           onClick={() => handleClaimLoot(item)}
+                           disabled={!!isLootingMediaId}
+                           className="aspect-square rounded-2xl bg-zinc-900 border border-white/5 cursor-pointer hover:border-indigo-500 hover:ring-2 hover:ring-indigo-500/50 hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all relative group flex flex-col items-center justify-center p-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                           title={`Identify loot from ${item.title}`}
+                         >
+                            <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl"></div>
+                            {isLootingMediaId === item.id ? (
+                               <div className="relative mb-2 flex items-center justify-center">
+                                  <div className="absolute inset-0 bg-indigo-500/30 blur-xl animate-pulse rounded-full"></div>
+                                  <Hammer className="w-8 h-8 text-indigo-400 relative z-10 animate-bounce" />
+                                  <Sparkles className="absolute -top-1 -right-1 w-4 h-4 text-indigo-300 animate-spin z-20 opacity-75" />
+                               </div>
+                            ) : (
+                               <Gem className="w-8 h-8 text-indigo-500 opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-transform duration-300 drop-shadow-[0_0_8px_rgba(99,102,241,0.5)] mb-2" />
+                            )}
+                            <div className={cn(
+                               "text-[8px] font-black uppercase text-zinc-500 group-hover:text-indigo-300 truncate w-full text-center tracking-widest px-1 font-display",
+                               isLootingMediaId === item.id && "text-indigo-400 animate-pulse drop-shadow-[0_0_5px_rgba(99,102,241,0.5)]"
+                            )}>
+                               {isLootingMediaId === item.id ? "Forging..." : item.title}
+                            </div>
+                         </button>
+                       ))}
+                     </div>
                    </div>
-                 </div>
-               )}
+                 ) : (
+                    <div className="h-full bg-gradient-to-br from-zinc-900/30 to-black border-2 border-dashed border-white/5 rounded-[2.5rem] p-12 flex flex-col items-center justify-center text-center">
+                       <Shield className="w-16 h-16 text-zinc-800 mb-6" />
+                       <p className="text-xs font-black text-zinc-600 uppercase tracking-[0.2em] font-display max-w-[200px] leading-relaxed">
+                          All completed conquests have been looted.
+                       </p>
+                    </div>
+                 )}
+               </div>
                
+               {/* Selection Viewer (if artifact selected) */}
                {selectedArtifact && (
-                 <div className="bg-purple-600/20 shadow-2xl shadow-purple-900/20 border border-purple-500/30 rounded-[2rem] p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
+                 <div className="bg-gradient-to-br from-zinc-900 to-[#121214] shadow-2xl shadow-black border border-white/10 rounded-[2.5rem] p-8 sm:p-10 animate-in fade-in slide-in-from-bottom-8 duration-500 ease-out relative overflow-hidden">
+                    <div className={cn("absolute inset-0 opacity-[0.05] mix-blend-screen pointer-events-none", RARITY_COLORS[selectedArtifact.rarity]?.bg || RARITY_COLORS['Common'].bg)}></div>
+                    <div className="flex items-start justify-between mb-6 relative z-10 w-full gap-4">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-3">
                           <span className={cn(
-                              "text-[10px] uppercase tracking-widest font-black px-2 py-0.5 rounded border shadow-sm",
+                              "text-[10px] uppercase tracking-[0.2em] font-black px-3 py-1 rounded border shadow-sm backdrop-blur-md font-display",
                               RARITY_COLORS[selectedArtifact.rarity]?.bg || RARITY_COLORS['Common'].bg,
                               RARITY_COLORS[selectedArtifact.rarity]?.text || RARITY_COLORS['Common'].text,
                               (RARITY_COLORS[selectedArtifact.rarity]?.border || RARITY_COLORS['Common'].border).replace('500', '500/30')
@@ -258,54 +317,63 @@ export function Armory() {
                               {selectedArtifact.rarity}
                           </span>
                         </div>
-                        <h3 className="text-lg font-black text-white italic">"{selectedArtifact.name}"</h3>
+                        <h3 className="text-2xl sm:text-3xl font-black text-white italic truncate tracking-tight py-1">{selectedArtifact.name}</h3>
                       </div>
-                      <div className="text-zinc-500" title={selectedArtifact.slot}>
-                        {renderSlotIcon(selectedArtifact.slot || 'Accessory', "w-6 h-6")}
+                      <div className="text-zinc-600 shrink-0 p-4 bg-black/40 rounded-2xl border border-white/5 shadow-inner" title={selectedArtifact.slot}>
+                        {renderSlotIcon(selectedArtifact.slot || 'Accessory', "w-8 h-8")}
                       </div>
                     </div>
                     
-                    <p className="text-sm text-purple-200/60 mb-4 font-medium leading-relaxed">{selectedArtifact.description}</p>
+                    <div className="relative z-10 backdrop-blur-sm bg-black/30 border border-white/5 rounded-2xl p-5 mb-6">
+                       <p className="text-sm text-zinc-300 font-medium leading-relaxed italic border-l-2 border-white/10 pl-4 py-1">"{selectedArtifact.description}"</p>
+                    </div>
                     
-                    <div className="mb-6 flex items-center gap-2 w-full" title="Durability">
-                      <Hammer className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-                      <div className="flex-1 h-2 bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+                    <div className="mb-6 flex items-center gap-3 w-full bg-black/50 p-4 rounded-2xl border border-white/5 relative z-10" title="Durability">
+                      <Hammer className="w-5 h-5 text-zinc-500 flex-shrink-0" />
+                      <div className="flex-1 h-3 bg-zinc-950 rounded-full overflow-hidden border border-white/5 shadow-inner p-[1px]">
                           <div 
                             className={cn(
-                              "h-full rounded-full transition-all",
-                              (selectedArtifact.durability / selectedArtifact.maxDurability) < 0.2 ? "bg-red-500" : "bg-emerald-500"
+                              "h-full rounded-full transition-all shadow-[inset_0_2px_4px_rgba(255,255,255,0.2)]",
+                              (selectedArtifact.durability / selectedArtifact.maxDurability) < 0.2 ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" : "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
                             )} 
                             style={{ width: `${(selectedArtifact.durability / selectedArtifact.maxDurability) * 100}%` }}
                           />
                       </div>
-                      <span className="text-xs font-black text-zinc-400 flex-shrink-0">{selectedArtifact.durability}/{selectedArtifact.maxDurability}</span>
+                      <span className="text-xs font-black text-zinc-400 flex-shrink-0 w-12 text-right font-mono">{selectedArtifact.durability}/{selectedArtifact.maxDurability}</span>
                     </div>
 
-                    {selectedArtifact.targetType ? (
-                      <div className="mb-6 bg-purple-900/30 border border-purple-500/20 rounded-xl p-3 flex items-center justify-between">
-                         <span className="text-[10px] text-purple-300 font-bold uppercase tracking-widest">{selectedArtifact.targetType}: {selectedArtifact.targetValue}</span>
-                         <span className="text-xs text-green-400 font-black">+{selectedArtifact.bonusPercent}% EXP</span>
-                      </div>
-                    ) : (
-                      <div className="mb-6 bg-purple-900/30 border border-purple-500/20 rounded-xl p-3 flex items-center justify-between">
-                         <span className="text-[10px] text-purple-300 font-bold uppercase tracking-widest">Base Effect</span>
-                         <span className="text-xs text-green-400 font-black">+20% EXP</span>
-                      </div>
-                    )}
+                    <div className="relative z-10 space-y-4 mb-8">
+                       {selectedArtifact.targetType ? (
+                         <div className="bg-gradient-to-r from-purple-900/40 to-transparent border-l-4 border-purple-500 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-inner">
+                            <span className="text-[10px] text-purple-300 font-bold uppercase tracking-[0.2em] font-display">Target Affinity: <span className="text-white">{selectedArtifact.targetType}</span></span>
+                            <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-3 py-1 rounded shadow-sm border border-emerald-500/20">+{selectedArtifact.bonusPercent}% {selectedArtifact.targetValue} EXP</span>
+                         </div>
+                       ) : (
+                         <div className="bg-gradient-to-r from-purple-900/40 to-transparent border-l-4 border-purple-500 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-inner">
+                            <span className="text-[10px] text-purple-300 font-bold uppercase tracking-[0.2em] font-display">Global Affinity</span>
+                            <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-3 py-1 rounded shadow-sm border border-emerald-500/20">+20% Base EXP</span>
+                         </div>
+                       )}
+                    </div>
                     
-                    <button
-                      onClick={() => handleEquip(selectedArtifact, selectedArtifact.slot as Slot || 'Accessory')}
-                      className="w-full bg-white/10 hover:bg-white/20 border border-white/10 py-3 rounded-xl text-[10px] font-black text-white uppercase tracking-widest transition-all"
-                    >
-                      Equip as {selectedArtifact.slot || 'Accessory'}
-                    </button>
-                    
-                    <button 
-                      onClick={() => setSelectedArtifact(null)}
-                      className="w-full mt-4 text-[10px] font-black text-purple-400/50 uppercase tracking-widest"
-                    >
-                      Cancel
-                    </button>
+                    <div className="flex gap-4 relative z-10 w-full">
+                       <button 
+                         onClick={() => setSelectedArtifact(null)}
+                         className="px-6 py-4 rounded-xl border border-white/10 font-black text-zinc-400 uppercase tracking-widest text-[10px] hover:text-white hover:bg-white/5 transition-all font-display shrink-0"
+                       >
+                         Dismiss
+                       </button>
+                       <button
+                         onClick={() => handleEquip(selectedArtifact, selectedArtifact.slot as Slot || 'Accessory')}
+                         className={cn(
+                           "flex-1 bg-white hover:bg-zinc-200 text-black py-4 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] transition-all font-display shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-[0_0_30px_rgba(255,255,255,0.4)] hover:-translate-y-1",
+                           RARITY_COLORS[selectedArtifact.rarity]?.text || RARITY_COLORS['Common'].text
+                         )}
+                         style={{ color: `var(--color-${RARITY_COLORS[selectedArtifact.rarity]?.text.split('-')[1] || 'zinc'}-500, #000)` }}
+                       >
+                         Equip to {selectedArtifact.slot || 'Accessory'}
+                       </button>
+                    </div>
                  </div>
                )}
             </div>
@@ -441,6 +509,11 @@ export function Armory() {
         onClose={() => setEditingMedia(null)}
         initialData={editingMedia}
         onSave={() => setEditingMedia(null)}
+      />
+
+      <LootReveal 
+        artifact={lootedArtifact} 
+        onClose={() => setLootedArtifact(null)} 
       />
     </div>
   );

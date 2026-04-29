@@ -65,166 +65,156 @@ export function Dashboard() {
 
   return (
     <>
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8 w-full items-start">
-        <div className="xl:col-span-2 space-y-6">
-          {/* RPG Card */}
-          <div className="bg-zinc-900 border border-white/5 rounded-3xl p-6 relative overflow-hidden shadow-2xl shadow-black/50">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-[80px] pointer-events-none" />
-            
-            <div className="flex flex-col md:flex-row items-center gap-6 relative z-10 w-full">
-              <div className="shrink-0 relative">
-                <div className="w-20 h-20 bg-zinc-950 rounded-2xl flex items-center justify-center border-4 border-orange-500/50 shadow-[0_0_20px_rgba(249,115,22,0.3)] relative">
-                  <Shield className="w-10 h-10 text-orange-400" />
-                  <div className="absolute -bottom-3 -right-3 bg-orange-600 text-white text-xs font-black px-2 py-0.5 rounded-full border-2 border-zinc-900 shadow-xl shadow-orange-900/50">
-                    Lvl {rpgState.level}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex-1 w-full flex flex-col justify-center min-w-0">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-3 gap-2">
-                  <div className="truncate w-full min-w-0">
-                     <h3 className="text-2xl font-black text-white italic tracking-tight truncate">{getDynamicTitle()}</h3>
-                     <p className="text-zinc-400 text-sm font-medium">{rpgState.currentExp.toLocaleString()} Total EXP</p>
-                  </div>
-                  <div className="text-left sm:text-right shrink-0 mt-1 sm:mt-0">
-                     <span className="text-xs text-orange-400 font-bold tracking-wider uppercase block sm:inline">Next Level</span>
-                     <div className="text-xs text-zinc-500 font-mono mt-0.5 sm:mt-0">
-                        {(rpgState.currentExp - rpgState.currentLevelExp).toLocaleString()} / {(rpgState.nextLevelExp - rpgState.currentLevelExp).toLocaleString()}
-                     </div>
-                  </div>
-                </div>
-                <div className="h-3 w-full bg-zinc-950 rounded-full overflow-hidden shadow-inner border border-white/5 relative">
-                  <div 
-                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-orange-600 to-orange-500 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(249,115,22,0.5)]" 
-                    style={{ width: `${Math.max(2, rpgState.expProgress * 100)}%` }} 
-                  />
-                </div>
-              </div>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 auto-rows-[minmax(180px,auto)] gap-4 xl:gap-6 mb-8 w-full">
+        
+        {/* Bento: RPG Hero (2x2) */}
+        <div className="md:col-span-2 xl:col-span-2 xl:row-span-2 bg-gradient-to-br from-[#121214] to-[#0A0A0C] border border-white/5 border-t-white/10 rounded-[2rem] p-6 lg:p-10 relative overflow-hidden shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_20px_40px_-10px_rgba(0,0,0,0.8)] flex flex-col justify-between group">
+          <div className="absolute -top-32 -right-32 w-96 h-96 bg-orange-500/10 rounded-full blur-[100px] pointer-events-none transition-transform duration-1000 group-hover:scale-110" />
+          
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+             <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-orange-400" />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 font-display">Lorekeeper</span>
+             </div>
+             <div className="bg-white/5 backdrop-blur-sm border border-white/5 px-4 py-1.5 rounded-full shadow-inner">
+                <span className="text-[10px] font-black uppercase tracking-widest text-orange-400">Level {rpgState.level}</span>
+             </div>
           </div>
 
-          {/* Oracle News */}
-          <div className="bg-gradient-to-br from-purple-950/30 to-zinc-900 border border-purple-500/20 rounded-3xl p-6 relative overflow-hidden group">
-             <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-purple-500/0 via-purple-500 to-purple-500/0" />
-             <div className="flex items-start gap-4">
-                <div className="shrink-0 w-12 h-12 bg-purple-500/10 rounded-2xl flex items-center justify-center border border-purple-500/20 shadow-inner">
-                   <Sparkles className="w-6 h-6 text-purple-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                   <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm font-black text-purple-200 uppercase tracking-widest flex items-center gap-2">
-                        Message from the Oracle
-                        {latestOracle && (
-                          <span className="text-[10px] text-zinc-500 font-medium lowercase italic px-2 py-0.5 bg-zinc-950/50 rounded-full border border-white/5">
-                             {format(parseISO(latestOracle.timestamp), 'h:mm a')}
-                          </span>
-                        )}
-                      </h4>
-                      <button 
-                        onClick={async (e) => {
-                          const btn = e.currentTarget;
-                          btn.disabled = true;
-                          const icon = btn.querySelector('svg');
-                          if(icon) icon.classList.add('animate-spin', 'text-purple-300');
-                          await fetchOracleMessage();
-                          btn.disabled = false;
-                          if(icon) icon.classList.remove('animate-spin', 'text-purple-300');
-                        }}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-purple-400 hover:text-purple-300 p-1 disabled:opacity-50"
-                      >
-                         <RefreshCw className="w-4 h-4" />
-                      </button>
-                   </div>
-                   <p className="text-zinc-300 italic text-sm leading-relaxed font-serif">
-                      {latestOracle?.message || "The Oracle is silent. Peer into the void to receive guidance."}
-                   </p>
-                </div>
-             </div>
+          <div className="relative z-10 w-full mb-8">
+             <h3 className="text-3xl sm:text-5xl font-black text-white italic tracking-tight font-display mb-2 drop-shadow-lg leading-tight">
+               {getDynamicTitle()}
+             </h3>
+             <p className="text-zinc-400 text-sm sm:text-base font-medium flex items-center gap-2">
+               <Sparkles className="w-4 h-4 text-orange-400/50" />
+               {rpgState.currentExp.toLocaleString()} Total EXP
+             </p>
+          </div>
+
+          <div className="mt-auto">
+            <div className="flex justify-between items-end mb-3">
+               <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Next Rank</span>
+               <div className="text-xs font-mono text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded shadow-inner border border-white/5">
+                  {(rpgState.currentExp - rpgState.currentLevelExp).toLocaleString()} / {(rpgState.nextLevelExp - rpgState.currentLevelExp).toLocaleString()}
+               </div>
+            </div>
+            <div className="h-4 w-full bg-black/60 rounded-full overflow-hidden shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)] border border-white/5 relative p-[2px]">
+              <div 
+                className="absolute top-0 left-0 h-full bg-gradient-to-r from-orange-600 to-orange-400 rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(249,115,22,0.6)]" 
+                style={{ width: `${Math.max(2, rpgState.expProgress * 100)}%` }} 
+              />
+              {/* Skeuomorphic inner glare on the progress bar */}
+              <div className="absolute top-0 left-0 w-full h-[30%] bg-white/20 rounded-full mix-blend-overlay"></div>
+            </div>
           </div>
         </div>
 
-        {/* Boss Column */}
-        <div className="space-y-4">
-           <h3 className="text-xs font-black text-zinc-500 uppercase tracking-[0.2em] px-2 flex items-center justify-between">
-              Weekly Encounters
-              <Swords className="w-4 h-4" />
-           </h3>
+        {/* Bento: Streak (1x1) */}
+        <div className="bg-gradient-to-br from-orange-950/40 to-zinc-900 border border-orange-500/20 border-t-orange-400/30 rounded-[2rem] p-6 relative overflow-hidden shadow-lg flex flex-col items-center justify-center text-center group">
+           <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-orange-400/50 to-transparent"></div>
+           <Flame className={cn("w-12 h-12 mb-3 drop-shadow-md", currentStreak > 0 ? "text-orange-400 fill-orange-500/20" : "text-zinc-600")} />
+           <div className="text-4xl font-black text-white font-display tabular-nums tracking-tight mb-1">{currentStreak}</div>
+           <div className="text-[10px] uppercase font-bold tracking-[0.2em] text-orange-500/70">Day Streak</div>
+        </div>
+
+        {/* Bento: Boss List (1x2) on Desktop */}
+        <div className="xl:row-span-2 bg-[#0c0c0e] border border-white/5 rounded-[2rem] p-6 flex flex-col relative overflow-hidden shadow-lg">
+           <div className="flex items-center justify-between mb-6 relative z-10">
+              <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] font-display">
+                 Priority Targets
+              </h3>
+              <Swords className="w-4 h-4 text-zinc-600" />
+           </div>
            
-           {activeBosses.length === 0 ? (
-             <div className="bg-zinc-900/40 border border-dashed border-white/5 rounded-3xl p-8 text-center">
-                <Target className="w-8 h-8 text-zinc-800 mx-auto mb-3" />
-                <p className="text-[10px] font-black text-zinc-700 uppercase tracking-widest leading-relaxed">
-                   Peace reigns across the realms.
-                </p>
-             </div>
-           ) : (
-             activeBosses.map(boss => {
-               const mediaItem = media.find(m => m.id === boss.mediaId);
-               const progress = (boss.currentProgress / boss.targetProgress) * 100;
-               return (
-                 <div key={boss.id} className="bg-zinc-900/60 border border-white/5 rounded-3xl p-5 relative overflow-hidden group hover:border-red-500/20 transition-all">
-                    <div className="flex flex-col gap-4">
-                       <div className="flex items-center gap-3">
-                          <div className={cn(
-                             "w-10 h-10 rounded-xl flex items-center justify-center border shrink-0",
-                             boss.level >= 4 ? "bg-red-500/10 border-red-500/30 text-red-500" :
-                             boss.level >= 2 ? "bg-amber-500/10 border-amber-500/30 text-amber-500" :
-                             "bg-zinc-500/10 border-zinc-500/30 text-zinc-500"
-                          )}>
-                             <AlertTriangle className="w-5 h-5" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                             <div className="text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-0.5">Level {boss.level} BOSS</div>
-                             <div className="flex items-center justify-between gap-2">
-                               <h4 className="text-sm font-black text-white truncate">{boss.name}</h4>
-                               <button 
-                                  onClick={async (e) => {
-                                    const btn = e.currentTarget;
-                                    btn.disabled = true;
-                                    const icon = btn.querySelector('svg');
-                                    if(icon) icon.classList.add('animate-spin', 'text-amber-500');
-                                    await rerollBoss(boss.id);
-                                    btn.disabled = false;
-                                    if(icon) icon.classList.remove('animate-spin', 'text-amber-500');
-                                  }} 
-                                  className="shrink-0 p-1 bg-white/5 hover:bg-white/10 rounded border border-white/5 transition-colors disabled:opacity-50" 
-                                  title="Reroll Boss Name"
-                                >
-                                  <RefreshCw className="w-3 h-3 text-zinc-400" />
-                                </button>
-                             </div>
-                          </div>
-                       </div>
-                       
-                       <div className="space-y-2">
-                          <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400 px-1">
-                             <span className="truncate max-w-[120px]">Target: {mediaItem?.title}</span>
-                             <span>{Math.floor(progress)}%</span>
-                          </div>
-                          <div className="h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5 p-[1px]">
-                             <div 
-                               className="h-full bg-gradient-to-r from-red-600 to-red-400 rounded-full transition-all duration-700" 
-                               style={{ width: `${Math.max(4, progress)}%` }} 
-                             />
-                          </div>
-                          <div className="flex items-center justify-between text-[8px] font-black text-zinc-600 uppercase tracking-widest px-1">
-                             <span>{boss.currentProgress} / {boss.targetProgress} {boss.unit}</span>
-                             <div className="flex items-center gap-1">
-                                <Clock className="w-2.5 h-2.5" />
-                                <span>{format(parseISO(boss.expiresAt), 'MMM d')}</span>
-                             </div>
-                          </div>
-                       </div>
-                    </div>
-                    {/* Shadow Decor */}
-                    <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity">
-                       <Swords className="w-16 h-16" />
-                    </div>
-                 </div>
-               );
-             })
-           )}
+           <div className="flex-1 overflow-y-auto pr-2 space-y-3 relative z-10">
+             {activeBosses.length === 0 ? (
+               <div className="h-full flex flex-col items-center justify-center text-center px-4 py-8">
+                  <Target className="w-10 h-10 text-zinc-800 mx-auto mb-4" />
+                  <p className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] leading-relaxed">
+                     Zero Active<br/>Threats
+                  </p>
+               </div>
+             ) : (
+               activeBosses.slice(0, 3).map(boss => {
+                 const mediaItem = media.find(m => m.id === boss.mediaId);
+                 const progress = (boss.currentProgress / boss.targetProgress) * 100;
+                 return (
+                   <div key={boss.id} className="bg-zinc-950 border border-white/5 rounded-2xl p-4 group hover:border-red-500/30 transition-colors shadow-inner relative overflow-hidden">
+                      {/* Skeuomorphic inner shadow */}
+                      <div className="absolute inset-0 shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] pointer-events-none rounded-2xl" />
+                      <div className="relative z-10">
+                        <div className="flex justify-between items-start mb-2">
+                           <div className="min-w-0 pr-2">
+                              <h4 className="text-xs font-bold text-white truncate font-display">{boss.name}</h4>
+                              <div className="text-[9px] text-zinc-500 uppercase tracking-widest mt-0.5 truncate">LVL {boss.level} • {mediaItem?.title}</div>
+                           </div>
+                           <button 
+                              onClick={async (e) => {
+                                const btn = e.currentTarget;
+                                btn.disabled = true;
+                                const icon = btn.querySelector('svg');
+                                if(icon) icon.classList.add('animate-spin', 'text-amber-500');
+                                await rerollBoss(boss.id);
+                                btn.disabled = false;
+                                if(icon) icon.classList.remove('animate-spin', 'text-amber-500');
+                              }} 
+                              className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-50"
+                           >
+                              <RefreshCw className="w-3 h-3" />
+                           </button>
+                        </div>
+                        <div className="h-1.5 w-full bg-black/80 rounded-full overflow-hidden border border-white/5 relative">
+                           <div 
+                             className={cn(
+                               "h-full rounded-full transition-all duration-700 shadow-[0_0_8px_rgba(239,68,68,0.5)]",
+                               boss.level >= 4 ? "bg-red-500" : boss.level >= 2 ? "bg-amber-500" : "bg-emerald-500"
+                             )}
+                             style={{ width: `${Math.max(4, progress)}%` }} 
+                           />
+                        </div>
+                        <div className="flex justify-between text-[8px] font-mono text-zinc-500 mt-1.5">
+                           <span>{boss.currentProgress} / {boss.targetProgress} {boss.unit}</span>
+                           <span className="flex items-center gap-1"><Clock className="w-2 h-2" /> {format(parseISO(boss.expiresAt), 'MMM d')}</span>
+                        </div>
+                      </div>
+                   </div>
+                 );
+               })
+             )}
+             {activeBosses.length > 3 && (
+               <div className="text-center text-[10px] text-zinc-600 py-1 font-bold">+ {activeBosses.length - 3} more active</div>
+             )}
+           </div>
+        </div>
+
+        {/* Bento: Oracle (1x1) */}
+        <div className="bg-gradient-to-br from-indigo-950/30 to-[#0A0A0C] border border-indigo-500/20 border-t-indigo-400/30 rounded-[2rem] p-6 relative overflow-hidden shadow-lg group flex flex-col">
+           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03] mix-blend-overlay"></div>
+           <div className="flex items-center justify-between mb-4 relative z-10">
+              <div className="flex items-center gap-2">
+                 <Wand2 className="w-4 h-4 text-indigo-400" />
+                 <span className="text-[10px] font-black text-indigo-300/80 uppercase tracking-[0.2em] font-display">The Oracle</span>
+              </div>
+              <button 
+                 onClick={async (e) => {
+                   const btn = e.currentTarget;
+                   btn.disabled = true;
+                   const icon = btn.querySelector('svg');
+                   if(icon) icon.classList.add('animate-spin', 'text-indigo-300');
+                   await fetchOracleMessage();
+                   btn.disabled = false;
+                   if(icon) icon.classList.remove('animate-spin', 'text-indigo-300');
+                 }}
+                 className="text-indigo-500 hover:text-indigo-300 transition-colors disabled:opacity-50"
+              >
+                 <RefreshCw className="w-3 h-3" />
+              </button>
+           </div>
+           <div className="flex-1 flex items-center justify-center relative z-10">
+              <p className="text-zinc-300 italic text-xs sm:text-sm leading-relaxed font-serif text-center px-2 shadow-black drop-shadow-md">
+                 "{latestOracle?.message || "Gaze into the abyss."}"
+              </p>
+           </div>
         </div>
       </div>
 

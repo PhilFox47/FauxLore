@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
 import { useMediaContext } from '../contexts/MediaContext';
-import { X, Edit2, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin } from 'lucide-react';
+import { X, Edit2, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield } from 'lucide-react';
 import { calculateScaledDelta } from '../lib/scaling';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
@@ -25,6 +25,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   const [deleteConfirmLogId, setDeleteConfirmLogId] = useState<string | null>(null);
   const [isLooting, setIsLooting] = useState(false);
   const [lootedArtifact, setLootedArtifact] = useState<Artifact | null>(null);
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [editLogData, setEditLogData] = useState<{
     delta: number;
     note: string;
@@ -34,6 +35,9 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   }>({ delta: 0, note: '', location: '', logDate: '', logTime: '' });
 
   if (!isOpen || !item) return null;
+
+  const uniqueLocations = Array.from(new Set(logs.map(l => l.location).filter(Boolean))) as string[];
+  const filteredLocations = uniqueLocations.filter(loc => loc.toLowerCase().includes(editLogData.location.toLowerCase()) && loc !== editLogData.location);
 
   const totalMasterPages = logs
     .filter(l => !l.isHistoric && l.metricType !== 'statusChange')
@@ -129,6 +133,17 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
     await deleteLog(logId);
     setEditingLogId(null);
     setDeleteConfirmLogId(null);
+  };
+
+  const renderSlotIcon = (slot: string, className: string) => {
+    switch(slot) {
+      case 'Head': return <Crown className={className} />;
+      case 'Body': return <Shirt className={className} />;
+      case 'Legs': return <Footprints className={className} />;
+      case 'Primary': return <Sword className={className} />;
+      case 'Secondary': return <Shield className={className} />;
+      default: return <Gem className={className} />;
+    }
   };
 
   return (
@@ -288,7 +303,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                        return (
                        <div key={artifact.id} className={cn("bg-purple-900/10 border rounded-2xl p-5 flex items-start gap-4 shadow-lg shadow-purple-900/5 hover:border-purple-500/50 transition-colors", style.border.replace('500', '500/30'))}>
                           <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border", style.bg, style.border.replace('500', '500/40'))}>
-                             <Gem className={cn("w-6 h-6", style.text)} />
+                             {renderSlotIcon(artifact.slot || 'Accessory', cn("w-6 h-6", style.text))}
                           </div>
                           <div className="flex-1 min-w-0">
                              <div className="flex items-center gap-2 mb-1">
@@ -368,15 +383,35 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                               className="w-full bg-[#18181b] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500 resize-none min-h-[60px]"
                             />
                           </div>
-                          <div className="flex-1">
+                          <div className="flex-1 relative">
                             <label className="block text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider pl-1">Location</label>
                             <input 
                               type="text"
                               value={editLogData.location}
-                              onChange={(e) => setEditLogData({ ...editLogData, location: e.target.value })}
+                              onChange={(e) => { setEditLogData({ ...editLogData, location: e.target.value }); setShowLocationDropdown(true); }}
+                              onFocus={() => setShowLocationDropdown(true)}
+                               onBlur={() => setTimeout(() => setShowLocationDropdown(false), 200)}
                               placeholder="e.g. Home, Train, Area..."
                               className="w-full bg-[#18181b] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500"
                             />
+                            {showLocationDropdown && filteredLocations.length > 0 && (
+                               <div className="absolute top-[100%] z-20 w-full mt-1 bg-[#18181b] border border-white/10 rounded-lg shadow-xl overflow-hidden max-h-32 overflow-y-auto">
+                                  {filteredLocations.map((loc, idx) => (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        setEditLogData({ ...editLogData, location: loc });
+                                        setShowLocationDropdown(false);
+                                      }}
+                                      className="w-full text-left px-3 py-2 text-xs font-mono text-zinc-300 hover:bg-white/10 hover:text-white transition-colors border-b border-white/5 last:border-0"
+                                    >
+                                      {loc}
+                                    </button>
+                                  ))}
+                               </div>
+                            )}
                           </div>
                         </div>
                         <div className="flex gap-2 justify-end mt-4">
