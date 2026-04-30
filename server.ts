@@ -324,14 +324,22 @@ async function startServer() {
       const apiKey = settings?.geminiApiKey || process.env.GEMINI_API_KEY;
       if (apiKey) {
         try {
+          const levelDescriptions: Record<number, string> = {
+            1: "Pleb (Laughable, pathetic, weakest minion, joke enemy)",
+            2: "Easy (Common enemy, foot soldier, standard hurdle)",
+            3: "Medium (Actual threat, elite minion, mini-boss)",
+            4: "Hard (Menacing, dangerous antagonist, major boss)",
+            5: "World Boss (EPIC, realm-ending, the final form, supreme being)"
+          };
+
           const prompt = `You are an RPG boss generator.
 Task: Create ONE boss name and title that perfectly fits the universe of "${mediaItem.title}" (Type: ${mediaItem.mediaType}).
-Difficulty: Level ${level} out of 5.
+Difficulty: Level ${level} - ${levelDescriptions[level as keyof typeof levelDescriptions]}.
 
 Instructions:
 1. USE WEB SEARCH to find actual characters, creatures, villains, or lore from exactly "${mediaItem.title}".
-2. Pick an appropriate entity from that media.
-3. Make them an RPG boss. If the media doesn't have obvious bosses, create a funny or thematic boss out of a main character/concept from it.
+2. Pick an appropriate entity from that media based on the difficulty level. Level 1 should be a joke/laughable, while Level 5 should be an epic, ultimate threat.
+3. Make them an RPG boss by giving them an appropriate title based on the difficulty. If the media doesn't have obvious bosses, create a thematic boss out of a character/concept from it.
 4. Return ONLY the name and title. No explanations, no markdown.
 5. Example format: "Bowser, King of the Koopas".
 
