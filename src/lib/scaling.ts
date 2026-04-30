@@ -27,12 +27,14 @@ export function calculateScaledPages(item: MediaItem, settings?: Settings | null
       
     case 'Game': {
       const hoursPlayed = (item.playtimeHours || 0);
-      return Math.round(hoursPlayed * multipliers.gamePagesPerHour);
+      const modifier = item.storyHeavyModifier ?? 1.0;
+      return Math.round(hoursPlayed * multipliers.gamePagesPerHour * modifier);
     }
 
     case 'Visual Novel': {
       const hoursPlayed = (item.playtimeHours || 0);
-      return Math.round(hoursPlayed * multipliers.vnPagesPerHour);
+      const modifier = item.storyHeavyModifier ?? 1.0;
+      return Math.round(hoursPlayed * multipliers.vnPagesPerHour * modifier);
     }
     
     case 'Manga':
@@ -95,11 +97,13 @@ export function calculateScaledDelta(delta: number, item: MediaItem, settings?: 
       return delta;
       
     case 'Game': {
-      return Math.round(delta * multipliers.gamePagesPerHour); // Delta is in hours
+      const modifier = item.storyHeavyModifier ?? 1.0;
+      return Math.round(delta * multipliers.gamePagesPerHour * modifier); // Delta is in hours
     }
 
     case 'Visual Novel': {
-      return Math.round(delta * multipliers.vnPagesPerHour); // Delta is in hours
+      const modifier = item.storyHeavyModifier ?? 1.0;
+      return Math.round(delta * multipliers.vnPagesPerHour * modifier); // Delta is in hours
     }
     
     case 'Manga':

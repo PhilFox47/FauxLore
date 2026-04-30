@@ -129,8 +129,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     }
   }, [settings]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, step } = e.target;
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const target = e.target;
+    const name = target.name;
+    const value = target.value;
+    const type = target.type;
+    const step = 'step' in target ? target.step : undefined;
     // Allow float inputs for step decimals
     if (name.startsWith('yearly__')) {
        const key = name.replace('yearly__', '');

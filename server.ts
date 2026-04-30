@@ -1188,7 +1188,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           status, userRating, userReview, dropReason, genres, tags, tropes, platforms, franchises,
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
-          issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, language, isOngoing, noEnemies, releaseStatus, lastSyncAt, createdAt, updatedAt,
+          issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, language, isOngoing, noEnemies, storyHeavyModifier, releaseStatus, lastSyncAt, createdAt, updatedAt,
           subtitle, maturityRating
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
@@ -1196,7 +1196,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           @status, @userRating, @userReview, @dropReason, @genres, @tags, @tropes, @platforms, @franchises,
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
-          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @language, @isOngoing, @noEnemies, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
+          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @language, @isOngoing, @noEnemies, @storyHeavyModifier, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
           @subtitle, @maturityRating
         )
         ON CONFLICT(id) DO UPDATE SET
@@ -1212,7 +1212,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           totalEpisodes=excluded.totalEpisodes, watched=excluded.watched, watchCount=excluded.watchCount,
           runtimeMinutes=excluded.runtimeMinutes, issuesRead=excluded.issuesRead, totalIssues=excluded.totalIssues,
           isReRun=excluded.isReRun, originalMediaId=excluded.originalMediaId, expectedReleaseDate=excluded.expectedReleaseDate,
-          language=excluded.language, isOngoing=excluded.isOngoing, noEnemies=excluded.noEnemies,
+          language=excluded.language, isOngoing=excluded.isOngoing, noEnemies=excluded.noEnemies, storyHeavyModifier=excluded.storyHeavyModifier,
           releaseStatus=excluded.releaseStatus, lastSyncAt=excluded.lastSyncAt,
           subtitle=excluded.subtitle, maturityRating=excluded.maturityRating
       `);
@@ -1263,6 +1263,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         maturityRating: item.maturityRating || null,
         isOngoing: item.isOngoing ? 1 : 0,
         noEnemies: item.noEnemies ? 1 : 0,
+        storyHeavyModifier: item.storyHeavyModifier ?? null,
         releaseStatus: item.releaseStatus || null,
         lastSyncAt: item.lastSyncAt || null,
         createdAt: item.createdAt,

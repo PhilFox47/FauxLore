@@ -10,7 +10,7 @@ interface ProgressModalProps {
   isOpen: boolean;
   item: MediaItem | null;
   onClose: () => void;
-  onLog: (mediaId: string, metricType: any, delta: number, note?: string, timestamp?: string, location?: string, isHistoric?: boolean) => void;
+  onLog: (mediaId: string, metricType: any, delta: number, note?: string, timestamp?: string, location?: string, isHistoric?: boolean, extraUpdates?: any) => void;
 }
 
 export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalProps) {

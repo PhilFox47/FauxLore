@@ -654,6 +654,33 @@ export function MediaFormModal({
             </label>
           </div>
 
+          {(formData.mediaType === 'Game' || formData.mediaType === 'Visual Novel') && (
+            <div className="mb-4 bg-white/5 border border-white/10 p-4 rounded-xl">
+              <label className="block text-sm font-medium text-purple-400 mb-1">
+                Story Heavy Modifier
+                <span className="text-zinc-500 font-normal ml-2 text-xs">(Master Pages Multiplier)</span>
+              </label>
+              <input
+                type="range"
+                name="storyHeavyModifier"
+                min="0.5"
+                max="1.5"
+                step="0.1"
+                value={formData.storyHeavyModifier ?? 1.0}
+                onChange={(e) => setFormData(p => ({ ...p, storyHeavyModifier: parseFloat(e.target.value) }))}
+                className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+              />
+              <div className="flex justify-between mt-2">
+                <span className="text-[10px] text-zinc-500 font-bold">x0.5 Gameplay Heavy</span>
+                <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest">x{Number(formData.storyHeavyModifier ?? 1.0).toFixed(1)}</span>
+                <span className="text-[10px] text-zinc-500 font-bold">x1.5 Story Heavy</span>
+              </div>
+              <p className="text-[10px] text-zinc-400 mt-2">
+                Adjust how much playtime translates to Master Pages. A story-heavy game gives more Master Pages per hour played compared to a gameplay-focused title.
+              </p>
+            </div>
+          )}
+
           {formData.status === "Dropped" && (
             <div className="mb-4">
               <label className="block text-sm font-medium text-red-400 mb-1">

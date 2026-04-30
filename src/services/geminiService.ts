@@ -115,6 +115,45 @@ export async function generateAiArtifactWithGemini(userApiKey: string | undefine
     slot = slots[Math.floor(Math.random() * slots.length)];
   }
 
+  // Pre-determine Bonus Effect via software-level RNG
+  let targetType = oldArtifact?.targetType || 'MediaType';
+  let targetValue = oldArtifact?.targetValue || '';
+
+  if (!oldArtifact) {
+    const hasGenre = item.genres && item.genres.length > 0;
+    const hasTag = item.tags && item.tags.length > 0;
+    const hasFranchise = item.franchises && item.franchises.length > 0;
+
+    let pool = [];
+    if (hasGenre) pool.push({ type: 'Genre', weight: 25 });
+    if (hasTag) pool.push({ type: 'Tag', weight: 25 });
+    if (hasFranchise) pool.push({ type: 'Franchise', weight: 30 });
+    pool.push({ type: 'MediaType', weight: 20 });
+
+    let totalWeight = pool.reduce((acc, curr) => acc + curr.weight, 0);
+    let r = Math.random() * totalWeight;
+    let currentWeight = 0;
+    for (const option of pool) {
+      currentWeight += option.weight;
+      if (r <= currentWeight) {
+        targetType = option.type;
+        break;
+      }
+    }
+
+    if (targetType === 'Genre') {
+      targetValue = item.genres[Math.floor(Math.random() * item.genres.length)];
+    } else if (targetType === 'Tag') {
+      targetValue = item.tags[Math.floor(Math.random() * item.tags.length)];
+    } else if (targetType === 'Franchise') {
+      targetValue = item.franchises[Math.floor(Math.random() * item.franchises.length)];
+    } else if (targetType === 'MediaType') {
+      const allMediaTypes = ['Game', 'Visual Novel', 'Book', 'Manga', 'Series', 'Comic', 'Movie'];
+      const otherMediaTypes = allMediaTypes.filter(m => m !== item.mediaType);
+      targetValue = otherMediaTypes[Math.floor(Math.random() * otherMediaTypes.length)];
+    }
+  }
+
   const contextSnippet = `
 Title: ${item.title}
 Type: ${item.mediaType}
@@ -132,33 +171,27 @@ Legacy Description: ${oldArtifact.description}` : '';
 Your task is to generate a unique, flavor-rich Artifact that deeply references the lore, characters, themes, or signature items of this media.${legacySnippet}
 
 USE YOUR WEB SEARCH CAPABILITIES to confirm details about "${item.title}" (${item.mediaType}) so the loot feels authentic and "inside-baseball" for fans. 
-For example: 
-- If it's a TV show, reference a specific plot point or character's signature item.
-- If it's a game, reference a specific rare drop or lore-heavy relic.
-- If it's a book, reference a peculiar magical item or a character's defining possession.
 
 Media Context:
 ${contextSnippet}
 
-REQUIREMENTS:
-1. Target Rarity: ${rarity} (Adjust the "epicness" of the item name and description based on this. Common is mundane, Legendary/Mythic are world-altering.)
-2. The item name should be clever and thematic (max 4 words). Let the rarity guide how grand the name sounds.
-3. The description should be 1-2 sentences of high-quality RPG flavor text that mentions lore details found via your search. If the item grants a specific bonus (e.g. to a genre or franchise), weave a subtle hint to that effect into the description!
-4. The item slot ${slot ? `MUST exactly be "${slot}"` : `must be picked from: Head, Body, Legs, Primary, Secondary, Accessory`}. Make sure the item conceptually fits this slot (e.g., if Body, it should be armor/clothing; if Head, it should be a hat/helmet; if Primary, a main weapon).
-5. The type should be a logical RPG category that fits the slot (Weapon, Relic, Armor, Spell, Trinket, Consumable, etc.).
-6. The item MUST provide a bonus to a specific category. Pick a targetType from ["Genre", "Franchise", "MediaType"] and a targetValue based on the media context (e.g. if targetType is Genre, targetValue could be "Sci-Fi").
-   - If targetType is "MediaType", targetValue MUST be "${item.mediaType}".
-   - If targetType is "Genre", targetValue MUST be one of: "${item.genres?.[0] || 'General'}" (pick a primary genre).
-   - If targetType is "Franchise", targetValue MUST be exactly this string: "${item.franchises?.[0] || 'None'}". If none exists, do NOT use Franchise.
+PRE-DETERMINED ATTRIBUTES:
+- Rarity: ${rarity}
+- Slot: ${slot} (Conceptually fit this slot. Head=hat/helmet, Body=armor/clothing, etc.)
+- Bonus Effect: Grants a bonus to ${targetType}: "${targetValue}"
 
-Return EXACTLY and ONLY a JSON object with the following keys:
+REQUIREMENTS:
+1. Ensure the Item Name and Description perfectly match the specified Rarity, Slot, and Bonus Effect.
+2. Target Rarity: ${rarity} (Adjust the "epicness". Common is mundane, Legendary/Mythic are world-altering).
+3. The item name should be clever, thematic (max 4 words), and sound like a tangible item you would equip in the "${slot}" slot. Let the rarity guide how grand the name sounds.
+4. The description should be 1-2 sentences of high-quality RPG flavor text mentioning lore details found via your search. It MUST subtly hint at the Bonus Effect (${targetType}: "${targetValue}").
+5. The type should be a logical RPG category that fits the slot (e.g., Weapon, Relic, Armor, Helmet, Trinket, Consumable, etc.).
+
+Return EXACTLY and ONLY a pure JSON object with the following keys:
 {
   "name": "The item name",
   "description": "The flavor text",
-  "type": "The RPG item type",
-  "slot": "${slot ? slot : `Pick exactly one of: Head, Body, Legs, Primary, Secondary, Accessory`}",
-  "targetType": "Genre, Franchise, or MediaType",
-  "targetValue": "The specific genre, franchise, or media type"
+  "type": "The RPG item type"
 }`;
 
   try {
@@ -204,9 +237,9 @@ Return EXACTLY and ONLY a JSON object with the following keys:
       name: parsed.name || "Mysterious Artifact",
       description: parsed.description || "An item of unknown origin.",
       type: parsed.type || "Trinket",
-      slot: parsed.slot || "Accessory",
-      targetType: parsed.targetType || "MediaType",
-      targetValue: parsed.targetValue || item.mediaType,
+      slot: slot || "Accessory",
+      targetType: targetType,
+      targetValue: targetValue,
       bonusPercent,
       rarity
     };
