@@ -223,7 +223,8 @@ async function startServer() {
   async function generateOracleMessage(userId: string, type: 'morning' | 'evening') {
     try {
       const settings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId);
-      const apiKey = settings?.nanoGptApiKey;
+      const sysSettings: any = db.prepare('SELECT * FROM system_settings WHERE id = "system"').get();
+      const apiKey = settings?.nanoGptApiKey || sysSettings?.nanoGptApiKey;
       if (!apiKey) return;
 
       const logs: any[] = db.prepare('SELECT * FROM logs WHERE userId = ? AND timestamp > ?').all(userId, new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
@@ -321,7 +322,8 @@ async function startServer() {
       
       let bossName = "";
       
-      const apiKey = settings?.geminiApiKey || process.env.GEMINI_API_KEY;
+      const sysSettings: any = db.prepare('SELECT geminiApiKey FROM system_settings WHERE id = "system"').get();
+      const apiKey = settings?.geminiApiKey || sysSettings?.geminiApiKey || process.env.GEMINI_API_KEY;
       if (apiKey) {
         try {
           const levelDescriptions: Record<number, string> = {
@@ -1565,7 +1567,10 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       const userId = getAuthUser(req, res);
       if (!userId) return;
 
-      const oldSettings: any = db.prepare('SELECT enemyDifficulty FROM settings WHERE userId = ?').get(userId);
+      const userRec: any = db.prepare('SELECT role FROM users WHERE id = ?').get(userId);
+      const isAdmin = userRec?.role === 'Admin';
+      
+      const oldSettings: any = db.prepare('SELECT enemyDifficulty, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey FROM settings WHERE userId = ?').get(userId);
       const oldDifficulty = oldSettings?.enemyDifficulty ?? 1.0;
       const newDifficulty = settings.enemyDifficulty ?? 1.0;
       
@@ -1589,14 +1594,14 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           enemyDifficulty=excluded.enemyDifficulty
       `).run({
         userId: userId,
-        igdbClientId: settings.igdbClientId || null,
-        igdbClientSecret: settings.igdbClientSecret || null,
-        tmdbApiKey: settings.tmdbApiKey || null,
-        hardcoverApiKey: settings.hardcoverApiKey || null,
-        nanoGptApiKey: settings.nanoGptApiKey || null,
-        nanoGptModel: settings.nanoGptModel || null,
-        geminiApiKey: settings.geminiApiKey || null,
-        googleBooksApiKey: settings.googleBooksApiKey || null,
+        igdbClientId: isAdmin ? (settings.igdbClientId || null) : (oldSettings?.igdbClientId || null),
+        igdbClientSecret: isAdmin ? (settings.igdbClientSecret || null) : (oldSettings?.igdbClientSecret || null),
+        tmdbApiKey: isAdmin ? (settings.tmdbApiKey || null) : (oldSettings?.tmdbApiKey || null),
+        hardcoverApiKey: isAdmin ? (settings.hardcoverApiKey || null) : (oldSettings?.hardcoverApiKey || null),
+        nanoGptApiKey: isAdmin ? (settings.nanoGptApiKey || null) : (oldSettings?.nanoGptApiKey || null),
+        nanoGptModel: isAdmin ? (settings.nanoGptModel || null) : (oldSettings?.nanoGptModel || null),
+        geminiApiKey: isAdmin ? (settings.geminiApiKey || null) : (oldSettings?.geminiApiKey || null),
+        googleBooksApiKey: isAdmin ? (settings.googleBooksApiKey || null) : (oldSettings?.googleBooksApiKey || null),
         timezone: settings.timezone || null,
         masterPageConfig: settings.masterPageConfig ? JSON.stringify(settings.masterPageConfig) : null,
         yearlyGoals: settings.yearlyGoals ? JSON.stringify(settings.yearlyGoals) : null,
@@ -1871,17 +1876,26 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       const settings = db.prepare('SELECT geminiApiKey FROM settings WHERE userId = ?').get(userId) as any;
       
       let newName = "Void Stalker"; // fallback
-      const apiKey = settings?.geminiApiKey || process.env.GEMINI_API_KEY;
+      const sysSettings: any = db.prepare('SELECT geminiApiKey FROM system_settings WHERE id = "system"').get();
+      const apiKey = settings?.geminiApiKey || sysSettings?.geminiApiKey || process.env.GEMINI_API_KEY;
       if (mediaItem && apiKey) {
         try {
+          const levelDescriptions: Record<number, string> = {
+            1: "Pleb (Laughable, pathetic, weakest minion, joke enemy)",
+            2: "Easy (Common enemy, foot soldier, standard hurdle)",
+            3: "Medium (Actual threat, elite minion, mini-boss)",
+            4: "Hard (Menacing, dangerous antagonist, major boss)",
+            5: "World Boss (EPIC, realm-ending, the final form, supreme being)"
+          };
+
           const prompt = `You are an RPG boss generator.
 Task: Create ONE boss name and title that perfectly fits the universe of "${mediaItem.title}" (Type: ${mediaItem.mediaType}).
-Difficulty: Level ${boss.level} out of 5.
+Difficulty: Level ${boss.level} - ${levelDescriptions[boss.level as keyof typeof levelDescriptions]}.
 
 Instructions:
 1. USE WEB SEARCH to find actual characters, creatures, villains, or lore from exactly "${mediaItem.title}".
-2. Pick an appropriate entity from that media.
-3. Make them an RPG boss. If the media doesn't have obvious bosses, create a funny or thematic boss out of a main character/concept from it.
+2. Pick an appropriate entity from that media based on the difficulty level. Level 1 should be a joke/laughable, while Level 5 should be an epic, ultimate threat.
+3. Make them an RPG boss by giving them an appropriate title based on the difficulty. If the media doesn't have obvious bosses, create a thematic boss out of a character/concept from it.
 4. Return ONLY the name and title. No explanations, no markdown.
 5. Example format: "Bowser, King of the Koopas".
 

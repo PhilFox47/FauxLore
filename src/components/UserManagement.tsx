@@ -44,11 +44,15 @@ export function UserManagement() {
     setIsCreating(true);
     setError(null);
     try {
-       await apiFetch('/api/users', {
+       const res = await apiFetch('/api/users', {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify(newUser)
        });
+       if (!res.ok) {
+         const data = await res.json().catch(() => ({}));
+         throw new Error(data.error || 'Failed to create user');
+       }
        setNewUser({ username: '', password: '', role: 'User' });
        await loadUsers();
     } catch (e: any) {

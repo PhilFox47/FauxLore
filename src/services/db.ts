@@ -123,7 +123,14 @@ export const DatabaseService = {
       }
       if (sysRes.ok) {
          const sys = await sysRes.json();
-         combined = { ...sys, ...combined }; // user settings overwrite system where applicable, ideally sys has the api keys
+         // user settings overwrite system where applicable, but ignore nulls/empties
+         const merged: any = { ...sys };
+         for (const [k, v] of Object.entries(combined)) {
+            if (v !== null && v !== undefined && v !== '') {
+               merged[k] = v;
+            }
+         }
+         combined = merged;
       }
       return combined;
     } catch (e) {
