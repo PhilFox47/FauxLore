@@ -394,17 +394,6 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   });
 
   
-  // Automatic Migrations
-  try { db.exec("ALTER TABLE media ADD COLUMN language TEXT"); } catch (e) { /* Ignore if it exists */ }
-  try { db.exec("ALTER TABLE media ADD COLUMN isOngoing INTEGER"); } catch (e) { /* Ignore if it exists */ }
-  try { db.exec("ALTER TABLE media ADD COLUMN releaseStatus TEXT"); } catch (e) { /* Ignore if it exists */ }
-  try { db.exec("ALTER TABLE media ADD COLUMN lastSyncAt TEXT"); } catch (e) { /* Ignore if it exists */ }
-  try { db.exec("ALTER TABLE media ADD COLUMN noEnemies INTEGER DEFAULT 0"); } catch (e) { /* Ignore if it exists */ }
-  try { db.exec("ALTER TABLE settings ADD COLUMN enemyDifficulty REAL DEFAULT 1.0"); } catch (e) { /* Ignore if it exists */ }
-  try { db.exec("ALTER TABLE world_bosses ADD COLUMN unit TEXT"); } catch (e) { /* Ignore if it exists */ }
-  try { db.exec("ALTER TABLE ai_recaps ADD COLUMN data TEXT"); } catch (e) { /* Ignore if it exists */ }
-  try { db.exec("ALTER TABLE world_bosses ADD COLUMN updatedAt TEXT"); } catch (e) { /* Ignore if it exists */ }
-
   // Create Tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS media (
@@ -425,6 +414,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       selectedHltbType TEXT,
       status TEXT NOT NULL,
       userRating INTEGER,
+      userReview TEXT,
+      dropReason TEXT,
       genres TEXT,
       tags TEXT,
       tropes TEXT,
@@ -450,6 +441,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       expectedReleaseDate TEXT,
       language TEXT,
       isOngoing INTEGER,
+      noEnemies INTEGER DEFAULT 0,
       releaseStatus TEXT,
       lastSyncAt TEXT,
       createdAt TEXT,
@@ -520,7 +512,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       masterPageConfig TEXT,
       yearlyGoals TEXT,
       lastActiveDate TEXT,
-      currentStreak INTEGER
+      currentStreak INTEGER,
+      enemyDifficulty REAL DEFAULT 1.0
     );
 
     CREATE TABLE IF NOT EXISTS ai_recaps (
@@ -530,6 +523,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       timeId TEXT NOT NULL,
       title TEXT,
       summary TEXT,
+      data TEXT,
       UNIQUE(userId, timeframe, timeId)
     );
 
@@ -572,11 +566,13 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       mediaId TEXT NOT NULL,
       name TEXT NOT NULL,
       level INTEGER NOT NULL, -- 1=Pleb, 2=Easy, 3=Medium, 4=Hard, 5=World Boss
+      unit TEXT,
       targetProgress REAL NOT NULL,
       currentProgress REAL DEFAULT 0,
       status TEXT DEFAULT 'Active',
       expiresAt TEXT NOT NULL,
       createdAt TEXT NOT NULL,
+      updatedAt TEXT,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
     );
 
@@ -588,6 +584,19 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       timestamp TEXT NOT NULL
     );
   `);
+
+  // Automatic Migrations
+  try { db.exec("ALTER TABLE media ADD COLUMN language TEXT"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE media ADD COLUMN isOngoing INTEGER"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE media ADD COLUMN releaseStatus TEXT"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE media ADD COLUMN lastSyncAt TEXT"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE media ADD COLUMN noEnemies INTEGER DEFAULT 0"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE media ADD COLUMN userReview TEXT"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE media ADD COLUMN dropReason TEXT"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE settings ADD COLUMN enemyDifficulty REAL DEFAULT 1.0"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE world_bosses ADD COLUMN unit TEXT"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE ai_recaps ADD COLUMN data TEXT"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE world_bosses ADD COLUMN updatedAt TEXT"); } catch (e) { /* Ignore if it exists */ }
 
   // Migration steps
   try { 
@@ -1166,7 +1175,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         INSERT INTO media (
           id, userId, title, mediaType, coverImageUrl, description, creator, publisher, year, 
           reviewScore, averagePlaytime, hltbMain, hltbMainExtra, hltbCompletionist, selectedHltbType,
-          status, userRating, genres, tags, tropes, platforms, franchises,
+          status, userRating, userReview, dropReason, genres, tags, tropes, platforms, franchises,
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
           issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, language, isOngoing, noEnemies, releaseStatus, lastSyncAt, createdAt, updatedAt,
@@ -1174,7 +1183,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
           @reviewScore, @averagePlaytime, @hltbMain, @hltbMainExtra, @hltbCompletionist, @selectedHltbType,
-          @status, @userRating, @genres, @tags, @tropes, @platforms, @franchises,
+          @status, @userRating, @userReview, @dropReason, @genres, @tags, @tropes, @platforms, @franchises,
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
           @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @language, @isOngoing, @noEnemies, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
@@ -1186,7 +1195,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           year=excluded.year, reviewScore=excluded.reviewScore, averagePlaytime=excluded.averagePlaytime,
           hltbMain=excluded.hltbMain, hltbMainExtra=excluded.hltbMainExtra, hltbCompletionist=excluded.hltbCompletionist,
           selectedHltbType=excluded.selectedHltbType,
-          status=excluded.status, userRating=excluded.userRating, genres=excluded.genres,
+          status=excluded.status, userRating=excluded.userRating, userReview=excluded.userReview, dropReason=excluded.dropReason, genres=excluded.genres,
           tags=excluded.tags, tropes=excluded.tropes, platforms=excluded.platforms, franchises=excluded.franchises, playtimeHours=excluded.playtimeHours,
           pagesRead=excluded.pagesRead, totalPages=excluded.totalPages, chaptersRead=excluded.chaptersRead,
           totalChapters=excluded.totalChapters, season=excluded.season, episodesWatched=excluded.episodesWatched,
@@ -1216,6 +1225,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         selectedHltbType: item.selectedHltbType || null,
         status: item.status,
         userRating: item.userRating || null,
+        userReview: item.userReview || null,
+        dropReason: item.dropReason || null,
         genres: JSON.stringify(item.genres || []),
         tags: JSON.stringify(item.tags || []),
         tropes: JSON.stringify(item.tropes || []),
@@ -1386,9 +1397,9 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
            newStatus = 'Active';
         }
         
-        let newUserRating = log.userRating !== undefined ? log.userRating : mediaRow.userRating;
-        let newUserReview = log.userReview !== undefined ? log.userReview : mediaRow.userReview;
-        let newWatched = log.watched !== undefined ? (log.watched ? 1 : 0) : mediaRow.watched;
+        let newUserRating = log.userRating !== undefined ? log.userRating : (mediaRow.userRating !== undefined ? mediaRow.userRating : null);
+        let newUserReview = log.userReview !== undefined ? log.userReview : (mediaRow.userReview !== undefined ? mediaRow.userReview : null);
+        let newWatched = log.watched !== undefined ? (log.watched ? 1 : 0) : (mediaRow.watched !== undefined ? mediaRow.watched : null);
         
         if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {
           if (log.isHistoric) {
