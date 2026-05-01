@@ -227,20 +227,37 @@ async function startServer() {
       const apiKey = settings?.nanoGptApiKey || sysSettings?.nanoGptApiKey;
       if (!apiKey) return;
 
+      const activeBosses: any[] = db.prepare("SELECT * FROM world_bosses WHERE userId = ? AND status = 'Active'").all(userId);
+      const allLogs: any[] = db.prepare('SELECT * FROM logs WHERE userId = ? ORDER BY timestamp DESC').all(userId);
       const logs: any[] = db.prepare('SELECT * FROM logs WHERE userId = ? AND timestamp > ?').all(userId, new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
       const media: any[] = db.prepare('SELECT * FROM media WHERE userId = ?').all(userId).map(normalizeMedia);
       
-      const systemPrompt = `You are the Narrative Oracle, a witty, casual, and highly charismatic gamemaster AI in a life-tracking RPG. 
-      You comment on the user's recent progress and offer guidance for the day ahead. Your tone is like an entertaining podcaster or gamemaster—fun, modern, slightly sarcastic but very encouraging. Give it personality!`;
+      const dustyMedia = media.filter(m => m.status === 'Active' || m.status === 'On Hold').filter(m => {
+        const mLogs = allLogs.filter(l => l.mediaId === m.id);
+        if (mLogs.length === 0) return true;
+        const lastLog = new Date(mLogs[0].timestamp).getTime();
+        return (Date.now() - lastLog) > 7 * 24 * 60 * 60 * 1000;
+      }).map(m => m.title);
+
+      const systemPrompt = `You are the Narrative Oracle, a helpful, welcoming, and charismatic gamemaster AI for a personal RPG.
+      Your responsibility is to warmly greet the user, give them some engaging advice, and comment on their progress without just parroting the logs.
+      You can mention a 'dusty' media item that hasn't been active in a while, give advice on defeating their current World Boss, comment on recent progress, or suggest tackling specific types of quests in their tracker.
+      Tone: Like an entertaining podcaster or gamemaster—fun, modern, helpful, slightly dramatic but very encouraging. Give it personality!`;
       
-      const userPrompt = `Time: ${type === 'morning' ? '09:00 AM' : '09:00 PM'}
-      Recent Logs: ${logs.map(l => {
+      let dustyContext = dustyMedia.length > 0 ? `Dusty Media (Needs Attention): ${dustyMedia.slice(0, 3).join(', ')}` : "No neglected media.";
+      let bossContext = activeBosses.length > 0 ? `Active Enemies to fight: ${activeBosses.map(b => b.name).join(', ')}` : "No active enemies right now.";
+      let logsContext = logs.length > 0 ? `Recent Triumphs (Past 24h): ${logs.slice(0,5).map(l => {
         const m = media.find(x => x.id === l.mediaId);
-        return `${m?.title} (${l.metricType}: +${l.delta})`;
-      }).join(', ')}
+        return `${m?.title} (+${l.delta} ${l.metricType})`;
+      }).join(', ')}` : "No recent logs.";
+
+      const userPrompt = `Time of Day: ${type === 'morning' ? 'Morning' : 'Evening'}
+      ${logsContext}
+      ${bossContext}
+      ${dustyContext}
       
-      Keep it short (under 300 characters). Don't be too cryptic—be charismatic and witty!
-      If it's morning, give a fun theme for the day. If evening, summarize their achievements with a clever quip.`;
+      Keep it short (2-3 sentences, approx 250 characters). Don't be too cryptic—be charismatic and welcoming!
+      Start with a greeting! If it's Morning, suggest a focus for the day (e.g., tackle an enemy or pick up a dusty book/game). If Evening, summarize their triumphs or encourage them to log something if they haven't.`;
 
       const aiRes = await fetch("https://nano-gpt.com/api/v1/chat/completions", {
         method: "POST",
