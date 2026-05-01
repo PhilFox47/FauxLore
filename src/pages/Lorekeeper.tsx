@@ -675,6 +675,7 @@ function QuestCard({
       fetchedForRef.current !== currentQuestStr &&
       !quest.isFailed &&
       !quest.isCompleted &&
+      !isRerolling &&
       ["monthly", "weekly", "yearly"].includes(quest.type)
     ) {
       fetchedForRef.current = currentQuestStr;
@@ -744,6 +745,7 @@ function QuestCard({
     quest.isFailed,
     quest.isCompleted,
     quest.type,
+    isRerolling,
   ]);
 
   const dynTitle = dynTitleCached || quest.title;
