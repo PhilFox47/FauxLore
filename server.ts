@@ -223,7 +223,7 @@ async function startServer() {
   async function generateOracleMessage(userId: string, type: 'morning' | 'evening') {
     try {
       const settings: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId);
-      const sysSettings: any = db.prepare('SELECT * FROM system_settings WHERE id = "system"').get();
+      const sysSettings: any = db.prepare('SELECT * FROM system_settings WHERE id = \'system\'').get();
       const apiKey = settings?.nanoGptApiKey || sysSettings?.nanoGptApiKey;
       if (!apiKey) return;
 
@@ -322,7 +322,7 @@ async function startServer() {
       
       let bossName = "";
       
-      const sysSettings: any = db.prepare('SELECT geminiApiKey FROM system_settings WHERE id = "system"').get();
+      const sysSettings: any = db.prepare('SELECT geminiApiKey FROM system_settings WHERE id = \'system\'').get();
       const apiKey = settings?.geminiApiKey || sysSettings?.geminiApiKey || process.env.GEMINI_API_KEY;
       if (apiKey) {
         try {
@@ -601,6 +601,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   try { db.exec("ALTER TABLE media ADD COLUMN releaseStatus TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN lastSyncAt TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN noEnemies INTEGER DEFAULT 0"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE media ADD COLUMN storyHeavyModifier REAL"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN userReview TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN dropReason TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE settings ADD COLUMN enemyDifficulty REAL DEFAULT 1.0"); } catch (e) { /* Ignore if it exists */ }
@@ -1877,7 +1878,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       const settings = db.prepare('SELECT geminiApiKey FROM settings WHERE userId = ?').get(userId) as any;
       
       let newName = "Void Stalker"; // fallback
-      const sysSettings: any = db.prepare('SELECT geminiApiKey FROM system_settings WHERE id = "system"').get();
+      const sysSettings: any = db.prepare('SELECT geminiApiKey FROM system_settings WHERE id = \'system\'').get();
       const apiKey = settings?.geminiApiKey || sysSettings?.geminiApiKey || process.env.GEMINI_API_KEY;
       if (mediaItem && apiKey) {
         try {
