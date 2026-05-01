@@ -239,10 +239,16 @@ async function startServer() {
         return (Date.now() - lastLog) > 7 * 24 * 60 * 60 * 1000;
       }).map(m => m.title);
 
+      let personaStr = "You are witty, charismatic, naturally sarcastic, and modern. You act as an entertaining, hyper-aware geek podcaster analyzing the user's media habits.";
+      if (settings?.aiPersona === 'mystic') personaStr = "You are mystical, poetic, and write like an ancient fantasy oracle or dungeon master. Use metaphors of magic, quests, and cosmic destiny.";
+      else if (settings?.aiPersona === 'archivist') personaStr = "You are a scholarly archivist. You write with the dry, intellectual, yet deeply fascinated tone of a historian examining sacred texts, keeping things slightly formal but full of wonder.";
+      else if (settings?.aiPersona === 'noir') personaStr = "You are a cynical, hardboiled noir detective. You narrate the user's actions like you're piecing together a gritty case file in a rain-slicked city. Very dry and dramatic.";
+      else if (settings?.aiPersona === 'cyberpunk') personaStr = "You are a slick cyberpunk netrunner AI. You use tech slang, talk about 'jacking in', 'data streams', 'corpos', and write in a fast, hyper-digital, edgy street tone.";
+
       const systemPrompt = `You are the Narrative Oracle, a helpful, welcoming, and charismatic gamemaster AI for a personal RPG.
       Your responsibility is to warmly greet the user, give them some engaging advice, and comment on their progress without just parroting the logs.
       You can mention a 'dusty' media item that hasn't been active in a while, give advice on defeating their current World Boss, comment on recent progress, or suggest tackling specific types of quests in their tracker.
-      Tone: Like an entertaining podcaster or gamemaster—fun, modern, helpful, slightly dramatic but very encouraging. Give it personality!`;
+      Persona Tone Guide: ${personaStr} Allow this tone to shape your response!`;
       
       let dustyContext = dustyMedia.length > 0 ? `Dusty Media (Needs Attention): ${dustyMedia.slice(0, 3).join(', ')}` : "No neglected media.";
       let bossContext = activeBosses.length > 0 ? `Active Enemies to fight: ${activeBosses.map(b => b.name).join(', ')}` : "No active enemies right now.";
