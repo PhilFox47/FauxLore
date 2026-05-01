@@ -367,6 +367,43 @@ export function MediaFormModal({
           onSubmit={handleSubmit}
           className="p-6 space-y-4 max-h-[70vh] overflow-y-auto"
         >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-0">
+            <div>
+              <label className="block text-sm font-medium text-zinc-400 mb-1">
+                Type *
+              </label>
+              <select
+                name="mediaType"
+                value={formData.mediaType}
+                onChange={handleChange}
+                className="input-field"
+              >
+                {MEDIA_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-400 mb-1">
+                Status *
+              </label>
+              <select
+                name="status"
+                value={formData.status}
+                onChange={handleChange}
+                className="input-field"
+              >
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <div className="relative z-10 block">
             <label className="block text-sm font-medium text-zinc-400 mb-1">
               Title *
@@ -432,9 +469,16 @@ export function MediaFormModal({
                     key={i}
                     type="button"
                     onClick={() => applySearchResult(res)}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 transition flex justify-between items-center group border border-transparent hover:border-white/5 gap-4"
+                    className="w-full text-left p-2 rounded-lg hover:bg-white/5 transition flex items-center group border border-transparent hover:border-white/5 gap-3"
                   >
-                    <div className="min-w-0">
+                    {res.coverImageUrl ? (
+                      <img src={res.coverImageUrl} className="w-10 h-14 object-cover rounded shadow-md shrink-0" alt="" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-10 h-14 bg-white/5 border border-white/10 rounded shadow-md shrink-0 flex items-center justify-center text-zinc-600">
+                        <span className="text-[10px] uppercase font-bold text-center">N/A</span>
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
                       <div className="font-bold text-white line-clamp-2 group-hover:text-orange-400 transition-colors">
                         {res.title}{" "}
                         <span className="text-zinc-500 font-normal">
@@ -595,42 +639,7 @@ export function MediaFormModal({
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-0">
-            <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">
-                Type *
-              </label>
-              <select
-                name="mediaType"
-                value={formData.mediaType}
-                onChange={handleChange}
-                className="input-field"
-              >
-                {MEDIA_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">
-                Status *
-              </label>
-              <select
-                name="status"
-                value={formData.status}
-                onChange={handleChange}
-                className="input-field"
-              >
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+
 
           <div className="flex items-center gap-2 mb-4 bg-orange-500/5 border border-orange-500/10 p-3 rounded-xl">
             <input

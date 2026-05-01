@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import { MediaItem, ProgressLog, MetricType, MediaType, Settings, Artifact, WorldBoss, OracleMessage } from '../types/schema';
+import { MediaItem, ProgressLog, MetricType, MediaType, Settings, Artifact, WorldBoss, OracleMessage, getMetricForType } from '../types/schema';
 import { DatabaseService } from '../services/db';
 import { calculateRPGState } from '../lib/rpgSystem';
 import { generateText } from '../services/nanoGptService';
@@ -134,22 +134,50 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [media, logs, settings, aiTextCache, isLoading, refreshData]);
 
   const saveMediaItem = useCallback(async (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => {
+    let oldMetricValue = 0;
+    const metric = getMetricForType(item.mediaType);
+    let existingItem: MediaItem | undefined;
+
     // Check for status change if editing an existing item
     if (item.id) {
-      const existingItem = media.find(m => m.id === item.id);
-      if (existingItem && existingItem.status !== item.status) {
-        // Track status change in logs
+      existingItem = media.find(m => m.id === item.id);
+      if (existingItem) {
+        if (existingItem.status !== item.status) {
+          // Track status change in logs
+          await DatabaseService.addProgressLog(
+            item.id, 
+            'statusChange', 
+            0, 
+            `Status changed from ${existingItem.status} to ${item.status}`,
+            new Date().toISOString()
+          );
+        }
+        if (metric) {
+          oldMetricValue = Number(existingItem[metric as keyof MediaItem]) || 0;
+        }
+      }
+    }
+
+    const savedItem = await DatabaseService.saveMedia(item);
+
+    // After saving, check if the numeric metric increased
+    if (metric) {
+      const newMetricValue = Number(item[metric as keyof MediaItem]) || 0;
+      const delta = newMetricValue - oldMetricValue;
+      if (delta > 0) {
+        // Create a historical log for this change
         await DatabaseService.addProgressLog(
-          item.id, 
-          'statusChange', 
-          0, 
-          `Status changed from ${existingItem.status} to ${item.status}`,
-          new Date().toISOString()
+          savedItem.id,
+          metric,
+          delta, 
+          "Initial Progress", 
+          new Date().toISOString(), 
+          undefined, 
+          true // isHistoric: true
         );
       }
     }
     
-    await DatabaseService.saveMedia(item);
     await refreshData();
   }, [media, refreshData]);
 

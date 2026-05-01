@@ -523,7 +523,9 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       yearlyGoals TEXT,
       lastActiveDate TEXT,
       currentStreak INTEGER,
-      enemyDifficulty REAL DEFAULT 1.0
+      enemyDifficulty REAL DEFAULT 1.0,
+      questOffsets TEXT,
+      questRerollsUsed TEXT
     );
 
     CREATE TABLE IF NOT EXISTS ai_recaps (
@@ -690,6 +692,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   try { db.prepare("ALTER TABLE settings ADD COLUMN googleBooksApiKey TEXT").run(); } catch(e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN lastActiveDate TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN currentStreak INTEGER").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE settings ADD COLUMN questOffsets TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE settings ADD COLUMN questRerollsUsed TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN hltbMain REAL").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE artifacts ADD COLUMN targetType TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE artifacts ADD COLUMN targetValue TEXT").run(); } catch (e) {}
@@ -1558,7 +1562,9 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       res.json({
         ...row,
         masterPageConfig: row.masterPageConfig ? JSON.parse(row.masterPageConfig) : undefined,
-        yearlyGoals: row.yearlyGoals ? JSON.parse(row.yearlyGoals) : undefined
+        yearlyGoals: row.yearlyGoals ? JSON.parse(row.yearlyGoals) : undefined,
+        questOffsets: row.questOffsets ? JSON.parse(row.questOffsets) : undefined,
+        questRerollsUsed: row.questRerollsUsed ? JSON.parse(row.questRerollsUsed) : undefined
       });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -1577,8 +1583,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       const newDifficulty = settings.enemyDifficulty ?? 1.0;
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, questOffsets, questRerollsUsed)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @questOffsets, @questRerollsUsed)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -1593,7 +1599,9 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           yearlyGoals=excluded.yearlyGoals,
           lastActiveDate=excluded.lastActiveDate,
           currentStreak=excluded.currentStreak,
-          enemyDifficulty=excluded.enemyDifficulty
+          enemyDifficulty=excluded.enemyDifficulty,
+          questOffsets=excluded.questOffsets,
+          questRerollsUsed=excluded.questRerollsUsed
       `).run({
         userId: userId,
         igdbClientId: isAdmin ? (settings.igdbClientId || null) : (oldSettings?.igdbClientId || null),
@@ -1609,7 +1617,9 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         yearlyGoals: settings.yearlyGoals ? JSON.stringify(settings.yearlyGoals) : null,
         lastActiveDate: settings.lastActiveDate || null,
         currentStreak: settings.currentStreak || 0,
-        enemyDifficulty: newDifficulty
+        enemyDifficulty: newDifficulty,
+        questOffsets: settings.questOffsets ? JSON.stringify(settings.questOffsets) : null,
+        questRerollsUsed: settings.questRerollsUsed ? JSON.stringify(settings.questRerollsUsed) : null
       });
 
       // Update active bosses if difficulty changed
@@ -1647,7 +1657,9 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       res.json({
         ...saved,
         masterPageConfig: saved.masterPageConfig ? JSON.parse(saved.masterPageConfig) : undefined,
-        yearlyGoals: saved.yearlyGoals ? JSON.parse(saved.yearlyGoals) : undefined
+        yearlyGoals: saved.yearlyGoals ? JSON.parse(saved.yearlyGoals) : undefined,
+        questOffsets: saved.questOffsets ? JSON.parse(saved.questOffsets) : undefined,
+        questRerollsUsed: saved.questRerollsUsed ? JSON.parse(saved.questRerollsUsed) : undefined
       });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -2359,39 +2371,55 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       // Try Google Books First
       try {
         const pages = [0, 40, 80];
-        const fetchPromises = pages.map(startIndex => {
-          let googleUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=40&startIndex=${startIndex}`;
-          if (lang) {
-            googleUrl += `&langRestrict=${lang}`;
-          }
-          if (apiKey) {
-            googleUrl += `&key=${apiKey}`;
-          }
-          return fetch(googleUrl, {
-            headers: {
-              'User-Agent': 'FauxLoreMediaTracker/1.0'
-            }
-          });
-        });
-
-        const responses = await Promise.all(fetchPromises);
         let allItems: any[] = [];
-        let allOk = true;
-        let lastStatus = 200;
 
-        for (const res of responses) {
-          if (!res.ok) {
-            allOk = false;
-            lastStatus = res.status;
-            break;
+        for (const startIndex of pages) {
+          let retryCount = 0;
+          let success = false;
+          while (retryCount < 2 && !success) {
+            try {
+              let googleUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=40&startIndex=${startIndex}`;
+              if (lang) {
+                googleUrl += `&langRestrict=${lang}`;
+              }
+              if (apiKey) {
+                googleUrl += `&key=${apiKey}`;
+              }
+              const res = await fetch(googleUrl, {
+                headers: {
+                  'User-Agent': 'FauxLoreMediaTracker/1.0'
+                }
+              });
+
+              if (!res.ok) {
+                if (res.status === 503) {
+                  // Retry on 503
+                  retryCount++;
+                  await new Promise(r => setTimeout(r, 1000));
+                  continue;
+                }
+                console.warn(`Google Books API HTTP Error: ${res.status} at index ${startIndex}`);
+                break; // Stop fetching more pages on other errors
+              }
+              const data = await res.json();
+              if (data.items) {
+                allItems = allItems.concat(data.items);
+              }
+              success = true;
+              if (!data.items || data.items.length < 40) {
+                break; // No more results
+              }
+            } catch (err) {
+              console.error(`Google Books fetch failed at index ${startIndex}:`, err);
+              break; // Network or parsing error, keep what we have
+            }
           }
-          const data = await res.json();
-          if (data.items) {
-            allItems = allItems.concat(data.items);
+          if (!success) {
+             break; // If we failed all retries for this page, stop fetching more pages
           }
         }
 
-        if (allOk) {
+        if (allItems.length > 0) {
           // Deduplicate by ID
           const uniqueItems = Array.from(new Map(allItems.map(item => [item.id, item])).values());
           
@@ -2457,13 +2485,10 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
               genres: []
             };
           });
-        } else {
-          console.warn(`Google Books API HTTP Error: ${lastStatus}`);
-          throw new Error(`Google Books API Error: ${lastStatus}`);
         }
       } catch (err) {
-        console.error(`Google Books fetch failed: ${err}`);
-        throw err;
+        console.error(`Google Books search processing failed:`, err);
+        // We do not throw here so we can return empty results instead of crashing
       }
 
       res.json(mappedResults);

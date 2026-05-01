@@ -196,7 +196,7 @@ export function calculateRPGState(
     const monthLogs = validLogs.filter(l => format(parseISO(l.timestamp), "yyyy-MM") === month);
     const tempQuests: Quest[] = [];
     const rng = mulberry32(parseInt(month.replace('-', '')));
-    generateIntervalQuests(tempQuests, monthLogs, media, settings, 'monthly', month, 4, rng);
+    generateIntervalQuests(tempQuests, monthLogs, media, settings, 'monthly', month, 4, rng, worldBosses, artifacts, validLogs);
     tempQuests.forEach(q => { if (q.isCompleted) questExp += q.expReward; });
     if (month === currentMonthInfo) quests.push(...tempQuests);
   }
@@ -205,7 +205,7 @@ export function calculateRPGState(
     const weekLogs = validLogs.filter(l => format(startOfWeek(parseISO(l.timestamp), { weekStartsOn: 1 }), "RRRR-II") === week);
     const tempQuests: Quest[] = [];
     const rng = mulberry32(parseInt(week.replace('-', '')));
-    generateIntervalQuests(tempQuests, weekLogs, media, settings, 'weekly', week, 2, rng);
+    generateIntervalQuests(tempQuests, weekLogs, media, settings, 'weekly', week, 2, rng, worldBosses, artifacts, validLogs);
     tempQuests.forEach(q => { if (q.isCompleted) questExp += q.expReward; });
     if (week === currentWeekInfo) quests.push(...tempQuests);
   }
@@ -368,7 +368,7 @@ function generateYearlyQuests(quests: Quest[], logs: ProgressLog[], media: Media
   });
 }
 
-function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: MediaItem[], settings: any, timeframe: 'monthly' | 'weekly', timeId: string, count: number, rng: () => number) {
+function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: MediaItem[], settings: any, timeframe: 'monthly' | 'weekly', timeId: string, count: number, rng: () => number, worldBosses: WorldBoss[] = [], artifacts: any[] = [], allLogs: ProgressLog[] = []) {
   const goals = getYearlyGoals(settings);
   let totalMasterPagesGoal = 0;
   MEDIA_TYPES.forEach(t => {
@@ -382,86 +382,413 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
 
   // Fun Challenge Templates
   const templates = [
-    () => {
-      const target = Math.max(10, Math.floor(totalMasterPagesGoal / divisor));
-      const current = calculateMasterPages(logs, media, settings);
-      return {
-        title: "The Great Consumer",
-        desc: `Consume ${target} Master Pages across your collection`,
-        target, current, type: 'pages' as const, reward: baseReward * 1.5
-      };
+    () => { // 1. The Finisher
+      if (timeframe === 'weekly') return null;
+      const target = Math.floor(rng() * 3) + 1;
+      const current = logs.filter(l => l.metricType === 'statusChange' && l.note?.includes('to Completed')).length;
+      return { title: "The Finisher", desc: "Complete " + target + " total media item(s)", target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
-    () => {
-      // Pick random media type
+    () => { // 2. The Specialist
+      if (timeframe === 'weekly') return null;
       const possibleTypes = MEDIA_TYPES.filter(t => goals[t] > 0);
       const chosenType = possibleTypes[Math.floor(rng() * possibleTypes.length)] || 'Book';
-      const target = Math.max(1, Math.floor(goals[chosenType] / divisor)); // use native target
-      const current = calculateNativeUnits(logs, media, chosenType);
-      
-      let verb = "Consume";
-      if (chosenType === 'Game') verb = "Play";
-      else if (['Book', 'Manga', 'Comic', 'Visual Novel'].includes(chosenType)) verb = "Read";
-      else verb = "Watch";
-
-      return {
-        title: `${chosenType} Enthusiast`,
-        desc: `${verb} ${target} ${NATIVE_UNIT_LABELS[chosenType]}`,
-        target, current, type: 'pages' as const, reward: baseReward
-      };
+      const target = Math.floor(rng() * 2) + 1;
+      const current = logs.filter(l => {
+        if (l.metricType !== 'statusChange' || !l.note?.includes('to Completed')) return false;
+        const m = media.find(x => x.id === l.mediaId);
+        return m?.mediaType === chosenType;
+      }).length;
+      return { title: "The Specialist", desc: "Complete " + target + " " + chosenType + "(s)", target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
-    () => {
-      // The Scribe
-      const target = timeframe === 'monthly' ? 10 : 3;
-      const current = logs.filter(l => l.note && l.note.trim().length >= 10).length;
-      return {
-        title: "The Scribe",
-        desc: `Write ${target} meaningful journal entries (10+ characters) attaching to progress logs`,
-        target, current, type: 'entries' as const, reward: baseReward * 2
-      };
+    () => { // 3. Endurance Trial
+      const target = Math.max(10, Math.floor(totalMasterPagesGoal / divisor)); // 5 for approx. a fifth, but divisor handles weekly/monthly scaling
+      const current = calculateMasterPages(logs, media, settings);
+      return { title: "Endurance Trial", desc: `Log a massive ${target} Master Pages overall`, target, current, type: 'pages' as const, reward: baseReward * 3 };
     },
-    () => {
-      // The Explorer
-      const target = timeframe === 'monthly' ? 4 : 2;
+    () => { // 4. The Polymath
+      if (timeframe === 'weekly') return null;
+      const target = 3;
       const typesSet = new Set();
-      logs.forEach(l => {
+      logs.filter(l => l.metricType === 'statusChange' && l.note?.includes('to Completed')).forEach(l => {
         const m = media.find(x => x.id === l.mediaId);
         if (m) typesSet.add(m.mediaType);
       });
-      const current = typesSet.size;
-      return {
-        title: "The Explorer",
-        desc: `Log progress in ${target} distinctly different media types`,
-        target, current, type: 'entries' as const, reward: baseReward * 1.2
-      };
+      return { title: "The Polymath", desc: "Complete items from 3 different media types", target, current: typesSet.size, type: 'entries' as const, reward: baseReward * 3 };
     },
-    () => {
-      // Night Owl
-      const target = timeframe === 'monthly' ? 5 : 2;
+    () => { // 5. Scholar of the Arcane
+      if (timeframe === 'weekly') return null;
+      const allGenres = Array.from(new Set(media.flatMap(m => m.genres || [])));
+      const chosenGenre = allGenres[Math.floor(rng() * allGenres.length)] || 'Fantasy';
+      const target = Math.floor(rng() * 2) + 1;
+      const current = logs.filter(l => {
+        if (l.metricType !== 'statusChange' || !l.note?.includes('to Completed')) return false;
+        const m = media.find(x => x.id === l.mediaId);
+        return m?.genres?.includes(chosenGenre);
+      }).length;
+      return { title: "Scholar of the Arcane", desc: `Complete ${target} item(s) in the '${chosenGenre}' genre`, target, current, type: 'entries' as const, reward: baseReward * 2.5 };
+    },
+    () => { // 6. Time Traveler's Archive
+      const target = timeframe === 'monthly' ? 50 : 20;
+      const currentYear = new Date().getFullYear();
       let current = 0;
       logs.forEach(l => {
-        const h = parseISO(l.timestamp).getHours();
-        if (h >= 0 && h <= 5) current++;
+        const m = media.find(x => x.id === l.mediaId);
+        if (m && m.year && m.year <= currentYear - 20) {
+          current += calculateScaledDelta(l.delta, m, settings);
+        }
       });
-      return {
-        title: "Night Owl",
-        desc: `Log progress ${target} times during late night hours (Midnight - 5AM)`,
-        target, current, type: 'entries' as const, reward: baseReward * 1.5
-      };
+      return { title: "Time Traveler's Archive", desc: `Consume ${target} Master Pages of media released over 20 years ago`, target, current: Math.floor(current), type: 'pages' as const, reward: baseReward * 2 };
     },
-    () => {
-      // Consistent Consumer
+    () => { // 7. Vanguard's Report
+      const target = timeframe === 'monthly' ? 50 : 20;
+      const currentYear = new Date().getFullYear();
+      let current = 0;
+      logs.forEach(l => {
+        const m = media.find(x => x.id === l.mediaId);
+        if (m && m.year === currentYear) {
+          current += calculateScaledDelta(l.delta, m, settings);
+        }
+      });
+      return { title: "Vanguard's Report", desc: `Consume ${target} Master Pages of media released this year`, target, current: Math.floor(current), type: 'pages' as const, reward: baseReward * 1.5 };
+    },
+    () => { // 8. The Leviathan
+      if (timeframe === 'weekly') return null;
+      const target = 1;
+      const current = logs.filter(l => {
+        if (l.metricType !== 'statusChange' || !l.note?.includes('to Completed')) return false;
+        const m = media.find(x => x.id === l.mediaId);
+        if (!m) return false;
+        if (m.mediaType === 'Game' && m.playtimeHours && m.playtimeHours >= 80) return true;
+        if (m.mediaType === 'Book' && m.totalPages && m.totalPages >= 800) return true;
+        if (m.mediaType === 'Series' && m.totalEpisodes && m.totalEpisodes >= 50) return true;
+        return false;
+      }).length;
+      return { title: "The Leviathan", desc: "Complete one massive media item (e.g. 80+ Hr Game, 800+ Pg Book)", target, current, type: 'entries' as const, reward: baseReward * 5 };
+    },
+    () => { // 9. Franchise Loyalist
+      if (timeframe === 'weekly') return null;
+      const target = 1;
+      const current = logs.filter(l => {
+        if (l.metricType !== 'statusChange' || !l.note?.includes('to Completed')) return false;
+        const m = media.find(x => x.id === l.mediaId);
+        return m?.franchises && m.franchises.length > 0;
+      }).length;
+      return { title: "Franchise Loyalist", desc: "Complete an item belonging to a Franchise", target, current, type: 'entries' as const, reward: baseReward * 1.5 };
+    },
+    () => { // 10. The Backlog Slayer
+      if (timeframe === 'weekly') return null;
+      const target = 1;
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      const backlogItems = media.filter(m => m.status === 'Planning' && new Date(m.createdAt) < threeMonthsAgo);
+      if (backlogItems.length < 3) return null; // Skip if backlog is small
+      
+      const current = logs.filter(l => {
+        if (l.metricType !== 'statusChange' || !l.note?.includes('to Completed')) return false;
+        const m = media.find(x => x.id === l.mediaId);
+        return m && new Date(m.createdAt) < threeMonthsAgo;
+      }).length;
+      return { title: "The Backlog Slayer", desc: "Complete an item that has been 'Planning' for over 3 months", target, current, type: 'entries' as const, reward: baseReward * 3 };
+    },
+    () => { // 11. Consistent Chronicler
       const target = timeframe === 'monthly' ? 15 : 4;
       const days = new Set(logs.map(l => format(parseISO(l.timestamp), "yyyy-MM-dd"))).size;
-      return {
-        title: "Consistent Consumer",
-        desc: `Log progress on ${target} different days`,
-        target, current: days, type: 'entries' as const, reward: baseReward * 2
-      };
+      return { title: "Consistent Chronicler", desc: `Log progress on ${target} different days`, target, current: days, type: 'entries' as const, reward: baseReward * 2 };
+    },
+    () => { // 12. Weekend Warrior
+      const target = timeframe === 'monthly' ? 5 : 2;
+      const current = new Set(logs.filter(l => {
+        const d = parseISO(l.timestamp).getDay();
+        return d === 0 || d === 6; // Sunday or Saturday
+      }).map(l => format(parseISO(l.timestamp), "yyyy-MM-dd"))).size;
+      return { title: "Weekend Warrior", desc: `Log progress on ${target} unique weekend days`, target, current, type: 'entries' as const, reward: baseReward * 1.5 };
+    },
+    () => { // 13. The Sprinter
+      if (timeframe === 'weekly') return null;
+      const target = 1;
+      let current = 0;
+      const completedLogs = logs.filter(l => l.metricType === 'statusChange' && l.note?.includes('to Completed'));
+      completedLogs.forEach(cL => {
+        const earliestLog = allLogs.find(l => l.mediaId === cL.mediaId && l.metricType !== 'statusChange');
+        if (earliestLog) {
+          const diffMs = new Date(cL.timestamp).getTime() - new Date(earliestLog.timestamp).getTime();
+          if (diffMs <= 72 * 60 * 60 * 1000) {
+            current++;
+          }
+        }
+      });
+      return { title: "The Sprinter", desc: "Start and complete an item within 72 hours", target, current, type: 'entries' as const, reward: baseReward * 4 };
+    },
+    () => { // 14. Binge Trance
+      const target = 1;
+      let current = 0;
+      const dayMap: Record<string, number> = {};
+      logs.forEach(l => {
+        const m = media.find(x => x.id === l.mediaId);
+        if (m) {
+          const day = format(parseISO(l.timestamp), "yyyy-MM-dd");
+          const key = day + "_" + m.id;
+          dayMap[key] = (dayMap[key] || 0) + calculateScaledDelta(l.delta, m, settings);
+        }
+      });
+      const threshold = Math.max(50, Math.floor(totalMasterPagesGoal / 52));
+      for (const val of Object.values(dayMap)) {
+        if (val >= threshold) current = 1;
+      }
+      return { title: "Binge Trance", desc: `Achieve ${threshold}+ Master Pages on a single item in one day`, target, current, type: 'entries' as const, reward: baseReward * 3 };
+    },
+    () => { // 15. Scribe's Duty
+      const target = timeframe === 'monthly' ? 10 : 3;
+      const current = logs.filter(l => l.note && l.note.trim().length >= 10).length;
+      return { title: "Scribe's Duty", desc: `Write ${target} meaningful journal entries (10+ characters) attaching to progress logs`, target, current, type: 'entries' as const, reward: baseReward * 2 };
+    },
+    () => { // 16. The Critic's Eye
+      if (timeframe === 'weekly') return null;
+      const target = Math.floor(rng() * 2) + 1;
+      const current = logs.filter(l => {
+         if (l.metricType !== 'statusChange' || !l.note?.includes('to Completed')) return false;
+         const m = media.find(x => x.id === l.mediaId);
+         return m && (m.userRating || 0) > 0;
+      }).length;
+      return { title: "The Critic's Eye", desc: `Finish and rate ${target} item(s)`, target, current, type: 'entries' as const, reward: baseReward * 2 };
+    },
+    () => { // 17. Boss Hunter
+      if (timeframe === 'weekly') return null;
+      const target = Math.floor(rng() * 2) + 1;
+      const current = worldBosses.filter(b => b.status === 'Defeated' && b.updatedAt && b.updatedAt.startsWith(timeId)).length;
+      return { title: "Boss Hunter", desc: `Defeat ${target} World Bosses`, target, current, type: 'entries' as const, reward: baseReward * 3 };
+    },
+    () => { // 18. Relic Appraiser
+      if (timeframe === 'weekly') return null;
+      const target = timeframe === 'monthly' ? 3 : 1;
+      const current = artifacts.filter(a => a.earnedAt.startsWith(timeId)).length;
+      return { title: "Relic Appraiser", desc: `Obtain ${target} new Artifacts`, target, current, type: 'entries' as const, reward: baseReward * 2 };
+    },
+    () => { // 19. Level Grinder
+      const targetExp = timeframe === 'monthly' ? 5000 : 1000;
+      const currentExp = calculateMasterPages(logs, media, settings); 
+      return { title: "Level Grinder", desc: `Gain approximately ${targetExp} base EXP`, target: targetExp, current: currentExp, type: 'pages' as const, reward: baseReward * 2 };
+    },
+    () => { // 20. Consecutive Commitment
+      if (timeframe !== 'weekly') return null;
+      const target = 3;
+      const days = Array.from(new Set(logs.map(l => format(parseISO(l.timestamp), "yyyy-MM-dd")))).sort();
+      let maxConsecutive = 0;
+      let currentConsecutive = 1;
+      for (let i = 1; i < days.length; i++) {
+         const d1 = new Date(days[i-1] + "T00:00:00Z");
+         const d2 = new Date(days[i] + "T00:00:00Z");
+         if (d2.getTime() - d1.getTime() <= 24 * 60 * 60 * 1000 + 1000) {
+            currentConsecutive++;
+         } else {
+            if (currentConsecutive > maxConsecutive) maxConsecutive = currentConsecutive;
+            currentConsecutive = 1;
+         }
+      }
+      if (currentConsecutive > maxConsecutive) maxConsecutive = currentConsecutive;
+      if (days.length === 0) maxConsecutive = 0;
+      return { title: "Consecutive Commitment", desc: "Log progress for 3 consecutive days during the week", target, current: maxConsecutive, type: 'entries' as const, reward: baseReward * 2 };
+    },
+    () => { // 21. The Wanderer
+      if (timeframe !== 'weekly') return null;
+      const target = 3;
+      const uniqueItems = new Set(logs.map(l => l.mediaId)).size;
+      return { title: "The Wanderer", desc: "Taste a little bit of everything. Log progress on 3 different media items in a single week", target, current: uniqueItems, type: 'entries' as const, reward: baseReward * 2 };
+    },
+    () => { // 22. Deep Focus
+      if (timeframe !== 'weekly') return null;
+      const target = 4;
+      const counts: Record<string, number> = {};
+      logs.forEach(l => { counts[l.mediaId] = (counts[l.mediaId] || 0) + 1; });
+      const maxLogs = Object.keys(counts).length > 0 ? Math.max(...Object.values(counts)) : 0;
+      return { title: "Deep Focus", desc: "Dedicate yourself to one world. Log progress on the same media item at least 4 times in the week", target, current: maxLogs, type: 'entries' as const, reward: baseReward * 2 };
+    },
+    () => { // 23. Genre Hopper
+      if (timeframe !== 'weekly') return null;
+      const target = 1;
+      let current = 0;
+      const unqMediaIds = Array.from(new Set(logs.map(l => l.mediaId)));
+      const items = unqMediaIds.map(id => media.find(m => m.id === id)).filter(Boolean) as MediaItem[];
+      
+      for (let i = 0; i < items.length; i++) {
+         for (let j = i + 1; j < items.length; j++) {
+            const genresA = items[i].genres || [];
+            const genresB = items[j].genres || [];
+            if (genresA.length > 0 && genresB.length > 0) {
+               const overlap = genresA.some(g => genresB.includes(g));
+               if (!overlap) {
+                  current = 1;
+                  break;
+               }
+            }
+         }
+         if (current) break;
+      }
+      return { title: "Genre Hopper", desc: "Expand your horizons. Log Progress on two items that do not share any genres", target, current, type: 'entries' as const, reward: baseReward * 2 };
+    },
+    () => { // 24. Format Focus
+      if (timeframe !== 'weekly') return null;
+      const target = 50;
+      const possibleTypes = MEDIA_TYPES.filter(t => goals[t] > 0);
+      const chosenType = possibleTypes[Math.floor(rng() * possibleTypes.length)] || 'Manga';
+      
+      let current = 0;
+      logs.forEach(l => {
+         const m = media.find(x => x.id === l.mediaId);
+         if (m && m.mediaType === chosenType) {
+            current += calculateScaledDelta(l.delta, m, settings);
+         }
+      });
+      return { title: "Format Focus", desc: `Dive deep into one medium. Gain 50 Master Pages exclusively in ${chosenType}`, target, current: Math.floor(current), type: 'pages' as const, reward: baseReward * 2 };
+    },
+    () => { // 25. The Initiator
+      if (timeframe !== 'weekly') return null;
+      const target = 1;
+      const current = logs.filter(l => l.metricType === 'statusChange' && l.note === 'Planning to In Progress').length;
+      return { title: "The Initiator", desc: "Take the first step. Move 1 item's status from 'Planning' to 'In Progress'", target, current, type: 'entries' as const, reward: baseReward * 2 };
+    },
+    () => { // 26. Weekly Sprinter
+      if (timeframe !== 'weekly') return null;
+      const target = 1;
+      
+      const isClose = media.some(m => {
+          if (m.status === 'In Progress' && ['Manga', 'Book', 'Series'].includes(m.mediaType)) {
+             const primary = PRIMARY_METRICS[m.mediaType];
+             const totalLogs = allLogs.filter(l => l.mediaId === m.id && l.metricType === primary);
+             const currentNative = totalLogs.reduce((acc, log) => acc + log.delta, 0);
+             let totalNative = 0;
+             if (m.mediaType === 'Manga') totalNative = m.totalChapters || 0;
+             if (m.mediaType === 'Book') totalNative = m.totalPages || 0;
+             if (m.mediaType === 'Series') totalNative = m.totalEpisodes || 0;
+             if (totalNative > 0) {
+                 const remainingNative = totalNative - currentNative;
+                 if (remainingNative > 0) {
+                     const logsMock = [{ mediaId: m.id, metricType: primary, delta: remainingNative }];
+                     const remainingMp = calculateMasterPages(logsMock as any, [m], settings, m.mediaType);
+                     if (remainingMp <= 200) return true;
+                 }
+             }
+          }
+          return false;
+      });
+      if (!isClose) return null;
+      
+      const current = logs.filter(l => l.metricType === 'statusChange' && l.note?.includes('to Completed')).length;
+      return { title: "Weekly Sprinter", desc: "Finish what you started. Complete 1 media item", target, current, type: 'entries' as const, reward: baseReward * 3 };
+    },
+    () => { // 27. Reviewer's Strike
+      if (timeframe !== 'weekly') return null;
+      const target = 1;
+
+      const isClose = media.some(m => {
+          if (m.status === 'In Progress' && ['Manga', 'Book', 'Series'].includes(m.mediaType)) {
+             const primary = PRIMARY_METRICS[m.mediaType];
+             const totalLogs = allLogs.filter(l => l.mediaId === m.id && l.metricType === primary);
+             const currentNative = totalLogs.reduce((acc, log) => acc + log.delta, 0);
+             let totalNative = 0;
+             if (m.mediaType === 'Manga') totalNative = m.totalChapters || 0;
+             if (m.mediaType === 'Book') totalNative = m.totalPages || 0;
+             if (m.mediaType === 'Series') totalNative = m.totalEpisodes || 0;
+             if (totalNative > 0) {
+                 const remainingNative = totalNative - currentNative;
+                 if (remainingNative > 0) {
+                     const logsMock = [{ mediaId: m.id, metricType: primary, delta: remainingNative }];
+                     const remainingMp = calculateMasterPages(logsMock as any, [m], settings, m.mediaType);
+                     if (remainingMp <= 200) return true;
+                 }
+             }
+          }
+          return false;
+      });
+      if (!isClose) return null;
+
+      const current = logs.filter(l => {
+         if (l.metricType !== 'statusChange' || !l.note?.includes('to Completed')) return false;
+         const m = media.find(x => x.id === l.mediaId);
+         return m && m.userRating && m.userRating >= 1 && m.userRating <= 5;
+      }).length;
+      return { title: "Reviewer's Strike", desc: "Share your thoughts. Complete an item and give it a rating of 1 to 5", target, current, type: 'entries' as const, reward: baseReward * 3 };
+    },
+    () => { // 28. Fresh Blood
+      if (timeframe !== 'weekly') return null;
+      const target = 1;
+      
+      const current = logs.filter(l => {
+         const m = media.find(x => x.id === l.mediaId);
+         if (m && l.metricType !== 'statusChange') {
+             const lDate = parseISO(l.timestamp);
+             const cDate = parseISO(m.createdAt);
+             const lWeek = format(startOfWeek(lDate, { weekStartsOn: 1 }), "RRRR-II");
+             const cWeek = format(startOfWeek(cDate, { weekStartsOn: 1 }), "RRRR-II");
+             return lWeek === cWeek;
+         }
+         return false;
+      }).length > 0 ? 1 : 0;
+      return { title: "Fresh Blood", desc: "Try something brand new. Add a new item to your library and log progress on it in the same week", target, current, type: 'entries' as const, reward: baseReward * 2 };
+    },
+    () => { // 29. Dust It Off
+      if (timeframe !== 'weekly') return null;
+      const target = 1;
+      
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      
+      const hasDustyItem = media.some(m => {
+          if (m.status === 'Planning' || m.status === 'In Progress' || m.status === 'Paused') {
+             const itemLogs = allLogs.filter(l => l.mediaId === m.id);
+             if (itemLogs.length > 0) {
+                 const latestLog = itemLogs.reduce((latest, current) => new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest);
+                 if (new Date(latestLog.timestamp) < oneMonthAgo) return true;
+             } else {
+                 if (new Date(m.createdAt) < oneMonthAgo) return true;
+             }
+          }
+          return false;
+      });
+      if (!hasDustyItem) return null;
+      
+      let current = 0;
+      logs.forEach(l => {
+         const itemLogs = allLogs.filter(al => al.mediaId === l.mediaId && new Date(al.timestamp) < new Date(l.timestamp));
+         if (itemLogs.length > 0) {
+             const latestBefore = itemLogs.reduce((latest, cur) => new Date(cur.timestamp) > new Date(latest.timestamp) ? cur : latest);
+             const timeDiff = new Date(l.timestamp).getTime() - new Date(latestBefore.timestamp).getTime();
+             if (timeDiff > 30 * 24 * 60 * 60 * 1000) current = 1;
+         } else {
+             const m = media.find(x => x.id === l.mediaId);
+             if (m && (new Date(l.timestamp).getTime() - new Date(m.createdAt).getTime() > 30 * 24 * 60 * 60 * 1000)) {
+                 current = 1;
+             }
+         }
+      });
+      return { title: "Dust It Off", desc: "Clear out the backlog. Log progress on an item that has been sitting in your library without updates for over a month", target, current, type: 'entries' as const, reward: baseReward * 3 };
+    },
+    () => { // 30. Marathon Session
+      if (timeframe !== 'weekly') return null;
+      const target = 1;
+      let current = 0;
+      logs.forEach(l => {
+         const m = media.find(x => x.id === l.mediaId);
+         if (m) {
+             const mp = calculateScaledDelta(l.delta, m, settings);
+             if (mp >= 50) current = 1;
+         }
+      });
+      return { title: "Marathon Session", desc: "Get lost in the zone. Have a single progress entry that yields 50+ Master Pages in one sitting", target, current, type: 'entries' as const, reward: baseReward * 2 };
+    },
+    () => { // 31. Journalist
+      if (timeframe !== 'weekly') return null;
+      const target = 2;
+      const current = logs.filter(l => l.note && l.note.trim().length >= 10).length;
+      return { title: "Journalist", desc: "Embody the Lorekeeper. Write 2 progress notes (10+ characters) attaching them to your progress logs", target, current, type: 'entries' as const, reward: baseReward * 2 };
     }
   ];
 
+  // Filter out nulls and apply overrides
+  const validTemplates = templates.map(t => t()).filter(Boolean) as NonNullable<ReturnType<typeof templates[0]>>[];
+
   // Fisher-Yates shuffle using RNG
-  const shuffled = [...templates];
+  const shuffled = [...validTemplates];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
@@ -501,12 +828,34 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     }
   }
 
+  const usedTitles = new Set<string>();
+
   for (let i = iOffset; i < count; i++) {
-    const generator = shuffled[i % shuffled.length];
-    const data = generator();
+    const qId = `${timeId}-${i}`;
+    let userOffset = 0;
+    if (settings?.questOffsets && settings.questOffsets[qId]) {
+      userOffset = settings.questOffsets[qId];
+    }
     
+    let data;
+    let attempts = 0;
+    let currentIndex = (i * 3 + userOffset) % shuffled.length;
+    
+    while(attempts < shuffled.length) {
+      const candidate = shuffled[currentIndex];
+      if (!usedTitles.has(candidate.title)) {
+        data = candidate;
+        break;
+      }
+      currentIndex = (currentIndex + 1) % shuffled.length;
+      attempts++;
+    }
+    
+    if (!data) data = shuffled[0];
+    usedTitles.add(data.title);
+
     quests.push({
-      id: `${timeId}-${i}`,
+      id: qId,
       type: timeframe,
       title: data.title,
       description: data.desc + ` this ${timeframe.replace('ly', '')}.`,

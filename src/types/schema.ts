@@ -154,6 +154,8 @@ export interface Settings {
   lastActiveDate?: string;
   currentStreak?: number;
   enemyDifficulty?: number; // 0.1 to 2.0 multiplier
+  questOffsets?: Record<string, number>;
+  questRerollsUsed?: Record<string, number>;
   masterPageConfig?: {
     gamePagesPerHour?: number; // 5 mins = 1 page -> 12 pages per hr
     vnPagesPerHour?: number; // 2.5 mins = 1 page -> 24 pages per hr
