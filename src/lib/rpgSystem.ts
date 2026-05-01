@@ -2,6 +2,61 @@ import { MediaItem, ProgressLog, getMetricForType, MediaType, WorldBoss } from '
 import { calculateScaledDelta } from './scaling';
 import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, differenceInDays } from 'date-fns';
 
+export function getQTarget(title: string, timeframe: 'monthly' | 'weekly', def: number, settings: any, rng?: () => number) {
+  if (settings?.questConfigs?.[title]?.[timeframe] !== undefined && settings?.questConfigs?.[title]?.[timeframe] !== null && String(settings?.questConfigs?.[title]?.[timeframe]).trim() !== '') {
+    const valStr = String(settings.questConfigs[title][timeframe]).trim().toLowerCase();
+    
+    // Check if it's a range like "1-3" or "1~3" or "1 to 3"
+    const match = valStr.match(/^(\d+)\s*[-~_x,]\s*(\d+)$/i);
+    if (match && rng) {
+        const min = parseInt(match[1], 10);
+        const max = parseInt(match[2], 10);
+        if (!isNaN(min) && !isNaN(max) && max >= min) {
+            return Math.floor(rng() * (max - min + 1)) + min;
+        }
+    }
+
+    const val = parseInt(valStr, 10);
+    if (!isNaN(val)) return val;
+  }
+  return def;
+}
+
+export const QUEST_DEFINITIONS = [
+  { id: '1', title: 'The Finisher', desc: 'Complete X total media item(s)', timeframes: ['monthly'], defaultMonthly: 'Random (1-3)' },
+  { id: '2', title: 'The Specialist', desc: 'Complete X [Type](s)', timeframes: ['monthly'], defaultMonthly: 'Random (1-2)' },
+  { id: '3', title: 'Endurance Trial', desc: 'Log X Master Pages overall', timeframes: ['monthly', 'weekly'], defaultMonthly: 'Dynamic', defaultWeekly: 'Dynamic' },
+  { id: '4', title: 'The Polymath', desc: 'Complete items from X different media types', timeframes: ['monthly'], defaultMonthly: 3 },
+  { id: '5', title: 'Scholar of the Arcane', desc: 'Complete X item(s) in a random genre', timeframes: ['monthly'], defaultMonthly: 'Random (1-2)' },
+  { id: '6', title: "Time Traveler's Archive", desc: 'Consume X Master Pages of media released over 20 years ago', timeframes: ['monthly', 'weekly'], defaultMonthly: 50, defaultWeekly: 20 },
+  { id: '7', title: "Vanguard's Report", desc: 'Consume X Master Pages of media released this year', timeframes: ['monthly', 'weekly'], defaultMonthly: 50, defaultWeekly: 20 },
+  { id: '8', title: 'The Leviathan', desc: 'Complete X massive media item', timeframes: ['monthly'], defaultMonthly: 1 },
+  { id: '9', title: 'Franchise Loyalist', desc: 'Complete X item belonging to a Franchise', timeframes: ['monthly'], defaultMonthly: 1 },
+  { id: '10', title: 'The Backlog Slayer', desc: "Complete X item that has been 'Planning' for over 3 months", timeframes: ['monthly'], defaultMonthly: 1 },
+  { id: '11', title: 'Consistent Chronicler', desc: 'Log progress on X different days', timeframes: ['monthly', 'weekly'], defaultMonthly: 15, defaultWeekly: 4 },
+  { id: '12', title: 'Weekend Warrior', desc: 'Log progress on X unique weekend days', timeframes: ['monthly', 'weekly'], defaultMonthly: 5, defaultWeekly: 2 },
+  { id: '13', title: 'The Sprinter', desc: 'Start and complete an item within 72 hours (Target: X items)', timeframes: ['monthly'], defaultMonthly: 1 },
+  { id: '14', title: 'Binge Trance', desc: 'Achieve X+ Master Pages on a single item in one day', timeframes: ['monthly', 'weekly'], defaultMonthly: 'Dynamic', defaultWeekly: 'Dynamic' },
+  { id: '15', title: "Scribe's Duty", desc: 'Write X meaningful journal entries', timeframes: ['monthly', 'weekly'], defaultMonthly: 10, defaultWeekly: 3 },
+  { id: '16', title: "The Critic's Eye", desc: 'Finish and rate X item(s)', timeframes: ['monthly'], defaultMonthly: 'Random (1-2)' },
+  { id: '17', title: 'Boss Hunter', desc: 'Defeat X World Bosses', timeframes: ['monthly'], defaultMonthly: 'Random (1-2)' },
+  { id: '18', title: 'Relic Appraiser', desc: 'Obtain X new Artifacts', timeframes: ['monthly'], defaultMonthly: 3 },
+  { id: '19', title: 'Level Grinder', desc: 'Gain approximately X base EXP', timeframes: ['monthly', 'weekly'], defaultMonthly: 5000, defaultWeekly: 1000 },
+  { id: '20', title: 'Consecutive Commitment', desc: 'Log progress for X consecutive days', timeframes: ['weekly'], defaultWeekly: 3 },
+  { id: '21', title: 'The Wanderer', desc: 'Log progress on X different media items', timeframes: ['weekly'], defaultWeekly: 3 },
+  { id: '22', title: 'Deep Focus', desc: 'Log progress on the same media item at least X times', timeframes: ['weekly'], defaultWeekly: 4 },
+  { id: '23', title: 'Genre Hopper', desc: 'Log Progress on X items that do not share any genres', timeframes: ['weekly'], defaultWeekly: 1 },
+  { id: '24', title: 'Format Focus', desc: 'Gain X Master Pages exclusively in one format', timeframes: ['weekly'], defaultWeekly: 50 },
+  { id: '25', title: 'The Initiator', desc: "Move X item's status from 'Planning' to 'In Progress'", timeframes: ['weekly'], defaultWeekly: 1 },
+  { id: '26', title: 'Weekly Sprinter', desc: 'Complete X media item', timeframes: ['weekly'], defaultWeekly: 1 },
+  { id: '27', title: "Reviewer's Strike", desc: 'Complete X item and give it a rating', timeframes: ['weekly'], defaultWeekly: 1 },
+  { id: '28', title: 'Fresh Blood', desc: 'Add X new item to your library and log progress on it', timeframes: ['weekly'], defaultWeekly: 1 },
+  { id: '29', title: 'Dust It Off', desc: 'Log progress on X item that has been sitting without updates', timeframes: ['weekly'], defaultWeekly: 1 },
+  { id: '30', title: 'Marathon Session', desc: 'Have a single progress entry that yields X+ Master Pages in one sitting', timeframes: ['weekly'], defaultWeekly: 50 },
+  { id: '31', title: 'Journalist', desc: 'Write X progress notes', timeframes: ['weekly'], defaultWeekly: 2 },
+  { id: 'theme', title: 'Theme Quests', desc: 'Gain Master Pages in games/books of the monthly theme.', timeframes: ['monthly'], defaultMonthly: 10 },
+];
+
 export interface Quest {
   id: string;
   type: 'weekly' | 'monthly' | 'yearly';
@@ -384,7 +439,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
   const templates = [
     () => { // 1. The Finisher
       if (timeframe === 'weekly') return null;
-      const target = Math.floor(rng() * 3) + 1;
+      const target = getQTarget("The Finisher", timeframe, Math.floor(rng() * 3) + 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = logs.filter(l => l.metricType === 'statusChange' && l.note?.includes('to Completed')).length;
       return { title: "The Finisher", desc: "Complete " + target + " total media item(s)", target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
@@ -392,7 +447,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       if (timeframe === 'weekly') return null;
       const possibleTypes = MEDIA_TYPES.filter(t => goals[t] > 0);
       const chosenType = possibleTypes[Math.floor(rng() * possibleTypes.length)] || 'Book';
-      const target = Math.floor(rng() * 2) + 1;
+      const target = getQTarget("The Specialist", timeframe, Math.floor(rng() * 2) + 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = logs.filter(l => {
         if (l.metricType !== 'statusChange' || !l.note?.includes('to Completed')) return false;
         const m = media.find(x => x.id === l.mediaId);
@@ -401,25 +456,25 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       return { title: "The Specialist", desc: "Complete " + target + " " + chosenType + "(s)", target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 3. Endurance Trial
-      const target = Math.max(10, Math.floor(totalMasterPagesGoal / divisor)); // 5 for approx. a fifth, but divisor handles weekly/monthly scaling
+      const target = getQTarget("Endurance Trial", timeframe, Math.max(10, Math.floor(totalMasterPagesGoal / divisor)), settings, typeof rng !== 'undefined' ? rng : undefined); // 5 for approx. a fifth, but divisor handles weekly/monthly scaling
       const current = calculateMasterPages(logs, media, settings);
       return { title: "Endurance Trial", desc: `Log a massive ${target} Master Pages overall`, target, current, type: 'pages' as const, reward: baseReward * 3 };
     },
     () => { // 4. The Polymath
       if (timeframe === 'weekly') return null;
-      const target = 3;
+      const target = getQTarget("The Polymath", timeframe, 3, settings, typeof rng !== 'undefined' ? rng : undefined);
       const typesSet = new Set();
       logs.filter(l => l.metricType === 'statusChange' && l.note?.includes('to Completed')).forEach(l => {
         const m = media.find(x => x.id === l.mediaId);
         if (m) typesSet.add(m.mediaType);
       });
-      return { title: "The Polymath", desc: "Complete items from 3 different media types", target, current: typesSet.size, type: 'entries' as const, reward: baseReward * 3 };
+      return { title: "The Polymath", desc: `Complete items from ${target} different media types`, target, current: typesSet.size, type: 'entries' as const, reward: baseReward * 3 };
     },
     () => { // 5. Scholar of the Arcane
       if (timeframe === 'weekly') return null;
       const allGenres = Array.from(new Set(media.flatMap(m => m.genres || [])));
       const chosenGenre = allGenres[Math.floor(rng() * allGenres.length)] || 'Fantasy';
-      const target = Math.floor(rng() * 2) + 1;
+      const target = getQTarget("Scholar of the Arcane", timeframe, Math.floor(rng() * 2) + 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = logs.filter(l => {
         if (l.metricType !== 'statusChange' || !l.note?.includes('to Completed')) return false;
         const m = media.find(x => x.id === l.mediaId);
@@ -428,7 +483,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       return { title: "Scholar of the Arcane", desc: `Complete ${target} item(s) in the '${chosenGenre}' genre`, target, current, type: 'entries' as const, reward: baseReward * 2.5 };
     },
     () => { // 6. Time Traveler's Archive
-      const target = timeframe === 'monthly' ? 50 : 20;
+      const target = getQTarget("Time Traveler's Archive", timeframe, timeframe === 'monthly' ? 50 : 20, settings, typeof rng !== 'undefined' ? rng : undefined);
       const currentYear = new Date().getFullYear();
       let current = 0;
       logs.forEach(l => {
@@ -440,7 +495,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       return { title: "Time Traveler's Archive", desc: `Consume ${target} Master Pages of media released over 20 years ago`, target, current: Math.floor(current), type: 'pages' as const, reward: baseReward * 2 };
     },
     () => { // 7. Vanguard's Report
-      const target = timeframe === 'monthly' ? 50 : 20;
+      const target = getQTarget("Vanguard's Report", timeframe, timeframe === 'monthly' ? 50 : 20, settings, typeof rng !== 'undefined' ? rng : undefined);
       const currentYear = new Date().getFullYear();
       let current = 0;
       logs.forEach(l => {
@@ -453,7 +508,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     },
     () => { // 8. The Leviathan
       if (timeframe === 'weekly') return null;
-      const target = 1;
+      const target = getQTarget("The Leviathan", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = logs.filter(l => {
         if (l.metricType !== 'statusChange' || !l.note?.includes('to Completed')) return false;
         const m = media.find(x => x.id === l.mediaId);
@@ -463,21 +518,21 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
         if (m.mediaType === 'Series' && m.totalEpisodes && m.totalEpisodes >= 50) return true;
         return false;
       }).length;
-      return { title: "The Leviathan", desc: "Complete one massive media item (e.g. 80+ Hr Game, 800+ Pg Book)", target, current, type: 'entries' as const, reward: baseReward * 5 };
+      return { title: "The Leviathan", desc: `Complete ${target} massive media item(s) (e.g. 80+ Hr Game, 800+ Pg Book)`, target, current, type: 'entries' as const, reward: baseReward * 5 };
     },
     () => { // 9. Franchise Loyalist
       if (timeframe === 'weekly') return null;
-      const target = 1;
+      const target = getQTarget("Franchise Loyalist", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = logs.filter(l => {
         if (l.metricType !== 'statusChange' || !l.note?.includes('to Completed')) return false;
         const m = media.find(x => x.id === l.mediaId);
         return m?.franchises && m.franchises.length > 0;
       }).length;
-      return { title: "Franchise Loyalist", desc: "Complete an item belonging to a Franchise", target, current, type: 'entries' as const, reward: baseReward * 1.5 };
+      return { title: "Franchise Loyalist", desc: `Complete ${target} item(s) belonging to a Franchise`, target, current, type: 'entries' as const, reward: baseReward * 1.5 };
     },
     () => { // 10. The Backlog Slayer
       if (timeframe === 'weekly') return null;
-      const target = 1;
+      const target = getQTarget("The Backlog Slayer", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       const threeMonthsAgo = new Date();
       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
       const backlogItems = media.filter(m => m.status === 'Planning' && new Date(m.createdAt) < threeMonthsAgo);
@@ -488,15 +543,15 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
         const m = media.find(x => x.id === l.mediaId);
         return m && new Date(m.createdAt) < threeMonthsAgo;
       }).length;
-      return { title: "The Backlog Slayer", desc: "Complete an item that has been 'Planning' for over 3 months", target, current, type: 'entries' as const, reward: baseReward * 3 };
+      return { title: "The Backlog Slayer", desc: `Complete ${target} item(s) that has been 'Planning' for over 3 months`, target, current, type: 'entries' as const, reward: baseReward * 3 };
     },
     () => { // 11. Consistent Chronicler
-      const target = timeframe === 'monthly' ? 15 : 4;
+      const target = getQTarget("Consistent Chronicler", timeframe, timeframe === 'monthly' ? 15 : 4, settings, typeof rng !== 'undefined' ? rng : undefined);
       const days = new Set(logs.map(l => format(parseISO(l.timestamp), "yyyy-MM-dd"))).size;
       return { title: "Consistent Chronicler", desc: `Log progress on ${target} different days`, target, current: days, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 12. Weekend Warrior
-      const target = timeframe === 'monthly' ? 5 : 2;
+      const target = getQTarget("Weekend Warrior", timeframe, timeframe === 'monthly' ? 5 : 2, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = new Set(logs.filter(l => {
         const d = parseISO(l.timestamp).getDay();
         return d === 0 || d === 6; // Sunday or Saturday
@@ -505,7 +560,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     },
     () => { // 13. The Sprinter
       if (timeframe === 'weekly') return null;
-      const target = 1;
+      const target = getQTarget("The Sprinter", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       let current = 0;
       const completedLogs = logs.filter(l => l.metricType === 'statusChange' && l.note?.includes('to Completed'));
       completedLogs.forEach(cL => {
@@ -517,9 +572,10 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
           }
         }
       });
-      return { title: "The Sprinter", desc: "Start and complete an item within 72 hours", target, current, type: 'entries' as const, reward: baseReward * 4 };
+      return { title: "The Sprinter", desc: `Start and complete ${target} item(s) within 72 hours`, target, current, type: 'entries' as const, reward: baseReward * 4 };
     },
     () => { // 14. Binge Trance
+      const threshold = getQTarget("Binge Trance", timeframe, Math.max(50, Math.floor(totalMasterPagesGoal / 52)), settings, typeof rng !== 'undefined' ? rng : undefined);
       const target = 1;
       let current = 0;
       const dayMap: Record<string, number> = {};
@@ -531,20 +587,19 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
           dayMap[key] = (dayMap[key] || 0) + calculateScaledDelta(l.delta, m, settings);
         }
       });
-      const threshold = Math.max(50, Math.floor(totalMasterPagesGoal / 52));
       for (const val of Object.values(dayMap)) {
         if (val >= threshold) current = 1;
       }
       return { title: "Binge Trance", desc: `Achieve ${threshold}+ Master Pages on a single item in one day`, target, current, type: 'entries' as const, reward: baseReward * 3 };
     },
     () => { // 15. Scribe's Duty
-      const target = timeframe === 'monthly' ? 10 : 3;
+      const target = getQTarget("Scribe's Duty", timeframe, timeframe === 'monthly' ? 10 : 3, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = logs.filter(l => l.note && l.note.trim().length >= 10).length;
-      return { title: "Scribe's Duty", desc: `Write ${target} meaningful journal entries (10+ characters) attaching to progress logs`, target, current, type: 'entries' as const, reward: baseReward * 2 };
+      return { title: "Scribe's Duty", desc: `Write ${target} meaningful journal entries (10+ characters) attaching them to progress logs`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 16. The Critic's Eye
       if (timeframe === 'weekly') return null;
-      const target = Math.floor(rng() * 2) + 1;
+      const target = getQTarget("The Critic's Eye", timeframe, Math.floor(rng() * 2) + 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = logs.filter(l => {
          if (l.metricType !== 'statusChange' || !l.note?.includes('to Completed')) return false;
          const m = media.find(x => x.id === l.mediaId);
@@ -554,24 +609,24 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     },
     () => { // 17. Boss Hunter
       if (timeframe === 'weekly') return null;
-      const target = Math.floor(rng() * 2) + 1;
+      const target = getQTarget("Boss Hunter", timeframe, Math.floor(rng() * 2) + 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = worldBosses.filter(b => b.status === 'Defeated' && b.updatedAt && b.updatedAt.startsWith(timeId)).length;
       return { title: "Boss Hunter", desc: `Defeat ${target} World Bosses`, target, current, type: 'entries' as const, reward: baseReward * 3 };
     },
     () => { // 18. Relic Appraiser
       if (timeframe === 'weekly') return null;
-      const target = timeframe === 'monthly' ? 3 : 1;
+      const target = getQTarget("Relic Appraiser", timeframe, timeframe === 'monthly' ? 3 : 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = artifacts.filter(a => a.earnedAt.startsWith(timeId)).length;
       return { title: "Relic Appraiser", desc: `Obtain ${target} new Artifacts`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 19. Level Grinder
-      const targetExp = timeframe === 'monthly' ? 5000 : 1000;
+      const targetExp = getQTarget("Level Grinder", timeframe, timeframe === 'monthly' ? 5000 : 1000, settings, typeof rng !== 'undefined' ? rng : undefined);
       const currentExp = calculateMasterPages(logs, media, settings); 
       return { title: "Level Grinder", desc: `Gain approximately ${targetExp} base EXP`, target: targetExp, current: currentExp, type: 'pages' as const, reward: baseReward * 2 };
     },
     () => { // 20. Consecutive Commitment
       if (timeframe !== 'weekly') return null;
-      const target = 3;
+      const target = getQTarget("Consecutive Commitment", timeframe, 3, settings, typeof rng !== 'undefined' ? rng : undefined);
       const days = Array.from(new Set(logs.map(l => format(parseISO(l.timestamp), "yyyy-MM-dd")))).sort();
       let maxConsecutive = 0;
       let currentConsecutive = 1;
@@ -587,25 +642,25 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       }
       if (currentConsecutive > maxConsecutive) maxConsecutive = currentConsecutive;
       if (days.length === 0) maxConsecutive = 0;
-      return { title: "Consecutive Commitment", desc: "Log progress for 3 consecutive days during the week", target, current: maxConsecutive, type: 'entries' as const, reward: baseReward * 2 };
+      return { title: "Consecutive Commitment", desc: `Log progress for ${target} consecutive days during the week`, target, current: maxConsecutive, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 21. The Wanderer
       if (timeframe !== 'weekly') return null;
-      const target = 3;
+      const target = getQTarget("The Wanderer", timeframe, 3, settings, typeof rng !== 'undefined' ? rng : undefined);
       const uniqueItems = new Set(logs.map(l => l.mediaId)).size;
-      return { title: "The Wanderer", desc: "Taste a little bit of everything. Log progress on 3 different media items in a single week", target, current: uniqueItems, type: 'entries' as const, reward: baseReward * 2 };
+      return { title: "The Wanderer", desc: `Taste a little bit of everything. Log progress on ${target} different media items in a single week`, target, current: uniqueItems, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 22. Deep Focus
       if (timeframe !== 'weekly') return null;
-      const target = 4;
+      const target = getQTarget("Deep Focus", timeframe, 4, settings, typeof rng !== 'undefined' ? rng : undefined);
       const counts: Record<string, number> = {};
       logs.forEach(l => { counts[l.mediaId] = (counts[l.mediaId] || 0) + 1; });
       const maxLogs = Object.keys(counts).length > 0 ? Math.max(...Object.values(counts)) : 0;
-      return { title: "Deep Focus", desc: "Dedicate yourself to one world. Log progress on the same media item at least 4 times in the week", target, current: maxLogs, type: 'entries' as const, reward: baseReward * 2 };
+      return { title: "Deep Focus", desc: `Dedicate yourself to one world. Log progress on the same media item at least ${target} times in the week`, target, current: maxLogs, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 23. Genre Hopper
       if (timeframe !== 'weekly') return null;
-      const target = 1;
+      const target = getQTarget("Genre Hopper", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       let current = 0;
       const unqMediaIds = Array.from(new Set(logs.map(l => l.mediaId)));
       const items = unqMediaIds.map(id => media.find(m => m.id === id)).filter(Boolean) as MediaItem[];
@@ -624,11 +679,11 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
          }
          if (current) break;
       }
-      return { title: "Genre Hopper", desc: "Expand your horizons. Log Progress on two items that do not share any genres", target, current, type: 'entries' as const, reward: baseReward * 2 };
+      return { title: "Genre Hopper", desc: `Expand your horizons. Log Progress on ${target+1} items that do not share any genres`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 24. Format Focus
       if (timeframe !== 'weekly') return null;
-      const target = 50;
+      const target = getQTarget("Format Focus", timeframe, 50, settings, typeof rng !== 'undefined' ? rng : undefined);
       const possibleTypes = MEDIA_TYPES.filter(t => goals[t] > 0);
       const chosenType = possibleTypes[Math.floor(rng() * possibleTypes.length)] || 'Manga';
       
@@ -639,20 +694,20 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
             current += calculateScaledDelta(l.delta, m, settings);
          }
       });
-      return { title: "Format Focus", desc: `Dive deep into one medium. Gain 50 Master Pages exclusively in ${chosenType}`, target, current: Math.floor(current), type: 'pages' as const, reward: baseReward * 2 };
+      return { title: "Format Focus", desc: `Dive deep into one medium. Gain ${target} Master Pages exclusively in ${chosenType}`, target, current: Math.floor(current), type: 'pages' as const, reward: baseReward * 2 };
     },
     () => { // 25. The Initiator
       if (timeframe !== 'weekly') return null;
-      const target = 1;
+      const target = getQTarget("The Initiator", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = logs.filter(l => l.metricType === 'statusChange' && l.note === 'Planning to In Progress').length;
-      return { title: "The Initiator", desc: "Take the first step. Move 1 item's status from 'Planning' to 'In Progress'", target, current, type: 'entries' as const, reward: baseReward * 2 };
+      return { title: "The Initiator", desc: `Take the first step. Move ${target} item's status from 'Planning' to 'In Progress'`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 26. Weekly Sprinter
       if (timeframe !== 'weekly') return null;
-      const target = 1;
+      const target = getQTarget("Weekly Sprinter", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       
       const isClose = media.some(m => {
-          if (m.status === 'In Progress' && ['Manga', 'Book', 'Series'].includes(m.mediaType)) {
+          if (m.status === 'Active' && ['Manga', 'Book', 'Series'].includes(m.mediaType)) {
              const primary = PRIMARY_METRICS[m.mediaType];
              const totalLogs = allLogs.filter(l => l.mediaId === m.id && l.metricType === primary);
              const currentNative = totalLogs.reduce((acc, log) => acc + log.delta, 0);
@@ -674,14 +729,14 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       if (!isClose) return null;
       
       const current = logs.filter(l => l.metricType === 'statusChange' && l.note?.includes('to Completed')).length;
-      return { title: "Weekly Sprinter", desc: "Finish what you started. Complete 1 media item", target, current, type: 'entries' as const, reward: baseReward * 3 };
+      return { title: "Weekly Sprinter", desc: `Finish what you started. Complete ${target} media item(s)`, target, current, type: 'entries' as const, reward: baseReward * 3 };
     },
     () => { // 27. Reviewer's Strike
       if (timeframe !== 'weekly') return null;
-      const target = 1;
+      const target = getQTarget("Reviewer's Strike", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
 
       const isClose = media.some(m => {
-          if (m.status === 'In Progress' && ['Manga', 'Book', 'Series'].includes(m.mediaType)) {
+          if (m.status === 'Active' && ['Manga', 'Book', 'Series'].includes(m.mediaType)) {
              const primary = PRIMARY_METRICS[m.mediaType];
              const totalLogs = allLogs.filter(l => l.mediaId === m.id && l.metricType === primary);
              const currentNative = totalLogs.reduce((acc, log) => acc + log.delta, 0);
@@ -707,11 +762,11 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
          const m = media.find(x => x.id === l.mediaId);
          return m && m.userRating && m.userRating >= 1 && m.userRating <= 5;
       }).length;
-      return { title: "Reviewer's Strike", desc: "Share your thoughts. Complete an item and give it a rating of 1 to 5", target, current, type: 'entries' as const, reward: baseReward * 3 };
+      return { title: "Reviewer's Strike", desc: `Share your thoughts. Complete ${target} item(s) and give it a rating of 1 to 5`, target, current, type: 'entries' as const, reward: baseReward * 3 };
     },
     () => { // 28. Fresh Blood
       if (timeframe !== 'weekly') return null;
-      const target = 1;
+      const target = getQTarget("Fresh Blood", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       
       const current = logs.filter(l => {
          const m = media.find(x => x.id === l.mediaId);
@@ -724,17 +779,17 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
          }
          return false;
       }).length > 0 ? 1 : 0;
-      return { title: "Fresh Blood", desc: "Try something brand new. Add a new item to your library and log progress on it in the same week", target, current, type: 'entries' as const, reward: baseReward * 2 };
+      return { title: "Fresh Blood", desc: `Try something brand new. Add ${target} new item(s) to your library and log progress on it in the same week`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 29. Dust It Off
       if (timeframe !== 'weekly') return null;
-      const target = 1;
+      const target = getQTarget("Dust It Off", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       
       const oneMonthAgo = new Date();
       oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
       
       const hasDustyItem = media.some(m => {
-          if (m.status === 'Planning' || m.status === 'In Progress' || m.status === 'Paused') {
+          if (m.status === 'Planning' || m.status === 'Active' || m.status === 'On Hold') {
              const itemLogs = allLogs.filter(l => l.mediaId === m.id);
              if (itemLogs.length > 0) {
                  const latestLog = itemLogs.reduce((latest, current) => new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest);
@@ -761,26 +816,27 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
              }
          }
       });
-      return { title: "Dust It Off", desc: "Clear out the backlog. Log progress on an item that has been sitting in your library without updates for over a month", target, current, type: 'entries' as const, reward: baseReward * 3 };
+      return { title: "Dust It Off", desc: `Clear out the backlog. Log progress on ${target} item(s) that has been sitting in your library without updates for over a month`, target, current, type: 'entries' as const, reward: baseReward * 3 };
     },
     () => { // 30. Marathon Session
       if (timeframe !== 'weekly') return null;
       const target = 1;
+      const targetMp = getQTarget("Marathon Session", timeframe, 50, settings, typeof rng !== 'undefined' ? rng : undefined);
       let current = 0;
       logs.forEach(l => {
          const m = media.find(x => x.id === l.mediaId);
          if (m) {
              const mp = calculateScaledDelta(l.delta, m, settings);
-             if (mp >= 50) current = 1;
+             if (mp >= targetMp) current = 1;
          }
       });
-      return { title: "Marathon Session", desc: "Get lost in the zone. Have a single progress entry that yields 50+ Master Pages in one sitting", target, current, type: 'entries' as const, reward: baseReward * 2 };
+      return { title: "Marathon Session", desc: `Get lost in the zone. Have a single progress entry that yields ${targetMp}+ Master Pages in one sitting`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 31. Journalist
       if (timeframe !== 'weekly') return null;
-      const target = 2;
+      const target = getQTarget("Journalist", timeframe, 2, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = logs.filter(l => l.note && l.note.trim().length >= 10).length;
-      return { title: "Journalist", desc: "Embody the Lorekeeper. Write 2 progress notes (10+ characters) attaching them to your progress logs", target, current, type: 'entries' as const, reward: baseReward * 2 };
+      return { title: "Journalist", desc: `Embody the Lorekeeper. Write ${target} progress notes (10+ characters) attaching them to your progress logs`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     }
   ];
 
@@ -802,7 +858,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     const monthNum = parseInt(monthStr, 10);
     const theme = MONTH_THEMES[monthNum];
     if (theme) {
-       const target = 10;
+       const target = getQTarget("Theme Quests", 'monthly', 10, settings, typeof rng !== 'undefined' ? rng : undefined);
        
        let current = 0;
        logs.forEach(l => {

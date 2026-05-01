@@ -525,7 +525,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       currentStreak INTEGER,
       enemyDifficulty REAL DEFAULT 1.0,
       questOffsets TEXT,
-      questRerollsUsed TEXT
+      questRerollsUsed TEXT,
+      questConfigs TEXT
     );
 
     CREATE TABLE IF NOT EXISTS ai_recaps (
@@ -607,6 +608,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   try { db.exec("ALTER TABLE media ADD COLUMN userReview TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN dropReason TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE settings ADD COLUMN enemyDifficulty REAL DEFAULT 1.0"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE settings ADD COLUMN questConfigs TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE world_bosses ADD COLUMN unit TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE ai_recaps ADD COLUMN data TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE world_bosses ADD COLUMN updatedAt TEXT"); } catch (e) { /* Ignore if it exists */ }
@@ -1564,7 +1566,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         masterPageConfig: row.masterPageConfig ? JSON.parse(row.masterPageConfig) : undefined,
         yearlyGoals: row.yearlyGoals ? JSON.parse(row.yearlyGoals) : undefined,
         questOffsets: row.questOffsets ? JSON.parse(row.questOffsets) : undefined,
-        questRerollsUsed: row.questRerollsUsed ? JSON.parse(row.questRerollsUsed) : undefined
+        questRerollsUsed: row.questRerollsUsed ? JSON.parse(row.questRerollsUsed) : undefined,
+        questConfigs: row.questConfigs ? JSON.parse(row.questConfigs) : undefined
       });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -1583,8 +1586,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       const newDifficulty = settings.enemyDifficulty ?? 1.0;
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, questOffsets, questRerollsUsed)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @questOffsets, @questRerollsUsed)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, questOffsets, questRerollsUsed, questConfigs)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @questOffsets, @questRerollsUsed, @questConfigs)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -1601,7 +1604,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           currentStreak=excluded.currentStreak,
           enemyDifficulty=excluded.enemyDifficulty,
           questOffsets=excluded.questOffsets,
-          questRerollsUsed=excluded.questRerollsUsed
+          questRerollsUsed=excluded.questRerollsUsed,
+          questConfigs=excluded.questConfigs
       `).run({
         userId: userId,
         igdbClientId: isAdmin ? (settings.igdbClientId || null) : (oldSettings?.igdbClientId || null),
@@ -1619,7 +1623,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         currentStreak: settings.currentStreak || 0,
         enemyDifficulty: newDifficulty,
         questOffsets: settings.questOffsets ? JSON.stringify(settings.questOffsets) : null,
-        questRerollsUsed: settings.questRerollsUsed ? JSON.stringify(settings.questRerollsUsed) : null
+        questRerollsUsed: settings.questRerollsUsed ? JSON.stringify(settings.questRerollsUsed) : null,
+        questConfigs: settings.questConfigs ? JSON.stringify(settings.questConfigs) : null
       });
 
       // Update active bosses if difficulty changed

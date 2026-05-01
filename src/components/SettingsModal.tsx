@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Sparkles, RefreshCw, UserCircle, Settings as SettingsIcon, Shield, Database, Users } from 'lucide-react';
+import { X, Save, Sparkles, RefreshCw, UserCircle, Settings as SettingsIcon, Shield, Database, Users, Target } from 'lucide-react';
 import { DatabaseService } from '../services/db';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
-import { calculateRPGState } from '../lib/rpgSystem';
+import { calculateRPGState, QUEST_DEFINITIONS } from '../lib/rpgSystem';
 import { generateText } from '../services/nanoGptService';
 import { UserManagement } from './UserManagement';
 
@@ -14,7 +14,7 @@ interface SettingsModalProps {
 export function SettingsModal({ onClose }: SettingsModalProps) {
   const { user, login } = useAuth();
   const { media, logs, settings, aiTextCache, saveAiText, refreshData, artifacts } = useMediaContext();
-  const [activeTab, setActiveTab] = useState<'account'|'preferences'|'rpg'|'system'|'users'>('account');
+  const [activeTab, setActiveTab] = useState<'account'|'preferences'|'rpg'|'quests'|'system'|'users'>('account');
   
   const [accountData, setAccountData] = useState({
     username: user?.username || '',
@@ -49,7 +49,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     comicPagesPerIssue: 20,
     episodesWatchedMultiplier: 30,
     moviePagesPerMovie: 100,
-    runtimeMinutesPerPage: 2.5
+    runtimeMinutesPerPage: 2.5,
+    questConfigs: {} as Record<string, any>
   });
   
   const [isLoading, setIsLoading] = useState(true);
@@ -84,7 +85,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         comicPagesPerIssue: settings.masterPageConfig?.comicPagesPerIssue ?? 20,
         episodesWatchedMultiplier: settings.masterPageConfig?.episodesWatchedMultiplier ?? 30,
         moviePagesPerMovie: settings.masterPageConfig?.moviePagesPerMovie ?? 100,
-        runtimeMinutesPerPage: settings.masterPageConfig?.runtimeMinutesPerPage ?? 2.5
+        runtimeMinutesPerPage: settings.masterPageConfig?.runtimeMinutesPerPage ?? 2.5,
+        questConfigs: settings.questConfigs || {}
       });
       setIsLoading(false);
     } else {
@@ -117,7 +119,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             comicPagesPerIssue: settings.masterPageConfig?.comicPagesPerIssue ?? 20,
             episodesWatchedMultiplier: settings.masterPageConfig?.episodesWatchedMultiplier ?? 30,
             moviePagesPerMovie: settings.masterPageConfig?.moviePagesPerMovie ?? 100,
-            runtimeMinutesPerPage: settings.masterPageConfig?.runtimeMinutesPerPage ?? 2.5
+            runtimeMinutesPerPage: settings.masterPageConfig?.runtimeMinutesPerPage ?? 2.5,
+            questConfigs: settings.questConfigs || {}
           });
         } catch (err: any) {
           setError(err.message || 'Failed to load settings');
@@ -152,6 +155,19 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         [name]: (type === 'number' || type === 'range') ? (step ? parseFloat(value) : parseInt(value, 10)) : value
       }));
     }
+  };
+
+  const handleQuestConfigChange = (title: string, timeframe: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      questConfigs: {
+        ...prev.questConfigs,
+        [title]: {
+          ...(prev.questConfigs[title] || {}),
+          [timeframe]: value
+        }
+      }
+    }));
   };
 
   const [isFixing, setIsFixing] = useState(false);
@@ -303,7 +319,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           moviePagesPerMovie: formData.moviePagesPerMovie,
           runtimeMinutesPerPage: formData.runtimeMinutesPerPage
         },
-        yearlyGoals: formData.yearlyGoals
+        yearlyGoals: formData.yearlyGoals,
+        questConfigs: formData.questConfigs
       });
       await refreshData();
       onClose();
@@ -341,6 +358,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-sm font-medium ${activeTab === 'rpg' ? 'bg-orange-500/10 text-orange-400' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'}`}
            >
              <Shield className="w-5 h-5" /> RPG Configuration
+           </button>
+
+           <button 
+             onClick={() => setActiveTab('quests')}
+             className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-sm font-medium ${activeTab === 'quests' ? 'bg-orange-500/10 text-orange-400' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'}`}
+           >
+             <Target className="w-5 h-5" /> Quests
            </button>
 
            {user?.role === 'Admin' && (
@@ -632,6 +656,60 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </div>
               </div>
               </>
+            )}
+
+            {activeTab === 'quests' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-1">Quest Difficulty Customization</h3>
+                  <p className="text-sm text-zinc-400 mb-4">
+                    Adjust targets for generated Weekly and Monthly Quests. Enter a specific number to override the default.
+                    <br/><br/>
+                    <strong className="text-white">Dynamic (Dyn):</strong> The target scales automatically based on your Yearly goals. Entering a number forces it to be a specific fixed amount.
+                    <br/>
+                    <strong className="text-white">Random (X-Y):</strong> The target sets itself to a random number in that range. Entering a number forces it to always be exactly your input.
+                    <br/><br/>
+                    Leave fields empty to use their default behaviors.
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {QUEST_DEFINITIONS.map(quest => (
+                    <div key={quest.id} className="bg-zinc-800/30 border border-white/5 rounded-xl p-4">
+                      <div className="mb-3">
+                         <h4 className="font-bold text-white text-sm">{quest.title}</h4>
+                         <p className="text-xs text-zinc-500">{quest.desc}</p>
+                      </div>
+                      <div className="space-y-3">
+                        {quest.timeframes.includes('monthly') && (
+                          <div className="flex items-center justify-between">
+                             <label className="text-xs font-medium text-zinc-400 w-24">Monthly:</label>
+                             <input 
+                               type="number"
+                               placeholder={String(quest.defaultMonthly)}
+                               value={formData.questConfigs[quest.title]?.['monthly'] || ''}
+                               onChange={(e) => handleQuestConfigChange(quest.title, 'monthly', e.target.value)}
+                               className="input-field py-1 px-3 w-32 text-xs"
+                             />
+                          </div>
+                        )}
+                        {quest.timeframes.includes('weekly') && (
+                          <div className="flex items-center justify-between">
+                             <label className="text-xs font-medium text-zinc-400 w-24">Weekly:</label>
+                             <input 
+                               type="number"
+                               placeholder={String(quest.defaultWeekly)}
+                               value={formData.questConfigs[quest.title]?.['weekly'] || ''}
+                               onChange={(e) => handleQuestConfigChange(quest.title, 'weekly', e.target.value)}
+                               className="input-field py-1 px-3 w-32 text-xs"
+                             />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
 
             {user?.role === 'Admin' && activeTab === 'users' && (
