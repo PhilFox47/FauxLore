@@ -178,8 +178,8 @@ export function calculateRPGState(
 
   let penaltyExp = 0;
   media.forEach(m => {
-    if (m.status === 'Dropped') {
-      penaltyExp -= m.isOngoing ? 100 : 500;
+    if (m.status === 'Dropped' && !m.isOngoing) {
+      penaltyExp -= 500;
     }
   });
 
