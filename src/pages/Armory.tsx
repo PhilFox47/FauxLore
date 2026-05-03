@@ -163,7 +163,21 @@ export function Armory() {
     }
   };
 
-  const unlootedCompletedMedia = media.filter(m => m.status === 'Completed' && !artifacts.some(a => a.mediaId === m.id));
+  const unlootedMedia = media.filter(m => {
+    const itemArtifacts = artifacts.filter(a => a.mediaId === m.id);
+    let allowedArtifactsCount = 0;
+    
+    if (m.mediaType === 'Game' && m.isOngoing) {
+      const nonHistoricalPlaytime = logs
+        .filter(l => l.mediaId === m.id && !l.timestamp.startsWith('1970-01-01') && l.metricType === 'playtimeHours')
+        .reduce((sum, log) => sum + log.delta, 0);
+      allowedArtifactsCount = Math.floor(nonHistoricalPlaytime / 50);
+    } else if (m.status === 'Completed') {
+      allowedArtifactsCount = 1;
+    }
+    
+    return itemArtifacts.length < allowedArtifactsCount;
+  });
 
   return (
     <div className="flex flex-col h-full overflow-hidden w-full bg-[#080809]">
@@ -254,16 +268,16 @@ export function Armory() {
             {/* Unlooted Treasures & selected artifact details */}
             <div className="space-y-6">
                <div className={cn("transition-all duration-500", selectedArtifact ? "opacity-30 pointer-events-none scale-95" : "opacity-100 scale-100")}>
-                 {unlootedCompletedMedia.length > 0 ? (
+                 {unlootedMedia.length > 0 ? (
                    <div className="bg-gradient-to-br from-indigo-950/20 to-black border border-indigo-500/20 shadow-[0_0_40px_rgba(99,102,241,0.1)] rounded-[2.5rem] p-8 sm:p-10 relative overflow-hidden">
                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03] mix-blend-overlay"></div>
                      <h3 className="text-sm sm:text-base font-black text-white mb-6 uppercase tracking-[0.2em] flex items-center gap-2 font-display">
                        <Gem className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />
                        Unidentified Loot
-                       <span className="ml-2 px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded text-[10px] tracking-widest">{unlootedCompletedMedia.length} Pending</span>
+                       <span className="ml-2 px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded text-[10px] tracking-widest">{unlootedMedia.length} Pending</span>
                      </h3>
                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 gap-4 relative z-10">
-                       {unlootedCompletedMedia.map(item => (
+                       {unlootedMedia.map(item => (
                          <button 
                            key={item.id}
                            onClick={() => handleClaimLoot(item)}

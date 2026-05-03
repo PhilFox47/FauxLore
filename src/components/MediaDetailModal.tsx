@@ -278,14 +278,16 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                 .filter(l => l.mediaId === item.id && !l.timestamp.startsWith('1970-01-01') && l.metricType === 'playtimeHours')
                 .reduce((sum, log) => sum + log.delta, 0);
               
-              allowedArtifactsCount = Math.floor(nonHistoricalPlaytime / 100);
+              allowedArtifactsCount = Math.floor(nonHistoricalPlaytime / 50);
             } else if (item.status === 'Completed') {
               allowedArtifactsCount = 1;
             }
             
-            if (allowedArtifactsCount === 0 && itemArtifacts.length === 0) return null;
+            if (!isOngoingGame && allowedArtifactsCount === 0 && itemArtifacts.length === 0) return null;
 
             const canLoot = itemArtifacts.length < allowedArtifactsCount;
+            const nextLootAt = allowedArtifactsCount * 50 + 50;
+            const progressToNext = isOngoingGame ? (nonHistoricalPlaytime % 50) : 0;
 
             return (
               <div className="mb-8">
@@ -294,7 +296,18 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                    {isOngoingGame ? 'Ongoing Conquest Loot' : 'Conquest Loot'}
                 </h3>
                 {isOngoingGame && (
-                  <p className="text-xs text-zinc-400 mb-4">Tracked Playtime: {nonHistoricalPlaytime.toFixed(1)} hrs (Next loot at {((itemArtifacts.length + (canLoot ? 0 : 1)) * 100)} hrs)</p>
+                  <div className="mb-4">
+                    <div className="flex justify-between text-xs text-zinc-400 mb-1.5">
+                      <span>Tracked Playtime: {nonHistoricalPlaytime.toFixed(1)} hrs</span>
+                      <span>Next loot at {nextLootAt} hrs</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-black/80 rounded-full overflow-hidden border border-white/5 relative">
+                       <div 
+                         className="h-full bg-purple-500 rounded-full transition-all duration-700 shadow-[0_0_8px_rgba(168,85,247,0.5)]"
+                         style={{ width: `${Math.min(100, Math.max(2, (progressToNext / 50) * 100))}%` }} 
+                       />
+                    </div>
+                  </div>
                 )}
                 {itemArtifacts.length > 0 && (
                   <div className="flex flex-col gap-3 mb-4">
