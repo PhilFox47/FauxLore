@@ -367,7 +367,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
             
             if (isOngoingGame) {
               nonHistoricalPlaytime = logs
-                .filter(l => l.mediaId === item.id && !l.timestamp.startsWith('1970-01-01') && l.metricType === 'playtimeHours')
+                .filter(l => l.mediaId === item.id && !l.isHistoric && !l.timestamp.startsWith('1970-01-01') && l.metricType === 'playtimeHours')
                 .reduce((sum, log) => sum + log.delta, 0);
               
               allowedArtifactsCount = Math.floor(nonHistoricalPlaytime / 50);

@@ -608,7 +608,7 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
               <select
                 value={dateRange}
                 onChange={(e) => setDateRange(e.target.value as any)}
-                className="bg-transparent text-sm text-white font-medium focus:outline-none pr-4 w-full"
+                className="bg-transparent text-sm text-white font-medium focus:outline-none pr-4 w-full [&>option]:bg-[#18181b]"
               >
                 <option value="7days">Last 7 Days</option>
                 <option value="30days">Last 30 Days</option>
