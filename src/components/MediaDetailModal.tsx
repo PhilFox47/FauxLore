@@ -35,21 +35,9 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
     logTime: string;
   }>({ delta: 0, note: '', location: '', logDate: '', logTime: '' });
 
-  if (!isOpen || !item) return null;
-
-  const uniqueLocations = Array.from(new Set(logs.map(l => l.location).filter(Boolean))) as string[];
-  const filteredLocations = uniqueLocations.filter(loc => loc.toLowerCase().includes(editLogData.location.toLowerCase()) && loc !== editLogData.location);
-
-  const totalMasterPages = logs
-    .filter(l => !l.isHistoric && l.metricType !== 'statusChange')
-    .reduce((acc, log) => acc + calculateScaledDelta(log.delta, item, settings), 0);
-  
-  // Sort logs descending by timestamp
-  const sortedLogs = [...logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
   const { currentMediaStreak, maxMediaStreak, activeDays, startDate, chartData } = React.useMemo(() => {
     const historicalLogs = logs.filter(l => !l.timestamp.startsWith('1970-01-01'));
-    if (historicalLogs.length === 0) return { currentMediaStreak: 0, maxMediaStreak: 0, activeDays: 0, startDate: null, chartData: [] };
+    if (historicalLogs.length === 0 || !item) return { currentMediaStreak: 0, maxMediaStreak: 0, activeDays: 0, startDate: null, chartData: [] };
 
     const uniqueDates = Array.from(new Set(historicalLogs.map(l => format(new Date(l.timestamp), 'yyyy-MM-dd')))).sort();
     const startDate = uniqueDates[0];
@@ -88,6 +76,18 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
 
     return { currentMediaStreak: currentStreak, maxMediaStreak: max, activeDays: uniqueDates.length, startDate, chartData };
   }, [logs, item, settings]);
+
+  if (!isOpen || !item) return null;
+
+  const uniqueLocations = Array.from(new Set(logs.map(l => l.location).filter(Boolean))) as string[];
+  const filteredLocations = uniqueLocations.filter(loc => loc.toLowerCase().includes(editLogData.location.toLowerCase()) && loc !== editLogData.location);
+
+  const totalMasterPages = logs
+    .filter(l => !l.isHistoric && l.metricType !== 'statusChange')
+    .reduce((acc, log) => acc + calculateScaledDelta(log.delta, item, settings), 0);
+  
+  // Sort logs descending by timestamp
+  const sortedLogs = [...logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   const itemArtifacts = artifacts?.filter(a => a.mediaId === item.id) || [];
 
