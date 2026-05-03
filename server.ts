@@ -564,9 +564,12 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
     );
 
     CREATE TABLE IF NOT EXISTS ai_text_cache (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
+      key TEXT NOT NULL,
+      userId TEXT NOT NULL DEFAULT 'default_user',
+      value TEXT NOT NULL,
+      PRIMARY KEY (userId, key)
     );
+
 
     CREATE TABLE IF NOT EXISTS franchises (
       id TEXT PRIMARY KEY,
@@ -707,7 +710,27 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   try { db.prepare("ALTER TABLE media ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE logs ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE ai_recaps ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run(); } catch (e) {}
-  try { db.prepare("ALTER TABLE ai_text_cache ADD COLUMN userId TEXT NOT NULL DEFAULT 'default_user'").run(); } catch (e) {}
+  // --- Recreate ai_text_cache for correct PRIMARY KEY ---
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(ai_text_cache)").all() as any[];
+    const hasUserIdPk = tableInfo.some(c => c.name === 'userId' && c.pk > 0);
+    if (!hasUserIdPk) {
+      console.log("Migrating ai_text_cache schema for proper multi-user PK...");
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS ai_text_cache_new (
+          key TEXT NOT NULL,
+          userId TEXT NOT NULL DEFAULT 'default_user',
+          value TEXT NOT NULL,
+          PRIMARY KEY (userId, key)
+        )
+      `).run();
+      db.prepare(`INSERT OR IGNORE INTO ai_text_cache_new (key, userId, value) SELECT key, userId, value FROM ai_text_cache`).run();
+      db.prepare(`DROP TABLE ai_text_cache`).run();
+      db.prepare(`ALTER TABLE ai_text_cache_new RENAME TO ai_text_cache`).run();
+    }
+  } catch (e: any) {
+    console.error("Migration error for ai_text_cache:", e);
+  }
   try { db.prepare("ALTER TABLE settings ADD COLUMN questDifficulty REAL").run(); } catch (e) {} // old
   try { db.prepare("ALTER TABLE settings ADD COLUMN yearlyGoals TEXT").run(); console.log("Migration: Added yearlyGoals"); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptApiKey TEXT").run(); console.log("Migration: Added nanoGptApiKey"); } catch (e) {}
@@ -1730,7 +1753,9 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
 
   app.get("/api/ai-text", (req, res) => {
     try {
-      const rows = db.prepare('SELECT * FROM ai_text_cache').all();
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const rows = db.prepare('SELECT * FROM ai_text_cache WHERE userId = ?').all(userId);
       const map: Record<string, string> = {};
       rows.forEach((r: any) => map[r.key] = r.value);
       res.json(map);
@@ -1739,13 +1764,16 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
 
   app.post("/api/ai-text", (req, res) => {
     try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
       const payload = req.body;
       db.prepare(`
-        INSERT INTO ai_text_cache (key, value)
-        VALUES (@key, @value)
-        ON CONFLICT(key) DO UPDATE SET value=excluded.value
+        INSERT INTO ai_text_cache (key, userId, value)
+        VALUES (@key, @userId, @value)
+        ON CONFLICT(userId, key) DO UPDATE SET value=excluded.value
       `).run({
         key: payload.key,
+        userId: userId,
         value: payload.value
       });
       res.json({ success: true });
@@ -1754,11 +1782,13 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
 
   app.delete("/api/ai-text", (req, res) => {
     try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
       const key = req.query.key as string;
       if (key) {
-        db.prepare('DELETE FROM ai_text_cache WHERE key = ?').run(key);
+        db.prepare('DELETE FROM ai_text_cache WHERE userId = ? AND key = ?').run(userId, key);
       } else {
-        db.prepare('DELETE FROM ai_text_cache').run();
+        db.prepare('DELETE FROM ai_text_cache WHERE userId = ?').run(userId);
       }
       res.json({ success: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
