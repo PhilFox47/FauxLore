@@ -80,6 +80,7 @@ export interface RPGState {
   quests: Quest[];
   expBreakdown: {
     baseExp: number;
+    armoryExp: number;
     questExp: number;
     bossExp: number;
     decayExp: number;
@@ -110,7 +111,7 @@ export function mulberry32(a: number) {
 }
 
 
-export function calculateLogExp(delta: number, item: MediaItem, settings: any, equippedArtifacts: any[]): number {
+export function calculateLogExpBreakdown(delta: number, item: MediaItem, settings: any, equippedArtifacts: any[]): { base: number, armory: number } {
   let logExp = calculateScaledDelta(delta, item, settings);
   let multiplier = 1.0;
   equippedArtifacts.forEach((a: any) => {
@@ -137,7 +138,12 @@ export function calculateLogExp(delta: number, item: MediaItem, settings: any, e
       multiplier += itemBonusPct * durabilityRatio;
     }
   });
-  return logExp * multiplier;
+  return { base: logExp, armory: logExp * multiplier - logExp };
+}
+
+export function calculateLogExp(delta: number, item: MediaItem, settings: any, equippedArtifacts: any[]): number {
+  const { base, armory } = calculateLogExpBreakdown(delta, item, settings, equippedArtifacts);
+  return base + armory;
 }
 
 export function calculateRPGState(
@@ -156,6 +162,7 @@ export function calculateRPGState(
   
   // First we calculate the base EXP per log, applying artifacts per-log.
   let baseExp = 0;
+  let armoryExp = 0;
   const equipped = artifacts.filter((a: any) => a.isEquipped);
 
   validLogs.forEach(log => {
@@ -163,7 +170,9 @@ export function calculateRPGState(
     
     const item = media.find(m => m.id === log.mediaId);
     if (item) {
-      baseExp += calculateLogExp(log.delta, item, settings, equipped);
+      const { base, armory } = calculateLogExpBreakdown(log.delta, item, settings, equipped);
+      baseExp += base;
+      armoryExp += armory;
     }
   });
 
@@ -177,11 +186,11 @@ export function calculateRPGState(
   worldBosses.forEach(boss => {
     // level: 1(50exp), 2(100), 3(200), 4(400), 5(1000)
     let bExp = 0;
-    if (boss.level === 1) bExp = 50;
-    else if (boss.level === 2) bExp = 100;
-    else if (boss.level === 3) bExp = 200;
-    else if (boss.level === 4) bExp = 400;
-    else if (boss.level === 5) bExp = 1000;
+    if (boss.level === 1) bExp = 100;
+    else if (boss.level === 2) bExp = 200;
+    else if (boss.level === 3) bExp = 400;
+    else if (boss.level === 4) bExp = 800;
+    else if (boss.level === 5) bExp = 2000;
 
     if (boss.status === 'Defeated') {
       bossExp += bExp;
@@ -265,7 +274,7 @@ export function calculateRPGState(
     if (week === currentWeekInfo) quests.push(...tempQuests);
   }
 
-  const totalExp = Math.max(0, baseExp + questExp + bossExp + decayExp + penaltyExp);
+  const totalExp = Math.max(0, baseExp + armoryExp + questExp + bossExp + decayExp + penaltyExp);
   const level = getLevelForExp(totalExp);
   
   const currentLevelExp = getExpForLevel(level);
@@ -295,7 +304,7 @@ export function calculateRPGState(
     expProgress,
     className: prefix + classNames[classIdx],
     quests,
-    expBreakdown: { baseExp, questExp, bossExp, decayExp, penaltyExp }
+    expBreakdown: { baseExp, armoryExp, questExp, bossExp, decayExp, penaltyExp }
   };
 }
 

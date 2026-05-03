@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
+import { format, differenceInDays, parseISO, subDays } from 'date-fns';
 import { useMediaContext } from "../contexts/MediaContext";
 import { calculateRPGState } from "../lib/rpgSystem";
 import {
@@ -13,6 +14,7 @@ import {
   Sparkles,
   ShieldAlert,
   Target,
+  Calendar,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { calculateScaledPages } from "../lib/scaling";
@@ -41,11 +43,49 @@ export function Lorekeeper() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isRegeneratingTitle, setIsRegeneratingTitle] = useState(false);
   const [isSpawningBoss, setIsSpawningBoss] = useState(false);
+  const [dateRange, setDateRange] = useState<'7days' | '30days' | '90days' | '1year' | 'all' | 'custom'>('all');
+  const [customStartDate, setCustomStartDate] = useState(() => format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [customEndDate, setCustomEndDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
 
   const rpgState = useMemo(
     () => calculateRPGState(media, logs, settings, worldBosses, artifacts),
     [media, logs, settings, worldBosses, artifacts],
   );
+
+  const breakdownState = useMemo(() => {
+    if (dateRange === 'all') return rpgState;
+    const cutoffMap: Record<string, number | null> = { '7days': 7, '30days': 30, '90days': 90, '1year': 365, 'custom': null };
+    const cutoffDays = cutoffMap[dateRange];
+    const cutoffDate = cutoffDays ? subDays(new Date(), cutoffDays) : null;
+
+    const filteredLogs = logs.filter(log => {
+      if (log.isHistoric || log.timestamp.startsWith('1970-01-01')) return false;
+      const logDate = new Date(log.timestamp);
+      if (dateRange === 'custom') {
+        if (customStartDate && logDate < new Date(customStartDate)) return false;
+        if (customEndDate && logDate > new Date(customEndDate + 'T23:59:59')) return false;
+        return true;
+      }
+      return cutoffDate ? logDate >= cutoffDate : true;
+    });
+
+    const filteredBosses = worldBosses.filter(b => {
+      // For completed/failed bosses, check if updatedAt is within range
+      if (b.status !== 'Active') {
+         if (!b.updatedAt) return false;
+         const bDate = new Date(b.updatedAt);
+         if (dateRange === 'custom') {
+           if (customStartDate && bDate < new Date(customStartDate)) return false;
+           if (customEndDate && bDate > new Date(customEndDate + 'T23:59:59')) return false;
+           return true;
+         }
+         return cutoffDate ? bDate >= cutoffDate : true;
+      }
+      return false; // Active bosses don't grant exp until defeated/failed
+    });
+
+    return calculateRPGState(media, filteredLogs, settings, filteredBosses, artifacts);
+  }, [logs, media, settings, worldBosses, artifacts, rpgState, dateRange, customStartDate, customEndDate]);
 
   const weeklyQuests = rpgState.quests.filter((q) => q.type === "weekly");
   const monthlyQuests = rpgState.quests.filter((q) => q.type === "monthly");
@@ -540,50 +580,106 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
 
       {/* Breakdown Grid */}
       <section>
-        <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-          <Award className="w-5 h-5 text-zinc-400" />
-          Experience Breakdown
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+          <h3 className="text-xl font-bold text-white flex items-center gap-2">
+            <Award className="w-5 h-5 text-zinc-400" />
+            Experience Breakdown
+          </h3>
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
+            {dateRange === 'custom' && (
+              <div className="flex items-center gap-2 bg-[#18181b] border border-white/10 rounded-xl px-2 h-10 w-full sm:w-auto">
+                <input 
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="bg-transparent text-sm text-white focus:outline-none max-w-[120px]"
+                />
+                <span className="text-zinc-500 text-sm">to</span>
+                <input 
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="bg-transparent text-sm text-white focus:outline-none max-w-[120px]"
+                />
+              </div>
+            )}
+            <div className="flex items-center gap-2 bg-[#18181b] border border-white/10 rounded-xl px-2 h-10 w-full sm:w-auto">
+              <Calendar className="w-4 h-4 text-zinc-400" />
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value as any)}
+                className="bg-transparent text-sm text-white font-medium focus:outline-none pr-4 w-full"
+              >
+                <option value="7days">Last 7 Days</option>
+                <option value="30days">Last 30 Days</option>
+                <option value="90days">Last 90 Days</option>
+                <option value="1year">Last Year</option>
+                <option value="all">All Time</option>
+                <option value="custom">Custom Timeframe</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           <div className="bg-zinc-900/40 border border-white/5 p-5 rounded-2xl">
-            <div className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-2">
+            <div className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
               Base EXP
             </div>
             <div className="text-2xl font-black text-white">
-              +{Math.floor(rpgState.expBreakdown.baseExp).toLocaleString()}
+              +{Math.floor(breakdownState.expBreakdown.baseExp).toLocaleString()}
             </div>
             <div className="text-xs text-zinc-500 mt-1">From Master Pages</div>
           </div>
+          <div className="bg-zinc-900/40 border border-[#b8860b]/30 p-5 rounded-2xl">
+            <div className="text-[#b8860b] text-[10px] font-black uppercase tracking-[0.2em] mb-2">
+              Armory Bonus
+            </div>
+            <div className="text-2xl font-black text-[#b8860b]">
+              +{Math.floor(breakdownState.expBreakdown.armoryExp).toLocaleString()}
+            </div>
+            <div className="text-xs text-[#b8860b]/60 mt-1">From Artifacts</div>
+          </div>
           <div className="bg-zinc-900/40 border border-emerald-500/10 p-5 rounded-2xl">
-            <div className="text-emerald-500 text-xs font-bold uppercase tracking-wider mb-2">
+            <div className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
               Quest EXP
             </div>
             <div className="text-2xl font-black text-emerald-400">
-              +{Math.floor(rpgState.expBreakdown.questExp).toLocaleString()}
+              +{Math.floor(breakdownState.expBreakdown.questExp).toLocaleString()}
             </div>
-            <div className="text-xs text-zinc-500 mt-1">
+            <div className="text-xs text-emerald-500/60 mt-1">
               From completed quests
             </div>
           </div>
+          <div className="bg-zinc-900/40 border border-fuchsia-500/20 p-5 rounded-2xl">
+            <div className="text-fuchsia-500 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
+              Boss EXP
+            </div>
+            <div className="text-2xl font-black text-fuchsia-400">
+              +{Math.floor(breakdownState.expBreakdown.bossExp).toLocaleString()}
+            </div>
+            <div className="text-xs text-fuchsia-500/60 mt-1">
+              From Defeated Bosses
+            </div>
+          </div>
           <div className="bg-zinc-900/40 border border-red-500/10 p-5 rounded-2xl">
-            <div className="text-red-500 text-xs font-bold uppercase tracking-wider mb-2">
+            <div className="text-red-500 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
               Decay Penalty
             </div>
             <div className="text-2xl font-black text-red-400">
-              {Math.floor(rpgState.expBreakdown.decayExp).toLocaleString()}
+              {Math.floor(breakdownState.expBreakdown.decayExp).toLocaleString()}
             </div>
-            <div className="text-xs text-zinc-500 mt-1">
+            <div className="text-xs text-red-500/60 mt-1">
               Due to inactivity gaps
             </div>
           </div>
           <div className="bg-zinc-900/40 border border-orange-500/10 p-5 rounded-2xl">
-            <div className="text-orange-500 text-xs font-bold uppercase tracking-wider mb-2">
+            <div className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
               Drop Penalty
             </div>
             <div className="text-2xl font-black text-orange-400">
-              {Math.floor(rpgState.expBreakdown.penaltyExp).toLocaleString()}
+              {Math.floor(breakdownState.expBreakdown.penaltyExp).toLocaleString()}
             </div>
-            <div className="text-xs text-zinc-500 mt-1">From dropped media</div>
+            <div className="text-xs text-orange-500/60 mt-1">From dropped media</div>
           </div>
         </div>
       </section>
