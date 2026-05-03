@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
 import { useMediaContext } from '../contexts/MediaContext';
-import { X, Edit2, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield } from 'lucide-react';
+import { X, Edit2, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame } from 'lucide-react';
 import { calculateScaledDelta } from '../lib/scaling';
 import { cn } from '../lib/utils';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { generateAiArtifactWithGemini } from '../services/geminiService';
 import { v4 as uuidv4 } from 'uuid';
 import { Artifact, RARITY_COLORS } from '../types/schema';
 import { LootReveal } from './LootReveal';
 import { ForgingButton } from './ForgingButton';
+import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer, YAxis } from 'recharts';
 
 interface MediaDetailModalProps {
   isOpen: boolean;
@@ -45,6 +46,48 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   
   // Sort logs descending by timestamp
   const sortedLogs = [...logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  const { currentMediaStreak, maxMediaStreak, activeDays, startDate, chartData } = React.useMemo(() => {
+    const historicalLogs = logs.filter(l => !l.timestamp.startsWith('1970-01-01'));
+    if (historicalLogs.length === 0) return { currentMediaStreak: 0, maxMediaStreak: 0, activeDays: 0, startDate: null, chartData: [] };
+
+    const uniqueDates = Array.from(new Set(historicalLogs.map(l => format(new Date(l.timestamp), 'yyyy-MM-dd')))).sort();
+    const startDate = uniqueDates[0];
+    
+    let max = 1;
+    let curr = 1;
+
+    for (let i = 1; i < uniqueDates.length; i++) {
+        const d1 = new Date(uniqueDates[i - 1]);
+        const d2 = new Date(uniqueDates[i]);
+        if (differenceInDays(d2, d1) === 1) {
+            curr++;
+            if (curr > max) max = curr;
+        } else {
+            curr = 1;
+        }
+    }
+
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const lastDate = new Date(uniqueDates[uniqueDates.length - 1]);
+    const daysSinceLast = differenceInDays(new Date(todayStr), lastDate);
+    const currentStreak = daysSinceLast <= 1 ? curr : 0;
+
+    let cumulative = 0;
+    const dataByDate = new Map<string, number>();
+    historicalLogs.filter(l => l.metricType !== 'statusChange').forEach(l => {
+       const dateStr = format(new Date(l.timestamp), 'yyyy-MM-dd');
+       const pages = calculateScaledDelta(l.delta, item, settings);
+       dataByDate.set(dateStr, (dataByDate.get(dateStr) || 0) + pages);
+    });
+
+    const chartData = uniqueDates.map(date => {
+       cumulative += (dataByDate.get(date) || 0);
+       return { name: format(new Date(date), 'MMM d'), pages: Math.floor(cumulative) };
+    });
+
+    return { currentMediaStreak: currentStreak, maxMediaStreak: max, activeDays: uniqueDates.length, startDate, chartData };
+  }, [logs, item, settings]);
 
   const itemArtifacts = artifacts?.filter(a => a.mediaId === item.id) || [];
 
@@ -213,7 +256,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
         {/* Right Panel: Content */}
         <div className="w-full md:w-3/5 bg-[#121214] p-8 overflow-y-auto">
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div className="bg-zinc-800/50 p-4 rounded-2xl border border-white/5">
               <div className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
                 <Clock className="w-3 h-3" /> Logs
@@ -227,8 +270,8 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
               <div className="text-2xl font-black text-white flex items-center h-8">
                 {item.userRating ? (
                   <>
-                     {Array(Math.floor(item.userRating)).fill(0).map((_, i) => <Star key={`full-${i}`} className="w-5 h-5 fill-white text-white" />)}
-                     {item.userRating % 1 !== 0 && <StarHalf className="w-5 h-5 fill-white text-white" />}
+                     {Array(Math.floor(item.userRating)).fill(0).map((_, i) => <Star key={`full-${i}`} className="w-4 h-4 fill-white text-white" />)}
+                     {item.userRating % 1 !== 0 && <StarHalf className="w-4 h-4 fill-white text-white" />}
                   </>
                 ) : '-'}
               </div>
@@ -239,7 +282,56 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
               </div>
               <div className="text-2xl font-black text-white">{Math.floor(totalMasterPages)}</div>
             </div>
+            <div className="bg-orange-500/10 p-4 rounded-2xl border border-orange-500/20">
+              <div className="text-orange-500/80 text-xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
+                <Flame className="w-3 h-3 text-orange-500" /> Max Streak
+              </div>
+              <div className="text-2xl font-black text-orange-500 flex items-center gap-2">
+                {maxMediaStreak} <span className="text-xs text-orange-500/60 tracking-wider">DAYS</span>
+              </div>
+            </div>
           </div>
+
+          {(activeDays > 0 || startDate) && (
+             <div className="mb-8 grid grid-cols-2 gap-4">
+                <div className="bg-zinc-800/30 p-3 rounded-xl border border-white/5 flex items-center justify-between">
+                   <div className="text-xs text-zinc-500 font-bold uppercase tracking-wider">First Log</div>
+                   <div className="text-sm font-bold text-white">{startDate ? format(new Date(startDate), 'MMM d, yyyy') : '-'}</div>
+                </div>
+                <div className="bg-zinc-800/30 p-3 rounded-xl border border-white/5 flex items-center justify-between">
+                   <div className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Days Active</div>
+                   <div className="text-sm font-bold text-white">{activeDays} Days</div>
+                </div>
+             </div>
+          )}
+
+          {chartData.length > 1 && (
+            <div className="mb-8 p-6 bg-zinc-800/30 rounded-2xl border border-white/5">
+              <h3 className="text-sm font-bold text-zinc-500 mb-6 tracking-wider uppercase flex items-center gap-2">
+                <BookOpen className="w-4 h-4" /> Progression (Master Pages)
+              </h3>
+              <div className="h-[200px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorPages" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="name" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                      itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                      labelStyle={{ color: '#a1a1aa', fontSize: '10px', marginBottom: '4px' }}
+                    />
+                    <Area type="monotone" dataKey="pages" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorPages)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
 
           {item.description && (
             <div className="mb-8">

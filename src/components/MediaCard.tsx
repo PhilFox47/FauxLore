@@ -19,9 +19,12 @@ import {
   Star, 
   StarHalf, 
   RotateCcw,
-  Sparkles
+  Sparkles,
+  Flame
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useMediaContext } from '../contexts/MediaContext';
+import { calculateStreak } from '../lib/streak';
 
 interface MediaCardProps {
   key?: string | number;
@@ -32,6 +35,10 @@ interface MediaCardProps {
 }
 
 export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaCardProps) {
+  const { logs } = useMediaContext();
+  const mediaLogs = React.useMemo(() => logs.filter(l => l.mediaId === item.id), [logs, item.id]);
+  const currentStreak = React.useMemo(() => calculateStreak(mediaLogs), [mediaLogs]);
+
   const metricType = getMetricForType(item.mediaType);
   const colors = MEDIA_COLORS[item.mediaType];
 
@@ -136,8 +143,16 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
          {/* Floating Elements on Cover */}
          {/* Top Left: Status & Re-run */}
          <div className="absolute top-3 left-3 flex flex-col gap-2">
-            <div className="bg-black/80 backdrop-blur-md rounded-full w-8 h-8 flex items-center justify-center border border-white/10 shadow-lg" title={item.status}>
-              {getStatusIcon(item.status)}
+            <div className="flex items-center gap-1.5">
+              <div className="bg-black/80 backdrop-blur-md rounded-full w-8 h-8 flex items-center justify-center border border-white/10 shadow-lg" title={item.status}>
+                {getStatusIcon(item.status)}
+              </div>
+              {currentStreak > 0 && (
+                <div className="bg-orange-500/10 backdrop-blur-md border border-orange-500/20 px-2 py-1 rounded-lg flex items-center gap-1 shadow-lg" title={`${currentStreak} Day Streak`}>
+                  <Flame className="w-3.5 h-3.5 text-orange-400 fill-orange-500/20" />
+                  <span className="text-orange-500 font-black text-xs">{currentStreak}</span>
+                </div>
+              )}
             </div>
             {item.isReRun && (
               <div className="bg-black/80 backdrop-blur-md rounded-full w-8 h-8 flex items-center justify-center border border-white/10 shadow-lg" title="Re-Run">
