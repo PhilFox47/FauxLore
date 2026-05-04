@@ -263,6 +263,14 @@ export const DatabaseService = {
     await apiFetch(`/api/world-bosses/${id}/reroll`, { method: 'POST' });
   },
 
+  async generateBossImage(id: string): Promise<void> {
+    await apiFetch(`/api/world-bosses/${id}/generate-image`, { method: 'POST' });
+  },
+
+  async generateArtifactImage(id: string): Promise<void> {
+    await apiFetch(`/api/artifacts/${id}/generate-image`, { method: 'POST' });
+  },
+
   async getOracleMessages(): Promise<any[]> {
     try {
       const res = await apiFetch('/api/oracle');

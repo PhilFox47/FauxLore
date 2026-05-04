@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
-import { Gem, Copy, Sword, Shield, Footprints, Sparkles, Hammer, AlertCircle, CheckCircle2, RotateCw, Crown, Shirt, User } from 'lucide-react';
+import { Gem, Copy, Sword, Shield, Footprints, Sparkles, Hammer, AlertCircle, CheckCircle2, RotateCw, Crown, Shirt, User, ImageIcon } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { MEDIA_COLORS, Artifact, RARITY_COLORS } from '../types/schema';
 import { generateAiArtifactWithGemini } from '../services/geminiService';
@@ -14,7 +14,7 @@ type Slot = 'Head' | 'Body' | 'Legs' | 'Primary' | 'Secondary' | 'Accessory';
 const SLOTS: Slot[] = ['Head', 'Body', 'Legs', 'Primary', 'Secondary', 'Accessory'];
 
 export function Armory() {
-  const { artifacts, media, settings, equipArtifact, unequipArtifact, updateArtifact, saveArtifact, logs } = useMediaContext();
+  const { artifacts, media, settings, equipArtifact, unequipArtifact, updateArtifact, saveArtifact, generateArtifactImage, logs } = useMediaContext();
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const [selectedMediaForDetails, setSelectedMediaForDetails] = useState<any | null>(null);
   const [editingMedia, setEditingMedia] = useState<any | null>(null);
@@ -465,9 +465,31 @@ export function Armory() {
                     {artifact.rarity}
                  </span>
                </div>
+               <button
+                 onClick={async (e) => {
+                   e.stopPropagation();
+                   const btn = e.currentTarget;
+                   btn.disabled = true;
+                   const icon = btn.querySelector("svg");
+                   if (icon) icon.classList.add("animate-pulse", "text-emerald-500");
+                   await generateArtifactImage(artifact.id);
+                   btn.disabled = false;
+                   if (icon) icon.classList.remove("animate-pulse", "text-emerald-500");
+                 }}
+                 className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50 relative z-10"
+                 title="Regenerate Artifact Image"
+               >
+                 <ImageIcon className="w-4 h-4 text-zinc-500" />
+               </button>
             </div>
+            
+            {artifact.imageUrl && (
+              <div className="absolute top-0 right-0 w-32 h-32 opacity-20" style={{ maskImage: "linear-gradient(to left, black, transparent)", WebkitMaskImage: "linear-gradient(to left, black, transparent)" }}>
+                <img src={artifact.imageUrl} alt={artifact.name} crossOrigin="anonymous" className="w-full h-full object-cover rounded-bl-[4rem]" />
+              </div>
+            )}
                             
-                            <h3 className="text-lg font-black text-white mb-2 leading-tight">
+                            <h3 className="text-lg font-black text-white mb-2 leading-tight relative drop-shadow-md z-10">
                               {artifact.name}
                             </h3>
                             

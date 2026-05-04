@@ -34,6 +34,8 @@ interface MediaContextType {
   franchises: any[];
   saveFranchise: (franchise: any) => Promise<void>;
   rerollBoss: (id: string) => Promise<void>;
+  generateBossImage: (id: string) => Promise<void>;
+  generateArtifactImage: (id: string) => Promise<void>;
   spawnBoss: () => Promise<void>;
   isLoading: boolean;
 }
@@ -236,6 +238,16 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     await refreshData();
   }, [refreshData]);
 
+  const generateBossImage = useCallback(async (id: string) => {
+    await DatabaseService.generateBossImage(id);
+    await refreshData();
+  }, [refreshData]);
+
+  const generateArtifactImage = useCallback(async (id: string) => {
+    await DatabaseService.generateArtifactImage(id);
+    await refreshData();
+  }, [refreshData]);
+
   const spawnBoss = useCallback(async () => {
     await DatabaseService.spawnBoss();
     await refreshData();
@@ -267,7 +279,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [refreshData]);
 
   return (
-    <MediaContext.Provider value={{ media, logs, settings, aiRecaps, artifacts, worldBosses, oracleMessages, taxonomies, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, fetchOracleMessage, rerollBoss, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, saveFranchise, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, aiRecaps, artifacts, worldBosses, oracleMessages, taxonomies, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, fetchOracleMessage, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, saveFranchise, isLoading }}>
       {children}
     </MediaContext.Provider>
   );

@@ -294,6 +294,96 @@ async function startServer() {
     }
   }
 
+  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string): Promise<string> {
+    const res = await fetch("https://nano-gpt.com/api/v1/images/generations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "chroma",
+        prompt: prompt,
+        size: "1536x1536",
+        response_format: "url"
+      })
+    });
+    if (!res.ok) throw new Error("NanoGPT Image Generation Failed: " + await res.text());
+    const data = await res.json();
+    if (!data.data?.[0]?.url) throw new Error("NanoGPT did not return an image URL");
+    return data.data[0].url;
+  }
+
+  async function generateBossImageBackground(userId: string, bossId: string, bossName: string, mediaTitle: string, mediaType: string) {
+    try {
+      const sysSettings: any = db.prepare('SELECT geminiApiKey, nanoGptApiKey FROM system_settings WHERE id = \'system\'').get();
+      const userSettings: any = db.prepare('SELECT geminiApiKey, nanoGptApiKey FROM settings WHERE userId = ?').get(userId);
+      const geminiKey = userSettings?.geminiApiKey || sysSettings?.geminiApiKey || process.env.GEMINI_API_KEY;
+      const nanoGptKey = userSettings?.nanoGptApiKey || sysSettings?.nanoGptApiKey;
+      if (!geminiKey || !nanoGptKey) return;
+
+      const prompt = `You are an expert AI image prompt engineer. An RPG boss named "${bossName}" has been encountered for the media "${mediaTitle}" (Type: ${mediaType}).
+Create a highly detailed, descriptive image prompt for the Chroma model.
+It should describe the boss in a dark, epic RPG style, perfectly capturing the essence of the character/concept from ${mediaTitle}. Include details about lighting, pose, background, and art style.
+Return ONLY the raw prompt text, nothing else.`;
+
+      const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          tools: [{ googleSearch: {} }],
+          generationConfig: { temperature: 0.7 }
+        })
+      });
+
+      if (!aiRes.ok) throw new Error("Failed to generate boss prompt");
+      const data = await aiRes.json();
+      const imagePrompt = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (!imagePrompt) throw new Error("Empty boss prompt");
+
+      const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt);
+      db.prepare("UPDATE world_bosses SET imageUrl = ? WHERE id = ?").run(imageUrl, bossId);
+    } catch (e) {
+      console.error("Boss Image Background Gen Error:", e);
+    }
+  }
+
+  async function generateArtifactImageBackground(userId: string, artifactId: string, artifactName: string, artifactDesc: string, mediaTitle: string) {
+    try {
+      const sysSettings: any = db.prepare('SELECT geminiApiKey, nanoGptApiKey FROM system_settings WHERE id = \'system\'').get();
+      const userSettings: any = db.prepare('SELECT geminiApiKey, nanoGptApiKey FROM settings WHERE userId = ?').get(userId);
+      const geminiKey = userSettings?.geminiApiKey || sysSettings?.geminiApiKey || process.env.GEMINI_API_KEY;
+      const nanoGptKey = userSettings?.nanoGptApiKey || sysSettings?.nanoGptApiKey;
+      if (!geminiKey || !nanoGptKey) return;
+
+      const prompt = `You are an expert AI image prompt engineer. An RPG loot item (artifact) named "${artifactName}" with the description "${artifactDesc}" has been found. It originates from the media "${mediaTitle}".
+Create a highly detailed, descriptive image prompt for the Chroma model.
+The image should show the item floating gloriously in a dramatic, magical lighting setting, like a legendary item drop in an RPG menu. Focus on the materials, details, particle effects, and aura around the item.
+Return ONLY the raw prompt text, nothing else.`;
+
+      const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          tools: [{ googleSearch: {} }],
+          generationConfig: { temperature: 0.7 }
+        })
+      });
+
+      if (!aiRes.ok) throw new Error("Failed to generate artifact prompt");
+      const data = await aiRes.json();
+      const imagePrompt = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (!imagePrompt) throw new Error("Empty artifact prompt");
+
+      const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt);
+      db.prepare("UPDATE artifacts SET imageUrl = ? WHERE id = ?").run(imageUrl, artifactId);
+    } catch (e) {
+      console.error("Artifact Image Background Gen Error:", e);
+    }
+  }
+
   // World Boss Spawner
   async function spawnWorldBoss(userId: string, throwOnEmpty = false) {
     try {
@@ -403,10 +493,14 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       nextMonday.setDate(nextMonday.getDate() + ((1 + 7 - nextMonday.getDay()) % 7 || 7));
       nextMonday.setHours(0, 0, 0, 0);
 
+      const bossId = uuidv4();
       db.prepare(`
         INSERT INTO world_bosses (id, userId, mediaId, name, level, targetProgress, currentProgress, expiresAt, createdAt, updatedAt, unit)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(uuidv4(), userId, mediaItem.id, bossName, level, target, 0, nextMonday.toISOString(), new Date().toISOString(), new Date().toISOString(), unit);
+      `).run(bossId, userId, mediaItem.id, bossName, level, target, 0, nextMonday.toISOString(), new Date().toISOString(), new Date().toISOString(), unit);
+      
+      // Auto-generate image in background
+      generateBossImageBackground(userId, bossId, bossName, mediaItem.title, mediaItem.mediaType);
     } catch (e) { 
         console.error("Boss spawn failed", e); 
         if (throwOnEmpty) throw e;
@@ -602,6 +696,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       targetType TEXT,
       targetValue TEXT,
       bonusPercent INTEGER,
+      imageUrl TEXT,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
     );
 
@@ -618,6 +713,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       expiresAt TEXT NOT NULL,
       createdAt TEXT NOT NULL,
       updatedAt TEXT,
+      imageUrl TEXT,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
     );
 
@@ -851,6 +947,9 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   } catch (e) {
     console.error("Migration to user_version 1 failed:", e);
   }
+
+  try { db.prepare("ALTER TABLE artifacts ADD COLUMN imageUrl TEXT").run(); console.log("Migration: Added imageUrl to artifacts"); } catch (e) {}
+  try { db.prepare("ALTER TABLE world_bosses ADD COLUMN imageUrl TEXT").run(); console.log("Migration: Added imageUrl to world_bosses"); } catch (e) {}
 
   const safeJsonParse = (str: any) => {
     try {
@@ -1824,7 +1923,46 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         targetValue: artifact.targetValue || null,
         bonusPercent: artifact.bonusPercent || 0
       });
+      
+      const mediaItem = db.prepare('SELECT title FROM media WHERE id = ?').get(artifact.mediaId) as any;
+      if (mediaItem) {
+        generateArtifactImageBackground(userId, artifact.id, artifact.name, artifact.description, mediaItem.title);
+      }
+      
       res.json({ success: true, artifact });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/artifacts/:id/generate-image", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const artifactId = req.params.id;
+      const artifact = db.prepare('SELECT name, description, mediaId FROM artifacts WHERE id = ? AND userId = ?').get(artifactId, userId) as any;
+      if (!artifact) return res.status(404).json({ error: 'Not found' });
+      const mediaItem = db.prepare('SELECT title FROM media WHERE id = ?').get(artifact.mediaId) as any;
+      if (!mediaItem) return res.status(404).json({ error: 'Media not found' });
+      
+      // We don't await so the UI unblocks, it fetches later
+      generateArtifactImageBackground(userId, artifactId, artifact.name, artifact.description, mediaItem.title);
+      
+      res.json({ success: true, message: 'Image generation started in the background.' });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/world-bosses/:id/generate-image", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const bossId = req.params.id;
+      const boss = db.prepare('SELECT name, mediaId FROM world_bosses WHERE id = ? AND userId = ?').get(bossId, userId) as any;
+      if (!boss) return res.status(404).json({ error: 'Not found' });
+      const mediaItem = db.prepare('SELECT title, mediaType FROM media WHERE id = ?').get(boss.mediaId) as any;
+      if (!mediaItem) return res.status(404).json({ error: 'Media not found' });
+
+      generateBossImageBackground(userId, bossId, boss.name, mediaItem.title, mediaItem.mediaType);
+      
+      res.json({ success: true, message: 'Image generation started in the background.' });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 

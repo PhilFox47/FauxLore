@@ -210,6 +210,38 @@ export async function generateAiArtifact(apiKey: string, model: string, item: an
   }
 }
 
+export async function generateImage(apiKey: string, prompt: string): Promise<string> {
+  if (!apiKey) throw new Error("Nano-GPT API Key is missing.");
+
+  const res = await fetch("https://nano-gpt.com/api/v1/images/generations", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: "chroma",
+      prompt: prompt,
+      size: "1536x1536",
+      response_format: "url"
+    })
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error("NanoGPT Image error:", errorText);
+    throw new Error(`Nano-GPT Image Error: ${res.statusText}`);
+  }
+
+  const data = await res.json();
+  const imageUrl = data.data?.[0]?.url;
+  if (!imageUrl) {
+    throw new Error("Failed to extract image URL from NanoGPT response.");
+  }
+
+  return imageUrl;
+}
+
 export async function generateText(apiKey: string, model: string, systemPrompt: string, prompt: string) {
   if (!apiKey) throw new Error("Nano-GPT API Key is missing. Please configure it in Settings.");
 

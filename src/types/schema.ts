@@ -114,6 +114,7 @@ export interface Artifact {
   targetType?: string;
   targetValue?: string;
   bonusPercent?: number;
+  imageUrl?: string;
 }
 
 export interface WorldBoss {
@@ -129,6 +130,7 @@ export interface WorldBoss {
   expiresAt: string;
   createdAt: string;
   updatedAt?: string;
+  imageUrl?: string;
 }
 
 export interface OracleMessage {

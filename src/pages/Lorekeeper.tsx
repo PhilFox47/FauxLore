@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   Target,
   Calendar,
+  ImageIcon
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { calculateScaledPages } from "../lib/scaling";
@@ -38,6 +39,7 @@ export function Lorekeeper() {
     worldBosses,
     artifacts,
     rerollBoss,
+    generateBossImage,
     spawnBoss,
   } = useMediaContext();
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -504,7 +506,7 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                             : "bg-zinc-950/50 border-white/10",
                       )}
                     >
-                      <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center justify-between mb-4 relative z-10">
                         <span
                           className={cn(
                             "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded",
@@ -517,42 +519,59 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                         >
                           {boss.status}
                         </span>
-                        <span className="text-[10px] font-black text-zinc-600 uppercase">
+                        <span className="text-[10px] font-black text-zinc-600 uppercase bg-zinc-950/80 px-2 py-0.5 rounded">
                           Lv. {boss.level}
                         </span>
                       </div>
 
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <h4 className="text-lg font-black text-white">
+                      {boss.imageUrl && (
+                        <div className="absolute top-0 right-0 w-32 h-32 opacity-20" style={{ maskImage: "linear-gradient(to left, black, transparent)", WebkitMaskImage: "linear-gradient(to left, black, transparent)" }}>
+                          <img src={boss.imageUrl} alt={boss.name} crossOrigin="anonymous" className="w-full h-full object-cover rounded-bl-[4rem]" />
+                        </div>
+                      )}
+
+                      <div className="flex items-start justify-between gap-2 mb-1 relative z-10">
+                        <h4 className="text-lg font-black text-white drop-shadow-md">
                           {boss.name}
                         </h4>
-                        {boss.status === "Active" && (
-                          <button
-                            onClick={async (e) => {
-                              const btn = e.currentTarget;
-                              btn.disabled = true;
-                              const icon = btn.querySelector("svg");
-                              if (icon)
-                                icon.classList.add(
-                                  "animate-spin",
-                                  "text-amber-500",
-                                );
-                              await rerollBoss(boss.id);
-                              btn.disabled = false;
-                              if (icon)
-                                icon.classList.remove(
-                                  "animate-spin",
-                                  "text-amber-500",
-                                );
-                            }}
-                            className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
-                            title="Reroll Boss Name"
-                          >
-                            <RefreshCw className="w-4 h-4 text-zinc-500" />
-                          </button>
-                        )}
+                        <div className="flex gap-1 shrink-0">
+                          {boss.status === "Active" && (
+                            <>
+                              <button
+                                onClick={async (e) => {
+                                  const btn = e.currentTarget;
+                                  btn.disabled = true;
+                                  const icon = btn.querySelector("svg");
+                                  if (icon) icon.classList.add("animate-pulse", "text-emerald-500");
+                                  await generateBossImage(boss.id);
+                                  btn.disabled = false;
+                                  if (icon) icon.classList.remove("animate-pulse", "text-emerald-500");
+                                }}
+                                className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+                                title="Regenerate Boss Image"
+                              >
+                                <ImageIcon className="w-4 h-4 text-zinc-500" />
+                              </button>
+                              <button
+                                onClick={async (e) => {
+                                  const btn = e.currentTarget;
+                                  btn.disabled = true;
+                                  const icon = btn.querySelector("svg");
+                                  if (icon) icon.classList.add("animate-spin", "text-amber-500");
+                                  await rerollBoss(boss.id);
+                                  btn.disabled = false;
+                                  if (icon) icon.classList.remove("animate-spin", "text-amber-500");
+                                }}
+                                className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+                                title="Reroll Boss Name"
+                              >
+                                <RefreshCw className="w-4 h-4 text-zinc-500" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-xs text-zinc-500 mb-6 truncate italic">
+                      <p className="text-xs text-zinc-400/80 mb-6 truncate italic relative z-10">
                         Target: {mediaItem?.title || "Unknown"}
                       </p>
 
@@ -608,7 +627,7 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                           : "bg-red-500/5 border-red-500/20 opacity-60",
                       )}
                     >
-                      <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center justify-between mb-4 relative z-10">
                         <span
                           className={cn(
                             "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded",
@@ -619,17 +638,23 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                         >
                           {boss.status}
                         </span>
-                        <span className="text-[10px] font-black text-zinc-600 uppercase">
+                        <span className="text-[10px] font-black text-zinc-600 uppercase bg-zinc-950/80 px-2 py-0.5 rounded">
                           Lv. {boss.level}
                         </span>
                       </div>
 
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <h4 className="text-lg font-black text-white">
+                      {boss.imageUrl && (
+                        <div className="absolute top-0 right-0 w-32 h-32 opacity-20" style={{ maskImage: "linear-gradient(to left, black, transparent)", WebkitMaskImage: "linear-gradient(to left, black, transparent)" }}>
+                          <img src={boss.imageUrl} alt={boss.name} crossOrigin="anonymous" className="w-full h-full object-cover rounded-bl-[4rem]" />
+                        </div>
+                      )}
+
+                      <div className="flex items-start justify-between gap-2 mb-1 relative z-10">
+                        <h4 className="text-lg font-black text-white drop-shadow-md">
                           {boss.name}
                         </h4>
                       </div>
-                      <p className="text-xs text-zinc-500 mb-6 truncate italic">
+                      <p className="text-xs text-zinc-400/80 mb-6 truncate italic relative z-10">
                         Target: {mediaItem?.title || "Unknown"}
                       </p>
 
