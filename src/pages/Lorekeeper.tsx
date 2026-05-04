@@ -18,7 +18,7 @@ import {
   ImageIcon
 } from "lucide-react";
 import { cn } from "../lib/utils";
-import { calculateScaledPages } from "../lib/scaling";
+import { calculateScaledPages, calculateScaledDelta } from "../lib/scaling";
 import {
   generateText,
   getPersonaDescription,
@@ -133,7 +133,15 @@ export function Lorekeeper() {
     const top10 = recent.slice(0, 10);
     let totalTop10Mp = 0;
     const top10WithMp = top10.map((m) => {
-      const mp = Math.floor(calculateScaledPages(m, settings));
+      const nonHistoricLogs = logs.filter(l => l.mediaId === m.id && !l.isHistoric && !l.timestamp.startsWith('1970-01-01'));
+      
+      let mp = 0;
+      if (nonHistoricLogs.length > 0) {
+        mp = nonHistoricLogs.reduce((sum, log) => sum + Math.floor(calculateScaledDelta(log.delta, m, settings)), 0);
+      } else {
+        mp = 1; // Minimum baseline for having started it at all
+      }
+      
       totalTop10Mp += mp;
       return { ...m, mp };
     });
@@ -147,7 +155,7 @@ export function Lorekeeper() {
     const top10Str = top10WithMp
       .map(
         (m) =>
-          `"${m.title}" (${m.mediaType}, Genres: ${m.genres.join(", ")}, Master Pages: ${m.mp})`,
+          `"${m.title}" (${m.mediaType}, Genres: ${m.genres?.join(", ") || 'none'}, Tags: ${m.tags?.map(t => t.name).join(", ") || 'none'}, Master Pages: ${m.mp})`
       )
       .join(" | ");
     const restStr = recent
@@ -185,11 +193,13 @@ export function Lorekeeper() {
 Their recently active/completed media are provided below. Give the "Most Recent" items significantly more weight in determining their title. The user's time investment is represented by "Master Pages".
 ${franchiseRule}
 
-Media Context:
+Media Context (Analyze the Genres, Tags, and Media Types carefully!):
 ${recentMediaStr}
 
-Generate a creative, punchy, and surprising title for them combining their level prestige and media tastes.
-Example: "Novice Gamer of the Fantastic Things" or "Romantic Reader of the Fine Arts".
+Generate a truly creative, deeply thematic, and punchy RPG-style title for them. Combine their level prestige with their unique media tastes.
+If they consume horror media, evoke a spooky atmosphere. If sci-fi, make it sound futuristic. If diverse, blend the concepts creatively.
+Use the provided Genres and Tags to make the title feel personalized and cool (e.g. "Cyberpunk Architect", "Novice Spellslinger of the Cozy Arts", "Veteran Mecha Commander").
+
 NO extra comments, NO quotes, just the title. 2-6 words.`;
 
       const titleKey = `rpg_title_${rpgState.level}`;
@@ -237,11 +247,13 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
 Their recently active/completed media are provided below. Give the "Most Recent" items significantly more weight in determining their title. The user's time investment is represented by "Master Pages".
 ${franchiseRule}
 
-Media Context:
+Media Context (Analyze the Genres, Tags, and Media Types carefully!):
 ${recentMediaStr}
 
-Generate a creative, punchy, and surprising title for them combining their level prestige and media tastes.
-Example: "Novice Gamer of the Fantastic Things" or "Romantic Reader of the Fine Arts".
+Generate a truly creative, deeply thematic, and punchy RPG-style title for them. Combine their level prestige with their unique media tastes.
+If they consume horror media, evoke a spooky atmosphere. If sci-fi, make it sound futuristic. If diverse, blend the concepts creatively.
+Use the provided Genres and Tags to make the title feel personalized and cool (e.g. "Cyberpunk Architect", "Novice Spellslinger of the Cozy Arts", "Veteran Mecha Commander").
+
 NO extra comments, NO quotes, just the title. 2-6 words.`;
 
       const titleKey = `rpg_title_${rpgState.level}`;

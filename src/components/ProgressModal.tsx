@@ -120,7 +120,9 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
     // Convert YYYY-MM-DD + HH:mm input to full ISO timestamp
     let finalTimestamp = new Date().toISOString();
     
-    if (logDate) {
+    if (isHistorical) {
+      finalTimestamp = new Date('1970-01-01T00:00:00.000Z').toISOString();
+    } else if (logDate) {
       const selectedDate = new Date(logDate);
       if (logTime) {
         const [hours, minutes] = logTime.split(':').map(Number);

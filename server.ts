@@ -923,6 +923,14 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
     `).run();
   } catch(e) { console.error('Migration of artifacts failed:', e); }
 
+  // Auto-migrate historical log timestamps
+  try {
+    const historicalUpdateResult = db.prepare("UPDATE logs SET timestamp = '1970-01-01T00:00:00.000Z' WHERE isHistoric = 1 AND timestamp != '1970-01-01T00:00:00.000Z'").run();
+    if (historicalUpdateResult.changes > 0) {
+      console.log(`Migrated ${historicalUpdateResult.changes} historical logs to proper timestamp.`);
+    }
+  } catch(e) { console.error('Migration of historical log timestamps failed:', e); }
+
   // Seed Taxonomies if empty
   try {
     const genreCount = db.prepare('SELECT count(*) as count FROM global_taxonomy WHERE type = ?').get('genre') as { count: number };
