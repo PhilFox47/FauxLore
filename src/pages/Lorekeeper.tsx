@@ -18,12 +18,13 @@ import {
   Calendar,
   ImageIcon,
   Gamepad2,
-  BookOpen,
+  Book,
   Headphones,
-  Eye,
+  MessagesSquare,
   BookImage,
   Tv,
-  Clapperboard
+  Clapperboard,
+  Library
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { calculateScaledPages, calculateScaledDelta } from "../lib/scaling";
@@ -251,6 +252,8 @@ ${perMediaContexts}
 Generate a truly creative, deeply thematic, and punchy RPG-style title for each requested category. 
 - Main Title: Combine their overall prestige with their unique media tastes (e.g. "Cyberpunk Architect", "Novice Spellslinger of the Cozy Arts").
 - Per-Media Titles: Heavily theme it ONLY around that specific media type AND that specific media level context. A level 1 Gamer should sound like a beginner, a level 50 Gamer should sound like an epic master. Match the "epicness" to their level context (e.g. beginner, experienced, etc.).
+
+CRITICAL RULE: DO NOT include words like "Level", "Lvl", or the numerical level in the generated title itself. Just output the titular name.
 
 Respond EXCLUSIVELY in valid JSON format like this:
 {
@@ -565,13 +568,13 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                     <div className="flex items-start justify-between mb-2">
                        <div className="w-10 h-10 rounded-xl bg-black/40 border border-white/10 flex items-center justify-center shrink-0 shadow-inner" style={{ color: accent, boxShadow: `inset 0 0 10px ${accent}20` }}>
                           {mediaType === 'Game' && <Gamepad2 className="w-5 h-5" />}
-                          {mediaType === 'Book' && <BookOpen className="w-5 h-5" />}
+                          {mediaType === 'Book' && <Book className="w-5 h-5" />}
                           {mediaType === 'Audiobook' && <Headphones className="w-5 h-5" />}
-                          {mediaType === 'Visual Novel' && <Eye className="w-5 h-5" />}
-                          {mediaType === 'Manga' && <BookImage className="w-5 h-5" />}
+                          {mediaType === 'Visual Novel' && <MessagesSquare className="w-5 h-5" />}
+                          {mediaType === 'Manga' && <Library className="w-5 h-5" />}
                           {mediaType === 'Series' && <Tv className="w-5 h-5" />}
                           {mediaType === 'Movie' && <Clapperboard className="w-5 h-5" />}
-                          {mediaType === 'Comic' && <Sparkles className="w-5 h-5" />}
+                          {mediaType === 'Comic' && <BookImage className="w-5 h-5" />}
                        </div>
                        <div className="text-3xl font-black text-white italic pl-4">
                          <span className="text-[10px] font-bold text-zinc-500 not-italic mr-1 block text-right leading-none">LVL</span>

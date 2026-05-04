@@ -103,13 +103,13 @@ export function getExpForLevel(level: number): number {
 
 export function getLevelForMediaExp(exp: number): number {
   if (exp <= 0) return 1;
-  let level = Math.floor(Math.sqrt(exp / 500)) + 1;
+  let level = Math.floor(Math.sqrt(exp / 250)) + 1;
   return Math.min(level, 100);
 }
 
 export function getExpForMediaLevel(level: number): number {
   if (level <= 1) return 0;
-  return 500 * Math.pow(level - 1, 2);
+  return 250 * Math.pow(level - 1, 2);
 }
 
 // Seeded PRNG
@@ -324,14 +324,14 @@ export function calculateRPGState(
 
   const mediaLevels: Record<string, { level: number; exp: number; nextLevelExp: number; currentLevelExp: number; expProgress: number; title: string }> = {};
   const mediaTitles: Record<string, string> = {
-    'Game': 'Gamer',
-    'Book': 'Bibliophile',
-    'Audiobook': 'Audiophile',
-    'Visual Novel': 'Reader',
-    'Manga': 'Otaku',
-    'Series': 'Binge-Watcher',
-    'Movie': 'Cinephile',
-    'Comic': 'Comic Fan'
+    'Game': 'Novice Gamer',
+    'Book': 'Light Reader',
+    'Audiobook': 'New Listener',
+    'Visual Novel': 'Story Skimmer',
+    'Manga': 'Panel Browser',
+    'Series': 'Occasional Streamer',
+    'Movie': 'Moviegoer',
+    'Comic': 'Issue Flipper'
   };
 
   ALL_MEDIA_TYPES.forEach(t => {

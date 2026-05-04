@@ -6,8 +6,11 @@ import { MediaDetailModal } from '../components/MediaDetailModal';
 import { ProgressModal } from '../components/ProgressModal';
 import { FilterSortBar } from '../components/FilterSortBar';
 import { useMediaFilterSort } from '../hooks/useMediaFilterSort';
-import { MediaItem } from '../types/schema';
-import { Plus, Search, Flame, Award, Shield, Swords, Sparkles, Wand2, Clock, Target, AlertTriangle, RefreshCw } from 'lucide-react';
+import { MediaItem, MediaType, MEDIA_HEX, MEDIA_TYPES } from '../types/schema';
+import { 
+  Plus, Search, Flame, Award, Shield, Swords, Sparkles, Wand2, Clock, Target, AlertTriangle, RefreshCw,
+  Gamepad2, Book, Headphones, MessagesSquare, Library, Tv, Clapperboard, BookImage
+} from 'lucide-react';
 import { calculateStreak } from '../lib/streak';
 import { calculateRPGState } from '../lib/rpgSystem';
 import { format, parseISO } from 'date-fns';
@@ -90,7 +93,7 @@ export function Dashboard() {
              </div>
           </div>
 
-          <div className="relative z-10 w-full mb-8">
+          <div className="relative z-10 w-full mb-6">
              <h3 className="text-3xl sm:text-5xl font-black text-white italic tracking-tight font-display mb-2 drop-shadow-lg leading-tight">
                {getDynamicTitle()}
              </h3>
@@ -98,6 +101,36 @@ export function Dashboard() {
                <Sparkles className="w-4 h-4 text-orange-400/50" />
                {Math.floor(rpgState.currentExp).toLocaleString()} Total EXP
              </p>
+          </div>
+
+          <div className="grid grid-cols-4 lg:grid-cols-8 gap-2 mb-6 relative z-10 w-full">
+            {MEDIA_TYPES.map(mediaType => {
+              const data = rpgState.mediaLevels[mediaType] || { level: 1, expProgress: 0 };
+              const accent = MEDIA_HEX[mediaType]?.base || '#f97316';
+              return (
+                <div key={mediaType} className="bg-black/40 border border-white/5 rounded-lg p-2.5 flex flex-col items-center justify-center gap-2 shadow-inner group hover:bg-black/60 transition-colors relative overflow-hidden" title={`${mediaType} Level ${data.level}`}>
+                  <div className="flex items-center gap-1.5 z-10">
+                    <span style={{ color: accent, boxShadow: `0 0 10px ${accent}20` }} className="drop-shadow-md">
+                      {mediaType === 'Game' && <Gamepad2 className="w-4 h-4" />}
+                      {mediaType === 'Book' && <Book className="w-4 h-4" />}
+                      {mediaType === 'Audiobook' && <Headphones className="w-4 h-4" />}
+                      {mediaType === 'Visual Novel' && <MessagesSquare className="w-4 h-4" />}
+                      {mediaType === 'Manga' && <Library className="w-4 h-4" />}
+                      {mediaType === 'Series' && <Tv className="w-4 h-4" />}
+                      {mediaType === 'Movie' && <Clapperboard className="w-4 h-4" />}
+                      {mediaType === 'Comic' && <BookImage className="w-4 h-4" />}
+                    </span>
+                    <span className="text-sm font-black text-white italic">{data.level}</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-zinc-950/80 rounded-full overflow-hidden border border-white/5 z-10 relative">
+                    <div 
+                      className="absolute top-0 left-0 h-full rounded-full transition-all duration-1000"
+                      style={{ width: `${Math.max(2, data.expProgress * 100)}%`, backgroundColor: accent, boxShadow: `0 0 10px ${accent}80` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           <div className="mt-auto">
