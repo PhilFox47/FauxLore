@@ -1933,7 +1933,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/artifacts/:id/generate-image", (req, res) => {
+  app.post("/api/artifacts/:id/generate-image", async (req, res) => {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
@@ -1943,14 +1943,14 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       const mediaItem = db.prepare('SELECT title FROM media WHERE id = ?').get(artifact.mediaId) as any;
       if (!mediaItem) return res.status(404).json({ error: 'Media not found' });
       
-      // We don't await so the UI unblocks, it fetches later
-      generateArtifactImageBackground(userId, artifactId, artifact.name, artifact.description, mediaItem.title);
+      // Await so the UI blocks and shows the loading spinner
+      await generateArtifactImageBackground(userId, artifactId, artifact.name, artifact.description, mediaItem.title);
       
-      res.json({ success: true, message: 'Image generation started in the background.' });
+      res.json({ success: true, message: 'Image generation finished.' });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/world-bosses/:id/generate-image", (req, res) => {
+  app.post("/api/world-bosses/:id/generate-image", async (req, res) => {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
@@ -1960,9 +1960,9 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       const mediaItem = db.prepare('SELECT title, mediaType FROM media WHERE id = ?').get(boss.mediaId) as any;
       if (!mediaItem) return res.status(404).json({ error: 'Media not found' });
 
-      generateBossImageBackground(userId, bossId, boss.name, mediaItem.title, mediaItem.mediaType);
+      await generateBossImageBackground(userId, bossId, boss.name, mediaItem.title, mediaItem.mediaType);
       
-      res.json({ success: true, message: 'Image generation started in the background.' });
+      res.json({ success: true, message: 'Image generation finished.' });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 

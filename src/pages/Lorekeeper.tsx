@@ -524,56 +524,64 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                         </span>
                       </div>
 
-                      {boss.imageUrl && (
-                        <div className="absolute top-0 right-0 w-32 h-32 opacity-20" style={{ maskImage: "linear-gradient(to left, black, transparent)", WebkitMaskImage: "linear-gradient(to left, black, transparent)" }}>
-                          <img src={boss.imageUrl} alt={boss.name} crossOrigin="anonymous" className="w-full h-full object-cover rounded-bl-[4rem]" />
-                        </div>
-                      )}
-
-                      <div className="flex items-start justify-between gap-2 mb-1 relative z-10">
-                        <h4 className="text-lg font-black text-white drop-shadow-md">
-                          {boss.name}
-                        </h4>
-                        <div className="flex gap-1 shrink-0">
-                          {boss.status === "Active" && (
-                            <>
-                              <button
-                                onClick={async (e) => {
-                                  const btn = e.currentTarget;
-                                  btn.disabled = true;
-                                  const icon = btn.querySelector("svg");
-                                  if (icon) icon.classList.add("animate-pulse", "text-emerald-500");
-                                  await generateBossImage(boss.id);
-                                  btn.disabled = false;
-                                  if (icon) icon.classList.remove("animate-pulse", "text-emerald-500");
-                                }}
-                                className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
-                                title="Regenerate Boss Image"
-                              >
-                                <ImageIcon className="w-4 h-4 text-zinc-500" />
-                              </button>
-                              <button
-                                onClick={async (e) => {
-                                  const btn = e.currentTarget;
-                                  btn.disabled = true;
-                                  const icon = btn.querySelector("svg");
-                                  if (icon) icon.classList.add("animate-spin", "text-amber-500");
-                                  await rerollBoss(boss.id);
-                                  btn.disabled = false;
-                                  if (icon) icon.classList.remove("animate-spin", "text-amber-500");
-                                }}
-                                className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
-                                title="Reroll Boss Name"
-                              >
-                                <RefreshCw className="w-4 h-4 text-zinc-500" />
-                              </button>
-                            </>
-                          )}
+                      <div className="flex gap-4 mb-4 relative z-10">
+                        {boss.imageUrl && (
+                          <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg">
+                            <img src={boss.imageUrl} alt={boss.name} crossOrigin="anonymous" className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <h4 className="text-lg font-black text-white drop-shadow-md truncate">
+                              {boss.name}
+                            </h4>
+                            <div className="flex gap-1 shrink-0">
+                              {boss.status === "Active" && (
+                                <>
+                                  <button
+                                    onClick={async (e) => {
+                                      const btn = e.currentTarget;
+                                      btn.disabled = true;
+                                      const icon = btn.querySelector("svg");
+                                      if (icon) icon.classList.add("animate-pulse", "text-emerald-500");
+                                      try {
+                                        await generateBossImage(boss.id);
+                                      } catch (error) {
+                                        console.error("Image generation failed:", error);
+                                      } finally {
+                                        btn.disabled = false;
+                                        if (icon) icon.classList.remove("animate-pulse", "text-emerald-500");
+                                      }
+                                    }}
+                                    className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+                                    title="Regenerate Boss Image"
+                                  >
+                                    <ImageIcon className="w-4 h-4 text-zinc-500" />
+                                  </button>
+                                  <button
+                                    onClick={async (e) => {
+                                      const btn = e.currentTarget;
+                                      btn.disabled = true;
+                                      const icon = btn.querySelector("svg");
+                                      if (icon) icon.classList.add("animate-spin", "text-amber-500");
+                                      await rerollBoss(boss.id);
+                                      btn.disabled = false;
+                                      if (icon) icon.classList.remove("animate-spin", "text-amber-500");
+                                    }}
+                                    className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+                                    title="Reroll Boss Name"
+                                  >
+                                    <RefreshCw className="w-4 h-4 text-zinc-500" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-xs text-zinc-400/80 truncate italic">
+                            Target: {mediaItem?.title || "Unknown"}
+                          </p>
                         </div>
                       </div>
-                      <p className="text-xs text-zinc-400/80 mb-6 truncate italic relative z-10">
-                        Target: {mediaItem?.title || "Unknown"}
-                      </p>
 
                       <div className="space-y-2">
                         <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden border border-white/5">
@@ -643,20 +651,23 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                         </span>
                       </div>
 
-                      {boss.imageUrl && (
-                        <div className="absolute top-0 right-0 w-32 h-32 opacity-20" style={{ maskImage: "linear-gradient(to left, black, transparent)", WebkitMaskImage: "linear-gradient(to left, black, transparent)" }}>
-                          <img src={boss.imageUrl} alt={boss.name} crossOrigin="anonymous" className="w-full h-full object-cover rounded-bl-[4rem]" />
+                      <div className="flex gap-4 mb-4 relative z-10">
+                        {boss.imageUrl && (
+                          <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg">
+                            <img src={boss.imageUrl} alt={boss.name} crossOrigin="anonymous" className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <h4 className="text-lg font-black text-white drop-shadow-md truncate">
+                              {boss.name}
+                            </h4>
+                          </div>
+                          <p className="text-xs text-zinc-400/80 truncate italic">
+                            Target: {mediaItem?.title || "Unknown"}
+                          </p>
                         </div>
-                      )}
-
-                      <div className="flex items-start justify-between gap-2 mb-1 relative z-10">
-                        <h4 className="text-lg font-black text-white drop-shadow-md">
-                          {boss.name}
-                        </h4>
                       </div>
-                      <p className="text-xs text-zinc-400/80 mb-6 truncate italic relative z-10">
-                        Target: {mediaItem?.title || "Unknown"}
-                      </p>
 
                       <div className="space-y-2">
                         <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden border border-white/5">

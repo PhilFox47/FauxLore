@@ -237,7 +237,13 @@ export function Armory() {
                                <div className="mb-2 relative">
                                  {/* Glow effect */}
                                  <div className={cn("absolute inset-0 blur-xl opacity-40", RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text)}></div>
-                                 {renderSlotIcon(slot, cn("w-6 h-6 sm:w-8 sm:h-8 relative z-10 drop-shadow-lg", RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text))}
+                                 {item.imageUrl ? (
+                                    <div className="w-10 h-10 sm:w-12 sm:h-12 relative z-10 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 mx-auto">
+                                      <img src={item.imageUrl} alt={item.name} crossOrigin="anonymous" className="w-full h-full object-cover" />
+                                    </div>
+                                 ) : (
+                                    renderSlotIcon(slot, cn("w-6 h-6 sm:w-8 sm:h-8 relative z-10 drop-shadow-lg mx-auto", RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text))
+                                 )}
                                </div>
                                <div className="text-[9px] sm:text-[10px] font-black text-white text-center leading-tight truncate w-full px-1 font-display tracking-wide">{item.name}</div>
                                
@@ -450,54 +456,61 @@ export function Armory() {
           selectedArtifact?.id === artifact.id && "border-purple-500 ring-4 ring-purple-500/20"
         )}
       >
-         <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between mb-4">
-               <div className="flex items-center gap-2">
-                 <div className="text-zinc-500" title={artifact.slot}>
-                   {renderSlotIcon(artifact.slot || 'Accessory', "w-4 h-4")}
+         <div className="flex flex-col h-full relative z-10">
+            <div className="flex gap-4 mb-4">
+              {artifact.imageUrl && (
+                <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900">
+                  <img src={artifact.imageUrl} alt={artifact.name} crossOrigin="anonymous" className="w-full h-full object-cover" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                 <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="text-zinc-500" title={artifact.slot}>
+                        {renderSlotIcon(artifact.slot || 'Accessory', "w-4 h-4")}
+                      </div>
+                      <span className={cn(
+                         "text-[10px] uppercase tracking-widest font-black px-2 py-0.5 rounded border shadow-sm shrink-0",
+                         RARITY_COLORS[artifact.rarity]?.bg || RARITY_COLORS['Common'].bg,
+                         RARITY_COLORS[artifact.rarity]?.text || RARITY_COLORS['Common'].text,
+                         (RARITY_COLORS[artifact.rarity]?.border || RARITY_COLORS['Common'].border).replace('500', '500/30')
+                      )}>
+                         {artifact.rarity}
+                      </span>
+                    </div>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const btn = e.currentTarget;
+                        btn.disabled = true;
+                        const icon = btn.querySelector("svg");
+                        if (icon) icon.classList.add("animate-pulse", "text-emerald-500");
+                        try {
+                          await generateArtifactImage(artifact.id);
+                        } catch (error) {
+                          console.error("Image generation failed:", error);
+                        } finally {
+                          btn.disabled = false;
+                          if (icon) icon.classList.remove("animate-pulse", "text-emerald-500");
+                        }
+                      }}
+                      className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50 relative z-10 shrink-0"
+                      title="Regenerate Artifact Image"
+                    >
+                      <ImageIcon className="w-4 h-4 text-zinc-500" />
+                    </button>
                  </div>
-                 <span className={cn(
-                    "text-[10px] uppercase tracking-widest font-black px-2 py-0.5 rounded border shadow-sm",
-                    RARITY_COLORS[artifact.rarity]?.bg || RARITY_COLORS['Common'].bg,
-                    RARITY_COLORS[artifact.rarity]?.text || RARITY_COLORS['Common'].text,
-                    (RARITY_COLORS[artifact.rarity]?.border || RARITY_COLORS['Common'].border).replace('500', '500/30')
-                 )}>
-                    {artifact.rarity}
-                 </span>
-               </div>
-               <button
-                 onClick={async (e) => {
-                   e.stopPropagation();
-                   const btn = e.currentTarget;
-                   btn.disabled = true;
-                   const icon = btn.querySelector("svg");
-                   if (icon) icon.classList.add("animate-pulse", "text-emerald-500");
-                   await generateArtifactImage(artifact.id);
-                   btn.disabled = false;
-                   if (icon) icon.classList.remove("animate-pulse", "text-emerald-500");
-                 }}
-                 className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50 relative z-10"
-                 title="Regenerate Artifact Image"
-               >
-                 <ImageIcon className="w-4 h-4 text-zinc-500" />
-               </button>
-            </div>
-            
-            {artifact.imageUrl && (
-              <div className="absolute top-0 right-0 w-32 h-32 opacity-20" style={{ maskImage: "linear-gradient(to left, black, transparent)", WebkitMaskImage: "linear-gradient(to left, black, transparent)" }}>
-                <img src={artifact.imageUrl} alt={artifact.name} crossOrigin="anonymous" className="w-full h-full object-cover rounded-bl-[4rem]" />
+                 
+                 <h3 className="text-lg font-black text-white mb-1 leading-tight relative drop-shadow-md z-10 truncate" title={artifact.name}>
+                   {artifact.name}
+                 </h3>
+                 <p className="text-xs text-zinc-500 leading-relaxed italic line-clamp-2" title={artifact.description}>
+                   "{artifact.description}"
+                 </p>
               </div>
-            )}
-                            
-                            <h3 className="text-lg font-black text-white mb-2 leading-tight relative drop-shadow-md z-10">
-                              {artifact.name}
-                            </h3>
-                            
-                            <p className="text-xs text-zinc-500 leading-relaxed flex-1 mb-6 italic line-clamp-2">
-                              "{artifact.description}"
-                            </p>
+            </div>
 
-                            <div className="pt-4 border-t border-white/5 flex flex-col gap-3">
+            <div className="mt-auto pt-4 border-t border-white/5 flex flex-col gap-3">
                               <div className="flex items-center gap-1.5 w-full" title="Durability">
                                 <Hammer className="w-3 h-3 text-zinc-500 flex-shrink-0" />
                                 <div className="flex-1 h-1.5 bg-zinc-950 rounded-full overflow-hidden">
