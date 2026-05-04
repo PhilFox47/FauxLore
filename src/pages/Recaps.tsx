@@ -21,7 +21,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieCha
 type Timeframe = 'week' | 'month' | 'year';
 
 export function Recaps() {
-  const { media, logs, settings, aiRecaps, saveAiRecap, artifacts, worldBosses, isLoading } = useMediaContext();
+  const { media, logs, settings, aiRecaps, saveAiRecap, artifacts, worldBosses, isLoading, aiTextCache } = useMediaContext();
   const [timeframe, setTimeframe] = useState<Timeframe>('week');
   const [offsetOffset, setOffsetOffset] = useState(1); 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -256,6 +256,8 @@ export function Recaps() {
       const historyLogsAtStart = validLogs.filter(l => parseISO(l.timestamp).getTime() < currentInterval.start.getTime());
       const rpgStateAtStart = calculateRPGState(media, historyLogsAtStart, settings, [], [], new Date(currentInterval.start.getTime() - 1000));
 
+      const finalClassName = aiTextCache[`rpg_title_${rpgStateAtEnd.level}`] || rpgStateAtEnd.className;
+
       const levelUps = Math.max(0, rpgStateAtEnd.level - rpgStateAtStart.level);
       const activeQuests = rpgStateAtEnd.quests.filter(q => q.type.startsWith(timeframe));
       const completedQuests = activeQuests.filter(q => q.isCompleted);
@@ -286,7 +288,7 @@ Is First Ever Recap?: ${isFirstRecap ? "YES. Welcome the user to their first rec
 Mayor Gaps in Logging: ${maxGapDays >= 3 ? `Yes, max gap of ${Math.round(maxGapDays)} days without playing/reading.` : "No major gaps. Consistent!"}
 
 LOREKEEPER LEVELING:
-Current Level: ${rpgStateAtEnd.level} (${rpgStateAtEnd.className})
+Current Level: ${rpgStateAtEnd.level} (${finalClassName})
 Levels Gained this ${timeframe}: ${levelUps}
 Quests Completed this ${timeframe}: ${completedQuests.length > 0 ? completedQuests.map(q => `${q.title} - ${q.description}`).join(' | ') : 'None'}
 Missed Quests: ${missedQuests.length > 0 ? missedQuests.map(q => `${q.title} - ${q.description} (${q.currentAmount}/${q.targetAmount})`).join(' | ') : 'None'}
@@ -368,7 +370,7 @@ ${promptContext}`, settings.aiPersona);
           prevGenreDist,
           levelUps,
           rpgLevel: rpgStateAtEnd.level,
-          rpgClass: rpgStateAtEnd.className,
+          rpgClass: finalClassName,
           exp: rpgStateAtEnd.currentExp, 
           nextLevelExp: rpgStateAtEnd.nextLevelExp,
           aiRoast,
@@ -1145,6 +1147,8 @@ ${promptContext}`, settings.aiPersona);
      const completedQuests = activeQuests.filter(q => q.isCompleted);
      const missedQuests = activeQuests.filter(q => !q.isCompleted);
 
+     const finalRenderedClassName = currentRecap?.data?.rpgClass || aiTextCache[`rpg_title_${rpgStateAtEnd.level}`] || rpgStateAtEnd.className;
+
      return (
         <div className="bg-gradient-to-br from-indigo-900/40 to-black border border-indigo-500/20 p-6 rounded-3xl relative overflow-hidden">
            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-[50px] rounded-full pointer-events-none" />
@@ -1158,7 +1162,7 @@ ${promptContext}`, settings.aiPersona);
                  <span className="text-xl font-black text-white leading-none">{rpgStateAtEnd.level}</span>
               </div>
               <div>
-                 <div className="text-sm font-bold text-zinc-300">{rpgStateAtEnd.className}</div>
+                 <div className="text-sm font-bold text-zinc-300">{finalRenderedClassName}</div>
                  <div className="text-xs text-zinc-500">{Math.floor(rpgStateAtEnd.currentExp)} Total EXP</div>
               </div>
            </div>

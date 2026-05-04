@@ -47,6 +47,15 @@ export function Lorekeeper() {
   const [customStartDate, setCustomStartDate] = useState(() => format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [customEndDate, setCustomEndDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
 
+  const nowTime = new Date().getTime();
+  const currentWeekBosses = worldBosses.filter(b => new Date(b.expiresAt).getTime() > nowTime);
+  
+  const sevenDaysAgo = nowTime - 7 * 24 * 60 * 60 * 1000;
+  const lastWeekBosses = worldBosses.filter(b => {
+    const t = new Date(b.expiresAt).getTime();
+    return t <= nowTime && t > sevenDaysAgo;
+  });
+
   const rpgState = useMemo(
     () => calculateRPGState(media, logs, settings, worldBosses, artifacts),
     [media, logs, settings, worldBosses, artifacts],
@@ -470,110 +479,185 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {worldBosses.length === 0 ? (
-            <div className="col-span-full py-12 text-center text-zinc-600 font-bold uppercase tracking-widest text-sm">
-              No active boss encounters
-            </div>
-          ) : (
-            worldBosses.map((boss) => {
-              const mediaItem = media.find((m) => m.id === boss.mediaId);
-              const progress =
-                (boss.currentProgress / boss.targetProgress) * 100;
-              return (
-                <div
-                  key={boss.id}
-                  className={cn(
-                    "p-6 rounded-3xl border transition-all relative overflow-hidden group",
-                    boss.status === "Defeated"
-                      ? "bg-emerald-500/5 border-emerald-500/20"
-                      : boss.status === "Failed"
-                        ? "bg-red-500/5 border-red-500/20 opacity-60"
-                        : "bg-zinc-950/50 border-white/10",
-                  )}
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <span
+        <div className="space-y-12">
+          <div>
+            <h3 className="text-xl font-bold text-white mb-6 uppercase tracking-widest text-zinc-400">Current Week</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {currentWeekBosses.length === 0 ? (
+                <div className="col-span-full py-6 text-zinc-600 font-bold uppercase tracking-widest text-sm text-center border border-dashed border-white/10 rounded-2xl">
+                  No active boss encounters
+                </div>
+              ) : (
+                currentWeekBosses.map((boss) => {
+                  const mediaItem = media.find((m) => m.id === boss.mediaId);
+                  const progress =
+                    (boss.currentProgress / boss.targetProgress) * 100;
+                  return (
+                    <div
+                      key={boss.id}
                       className={cn(
-                        "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded",
+                        "p-6 rounded-3xl border transition-all relative overflow-hidden group",
                         boss.status === "Defeated"
-                          ? "bg-emerald-500/20 text-emerald-400"
+                          ? "bg-emerald-500/5 border-emerald-500/20"
                           : boss.status === "Failed"
-                            ? "bg-red-500/20 text-red-400"
-                            : "bg-zinc-500/20 text-zinc-400",
+                            ? "bg-red-500/5 border-red-500/20 opacity-60"
+                            : "bg-zinc-950/50 border-white/10",
                       )}
                     >
-                      {boss.status}
-                    </span>
-                    <span className="text-[10px] font-black text-zinc-600 uppercase">
-                      Lv. {boss.level}
-                    </span>
-                  </div>
+                      <div className="flex items-center justify-between mb-4">
+                        <span
+                          className={cn(
+                            "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded",
+                            boss.status === "Defeated"
+                              ? "bg-emerald-500/20 text-emerald-400"
+                              : boss.status === "Failed"
+                                ? "bg-red-500/20 text-red-400"
+                                : "bg-zinc-500/20 text-zinc-400",
+                          )}
+                        >
+                          {boss.status}
+                        </span>
+                        <span className="text-[10px] font-black text-zinc-600 uppercase">
+                          Lv. {boss.level}
+                        </span>
+                      </div>
 
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <h4 className="text-lg font-black text-white">
-                      {boss.name}
-                    </h4>
-                    {boss.status === "Active" && (
-                      <button
-                        onClick={async (e) => {
-                          const btn = e.currentTarget;
-                          btn.disabled = true;
-                          const icon = btn.querySelector("svg");
-                          if (icon)
-                            icon.classList.add(
-                              "animate-spin",
-                              "text-amber-500",
-                            );
-                          await rerollBoss(boss.id);
-                          btn.disabled = false;
-                          if (icon)
-                            icon.classList.remove(
-                              "animate-spin",
-                              "text-amber-500",
-                            );
-                        }}
-                        className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
-                        title="Reroll Boss Name"
-                      >
-                        <RefreshCw className="w-4 h-4 text-zinc-500" />
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-xs text-zinc-500 mb-6 truncate italic">
-                    Target: {mediaItem?.title || "Unknown"}
-                  </p>
-
-                  <div className="space-y-2">
-                    <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden border border-white/5">
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-all duration-700",
-                          boss.status === "Defeated"
-                            ? "bg-emerald-500"
-                            : "bg-red-500",
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h4 className="text-lg font-black text-white">
+                          {boss.name}
+                        </h4>
+                        {boss.status === "Active" && (
+                          <button
+                            onClick={async (e) => {
+                              const btn = e.currentTarget;
+                              btn.disabled = true;
+                              const icon = btn.querySelector("svg");
+                              if (icon)
+                                icon.classList.add(
+                                  "animate-spin",
+                                  "text-amber-500",
+                                );
+                              await rerollBoss(boss.id);
+                              btn.disabled = false;
+                              if (icon)
+                                icon.classList.remove(
+                                  "animate-spin",
+                                  "text-amber-500",
+                                );
+                            }}
+                            className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+                            title="Reroll Boss Name"
+                          >
+                            <RefreshCw className="w-4 h-4 text-zinc-500" />
+                          </button>
                         )}
-                        style={{ width: `${Math.max(4, progress)}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-[8px] font-black text-zinc-600 uppercase tracking-widest">
-                      <span>
-                        {Math.floor(boss.currentProgress)} /{" "}
-                        {boss.targetProgress} {boss.unit}
-                      </span>
-                      <span>{Math.floor(progress)}%</span>
-                    </div>
-                  </div>
+                      </div>
+                      <p className="text-xs text-zinc-500 mb-6 truncate italic">
+                        Target: {mediaItem?.title || "Unknown"}
+                      </p>
 
-                  {boss.status === "Active" && (
-                    <div className="mt-4 flex items-center gap-2 text-[9px] font-black text-amber-500 uppercase tracking-widest">
-                      <ShieldAlert className="w-3 h-3" />
-                      Expires {new Date(boss.expiresAt).toLocaleDateString()}
+                      <div className="space-y-2">
+                        <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden border border-white/5">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all duration-700",
+                              boss.status === "Defeated"
+                                ? "bg-emerald-500"
+                                : "bg-red-500",
+                            )}
+                            style={{ width: `${Math.max(4, progress)}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[8px] font-black text-zinc-600 uppercase tracking-widest">
+                          <span>
+                            {Math.floor(boss.currentProgress)} /{" "}
+                            {boss.targetProgress} {boss.unit}
+                          </span>
+                          <span>{Math.floor(progress)}%</span>
+                        </div>
+                      </div>
+
+                      {boss.status === "Active" && (
+                        <div className="mt-4 flex items-center gap-2 text-[9px] font-black text-amber-500 uppercase tracking-widest">
+                          <ShieldAlert className="w-3 h-3" />
+                          Expires {new Date(boss.expiresAt).toLocaleDateString()}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              );
-            })
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {lastWeekBosses.length > 0 && (
+            <div>
+              <h3 className="text-xl font-bold text-white mb-6 uppercase tracking-widest text-zinc-500">Last Week</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {lastWeekBosses.map((boss) => {
+                  const mediaItem = media.find((m) => m.id === boss.mediaId);
+                  const progress =
+                    (boss.currentProgress / boss.targetProgress) * 100;
+                  return (
+                    <div
+                      key={boss.id}
+                      className={cn(
+                        "p-6 rounded-3xl border transition-all relative overflow-hidden group hover:border-white/20",
+                        boss.status === "Defeated"
+                          ? "bg-emerald-500/5 border-emerald-500/20"
+                          : "bg-red-500/5 border-red-500/20 opacity-60",
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <span
+                          className={cn(
+                            "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded",
+                            boss.status === "Defeated"
+                              ? "bg-emerald-500/20 text-emerald-400"
+                              : "bg-red-500/20 text-red-400"
+                          )}
+                        >
+                          {boss.status}
+                        </span>
+                        <span className="text-[10px] font-black text-zinc-600 uppercase">
+                          Lv. {boss.level}
+                        </span>
+                      </div>
+
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h4 className="text-lg font-black text-white">
+                          {boss.name}
+                        </h4>
+                      </div>
+                      <p className="text-xs text-zinc-500 mb-6 truncate italic">
+                        Target: {mediaItem?.title || "Unknown"}
+                      </p>
+
+                      <div className="space-y-2">
+                        <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden border border-white/5">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all duration-700",
+                              boss.status === "Defeated"
+                                ? "bg-emerald-500"
+                                : "bg-red-500",
+                            )}
+                            style={{ width: `${Math.max(4, progress)}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[8px] font-black text-zinc-600 uppercase tracking-widest">
+                          <span>
+                            {Math.floor(boss.currentProgress)} /{" "}
+                            {boss.targetProgress} {boss.unit}
+                          </span>
+                          <span>{Math.floor(progress)}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </div>
       </section>
