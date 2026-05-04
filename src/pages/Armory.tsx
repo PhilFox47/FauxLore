@@ -24,6 +24,7 @@ export function Armory() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortType, setSortType] = useState<'Recent' | 'Rarity' | 'Durability'>('Recent');
   const [filterSlot, setFilterSlot] = useState<Slot | 'All'>('All');
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   const handleClaimLoot = async (item: any) => {
     setIsLootingMediaId(item.id);
@@ -238,8 +239,8 @@ export function Armory() {
                                  {/* Glow effect */}
                                  <div className={cn("absolute inset-0 blur-xl opacity-40", RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text)}></div>
                                  {item.imageUrl ? (
-                                    <div className="w-10 h-10 sm:w-12 sm:h-12 relative z-10 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 mx-auto">
-                                      <img src={item.imageUrl} alt={item.name} crossOrigin="anonymous" className="w-full h-full object-cover" />
+                                    <div className="w-10 h-10 sm:w-12 sm:h-12 relative z-10 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 mx-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); setExpandedImage(item.imageUrl || null); }}>
+                                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
                                     </div>
                                  ) : (
                                     renderSlotIcon(slot, cn("w-6 h-6 sm:w-8 sm:h-8 relative z-10 drop-shadow-lg mx-auto", RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text))
@@ -459,8 +460,8 @@ export function Armory() {
          <div className="flex flex-col h-full relative z-10">
             <div className="flex gap-4 mb-4">
               {artifact.imageUrl && (
-                <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900">
-                  <img src={artifact.imageUrl} alt={artifact.name} crossOrigin="anonymous" className="w-full h-full object-cover" />
+                <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 cursor-pointer" onClick={(e) => { e.stopPropagation(); setExpandedImage(artifact.imageUrl || null); }}>
+                  <img src={artifact.imageUrl} alt={artifact.name} className="w-full h-full object-cover" />
                 </div>
               )}
               <div className="flex-1 min-w-0">
@@ -564,6 +565,20 @@ export function Armory() {
         artifact={lootedArtifact} 
         onClose={() => setLootedArtifact(null)} 
       />
+
+      {expandedImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" onClick={() => setExpandedImage(null)}>
+          <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center">
+            <img src={expandedImage} alt="Expanded Artifact" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" />
+            <button
+              onClick={() => setExpandedImage(null)}
+              className="absolute top-4 right-4 bg-black/50 hover:bg-black/80 text-white w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

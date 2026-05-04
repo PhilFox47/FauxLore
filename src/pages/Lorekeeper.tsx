@@ -48,6 +48,7 @@ export function Lorekeeper() {
   const [dateRange, setDateRange] = useState<'7days' | '30days' | '90days' | '1year' | 'all' | 'custom'>('all');
   const [customStartDate, setCustomStartDate] = useState(() => format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [customEndDate, setCustomEndDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   const nowTime = new Date().getTime();
   const currentWeekBosses = worldBosses.filter(b => new Date(b.expiresAt).getTime() > nowTime);
@@ -526,13 +527,13 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
 
                       <div className="flex gap-4 mb-4 relative z-10">
                         {boss.imageUrl && (
-                          <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg">
-                            <img src={boss.imageUrl} alt={boss.name} crossOrigin="anonymous" className="w-full h-full object-cover" />
+                          <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg cursor-pointer" onClick={(e) => { e.stopPropagation(); setExpandedImage(boss.imageUrl || null); }}>
+                            <img src={boss.imageUrl} alt={boss.name} className="w-full h-full object-cover" />
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
-                            <h4 className="text-lg font-black text-white drop-shadow-md truncate">
+                            <h4 className="text-lg font-black text-white drop-shadow-md break-words">
                               {boss.name}
                             </h4>
                             <div className="flex gap-1 shrink-0">
@@ -653,13 +654,13 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
 
                       <div className="flex gap-4 mb-4 relative z-10">
                         {boss.imageUrl && (
-                          <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg">
-                            <img src={boss.imageUrl} alt={boss.name} crossOrigin="anonymous" className="w-full h-full object-cover" />
+                          <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg cursor-pointer" onClick={(e) => { e.stopPropagation(); setExpandedImage(boss.imageUrl || null); }}>
+                            <img src={boss.imageUrl} alt={boss.name} className="w-full h-full object-cover" />
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
-                            <h4 className="text-lg font-black text-white drop-shadow-md truncate">
+                            <h4 className="text-lg font-black text-white drop-shadow-md break-words">
                               {boss.name}
                             </h4>
                           </div>
@@ -857,6 +858,20 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
           </div>
         </div>
       </section>
+
+      {expandedImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" onClick={() => setExpandedImage(null)}>
+          <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center">
+            <img src={expandedImage} alt="Expanded Boss" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" />
+            <button
+              onClick={() => setExpandedImage(null)}
+              className="absolute top-4 right-4 bg-black/50 hover:bg-black/80 text-white w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
