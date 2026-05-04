@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Artifact, RARITY_COLORS } from '../types/schema';
 import { Sparkles, Gem, X, Crown, Shirt, Footprints, Sword, Shield } from 'lucide-react';
+import { playLootSound } from '../lib/sounds';
 
 const renderSlotIcon = (slot: string, className: string) => {
   switch(slot) {
@@ -34,13 +35,19 @@ export function LootReveal({ artifact, onClose }: LootRevealProps) {
     if (artifact) {
       if (artifact.rarity === 'Mythic' || artifact.rarity === 'Legendary') {
          setShake(true);
+         playLootSound(artifact.rarity, 'buildup');
          const s = setTimeout(() => {
             setShake(false);
             setShowDetails(true);
+            playLootSound(artifact.rarity, 'reveal');
          }, 2500); // longer buildup for legendary/mythic
          return () => clearTimeout(s);
       } else {
-         const t = setTimeout(() => setShowDetails(true), 1500);
+         playLootSound(artifact.rarity, 'buildup');
+         const t = setTimeout(() => {
+           setShowDetails(true);
+           playLootSound(artifact.rarity, 'reveal');
+         }, 1500);
          return () => clearTimeout(t);
       }
     } else {

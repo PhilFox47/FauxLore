@@ -155,7 +155,7 @@ export function Lorekeeper() {
     const top10Str = top10WithMp
       .map(
         (m) =>
-          `"${m.title}" (${m.mediaType}, Genres: ${m.genres?.join(", ") || 'none'}, Tags: ${m.tags?.map(t => t.name).join(", ") || 'none'}, Master Pages: ${m.mp})`
+          `"${m.title}" (${m.mediaType}, Genres: ${m.genres?.join(", ") || 'none'}, Tags: ${m.tags?.join(", ") || 'none'}, Master Pages: ${m.mp})`
       )
       .join(" | ");
     const restStr = recent

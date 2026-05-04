@@ -7,6 +7,7 @@ import { cn } from '../lib/utils';
 import { format, differenceInDays } from 'date-fns';
 import { generateAiArtifactWithGemini } from '../services/geminiService';
 import { v4 as uuidv4 } from 'uuid';
+import { DatabaseService } from '../services/db';
 import { Artifact, RARITY_COLORS } from '../types/schema';
 import { LootReveal } from './LootReveal';
 import { ForgingButton } from './ForgingButton';
@@ -21,10 +22,11 @@ interface MediaDetailModalProps {
 }
 
 export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaDetailModalProps) {
-  const { settings, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem } = useMediaContext();
+  const { settings, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem, generateArtifactImage } = useMediaContext();
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [deleteConfirmLogId, setDeleteConfirmLogId] = useState<string | null>(null);
   const [isLooting, setIsLooting] = useState(false);
+  const [pendingLootId, setPendingLootId] = useState<string | null>(null);
   const [lootedArtifact, setLootedArtifact] = useState<Artifact | null>(null);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [editLogData, setEditLogData] = useState<{
@@ -89,7 +91,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   // Sort logs descending by timestamp
   const sortedLogs = [...logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-  const itemArtifacts = artifacts?.filter(a => a.mediaId === item.id) || [];
+  const itemArtifacts = artifacts?.filter(a => a.mediaId === item.id && a.id !== pendingLootId && a.id !== lootedArtifact?.id) || [];
 
   const handleClaimLoot = async () => {
     setIsLooting(true);
@@ -111,13 +113,25 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
         maxDurability: 100,
         isEquipped: false
       };
+      
+      setPendingLootId(newArtifact.id);
       await saveArtifact(newArtifact);
-      setLootedArtifact(newArtifact);
+      
+      try {
+        await generateArtifactImage(newArtifact.id);
+        const loadedArtifacts = await DatabaseService.getArtifacts();
+        const updatedArtifact = loadedArtifacts.find(a => a.id === newArtifact.id) || newArtifact;
+        setLootedArtifact(updatedArtifact);
+      } catch (e) {
+        console.error("Failed to generate and load image for artifact", e);
+        setLootedArtifact(newArtifact);
+      }
     } catch(e: any) {
       console.error("Failed to loot: " + e.message);
       alert("Failed to loot: " + e.message + "\n\nNote: Ensure your Gemini API Key is set in AI Studio Secrets.");
     } finally {
       setIsLooting(false);
+      setPendingLootId(null);
     }
   };
 

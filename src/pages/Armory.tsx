@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
-import { Gem, Copy, Sword, Shield, Footprints, Sparkles, Hammer, AlertCircle, CheckCircle2, RotateCw, Crown, Shirt, User, ImageIcon } from 'lucide-react';
+import { Gem, Copy, Sword, Shield, Footprints, Sparkles, Hammer, AlertCircle, CheckCircle2, RotateCw, Crown, Shirt, User, ImageIcon, Flame } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { MEDIA_COLORS, Artifact, RARITY_COLORS } from '../types/schema';
 import { generateAiArtifactWithGemini } from '../services/geminiService';
@@ -21,6 +21,7 @@ export function Armory() {
   const [editingMedia, setEditingMedia] = useState<any | null>(null);
   const [isMigrating, setIsMigrating] = useState(false);
   const [isLootingMediaId, setIsLootingMediaId] = useState<string | null>(null);
+  const [pendingLootId, setPendingLootId] = useState<string | null>(null);
   const [lootedArtifact, setLootedArtifact] = useState<Artifact | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortType, setSortType] = useState<'Recent' | 'Rarity' | 'Durability'>('Recent');
@@ -47,6 +48,8 @@ export function Armory() {
         maxDurability: 100,
         isEquipped: false
       };
+      
+      setPendingLootId(newArtifact.id);
       await saveArtifact(newArtifact);
       
       try {
@@ -63,6 +66,7 @@ export function Armory() {
       alert("Failed to loot: " + e.message + "\n\nNote: Ensure your Gemini API Key is set in AI Studio Secrets.");
     } finally {
       setIsLootingMediaId(null);
+      setPendingLootId(null);
     }
   };
 
@@ -121,6 +125,7 @@ export function Armory() {
 
   const filteredAndSortedInventory = [...inventory]
     .filter(a => {
+      if (a.id === pendingLootId || a.id === lootedArtifact?.id) return false;
       if (filterSlot !== 'All' && a.slot !== filterSlot) return false;
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
@@ -303,20 +308,21 @@ export function Armory() {
                            title={`Identify loot from ${item.title}`}
                          >
                             <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl"></div>
-                            {isLootingMediaId === item.id ? (
+                             {isLootingMediaId === item.id ? (
                                <div className="relative mb-2 flex items-center justify-center">
                                   <div className="absolute inset-0 bg-indigo-500/30 blur-xl animate-pulse rounded-full"></div>
                                   <Hammer className="w-8 h-8 text-indigo-400 relative z-10 animate-bounce" />
                                   <Sparkles className="absolute -top-1 -right-1 w-4 h-4 text-indigo-300 animate-spin z-20 opacity-75" />
+                                  <Flame className="absolute -bottom-1 -left-1 w-4 h-4 text-amber-500/80 animate-pulse z-20" />
                                </div>
                             ) : (
                                <Gem className="w-8 h-8 text-indigo-500 opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-transform duration-300 drop-shadow-[0_0_8px_rgba(99,102,241,0.5)] mb-2" />
                             )}
                             <div className={cn(
-                               "text-[8px] font-black uppercase text-zinc-500 group-hover:text-indigo-300 truncate w-full text-center tracking-widest px-1 font-display",
-                               isLootingMediaId === item.id && "text-indigo-400 animate-pulse drop-shadow-[0_0_5px_rgba(99,102,241,0.5)]"
+                               "text-[8px] font-black uppercase text-zinc-500 group-hover:text-indigo-300 truncate w-full text-center tracking-widest px-1 font-display transition-all duration-300",
+                               isLootingMediaId === item.id && "text-indigo-300 font-bold scale-110 drop-shadow-[0_0_5px_rgba(99,102,241,0.5)] bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 via-purple-300 to-indigo-300 animate-pulse"
                             )}>
-                               {isLootingMediaId === item.id ? "Forging..." : item.title}
+                               {isLootingMediaId === item.id ? "Forging Relic..." : item.title}
                             </div>
                          </button>
                        ))}
