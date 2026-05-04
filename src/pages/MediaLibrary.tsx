@@ -9,6 +9,7 @@ import { FilterSortBar } from '../components/FilterSortBar';
 import { useMediaFilterSort } from '../hooks/useMediaFilterSort';
 import { MediaItem, MediaType, MEDIA_HEX, getMetricForType } from '../types/schema';
 import { NATIVE_UNIT_LABELS, calculateRPGState } from '../lib/rpgSystem';
+import { getRandomFlavorText } from '../lib/flavorTexts';
 import { Plus, Search, CheckCircle2, TrendingUp, Pickaxe } from 'lucide-react';
 
 export function MediaLibrary() {
@@ -34,6 +35,7 @@ export function MediaLibrary() {
   const rpgState = useMemo(() => calculateRPGState(media, logs, settings, worldBosses, artifacts), [media, logs, settings, worldBosses, artifacts]);
   const vaultLevel = rpgState.mediaLevels[decodedMediaType] || { level: 1, exp: 0, nextLevelExp: 100, currentLevelExp: 0, expProgress: 0, title: 'Novice' };
   const vaultTitle = aiTextCache[`rpg_title_${decodedMediaType}_${vaultLevel.level}`] || vaultLevel.title;
+  const flavorText = useMemo(() => getRandomFlavorText(decodedMediaType), [decodedMediaType]);
   
   const totalAccumulated = useMemo(() => {
     const metric = getMetricForType(decodedMediaType);
@@ -97,7 +99,7 @@ export function MediaLibrary() {
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 font-display">The Vault</span>
             </div>
             <h2 className="text-4xl sm:text-5xl font-black text-white font-display tracking-tight leading-none mb-2">{decodedMediaType}s</h2>
-            <p className="text-zinc-400 font-medium italic">Your entire history, collection, and backlog.</p>
+            <p className="text-zinc-400 font-medium italic">{flavorText}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-6 sm:gap-10 mt-2 lg:mt-0 pt-6 lg:pt-0 border-t lg:border-t-0 border-white/5 shrink-0">
