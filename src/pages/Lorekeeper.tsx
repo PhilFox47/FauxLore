@@ -273,15 +273,26 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
       await saveAiText(titleKey, titleRes);
 
       // 2. Quests
+      const generatedQuestTitles: string[] = [];
+      const generatedQuestDescs: string[] = [];
+
       for (const quest of rpgState.quests) {
         // Title
         const qTitleKey = `quest_title_${quest.id}`;
-        const tPrompt = `Rewrite this Quest Title to sound natural, conversational and motivating. DON'T use RPG tropes like 'Saga', 'Undying', 'Eternal', 'Valor'. Keep it simple and human. Original: "${quest.title}". Give ONLY the title.`;
+        let existingTitlesRule = "";
+        if (generatedQuestTitles.length > 0) {
+          existingTitlesRule = `\nCRITICAL RULE: Do NOT use titles similar to these already generated titles: ${generatedQuestTitles.map(d => '"' + d + '"').join(", ")}.`;
+        }
+        const tPrompt = `Rewrite this Quest Title to sound natural, conversational and motivating. DON'T use RPG tropes like 'Saga', 'Undying', 'Eternal', 'Valor'. Keep it simple and human. Original: "${quest.title}".${existingTitlesRule} Give ONLY the title.`;
         let qTitleRes = "";
 
         // Description
         const qDescKey = `quest_desc_${quest.id}`;
-        const dPrompt = `Rewrite this Quest Description to sound natural and friendly, like a helpful friend encouraging you to read or play. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Limit the response to 1-2 short sentences. CRITICAL: You MUST explicitly include clear instructions on what needs to be done based on the original description! Example: 'Time to read some good books! Read at least 100 pages this week.' Original: "${quest.description}". Give ONLY the description.`;
+        let existingDescsRule = "";
+        if (generatedQuestDescs.length > 0) {
+          existingDescsRule = `\nCRITICAL RULE: Do NOT start with or use phrases similar to the already generated descriptions. Vary your sentence structure! Previously generated descriptions:\n${generatedQuestDescs.map(d => '- "' + d + '"').join("\n")}.`;
+        }
+        const dPrompt = `Rewrite this Quest Description to sound natural and friendly, like a helpful friend encouraging you to read or play. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Limit the response to 1-2 short sentences. CRITICAL: You MUST explicitly include clear instructions on what needs to be done based on the original description! Example: 'Time to read some good books! Read at least 100 pages this week.'${existingDescsRule} Original: "${quest.description}". Give ONLY the description.`;
         let qDescRes = "";
 
         if (settings.nanoGptApiKey) {
@@ -304,6 +315,9 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
 
         await saveAiText(qTitleKey, qTitleRes);
         await saveAiText(qDescKey, qDescRes);
+        
+        generatedQuestTitles.push(qTitleRes);
+        generatedQuestDescs.push(qDescRes);
       }
 
       await refreshData();
@@ -841,6 +855,7 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                 quest={q}
                 onReroll={(e) => handleRerollQuest(e, q.id, "weekly")}
                 isRerolling={rerollingQuestId === q.id}
+                allQuests={rpgState.quests}
               />
             ))}
           </div>
@@ -858,6 +873,7 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                 quest={q}
                 onReroll={(e) => handleRerollQuest(e, q.id, "monthly")}
                 isRerolling={rerollingQuestId === q.id}
+                allQuests={rpgState.quests}
               />
             ))}
           </div>
@@ -870,7 +886,7 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
           </h4>
           <div className="grid md:grid-cols-2 gap-4">
             {yearlyQuests.map((q, i) => (
-              <QuestCard key={i} quest={q} />
+              <QuestCard key={i} quest={q} allQuests={rpgState.quests} />
             ))}
           </div>
         </div>
@@ -897,10 +913,12 @@ function QuestCard({
   quest,
   onReroll,
   isRerolling,
+  allQuests,
 }: {
   quest: any;
   onReroll?: (e: React.MouseEvent) => void;
   isRerolling?: boolean;
+  allQuests?: any[];
 }) {
   const { aiTextCache, saveAiText, settings, refreshData } = useMediaContext();
   const percentage = Math.min(
@@ -931,9 +949,22 @@ function QuestCard({
       (async () => {
         try {
           const systemPrompt = getPersonaDescription(settings?.aiPersona) + FAUXLORE_CONTEXT;
+          
+          let existingTitlesRule = "";
+          let existingDescsRule = "";
+          if (allQuests) {
+            const skipTitleList = allQuests.map(q => aiTextCache[`quest_title_${q.id}`]).filter(Boolean);
+            const skipDescList = allQuests.map(q => aiTextCache[`quest_desc_${q.id}`]).filter(Boolean);
+            if (skipTitleList.length > 0) {
+              existingTitlesRule = `\nCRITICAL RULE: Do NOT use titles similar to these already generated titles: ${skipTitleList.map(t => '"' + t + '"').join(", ")}.`;
+            }
+            if (skipDescList.length > 0) {
+              existingDescsRule = `\nCRITICAL RULE: Do NOT start with or use phrases similar to the already generated descriptions. Vary your sentence structure! Previously generated descriptions:\n${skipDescList.map(d => '- "' + d + '"').join("\n")}.`;
+            }
+          }
 
-          const titlePrompt = `Rewrite this Quest Title to sound natural, conversational and motivating. DON'T use RPG tropes like 'Saga', 'Undying', 'Eternal', 'Valor'. Keep it simple and human. Original: "${quest.title}". Give ONLY the title.`;
-          const descPrompt = `Rewrite this Quest Description to sound natural and friendly, like a helpful friend encouraging you to read or play. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Limit the response to 1-2 short sentences. CRITICAL: You MUST explicitly include clear instructions on what needs to be done based on the original description! Example: 'Time to read some good books! Read at least 100 pages this week.' Original: "${quest.description}". Give ONLY the description.`;
+          const titlePrompt = `Rewrite this Quest Title to sound natural, conversational and motivating. DON'T use RPG tropes like 'Saga', 'Undying', 'Eternal', 'Valor'. Keep it simple and human. Original: "${quest.title}".${existingTitlesRule} Give ONLY the title.`;
+          const descPrompt = `Rewrite this Quest Description to sound natural and friendly, like a helpful friend encouraging you to read or play. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Limit the response to 1-2 short sentences. CRITICAL: You MUST explicitly include clear instructions on what needs to be done based on the original description! Example: 'Time to read some good books! Read at least 100 pages this week.'${existingDescsRule} Original: "${quest.description}". Give ONLY the description.`;
 
           let qTitleRes = "";
           let qDescRes = "";
