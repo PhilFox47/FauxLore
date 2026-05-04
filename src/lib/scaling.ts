@@ -12,6 +12,7 @@ export function calculateScaledPages(item: MediaItem, settings?: Settings | null
   const defaults = {
     gamePagesPerHour: 12,
     vnPagesPerHour: 24,
+    audiobookPagesPerHour: 30,
     mangaPagesPerChapter: 5,
     comicPagesPerIssue: 20,
     episodesWatchedMultiplier: 30,
@@ -24,6 +25,11 @@ export function calculateScaledPages(item: MediaItem, settings?: Settings | null
   switch (item.mediaType) {
     case 'Book':
       return item.pagesRead || 0;
+      
+    case 'Audiobook': {
+      const hoursPlayed = (item.playtimeHours || 0);
+      return Math.round(hoursPlayed * multipliers.audiobookPagesPerHour);
+    }
       
     case 'Game': {
       const hoursPlayed = (item.playtimeHours || 0);
@@ -83,6 +89,7 @@ export function calculateScaledDelta(delta: number, item: MediaItem, settings?: 
   const defaults = {
     gamePagesPerHour: 12,
     vnPagesPerHour: 24,
+    audiobookPagesPerHour: 30,
     mangaPagesPerChapter: 5,
     comicPagesPerIssue: 20,
     episodesWatchedMultiplier: 30,
@@ -95,6 +102,10 @@ export function calculateScaledDelta(delta: number, item: MediaItem, settings?: 
   switch (item.mediaType) {
     case 'Book':
       return delta;
+      
+    case 'Audiobook': {
+      return Math.round(delta * multipliers.audiobookPagesPerHour); // Delta is in hours
+    }
       
     case 'Game': {
       const modifier = item.storyHeavyModifier ?? 1.0;

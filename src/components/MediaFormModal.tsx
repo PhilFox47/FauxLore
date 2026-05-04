@@ -182,7 +182,7 @@ export function MediaFormModal({
           formData.title,
         );
         setSearchResults(results);
-      } else if (formData.mediaType === "Book") {
+      } else if (formData.mediaType === "Book" || formData.mediaType === "Audiobook") {
         const results = await IntegrationsService.searchBookMetadata(
           formData.title,
           formData.language,
@@ -428,6 +428,7 @@ export function MediaFormModal({
               {[
                 "Game",
                 "Book",
+                "Audiobook",
                 "Movie",
                 "Series",
                 "Visual Novel",
@@ -621,7 +622,7 @@ export function MediaFormModal({
             />
           </div>
 
-          {formData.mediaType === "Book" && (
+          {["Book", "Audiobook"].includes(formData.mediaType) && (
             <div className="block mt-4 relative z-0">
               <label className="block text-sm font-medium text-zinc-400 mb-1">
                 Language (For Metadata Search)
@@ -1197,7 +1198,8 @@ export function MediaFormModal({
             </div>
 
             {(formData.mediaType === "Game" ||
-              formData.mediaType === "Visual Novel") && (
+              formData.mediaType === "Visual Novel" ||
+              formData.mediaType === "Audiobook") && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {formData.mediaType === "Game" && (
                   <div className="col-span-1 sm:col-span-2 flex items-center gap-2">
@@ -1236,7 +1238,8 @@ export function MediaFormModal({
                   />
                 </div>
                 {(formData.mediaType === "Game" ||
-                  formData.mediaType === "Visual Novel") && (
+                  formData.mediaType === "Visual Novel" ||
+                  formData.mediaType === "Audiobook") && (
                   <div className="col-span-1 sm:col-span-2 space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-zinc-400 mb-1">

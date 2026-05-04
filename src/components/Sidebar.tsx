@@ -33,6 +33,7 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
   const libraryItems = [
     { name: 'Games', path: '/library/Game', count: getCount('Game'), color: MEDIA_COLORS['Game'] },
     { name: 'Books', path: '/library/Book', count: getCount('Book'), color: MEDIA_COLORS['Book'] },
+    { name: 'Audiobooks', path: '/library/Audiobook', count: getCount('Audiobook'), color: MEDIA_COLORS['Audiobook'] },
     { name: 'Visual Novels', path: '/library/Visual%20Novel', count: getCount('Visual Novel'), color: MEDIA_COLORS['Visual Novel'] },
     { name: 'Manga', path: '/library/Manga', count: getCount('Manga'), color: MEDIA_COLORS['Manga'] },
     { name: 'Series', path: '/library/Series', count: getCount('Series'), color: MEDIA_COLORS['Series'] },

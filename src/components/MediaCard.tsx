@@ -20,7 +20,8 @@ import {
   StarHalf, 
   RotateCcw,
   Sparkles,
-  Flame
+  Flame,
+  Headphones
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
@@ -58,6 +59,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
     switch (type) {
       case 'Game': return <Gamepad2 className={className} />;
       case 'Book': return <Book className={className} />;
+      case 'Audiobook': return <Headphones className={className} />;
       case 'Visual Novel': return <MessagesSquare className={className} />;
       case 'Manga': return <Library className={className} />;
       case 'Series': return <Tv className={className} />;

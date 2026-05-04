@@ -311,11 +311,12 @@ export function calculateRPGState(
 }
 
 const DEFAULT_YEARLY_GOALS: Record<MediaType, number> = {
-  'Game': 100, 'Book': 5000, 'Visual Novel': 50, 'Manga': 200, 'Series': 100, 'Movie': 20, 'Comic': 100
+  'Game': 100, 'Book': 5000, 'Visual Novel': 50, 'Manga': 200, 'Series': 100, 'Movie': 20, 'Comic': 100, 'Audiobook': 50
 };
 export const NATIVE_UNIT_LABELS: Record<MediaType, string> = {
   'Game': 'Hours Played',
   'Book': 'Pages Read',
+  'Audiobook': 'Hours Listened',
   'Visual Novel': 'Hours Played',
   'Manga': 'Chapters Read',
   'Series': 'Episodes Watched',
@@ -325,6 +326,7 @@ export const NATIVE_UNIT_LABELS: Record<MediaType, string> = {
 const PRIMARY_METRICS: Record<MediaType, string> = {
   'Game': 'playtimeHours',
   'Visual Novel': 'playtimeHours',
+  'Audiobook': 'playtimeHours',
   'Book': 'pagesRead',
   'Manga': 'chaptersRead',
   'Series': 'episodesWatched',
@@ -332,7 +334,7 @@ const PRIMARY_METRICS: Record<MediaType, string> = {
   'Comic': 'issuesRead'
 };
 
-const MEDIA_TYPES: MediaType[] = ['Game', 'Book', 'Visual Novel', 'Manga', 'Series', 'Movie', 'Comic'];
+const MEDIA_TYPES: MediaType[] = ['Game', 'Book', 'Visual Novel', 'Manga', 'Series', 'Movie', 'Comic', 'Audiobook'];
 
 const MONTH_THEMES: Record<number, { name: string, tags: string[], desc: string }> = {
   1: { name: "New Beginnings", tags: ["Action", "Adventure", "Sci-Fi", "Mystery"], desc: "Kick off the year with" },
@@ -357,6 +359,7 @@ export function getMasterPagesForNativeUnit(amount: number, mediaType: MediaType
    const mpConfig = settings?.masterPageConfig || {};
    switch (mediaType) {
      case 'Book': return amount;
+     case 'Audiobook': return amount * (mpConfig.audiobookPagesPerHour ?? 30);
      case 'Game': return amount * (mpConfig.gamePagesPerHour ?? 12);
      case 'Visual Novel': return amount * (mpConfig.vnPagesPerHour ?? 24);
      case 'Manga': return amount * (mpConfig.mangaPagesPerChapter ?? 5);

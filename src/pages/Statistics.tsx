@@ -17,7 +17,7 @@ export function Statistics() {
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const [mediaTypeFilters, setMediaTypeFilters] = useState<string[]>(['All']);
 
-  const MEDIA_TYPES = ['Game', 'Book', 'Visual Novel', 'Manga', 'Series', 'Movie', 'Comic'];
+  const MEDIA_TYPES = ['Game', 'Book', 'Visual Novel', 'Manga', 'Series', 'Movie', 'Comic', 'Audiobook'];
   const [isMediaDropdownOpen, setIsMediaDropdownOpen] = useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
 

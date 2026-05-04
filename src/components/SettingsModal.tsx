@@ -41,10 +41,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       'Manga': 200,
       'Series': 100,
       'Movie': 20,
-      'Comic': 100
+      'Comic': 100,
+      'Audiobook': 50
     } as Record<string, number>,
     gamePagesPerHour: 12,
     vnPagesPerHour: 24,
+    audiobookPagesPerHour: 30,
     mangaPagesPerChapter: 5,
     comicPagesPerIssue: 20,
     episodesWatchedMultiplier: 30,
@@ -77,10 +79,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           'Manga': settings.yearlyGoals?.['Manga'] ?? 200,
           'Series': settings.yearlyGoals?.['Series'] ?? 100,
           'Movie': settings.yearlyGoals?.['Movie'] ?? 20,
-          'Comic': settings.yearlyGoals?.['Comic'] ?? 100
+          'Comic': settings.yearlyGoals?.['Comic'] ?? 100,
+          'Audiobook': settings.yearlyGoals?.['Audiobook'] ?? 50
         },
         gamePagesPerHour: settings.masterPageConfig?.gamePagesPerHour ?? 12,
         vnPagesPerHour: settings.masterPageConfig?.vnPagesPerHour ?? 24,
+        audiobookPagesPerHour: settings.masterPageConfig?.audiobookPagesPerHour ?? 30,
         mangaPagesPerChapter: settings.masterPageConfig?.mangaPagesPerChapter ?? 5,
         comicPagesPerIssue: settings.masterPageConfig?.comicPagesPerIssue ?? 20,
         episodesWatchedMultiplier: settings.masterPageConfig?.episodesWatchedMultiplier ?? 30,
@@ -111,10 +115,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               'Manga': settings.yearlyGoals?.['Manga'] ?? 200,
               'Series': settings.yearlyGoals?.['Series'] ?? 100,
               'Movie': settings.yearlyGoals?.['Movie'] ?? 20,
-              'Comic': settings.yearlyGoals?.['Comic'] ?? 100
+              'Comic': settings.yearlyGoals?.['Comic'] ?? 100,
+              'Audiobook': settings.yearlyGoals?.['Audiobook'] ?? 50
             },
             gamePagesPerHour: settings.masterPageConfig?.gamePagesPerHour ?? 12,
             vnPagesPerHour: settings.masterPageConfig?.vnPagesPerHour ?? 24,
+            audiobookPagesPerHour: settings.masterPageConfig?.audiobookPagesPerHour ?? 30,
             mangaPagesPerChapter: settings.masterPageConfig?.mangaPagesPerChapter ?? 5,
             comicPagesPerIssue: settings.masterPageConfig?.comicPagesPerIssue ?? 20,
             episodesWatchedMultiplier: settings.masterPageConfig?.episodesWatchedMultiplier ?? 30,
@@ -313,6 +319,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         masterPageConfig: {
           gamePagesPerHour: formData.gamePagesPerHour,
           vnPagesPerHour: formData.vnPagesPerHour,
+          audiobookPagesPerHour: formData.audiobookPagesPerHour,
           mangaPagesPerChapter: formData.mangaPagesPerChapter,
           comicPagesPerIssue: formData.comicPagesPerIssue,
           episodesWatchedMultiplier: formData.episodesWatchedMultiplier,
@@ -486,6 +493,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   {Object.entries({
                      'Game': { label: 'Games', unit: 'Hours Played' },
                      'Book': { label: 'Books', unit: 'Pages Read' },
+                     'Audiobook': { label: 'Audiobooks', unit: 'Hours Listened' },
                      'Visual Novel': { label: 'Visual Novels', unit: 'Hours Played' },
                      'Manga': { label: 'Manga', unit: 'Chapters Read' },
                      'Series': { label: 'Series', unit: 'Episodes Watched' },
@@ -572,6 +580,20 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         type="number"
                         name="vnPagesPerHour"
                         value={formData.vnPagesPerHour}
+                        onChange={handleChange}
+                        className="input-field pr-16" 
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500 font-medium">Pages</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Audiobook: 1 Hour = </label>
+                    <div className="relative">
+                      <input 
+                        type="number"
+                        name="audiobookPagesPerHour"
+                        value={formData.audiobookPagesPerHour}
                         onChange={handleChange}
                         className="input-field pr-16" 
                       />

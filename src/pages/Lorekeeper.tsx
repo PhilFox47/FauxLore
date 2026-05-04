@@ -27,6 +27,11 @@ import { generateGeminiText } from "../services/geminiService";
 import { DatabaseService } from "../services/db";
 import { Loader2, Dices } from "lucide-react";
 
+const FAUXLORE_CONTEXT = `\n\nCONTEXT ABOUT FAUXLORE:
+FauxLore is an RPG-themed media-tracking app where the user logs their time/pages/etc on Games, Books, Visual Novels, Manga, Series, Movies, Comics, and Audiobooks to earn "Master Pages" (XP) and level up.
+"Quests" in FauxLore are weekly, monthly, or daily consumption goals (e.g. "Read 200 pages" or "Play 10 hours").
+When generating text, DO NOT treat the user as a literal warrior fighting real monsters. Instead, playfully frame their normal media consumption habits using the chosen persona's style, acknowledging that they are interacting with media (reading, playing, watching).`;
+
 export function Lorekeeper() {
   const {
     media,
@@ -166,7 +171,7 @@ export function Lorekeeper() {
     setIsRegeneratingTitle(true);
     try {
       const personaDesc = getPersonaDescription(settings?.aiPersona);
-      const systemPrompt = `You are FauxLore, a creative AI assistant. ${personaDesc} Your task is to generate a fun, punchy title based on the user's level and their recently consumed media.`;
+      const systemPrompt = `You are FauxLore, a creative AI assistant. ${personaDesc} Your task is to generate a fun, punchy title based on the user's level and their recently consumed media.${FAUXLORE_CONTEXT}`;
 
       const { text: recentMediaStr, dominantMedia } = getRecentMediaContext();
       const levelContext = getLevelContext(rpgState.level);
@@ -217,7 +222,7 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
     setIsRegenerating(true);
     try {
       const personaDesc = getPersonaDescription(settings?.aiPersona);
-      const systemPrompt = `You are FauxLore's central AI logic core. ${personaDesc}`;
+      const systemPrompt = `You are FauxLore's central AI logic core. ${personaDesc}${FAUXLORE_CONTEXT}`;
 
       // 1. RPG Title
       const { text: recentMediaStr, dominantMedia } = getRecentMediaContext();
@@ -913,7 +918,7 @@ function QuestCard({
       setIsGenerating(true);
       (async () => {
         try {
-          const systemPrompt = getPersonaDescription(settings?.aiPersona);
+          const systemPrompt = getPersonaDescription(settings?.aiPersona) + FAUXLORE_CONTEXT;
 
           const titlePrompt = `Rewrite this Quest Title to sound natural, conversational and motivating. DON'T use RPG tropes like 'Saga', 'Undying', 'Eternal', 'Valor'. Keep it simple and human. Original: "${quest.title}". Give ONLY the title.`;
           const descPrompt = `Rewrite this Quest Description to sound natural and friendly, like a helpful friend encouraging you to read or play. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Limit the response to 1-2 short sentences. CRITICAL: You MUST explicitly include clear instructions on what needs to be done based on the original description! Example: 'Time to read some good books! Read at least 100 pages this week.' Original: "${quest.description}". Give ONLY the description.`;

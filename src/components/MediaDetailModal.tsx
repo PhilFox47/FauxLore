@@ -361,11 +361,11 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
           )}
 
           {(() => {
-            const isOngoingGame = item.mediaType === 'Game' && item.isOngoing;
+            const isOngoingPlaytimeMedia = (item.mediaType === 'Game' || item.mediaType === 'Visual Novel' || item.mediaType === 'Audiobook') && item.isOngoing;
             let allowedArtifactsCount = 0;
             let nonHistoricalPlaytime = 0;
             
-            if (isOngoingGame) {
+            if (isOngoingPlaytimeMedia) {
               nonHistoricalPlaytime = logs
                 .filter(l => l.mediaId === item.id && !l.isHistoric && !l.timestamp.startsWith('1970-01-01') && l.metricType === 'playtimeHours')
                 .reduce((sum, log) => sum + log.delta, 0);
@@ -375,19 +375,19 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
               allowedArtifactsCount = 1;
             }
             
-            if (!isOngoingGame && allowedArtifactsCount === 0 && itemArtifacts.length === 0) return null;
+            if (!isOngoingPlaytimeMedia && allowedArtifactsCount === 0 && itemArtifacts.length === 0) return null;
 
             const canLoot = itemArtifacts.length < allowedArtifactsCount;
             const nextLootAt = allowedArtifactsCount * 50 + 50;
-            const progressToNext = isOngoingGame ? (nonHistoricalPlaytime % 50) : 0;
+            const progressToNext = isOngoingPlaytimeMedia ? (nonHistoricalPlaytime % 50) : 0;
 
             return (
               <div className="mb-8">
                 <h3 className="text-lg font-bold text-white mb-3 tracking-wide flex items-center gap-2">
                    <Gem className="w-5 h-5 text-purple-400" />
-                   {isOngoingGame ? 'Ongoing Conquest Loot' : 'Conquest Loot'}
+                   {isOngoingPlaytimeMedia ? 'Ongoing Conquest Loot' : 'Conquest Loot'}
                 </h3>
-                {isOngoingGame && (
+                {isOngoingPlaytimeMedia && (
                   <div className="mb-4">
                     <div className="flex justify-between text-xs text-zinc-400 mb-1.5">
                       <span>Tracked Playtime: {nonHistoricalPlaytime.toFixed(1)} hrs</span>
