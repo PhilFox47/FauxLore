@@ -7,6 +7,7 @@ import fs from "fs";
 import cron from "node-cron";
 import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcrypt";
+import { calculateRPGState } from "./src/lib/rpgSystem";
 
 dotenv.config();
 
@@ -229,8 +230,23 @@ async function startServer() {
 
       const activeBosses: any[] = db.prepare("SELECT * FROM world_bosses WHERE userId = ? AND status = 'Active'").all(userId);
       const allLogs: any[] = db.prepare('SELECT * FROM logs WHERE userId = ? ORDER BY timestamp DESC').all(userId);
-      const logs: any[] = db.prepare('SELECT * FROM logs WHERE userId = ? AND timestamp > ?').all(userId, new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+      const logs: any[] = db.prepare('SELECT * FROM logs WHERE userId = ? AND timestamp > ?').all(userId, new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString());
       const media: any[] = db.prepare('SELECT * FROM media WHERE userId = ?').all(userId).map(normalizeMedia);
+      const artifacts: any[] = db.prepare('SELECT * FROM artifacts WHERE userId = ?').all(userId);
+      
+      const parsedSettings = {
+        ...settings,
+        rankConfigs: settings?.rankConfigs ? JSON.parse(settings.rankConfigs) : undefined,
+        questConfigs: settings?.questConfigs ? JSON.parse(settings.questConfigs) : undefined
+      };
+      
+      let activeQuests: any[] = [];
+      try {
+         const rpgState = calculateRPGState(allLogs as any, media as any, parsedSettings, artifacts as any, activeBosses);
+         activeQuests = rpgState.quests.filter(q => !q.isFailed);
+      } catch (e) {
+         console.warn("Could not calculate RPG state for oracle", e);
+      }
       
       const dustyMedia = media.filter(m => m.status === 'Active' || m.status === 'On Hold').filter(m => {
         const mLogs = allLogs.filter(l => l.mediaId === m.id);
@@ -247,23 +263,25 @@ async function startServer() {
 
       const systemPrompt = `You are the Narrative Oracle, a helpful, welcoming, and charismatic gamemaster AI for a personal RPG.
       Your responsibility is to warmly greet the user, give them some engaging advice, and comment on their progress without just parroting the logs.
-      You can mention a 'dusty' media item that hasn't been active in a while, give advice on defeating their current World Boss, comment on recent progress, or suggest tackling specific types of quests in their tracker.
+      You can make general welcoming remarks, mention a 'dusty' media item that hasn't been active in a while, give advice on defeating their current World Boss, comment on recent progress, or suggest tackling specific types of quests in their tracker.
       Persona Tone Guide: ${personaStr} Allow this tone to shape your response!`;
       
       let dustyContext = dustyMedia.length > 0 ? `Dusty Media (Needs Attention): ${dustyMedia.slice(0, 3).join(', ')}` : "No neglected media.";
       let bossContext = activeBosses.length > 0 ? `Active Enemies to fight: ${activeBosses.map(b => b.name).join(', ')}` : "No active enemies right now.";
-      let logsContext = logs.length > 0 ? `Recent Triumphs (Past 24h): ${logs.slice(0,5).map(l => {
+      let questContext = activeQuests.length > 0 ? `Active/Completed Quests: ${activeQuests.map(q => `${q.title} (${q.isCompleted ? 'Completed' : 'Active'})`).join(', ')}` : "No interesting quests right now.";
+      let logsContext = logs.length > 0 ? `Recent Triumphs (Past 12h): ${logs.slice(0,5).map(l => {
         const m = media.find(x => x.id === l.mediaId);
         return `${m?.title} (+${l.delta} ${l.metricType})`;
-      }).join(', ')}` : "No recent logs.";
+      }).join(', ')}` : "No recent logs (Past 12h).";
 
       const userPrompt = `Time of Day: ${type === 'morning' ? 'Morning' : 'Evening'}
       ${logsContext}
       ${bossContext}
+      ${questContext}
       ${dustyContext}
       
       Keep it short (2-3 sentences, approx 250 characters). Don't be too cryptic—be charismatic and welcoming!
-      Start with a greeting! If it's Morning, suggest a focus for the day (e.g., tackle an enemy or pick up a dusty book/game). If Evening, summarize their triumphs or encourage them to log something if they haven't.`;
+      Start with a greeting! If it's Morning, suggest a focus for the day (e.g., tackle an enemy, finish a quest, or pick up a dusty book/game). If Evening, summarize their triumphs or encourage them to log something if they haven't.`;
 
       const aiRes = await fetch("https://nano-gpt.com/api/v1/chat/completions", {
         method: "POST",

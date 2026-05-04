@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect, useRef } from "react";
 import { format, differenceInDays, parseISO, subDays } from 'date-fns';
 import { useMediaContext } from "../contexts/MediaContext";
 import { calculateRPGState } from "../lib/rpgSystem";
+import { MEDIA_HEX } from "../types/schema";
 import {
   Shield,
   Swords,
@@ -15,7 +16,14 @@ import {
   ShieldAlert,
   Target,
   Calendar,
-  ImageIcon
+  ImageIcon,
+  Gamepad2,
+  BookOpen,
+  Headphones,
+  Eye,
+  BookImage,
+  Tv,
+  Clapperboard
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { calculateScaledPages, calculateScaledDelta } from "../lib/scaling";
@@ -108,20 +116,48 @@ export function Lorekeeper() {
   const monthlyQuests = rpgState.quests.filter((q) => q.type === "monthly");
   const yearlyQuests = rpgState.quests.filter((q) => q.type === "yearly");
 
+  const missingMainTitle = !aiTextCache[`rpg_title_${rpgState.level}`];
+  const missingMediaTypes = useMemo(() => {
+    return Object.entries(rpgState.mediaLevels)
+      .filter(([, data]) => data.level > 1 || data.exp > 0)
+      .filter(([mediaType, data]) => !aiTextCache[`rpg_title_${mediaType}_${data.level}`])
+      .map(([mediaType]) => mediaType);
+  }, [rpgState.mediaLevels, aiTextCache]);
+
+  const missingTitleRef = useRef(false);
+
+  useEffect(() => {
+    if (!settings?.nanoGptApiKey && !settings?.geminiApiKey) return;
+    if (isRegeneratingTitle || missingTitleRef.current) return;
+    
+    if (missingMainTitle || missingMediaTypes.length > 0) {
+      missingTitleRef.current = true;
+      generateMissingTitles(missingMainTitle, missingMediaTypes).finally(() => {
+        missingTitleRef.current = false;
+      });
+    }
+  }, [missingMainTitle, missingMediaTypes.length, settings?.nanoGptApiKey, settings?.geminiApiKey]);
+
   const getDynamicTitle = () => {
     return aiTextCache[`rpg_title_${rpgState.level}`] || rpgState.className;
+  };
+
+  const getMediaTitle = (mediaType: string, level: number, defVal: string) => {
+    return aiTextCache[`rpg_title_${mediaType}_${level}`] || defVal;
   };
 
   const getLevelContext = (level: number) => {
     if (level >= 100) return "almost unrealistic, ultimate, mythical";
     if (level >= 50) return "epic, legendary, master-level (soft level cap)";
-    if (level > 10) return "experienced, intermediate-level";
+    if (level >= 20) return "dedicated, veteran-level";
+    if (level >= 10) return "experienced, casual, intermediate-level";
     return "basic, beginner-level";
   };
 
-  const getRecentMediaContext = () => {
+  const getRecentMediaContext = (mediaType?: string) => {
     const recent = [...media]
       .filter((m) => m.status === "Active" || m.status === "Completed")
+      .filter((m) => mediaType ? m.mediaType === mediaType : true)
       .sort(
         (a, b) =>
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
@@ -155,7 +191,7 @@ export function Lorekeeper() {
     const top10Str = top10WithMp
       .map(
         (m) =>
-          `"${m.title}" (${m.mediaType}, Genres: ${m.genres?.join(", ") || 'none'}, Tags: ${m.tags?.join(", ") || 'none'}, Master Pages: ${m.mp})`
+          `"${m.title}" (${m.mediaType}, Genres: ${m.genres?.join(", ") || 'none'}, Tags: ${m.tags?.join(", ") || 'none'}, MP: ${m.mp})`
       )
       .join(" | ");
     const restStr = recent
@@ -170,39 +206,58 @@ export function Lorekeeper() {
     return { text, dominantMedia };
   };
 
-  const handleRegenerateTitle = async () => {
+  const generateMissingTitles = async (generateMain: boolean, mediaTypesToGenerate: string[], manualRes: boolean = false) => {
     if (!settings?.nanoGptApiKey && !settings?.geminiApiKey) {
-      alert("Please configure an AI API Key in Settings first.");
+      if (manualRes) alert("Please configure an AI API Key in Settings first.");
       return;
     }
+
+    if (!generateMain && mediaTypesToGenerate.length === 0) return;
 
     setIsRegeneratingTitle(true);
     try {
       const personaDesc = getPersonaDescription(settings?.aiPersona);
-      const systemPrompt = `You are FauxLore, a creative AI assistant. ${personaDesc} Your task is to generate a fun, punchy title based on the user's level and their recently consumed media.${FAUXLORE_CONTEXT}`;
+      const systemPrompt = `You are FauxLore, a creative AI assistant. ${personaDesc} Your task is to generate fun, punchy titles based on the user's level and their recently consumed media.${FAUXLORE_CONTEXT}
+CRITICAL RULE: DO NOT reference any specific franchise, character, or media title by name. Use general genre or medium terms instead, unless EXPLICITLY PERMITTED below.`;
 
-      const { text: recentMediaStr, dominantMedia } = getRecentMediaContext();
+      let generatedFormatRules = [];
+      if (generateMain) generatedFormatRules.push(`"main": "The Grand Master"`);
+      mediaTypesToGenerate.forEach(t => generatedFormatRules.push(`"${t}": "Title here"`));
+
+      let perMediaContexts = mediaTypesToGenerate.map(t => {
+          const typeContext = getRecentMediaContext(t);
+          const tLevel = rpgState.mediaLevels[t].level;
+          return `=== Per-Media: ${t} ===
+Level: ${tLevel} (${getLevelContext(tLevel)})
+Recent ${t} Media:
+${typeContext.text}`;
+      }).join('\n\n');
+
+      const mainContext = getRecentMediaContext();
       const levelContext = getLevelContext(rpgState.level);
 
-      let franchiseRule = `CRITICAL RULE: DO NOT reference any specific franchise, character, or media title by name. Use general genre or medium terms instead.`;
-      if (dominantMedia) {
-        franchiseRule = `CRITICAL RULE: You MAY reference the specific franchise or title "${dominantMedia.title}" by name, because it accounts for more than 50% of their recent Master Pages. Do NOT reference any other specific franchise by name.`;
+      let franchiseRule = ``;
+      if (mainContext.dominantMedia && generateMain) {
+        franchiseRule = `\nFRANCHISE EXCEPTION: You MAY reference the specific franchise or title "${mainContext.dominantMedia.title}" by name for the main title, because it accounts for more than 50% of their recent Master Pages.`;
       }
 
-      const titlePrompt = `The user is Level ${rpgState.level} (${levelContext}). 
-Their recently active/completed media are provided below. Give the "Most Recent" items significantly more weight in determining their title. The user's time investment is represented by "Master Pages".
-${franchiseRule}
+      const titlePrompt = `The user is Overall Level ${rpgState.level} (${levelContext}).
+      
+=== OVERALL MEDIA CONTEXT (For Main Title) ===
+${mainContext.text}${franchiseRule}
 
-Media Context (Analyze the Genres, Tags, and Media Types carefully!):
-${recentMediaStr}
+${perMediaContexts}
 
-Generate a truly creative, deeply thematic, and punchy RPG-style title for them. Combine their level prestige with their unique media tastes.
-If they consume horror media, evoke a spooky atmosphere. If sci-fi, make it sound futuristic. If diverse, blend the concepts creatively.
-Use the provided Genres and Tags to make the title feel personalized and cool (e.g. "Cyberpunk Architect", "Novice Spellslinger of the Cozy Arts", "Veteran Mecha Commander").
+Generate a truly creative, deeply thematic, and punchy RPG-style title for each requested category. 
+- Main Title: Combine their overall prestige with their unique media tastes (e.g. "Cyberpunk Architect", "Novice Spellslinger of the Cozy Arts").
+- Per-Media Titles: Heavily theme it ONLY around that specific media type AND that specific media level context. A level 1 Gamer should sound like a beginner, a level 50 Gamer should sound like an epic master. Match the "epicness" to their level context (e.g. beginner, experienced, etc.).
 
-NO extra comments, NO quotes, just the title. 2-6 words.`;
+Respond EXCLUSIVELY in valid JSON format like this:
+{
+  ${generatedFormatRules.join(',\n  ')}
+}
+NO other text or markdown, JUST raw JSON.`;
 
-      const titleKey = `rpg_title_${rpgState.level}`;
       let titleRes = "";
       if (settings.nanoGptApiKey) {
         const apiKey = settings.nanoGptApiKey;
@@ -213,15 +268,39 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
         titleRes = await generateGeminiText(apiKey, systemPrompt, titlePrompt);
       }
 
-      await saveAiText(titleKey, titleRes);
+      const cleanJson = titleRes.replace(/```json/gi, '').replace(/```/g, '').trim();
+      let parsedTitles: Record<string, string> = {};
+      try {
+         parsedTitles = JSON.parse(cleanJson);
+      } catch (e) {
+         console.error("Failed to parse JSON titles: ", cleanJson);
+         throw new Error("AI did not return valid JSON.");
+      }
+
+      if (generateMain && parsedTitles.main) {
+        await saveAiText(`rpg_title_${rpgState.level}`, parsedTitles.main);
+      }
+      
+      for (const t of mediaTypesToGenerate) {
+        if (parsedTitles[t]) {
+           await saveAiText(`rpg_title_${t}_${rpgState.mediaLevels[t].level}`, parsedTitles[t]);
+        }
+      }
 
       await refreshData();
+      if (manualRes) alert("Titles successfully regenerated!");
     } catch (e: any) {
-      alert("Error regenerating title: " + e.message);
+      if (manualRes) alert("Error regenerating format: " + e.message);
+      else console.error("Error regenerating bg titles:", e.message);
     } finally {
       setIsRegeneratingTitle(false);
     }
   };
+
+  const handleRegenerateTitle = async () => {
+     generateMissingTitles(true, Object.keys(rpgState.mediaLevels).filter(k => rpgState.mediaLevels[k].level > 1 || rpgState.mediaLevels[k].exp > 0), true);
+  };
+
 
   const handleRegenerate = async () => {
     if (!settings?.nanoGptApiKey && !settings?.geminiApiKey) {
@@ -424,48 +503,100 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
       </header>
 
       {/* Hero Overview */}
-      <section className="shrink-0 bg-zinc-900 border border-white/5 rounded-3xl p-8 relative overflow-hidden flex flex-col md:flex-row items-center gap-8">
+      <section className="shrink-0 bg-zinc-900 border border-white/5 rounded-3xl p-8 relative overflow-hidden flex flex-col gap-8">
         <div className="absolute top-0 right-0 w-96 h-96 bg-orange-500/10 rounded-full blur-[100px] pointer-events-none" />
 
-        <div className="shrink-0 relative">
-          <div className="w-32 h-32 bg-zinc-950 rounded-3xl flex items-center justify-center border-4 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.3)] z-10 relative">
-            <Swords className="w-16 h-16 text-orange-400" />
-            <div className="absolute -bottom-4 -right-4 bg-orange-600 text-white text-base font-black px-4 py-1 rounded-full border-4 border-zinc-900 shadow-xl shadow-orange-900/50">
-              Lvl {rpgState.level}
+        <div className="flex flex-col md:flex-row items-center gap-8 z-10 relative leading-none">
+          <div className="shrink-0 relative">
+            <div className="w-32 h-32 bg-zinc-950 rounded-3xl flex items-center justify-center border-4 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.3)] z-10 relative">
+              <Swords className="w-16 h-16 text-orange-400" />
+              <div className="absolute -bottom-4 -right-4 bg-orange-600 text-white text-base font-black px-4 py-1 rounded-full border-4 border-zinc-900 shadow-xl shadow-orange-900/50">
+                Lvl {rpgState.level}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 w-full text-center md:text-left leading-normal">
+            <h3 className="text-4xl font-black text-white italic tracking-tight mb-2">
+              {getDynamicTitle()}
+            </h3>
+            <p className="text-zinc-400 text-lg font-medium mb-6">
+              {Math.floor(rpgState.currentExp).toLocaleString()} Total EXP
+            </p>
+
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-sm text-orange-400 font-bold tracking-wider uppercase">
+                Progress to Level {rpgState.level + 1}
+              </span>
+              <div className="text-sm text-zinc-500 font-mono">
+                {Math.floor(
+                  rpgState.currentExp - rpgState.currentLevelExp,
+                ).toLocaleString()}{" "}
+                /{" "}
+                {Math.floor(
+                  rpgState.nextLevelExp - rpgState.currentLevelExp,
+                ).toLocaleString()}{" "}
+                EXP
+              </div>
+            </div>
+            <div className="h-4 bg-zinc-950 rounded-full overflow-hidden shadow-inner border border-white/5 relative">
+              <div
+                className="absolute top-0 left-0 h-full bg-gradient-to-r from-orange-600 to-orange-500 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(249,115,22,0.5)]"
+                style={{ width: `${Math.max(2, rpgState.expProgress * 100)}%` }}
+              />
             </div>
           </div>
         </div>
+      </section>
 
-        <div className="flex-1 w-full z-10 text-center md:text-left">
-          <h3 className="text-4xl font-black text-white italic tracking-tight mb-2">
-            {getDynamicTitle()}
-          </h3>
-          <p className="text-zinc-400 text-lg font-medium mb-6">
-            {Math.floor(rpgState.currentExp).toLocaleString()} Total EXP
-          </p>
-
-          <div className="flex justify-between items-end mb-2">
-            <span className="text-sm text-orange-400 font-bold tracking-wider uppercase">
-              Progress to Level {rpgState.level + 1}
-            </span>
-            <div className="text-sm text-zinc-500 font-mono">
-              {Math.floor(
-                rpgState.currentExp - rpgState.currentLevelExp,
-              ).toLocaleString()}{" "}
-              /{" "}
-              {Math.floor(
-                rpgState.nextLevelExp - rpgState.currentLevelExp,
-              ).toLocaleString()}{" "}
-              EXP
-            </div>
-          </div>
-          <div className="h-4 bg-zinc-950 rounded-full overflow-hidden shadow-inner border border-white/5 relative">
-            <div
-              className="absolute top-0 left-0 h-full bg-gradient-to-r from-orange-600 to-orange-500 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(249,115,22,0.5)]"
-              style={{ width: `${Math.max(2, rpgState.expProgress * 100)}%` }}
-            />
-          </div>
-        </div>
+      {/* Per-Media Level Overview */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 z-10 relative">
+        {Object.entries(rpgState.mediaLevels)
+            .sort(([, a], [, b]) => b.level - a.level)
+            .map(([mediaType, data]) => {
+              const accent = MEDIA_HEX[mediaType as keyof typeof MEDIA_HEX]?.base || '#f97316';
+              // Default to generic title if AI hasn't generated one
+              const currentTitle = getMediaTitle(mediaType, data.level, data.title);
+              return (
+                <div key={mediaType} className="bg-zinc-900 border border-white/5 rounded-3xl p-6 flex flex-col relative overflow-hidden group shadow-lg">
+                  <div className="absolute top-0 right-0 w-32 h-32 blur-[60px] opacity-10 pointer-events-none transition-opacity group-hover:opacity-30" style={{ backgroundColor: accent }} />
+                  
+                  <div className="flex flex-col mb-4 relative z-10">
+                    <div className="flex items-start justify-between mb-2">
+                       <div className="w-10 h-10 rounded-xl bg-black/40 border border-white/10 flex items-center justify-center shrink-0 shadow-inner" style={{ color: accent, boxShadow: `inset 0 0 10px ${accent}20` }}>
+                          {mediaType === 'Game' && <Gamepad2 className="w-5 h-5" />}
+                          {mediaType === 'Book' && <BookOpen className="w-5 h-5" />}
+                          {mediaType === 'Audiobook' && <Headphones className="w-5 h-5" />}
+                          {mediaType === 'Visual Novel' && <Eye className="w-5 h-5" />}
+                          {mediaType === 'Manga' && <BookImage className="w-5 h-5" />}
+                          {mediaType === 'Series' && <Tv className="w-5 h-5" />}
+                          {mediaType === 'Movie' && <Clapperboard className="w-5 h-5" />}
+                          {mediaType === 'Comic' && <Sparkles className="w-5 h-5" />}
+                       </div>
+                       <div className="text-3xl font-black text-white italic pl-4">
+                         <span className="text-[10px] font-bold text-zinc-500 not-italic mr-1 block text-right leading-none">LVL</span>
+                         {data.level}
+                       </div>
+                    </div>
+                    <div className="text-sm font-black uppercase tracking-widest line-clamp-2 leading-tight" style={{ color: accent }} title={currentTitle}>{currentTitle}</div>
+                  </div>
+                  
+                  <div className="mt-auto relative z-10">
+                    <div className="flex justify-between items-end mb-1.5">
+                      <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{Math.floor(data.exp).toLocaleString()} EXP</div>
+                      <div className="text-[11px] text-zinc-400 font-mono font-medium tracking-tighter">{Math.floor(data.expProgress * 100)}%</div>
+                    </div>
+                    <div className="h-2 bg-zinc-950 rounded-full overflow-hidden shadow-inner border border-white/5 relative">
+                      <div 
+                        className="h-full rounded-full transition-all duration-1000"
+                        style={{ width: `${Math.max(2, data.expProgress * 100)}%`, backgroundColor: accent, boxShadow: `0 0 10px ${accent}80` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+        }
       </section>
 
       {/* World Bosses Section */}

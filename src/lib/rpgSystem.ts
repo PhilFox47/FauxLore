@@ -86,6 +86,7 @@ export interface RPGState {
     decayExp: number;
     penaltyExp: number;
   };
+  mediaLevels: Record<string, { level: number; exp: number; nextLevelExp: number; currentLevelExp: number; expProgress: number; title: string }>;
 }
 
 // Exp threshold curve
@@ -98,6 +99,17 @@ export function getLevelForExp(exp: number): number {
 export function getExpForLevel(level: number): number {
   if (level <= 1) return 0;
   return 1000 * Math.pow(level - 1, 2);
+}
+
+export function getLevelForMediaExp(exp: number): number {
+  if (exp <= 0) return 1;
+  let level = Math.floor(Math.sqrt(exp / 500)) + 1;
+  return Math.min(level, 100);
+}
+
+export function getExpForMediaLevel(level: number): number {
+  if (level <= 1) return 0;
+  return 500 * Math.pow(level - 1, 2);
 }
 
 // Seeded PRNG
@@ -160,6 +172,11 @@ export function calculateRPGState(
   // Filter historical
   const validLogs = logs.filter(l => !l.isHistoric && !l.timestamp.startsWith('1970-01-01'));
   
+  // Initialize Media level EXP trackers
+  const ALL_MEDIA_TYPES: MediaType[] = ['Game', 'Book', 'Audiobook', 'Visual Novel', 'Manga', 'Series', 'Movie', 'Comic'];
+  const mediaExpTrackers: Record<string, number> = {};
+  ALL_MEDIA_TYPES.forEach(t => mediaExpTrackers[t] = 0);
+
   // First we calculate the base EXP per log, applying artifacts per-log.
   let baseExp = 0;
   let armoryExp = 0;
@@ -173,6 +190,7 @@ export function calculateRPGState(
       const { base, armory } = calculateLogExpBreakdown(log.delta, item, settings, equipped);
       baseExp += base;
       armoryExp += armory;
+      mediaExpTrackers[item.mediaType] += (base + armory);
     }
   });
 
@@ -180,6 +198,7 @@ export function calculateRPGState(
   media.forEach(m => {
     if (m.status === 'Dropped' && !m.isOngoing) {
       penaltyExp -= 500;
+      mediaExpTrackers[m.mediaType] -= 500;
     }
   });
 
@@ -194,10 +213,15 @@ export function calculateRPGState(
     else if (boss.level === 4) bExp = 800;
     else if (boss.level === 5) bExp = 2000;
 
+    const bossMedia = media.find(m => m.id === boss.mediaId);
+    const mType = bossMedia ? bossMedia.mediaType : null;
+
     if (boss.status === 'Defeated') {
       bossExp += bExp;
+      if (mType) mediaExpTrackers[mType] += (bExp * 2);
     } else if (boss.status === 'Failed') {
       penaltyExp -= bExp;
+      if (mType) mediaExpTrackers[mType] -= (bExp * 2);
     }
   });
 
@@ -298,6 +322,38 @@ export function calculateRPGState(
   if (gameCount > bookCount * 2) prefix = "Digital ";
   if (bookCount > gameCount * 2) prefix = "Literary ";
 
+  const mediaLevels: Record<string, { level: number; exp: number; nextLevelExp: number; currentLevelExp: number; expProgress: number; title: string }> = {};
+  const mediaTitles: Record<string, string> = {
+    'Game': 'Gamer',
+    'Book': 'Bibliophile',
+    'Audiobook': 'Audiophile',
+    'Visual Novel': 'Reader',
+    'Manga': 'Otaku',
+    'Series': 'Binge-Watcher',
+    'Movie': 'Cinephile',
+    'Comic': 'Comic Fan'
+  };
+
+  ALL_MEDIA_TYPES.forEach(t => {
+    const tExp = Math.max(0, mediaExpTrackers[t]);
+    const mLevel = getLevelForMediaExp(tExp);
+    const cur = getExpForMediaLevel(mLevel);
+    const next = getExpForMediaLevel(mLevel + 1);
+    const prog = mLevel === 100 ? 1 : ((tExp - cur) / (next - cur));
+    
+    // Also include questExp in a simpler way if they want it later? 
+    // Wait, prompt: "While Quests EXP does not apply here" - okay.
+
+    mediaLevels[t] = {
+      level: mLevel,
+      exp: tExp,
+      nextLevelExp: next,
+      currentLevelExp: cur,
+      expProgress: prog,
+      title: mediaTitles[t]
+    };
+  });
+
   return {
     currentExp: totalExp,
     level,
@@ -306,7 +362,8 @@ export function calculateRPGState(
     expProgress,
     className: prefix + classNames[classIdx],
     quests,
-    expBreakdown: { baseExp, armoryExp, questExp, bossExp, decayExp, penaltyExp }
+    expBreakdown: { baseExp, armoryExp, questExp, bossExp, decayExp, penaltyExp },
+    mediaLevels
   };
 }
 

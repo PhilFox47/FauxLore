@@ -11,7 +11,8 @@ import {
   Book, 
   Tv, 
   Clapperboard, 
-  Library, 
+  Library,
+  BookImage,
   Ghost, 
   MessagesSquare,
   Plus, 
@@ -64,7 +65,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
       case 'Manga': return <Library className={className} />;
       case 'Series': return <Tv className={className} />;
       case 'Movie': return <Clapperboard className={className} />;
-      case 'Comic': return <Library className={className} />;
+      case 'Comic': return <BookImage className={className} />;
       default: return null;
     }
   };

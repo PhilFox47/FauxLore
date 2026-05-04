@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, Settings, X, Presentation, BookOpen, Dice5, Shield, Flame, Gem, Globe, Skull, CalendarClock, LogOut } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Settings, X, Presentation, BookOpen, Dice5, Shield, Flame, Gem, Globe, Skull, CalendarClock, LogOut, Gamepad2, Book, Headphones, MessagesSquare, Library, Tv, Clapperboard, BookImage } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -31,14 +31,14 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
   ];
 
   const libraryItems = [
-    { name: 'Games', path: '/library/Game', count: getCount('Game'), color: MEDIA_COLORS['Game'] },
-    { name: 'Books', path: '/library/Book', count: getCount('Book'), color: MEDIA_COLORS['Book'] },
-    { name: 'Audiobooks', path: '/library/Audiobook', count: getCount('Audiobook'), color: MEDIA_COLORS['Audiobook'] },
-    { name: 'Visual Novels', path: '/library/Visual%20Novel', count: getCount('Visual Novel'), color: MEDIA_COLORS['Visual Novel'] },
-    { name: 'Manga', path: '/library/Manga', count: getCount('Manga'), color: MEDIA_COLORS['Manga'] },
-    { name: 'Series', path: '/library/Series', count: getCount('Series'), color: MEDIA_COLORS['Series'] },
-    { name: 'Movies', path: '/library/Movie', count: getCount('Movie'), color: MEDIA_COLORS['Movie'] },
-    { name: 'Comics', path: '/library/Comic', count: getCount('Comic'), color: MEDIA_COLORS['Comic'] },
+    { name: 'Games', path: '/library/Game', count: getCount('Game'), color: MEDIA_COLORS['Game'], icon: Gamepad2 },
+    { name: 'Books', path: '/library/Book', count: getCount('Book'), color: MEDIA_COLORS['Book'], icon: Book },
+    { name: 'Audiobooks', path: '/library/Audiobook', count: getCount('Audiobook'), color: MEDIA_COLORS['Audiobook'], icon: Headphones },
+    { name: 'Visual Novels', path: '/library/Visual%20Novel', count: getCount('Visual Novel'), color: MEDIA_COLORS['Visual Novel'], icon: MessagesSquare },
+    { name: 'Manga', path: '/library/Manga', count: getCount('Manga'), color: MEDIA_COLORS['Manga'], icon: Library },
+    { name: 'Series', path: '/library/Series', count: getCount('Series'), color: MEDIA_COLORS['Series'], icon: Tv },
+    { name: 'Movies', path: '/library/Movie', count: getCount('Movie'), color: MEDIA_COLORS['Movie'], icon: Clapperboard },
+    { name: 'Comics', path: '/library/Comic', count: getCount('Comic'), color: MEDIA_COLORS['Comic'], icon: BookImage },
   ];
 
   const currentStreak = useMemo(() => calculateStreak(logs), [logs]);
@@ -129,7 +129,7 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
               }
             >
               <div className="flex items-center gap-3">
-                 <div className={cn("w-2 h-2 rounded-full", item.color.bg, item.color.shadow)} />
+                 <item.icon className={cn("w-4 h-4", item.color.text)} />
                 <span>{item.name}</span>
               </div>
               {item.count > 0 && (

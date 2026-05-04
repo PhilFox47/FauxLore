@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMediaContext } from '../contexts/MediaContext';
 import { MediaCard } from '../components/MediaCard';
@@ -7,12 +7,13 @@ import { MediaDetailModal } from '../components/MediaDetailModal';
 import { ProgressModal } from '../components/ProgressModal';
 import { FilterSortBar } from '../components/FilterSortBar';
 import { useMediaFilterSort } from '../hooks/useMediaFilterSort';
-import { MediaItem, MediaType } from '../types/schema';
-import { Plus, Search } from 'lucide-react';
+import { MediaItem, MediaType, MEDIA_HEX, getMetricForType } from '../types/schema';
+import { NATIVE_UNIT_LABELS, calculateRPGState } from '../lib/rpgSystem';
+import { Plus, Search, CheckCircle2, TrendingUp, Pickaxe } from 'lucide-react';
 
 export function MediaLibrary() {
   const { mediaType } = useParams<{ mediaType: string }>();
-  const { media, logs, saveMediaItem, addLog, deleteMediaItem } = useMediaContext();
+  const { media, logs, settings, worldBosses, artifacts, aiTextCache, saveMediaItem, addLog, deleteMediaItem } = useMediaContext();
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MediaItem | undefined>(undefined);
@@ -25,7 +26,25 @@ export function MediaLibrary() {
 
   const decodedMediaType = decodeURIComponent(mediaType || '') as MediaType;
 
+  const accentBase = MEDIA_HEX[decodedMediaType]?.base || '#f97316';
+  const accentHover = MEDIA_HEX[decodedMediaType]?.hover || '#ea580c';
+
   const baseMediaItems = media.filter(m => m.mediaType === decodedMediaType);
+
+  const rpgState = useMemo(() => calculateRPGState(media, logs, settings, worldBosses, artifacts), [media, logs, settings, worldBosses, artifacts]);
+  const vaultLevel = rpgState.mediaLevels[decodedMediaType] || { level: 1, exp: 0, nextLevelExp: 100, currentLevelExp: 0, expProgress: 0, title: 'Novice' };
+  const vaultTitle = aiTextCache[`rpg_title_${decodedMediaType}_${vaultLevel.level}`] || vaultLevel.title;
+  
+  const totalAccumulated = useMemo(() => {
+    const metric = getMetricForType(decodedMediaType);
+    return baseMediaItems.reduce((acc, m) => acc + ((m[metric as keyof MediaItem] as number) || 0), 0);
+  }, [baseMediaItems, decodedMediaType]);
+
+  const completionRate = useMemo(() => {
+    if (baseMediaItems.length === 0) return 0;
+    const completed = baseMediaItems.filter(m => m.status === 'Completed').length;
+    return Math.round((completed / baseMediaItems.length) * 100);
+  }, [baseMediaItems]);
   
   const {
     statusFilters,
@@ -65,37 +84,79 @@ export function MediaLibrary() {
 
   return (
     <>
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 bg-gradient-to-br from-zinc-900 to-[#0A0A0C] border border-white/5 rounded-3xl p-8 relative overflow-hidden shadow-2xl">
+      <header 
+        className="flex flex-col gap-6 sm:gap-8 mb-8 bg-gradient-to-br from-zinc-900 to-[#0A0A0C] border border-white/5 rounded-3xl p-8 relative overflow-hidden shadow-2xl"
+        style={{ '--accent': accentBase, '--accent-hover': accentHover } as React.CSSProperties}
+      >
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.05] mix-blend-overlay"></div>
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]"></span>
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 font-display">The Vault</span>
+        
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-2 h-2 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent-hover)]" style={{ boxShadow: `0 0 8px ${accentBase}`}}></span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 font-display">The Vault</span>
+            </div>
+            <h2 className="text-4xl sm:text-5xl font-black text-white font-display tracking-tight leading-none mb-2">{decodedMediaType}s</h2>
+            <p className="text-zinc-400 font-medium italic">Your entire history, collection, and backlog.</p>
           </div>
-          <h2 className="text-4xl sm:text-5xl font-black text-white font-display tracking-tight leading-none mb-2">{decodedMediaType}s</h2>
-          <p className="text-zinc-400 font-medium italic">Your entire history, collection, and backlog.</p>
+
+          <div className="flex flex-wrap items-center gap-6 sm:gap-10 mt-2 lg:mt-0 pt-6 lg:pt-0 border-t lg:border-t-0 border-white/5 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="relative w-10 h-10 flex items-center justify-center">
+                <svg className="w-full h-full transform -rotate-90">
+                  <circle cx="20" cy="20" r="18" stroke="currentColor" strokeWidth="3" fill="transparent" className="text-white/10" />
+                  <circle cx="20" cy="20" r="18" stroke="currentColor" strokeWidth="3" fill="transparent" strokeDasharray={`${vaultLevel.expProgress * 113} 113`} className="text-[var(--accent)] transition-all duration-1000 ease-out" />
+                </svg>
+                <span className="absolute text-xs font-black text-white">{vaultLevel.level}</span>
+              </div>
+              <div className="flex flex-col justify-center">
+                <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--accent)] font-bold">{vaultTitle}</div>
+                <div className="text-sm font-black text-white leading-none">{vaultLevel.exp.toLocaleString()} <span className="text-[10px] font-medium text-zinc-500">EXP</span></div>
+              </div>
+            </div>
+
+            <div className="h-8 w-px bg-white/5 hidden sm:block"></div>
+
+            <div className="flex flex-col justify-center">
+              <div className="text-[9px] uppercase tracking-[0.1em] text-zinc-500 font-bold flex items-center gap-1 mb-0.5">
+                <CheckCircle2 className="w-3 h-3 text-[var(--accent)]" /> Clear Rate
+              </div>
+              <div className="text-xl font-black text-white leading-none">{completionRate}%</div>
+            </div>
+
+            <div className="h-8 w-px bg-white/5 hidden sm:block"></div>
+
+            <div className="flex flex-col justify-center">
+              <div className="text-[9px] uppercase tracking-[0.1em] text-zinc-500 font-bold flex items-center gap-1 mb-0.5">
+                <TrendingUp className="w-3 h-3 text-[var(--accent)]" /> {NATIVE_UNIT_LABELS[decodedMediaType] || 'Logged'}
+              </div>
+              <div className="text-xl font-black text-white leading-none">{totalAccumulated.toLocaleString()}</div>
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 relative z-10 w-full md:w-auto">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4 relative z-10 w-full pt-2">
           <FilterSortBar 
             statusFilters={statusFilters}
             setStatusFilters={setStatusFilters}
             sortBy={sortBy}
             setSortBy={(val) => setSortBy(val as any)}
           />
-          <div className="relative flex-1 sm:w-64">
+          <div className="relative flex-1 lg:w-64">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input 
               type="text" 
               placeholder="Search title..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-black/50 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-orange-500 w-full backdrop-blur-md transition-shadow focus:shadow-[0_0_15px_rgba(249,115,22,0.2)] font-medium"
+              className="bg-black/50 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--accent)] w-full backdrop-blur-md transition-shadow focus:shadow-[0_0_15px_var(--accent)] font-medium"
+              style={{ boxShadow: searchQuery ? `0 0 15px ${accentBase}33` : undefined }}
             />
           </div>
           <button 
             onClick={handleAddNew}
-            className="bg-orange-600 hover:bg-orange-500 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(249,115,22,0.3)] hover:shadow-[0_0_30px_rgba(249,115,22,0.5)] shrink-0 font-display mt-2 sm:mt-0 flex items-center justify-center gap-2 whitespace-nowrap"
+            className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shrink-0 font-display mt-2 lg:mt-0 flex items-center justify-center gap-2 whitespace-nowrap"
+            style={{ boxShadow: `0 0 20px ${accentBase}4D` }}
           >
             <Plus className="w-4 h-4" /> Inscribe Record
           </button>

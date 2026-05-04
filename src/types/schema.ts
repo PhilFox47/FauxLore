@@ -197,6 +197,17 @@ export const MEDIA_COLORS: Record<MediaType, { text: string, bg: string, progres
   'Comic': { text: 'text-green-400', bg: 'bg-green-600', progress: 'bg-green-500', shadow: 'shadow-[0_0_12px_rgba(34,197,94,0.5)]', glow: 'bg-green-500/30' },
 };
 
+export const MEDIA_HEX: Record<MediaType, { base: string, hover: string }> = {
+  'Game': { base: '#f97316', hover: '#ea580c' }, // orange-500, orange-600
+  'Book': { base: '#14b8a6', hover: '#0d9488' }, // teal-500, teal-600
+  'Audiobook': { base: '#ec4899', hover: '#db2777' }, // pink-500, pink-600
+  'Visual Novel': { base: '#a855f7', hover: '#9333ea' }, // purple-500, purple-600
+  'Manga': { base: '#3b82f6', hover: '#2563eb' }, // blue-500, blue-600
+  'Series': { base: '#ef4444', hover: '#dc2626' }, // red-500, red-600
+  'Movie': { base: '#eab308', hover: '#ca8a04' }, // yellow-500, yellow-600
+  'Comic': { base: '#22c55e', hover: '#16a34a' }, // green-500, green-600
+};
+
 export const RARITY_COLORS: Record<string, { border: string, bg: string, text: string, textShadow: string }> = {
   'Common': { border: 'border-zinc-500', bg: 'bg-zinc-500/10', text: 'text-zinc-400', textShadow: 'drop-shadow-[0_0_8px_rgba(161,161,170,0.5)]' },
   'Uncommon': { border: 'border-green-500', bg: 'bg-green-500/10', text: 'text-green-400', textShadow: 'drop-shadow-[0_0_8px_rgba(74,222,128,0.5)]' },

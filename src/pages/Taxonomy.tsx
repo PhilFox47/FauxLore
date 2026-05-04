@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Search, Plus, Trash2, Tag, BookOpen, Hexagon, BarChart, Settings, BrainCircuit, ListFilter } from 'lucide-react';
+import { Search, Plus, Trash2, Tag, BookOpen, Hexagon, BarChart, Settings, BrainCircuit, ListFilter, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { DatabaseService } from '../services/db';
 import { generateText } from '../services/nanoGptService';
@@ -17,8 +17,30 @@ export function Taxonomy() {
   const [isMigrating, setIsMigrating] = useState(false);
   const [migratingId, setMigratingId] = useState<string|null>(null);
   const [sortBy, setSortBy] = useState<'Alphabetical' | 'Usage Count'>('Alphabetical');
+  const [selectedTaxonomy, setSelectedTaxonomy] = useState<{id: string; name: string; type: string} | null>(null);
 
   const isAdmin = user?.role === 'Admin';
+
+  const missingTaxonomyMedia = useMemo(() => {
+    const globalGenres = taxonomies.filter(t => t.type === 'genre').map(t => t.name.toLowerCase().trim());
+    const globalTags = taxonomies.filter(t => t.type === 'tag').map(t => t.name.toLowerCase().trim());
+
+    return media.map(m => {
+      const missingGenres = m.genres?.filter(g => !globalGenres.includes(g.toLowerCase().trim())) || [];
+      const missingTags = m.tags?.filter(t => !globalTags.includes(t.toLowerCase().trim())) || [];
+      return { ...m, missingGenres, missingTags };
+    }).filter(m => m.missingGenres.length > 0 || m.missingTags.length > 0);
+  }, [media, taxonomies]);
+
+  const mediaWithSelectedTaxonomy = useMemo(() => {
+    if (!selectedTaxonomy) return [];
+    const searchName = selectedTaxonomy.name.toLowerCase().trim();
+    if (selectedTaxonomy.type === 'genre') {
+      return media.filter(m => m.genres?.some(g => g.toLowerCase().trim() === searchName));
+    } else {
+      return media.filter(m => m.tags?.some(t => t.toLowerCase().trim() === searchName));
+    }
+  }, [selectedTaxonomy, media]);
 
   const filteredItems = useMemo(() => {
     let result = taxonomies
@@ -224,17 +246,21 @@ Return JSON only.`;
           <div className="flex-1 overflow-y-auto p-6 bg-[#09090B]">
             <div className="flex flex-wrap gap-2">
               {filteredItems.map(t => (
-                <div key={t.id} className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm animate-fade-in",
-                  activeTab === 'genre' 
-                    ? "bg-orange-500/10 border-orange-500/20 text-orange-200" 
-                    : "bg-teal-500/10 border-teal-500/20 text-teal-200"
-                )}>
+                <div 
+                  key={t.id} 
+                  onClick={() => setSelectedTaxonomy(t as any)}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm animate-fade-in cursor-pointer hover:brightness-125 transition-all",
+                    activeTab === 'genre' 
+                      ? "bg-orange-500/10 border-orange-500/20 text-orange-200" 
+                      : "bg-teal-500/10 border-teal-500/20 text-teal-200"
+                  )}
+                >
                   {t.name}
                   <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded-full ml-1 opacity-70" title="Usage Count">{t.usageCount}</span>
                   {isAdmin && t.usageCount === 0 && (
                     <button 
-                      onClick={() => handleDelete(t.id)}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
                       className="ml-1 opacity-50 hover:opacity-100 hover:text-red-400 transition-colors"
                       title="Delete"
                     >
@@ -264,13 +290,13 @@ Return JSON only.`;
              </p>
 
              <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-               {media.slice(0, 50).map(item => (
+               {missingTaxonomyMedia.slice(0, 50).map(item => (
                  <div key={item.id} className="bg-white/5 border border-white/5 p-4 rounded-xl">
                    <div className="font-semibold text-white mb-2 line-clamp-1">{item.title}</div>
                    
                    <div className="flex flex-wrap gap-1 mb-4">
-                     {item.genres?.map((g, i) => <span key={i} className="text-[10px] px-1.5 py-0.5 bg-orange-500/20 text-orange-300 rounded border border-orange-500/20">{g}</span>)}
-                     {item.tags?.map((t, i) => <span key={i} className="text-[10px] px-1.5 py-0.5 bg-teal-500/20 text-teal-300 rounded border border-teal-500/20">{t}</span>)}
+                     {item.missingGenres.map((g, i) => <span key={i} className="text-[10px] px-1.5 py-0.5 bg-orange-500/20 text-orange-300 rounded border border-orange-500/20">{g}</span>)}
+                     {item.missingTags.map((t, i) => <span key={i} className="text-[10px] px-1.5 py-0.5 bg-teal-500/20 text-teal-300 rounded border border-teal-500/20">{t}</span>)}
                    </div>
 
                    <button 
@@ -287,14 +313,61 @@ Return JSON only.`;
                    </button>
                  </div>
                ))}
-               {media.length === 0 && (
-                 <div className="text-center text-zinc-600 text-sm mt-10">Your library is empty.</div>
+               {missingTaxonomyMedia.length === 0 && (
+                 <div className="text-center text-zinc-600 text-sm mt-10">All items are categorized correctly!</div>
                )}
              </div>
           </div>
         </div>
 
       </div>
+
+      {/* Selected Taxonomy Overview Modal */}
+      {selectedTaxonomy && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#121214] border border-white/10 w-full max-w-2xl max-h-[80vh] rounded-2xl flex flex-col shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-white/10 flex items-center justify-between bg-black/40">
+              <div className="flex items-center gap-3">
+                {selectedTaxonomy.type === 'genre' ? (
+                  <BookOpen className="w-5 h-5 text-orange-400" />
+                ) : (
+                  <Tag className="w-5 h-5 text-teal-400" />
+                )}
+                <h2 className="text-xl font-bold tracking-tight text-white capitalize">
+                  {selectedTaxonomy.name}
+                </h2>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/70">
+                  {mediaWithSelectedTaxonomy.length} Items
+                </span>
+              </div>
+              <button 
+                onClick={() => setSelectedTaxonomy(null)}
+                className="p-2 hover:bg-white/10 rounded-full transition-colors text-zinc-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 grid gap-3 grid-cols-1 md:grid-cols-2">
+              {mediaWithSelectedTaxonomy.map(m => (
+                <div key={m.id} className="bg-white/5 border border-white/5 p-4 rounded-xl flex flex-col">
+                  <div className="font-semibold text-white mb-1 line-clamp-1">{m.title}</div>
+                  <div className="text-xs text-zinc-400 mb-3">{m.mediaType}</div>
+                  <div className="mt-auto flex flex-wrap gap-1">
+                    {m.genres?.slice(0,2).map((g,i) => <span key={`g-${i}`} className="text-[9px] px-1.5 py-0.5 bg-orange-500/20 text-orange-300 rounded border border-orange-500/20">{g}</span>)}
+                    {m.tags?.slice(0,3).map((t,i) => <span key={`t-${i}`} className="text-[9px] px-1.5 py-0.5 bg-teal-500/20 text-teal-300 rounded border border-teal-500/20">{t}</span>)}
+                  </div>
+                </div>
+              ))}
+              {mediaWithSelectedTaxonomy.length === 0 && (
+                <div className="col-span-1 md:col-span-2 text-center text-zinc-500 py-10">
+                  No media items use this {selectedTaxonomy.type}.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
