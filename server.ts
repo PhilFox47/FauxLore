@@ -783,6 +783,11 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       db.prepare("UPDATE settings SET userId = ? WHERE userId = 'default_user'").run(adminId);
       db.prepare("UPDATE ai_recaps SET userId = ? WHERE userId = 'default_user'").run(adminId);
       db.prepare("UPDATE artifacts SET userId = ? WHERE userId = 'default_user'").run(adminId);
+      db.prepare("UPDATE ai_text_cache SET userId = ? WHERE userId = 'default_user'").run(adminId);
+      db.prepare("UPDATE world_bosses SET userId = ? WHERE userId = 'default_user'").run(adminId);
+      db.prepare("UPDATE oracle_messages SET userId = ? WHERE userId = 'default_user'").run(adminId);
+      db.prepare("UPDATE taxonomies SET userId = ? WHERE userId = 'default_user'").run(adminId);
+      db.prepare("UPDATE franchises SET userId = ? WHERE userId = 'default_user'").run(adminId);
     }
   } catch(e) { console.error('Migration of default_user failed:', e); }
 
@@ -1429,27 +1434,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         }
       } catch(e) {}
 
-      // Clear the AI recap cache for this specific timeframe to force regeneration
-      try {
-        const d = new Date(log.timestamp);
-        // We aren't guaranteed to have date-fns here so do basic JS
-        // Just empty all recaps for this userId where timeId matches the approximate week/month/year?
-        // Actually, it's safer to just delete all recaps for the user entirely? No, let's just delete them all.
-        // It forces regeneration next time they visit Recaps. The cost is negligible considering how rare back-logging is.
-        // Even better, find the specific IDs.
-        // Year:
-        const year = d.getFullYear().toString();
-        // Month:
-        const month = `${year}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        
-        db.prepare(`DELETE FROM ai_recaps WHERE userId = ? AND timeId IN (?, ?, 'all')`).run(userId, year, month);
-
-        // For weeks it's RRRR-II format... which is hard to compute without date-fns. 
-        // Let's just delete the 'weekly' ones that might match or are close. Actually let's delete ALL weekly recaps for this user to be safe if a back-log happens.
-        db.prepare(`DELETE FROM ai_recaps WHERE userId = ? AND timeframe = 'weekly'`).run(userId);
-      } catch(e) {
-        // fail silently
-      }
+      // Skip clearing AI recaps automatically as it causes unexpected regenerations.
+      // Users can refresh manually if needed.
       
       const mediaRow = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(log.mediaId, userId) as any;
       if (mediaRow) {
@@ -1547,12 +1533,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         WHERE id = ? AND userId = ?
       `).run(newTimestamp, newDelta, newNote, newLocation, logId, userId);
 
-      // Clean AI recaps similar to add log if timestamp or delta changed significantly
-      if (deltaDiff !== 0 || newTimestamp !== existingLog.timestamp) {
-        try {
-          db.prepare(`DELETE FROM ai_recaps WHERE userId = ?`).run(userId);
-        } catch(e) {}
-      }
+      // Skip clearing AI recaps automatically
 
       // Update media item total logic
       if (deltaDiff !== 0) {
@@ -1581,10 +1562,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
 
       db.prepare('DELETE FROM logs WHERE id = ? AND userId = ?').run(logId, userId);
 
-      // Clean AI recaps
-      try {
-        db.prepare(`DELETE FROM ai_recaps WHERE userId = ?`).run(userId);
-      } catch(e) {}
+      // Skip clearing AI recaps automatically
 
       // Revert media item metrics
       const mediaRow = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(existingLog.mediaId, userId) as any;

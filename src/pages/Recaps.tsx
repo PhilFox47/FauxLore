@@ -5,7 +5,8 @@ import {
   startOfWeek, endOfWeek, subWeeks, 
   startOfMonth, endOfMonth, subMonths, 
   startOfYear, endOfYear, subYears, 
-  format, isWithinInterval, parseISO
+  format, isWithinInterval, parseISO,
+  startOfISOWeek, endOfISOWeek, formatISO
 } from 'date-fns';
 import { calculateScaledDelta } from '../lib/scaling';
 import { calculateRPGState } from '../lib/rpgSystem';
@@ -20,7 +21,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieCha
 type Timeframe = 'week' | 'month' | 'year';
 
 export function Recaps() {
-  const { media, logs, settings, aiRecaps, saveAiRecap, artifacts, worldBosses } = useMediaContext();
+  const { media, logs, settings, aiRecaps, saveAiRecap, artifacts, worldBosses, isLoading } = useMediaContext();
   const [timeframe, setTimeframe] = useState<Timeframe>('week');
   const [offsetOffset, setOffsetOffset] = useState(1); 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -32,7 +33,7 @@ export function Recaps() {
     const now = new Date();
     if (timeframe === 'week') {
       const target = subWeeks(now, offsetOffset);
-      return { start: startOfWeek(target, { weekStartsOn: 1 }), end: endOfWeek(target, { weekStartsOn: 1 }) };
+      return { start: startOfISOWeek(target), end: endOfISOWeek(target) };
     } else if (timeframe === 'month') {
       const target = subMonths(now, offsetOffset);
       return { start: startOfMonth(target), end: endOfMonth(target) };
@@ -43,7 +44,7 @@ export function Recaps() {
   }, [timeframe, offsetOffset]);
 
   const timeId = useMemo(() => {
-    if (timeframe === 'week') return format(currentInterval.start, "yyyy-'W'ww");
+    if (timeframe === 'week') return format(currentInterval.start, "RRRR-'W'II");
     if (timeframe === 'month') return format(currentInterval.start, "yyyy-MM");
     return format(currentInterval.start, "yyyy");
   }, [timeframe, currentInterval]);
@@ -133,8 +134,9 @@ export function Recaps() {
   }, [activeProgressLogs, media, settings]);
 
   const currentRecap = useMemo(() => {
-    return aiRecaps.find(r => r.timeframe === timeframe && r.timeId === timeId);
-  }, [aiRecaps, timeframe, timeId]);
+    if (isLoading) return undefined; // Return undefined while loading to avoid false "missing" states
+    return aiRecaps.find(r => r.timeframe === timeframe && r.timeId === timeId) || null;
+  }, [aiRecaps, timeframe, timeId, isLoading]);
 
   const formatIntervalLabel = () => {
     if (timeframe === 'week') {
@@ -156,14 +158,22 @@ export function Recaps() {
   const handleNext = () => setOffsetOffset(p => Math.max(1, p - 1));
 
   useEffect(() => {
-    if (!currentRecap && activeLogs.length > 0 && settings?.nanoGptApiKey && !isGenerating) {
+    // Only trigger if:
+    // 1. Not loading
+    // 2. No recap exists (returned null, not undefined)
+    // 3. There is activity
+    // 4. We have API keys
+    // 5. Not already generating
+    // 6. We are looking at a RECENT period (e.g. within the last 2 periods) to prevent mass historical generation
+    const isRecent = offsetOffset <= 2;
+
+    if (!isLoading && currentRecap === null && activeLogs.length > 0 && settings?.nanoGptApiKey && !isGenerating && isRecent) {
       if (!attemptedGenRef.current.has(timeId)) {
         attemptedGenRef.current.add(timeId);
-        // Fire asynchronously to not block render
         setTimeout(() => handleGenerateAI(), 100);
       }
     }
-  }, [currentRecap, activeLogs.length, settings?.nanoGptApiKey, isGenerating, timeId]);
+  }, [currentRecap, activeLogs.length, settings?.nanoGptApiKey, isGenerating, timeId, isLoading, offsetOffset]);
 
   const handleGenerateAI = async () => {
     if (!settings?.nanoGptApiKey) {
