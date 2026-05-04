@@ -299,9 +299,15 @@ async function startServer() {
     try {
       // Exclude Movies from boss spawns as they are either watched or unwatched (not ongoing)
       // Also exclude media where user explicitly disabled enemies
-      const activeMedia = db.prepare("SELECT id, title, mediaType FROM media WHERE userId = ? AND status = 'Active' AND mediaType != 'Movie' AND (noEnemies = 0 OR noEnemies IS NULL)").all(userId) as any[];
+      const allActiveMedia = db.prepare("SELECT id FROM media WHERE userId = ? AND status = 'Active' AND mediaType != 'Movie' AND (noEnemies = 0 OR noEnemies IS NULL)").all(userId) as any[];
+      if (allActiveMedia.length === 0) {
+        if (throwOnEmpty) throw new Error("No active media found (excluding Movies & disabled enemies). Start consuming a Media Item to spawn an enemy!");
+        return;
+      }
+
+      const activeMedia = db.prepare("SELECT id, title, mediaType FROM media WHERE userId = ? AND status = 'Active' AND mediaType != 'Movie' AND (noEnemies = 0 OR noEnemies IS NULL) AND id NOT IN (SELECT mediaId FROM world_bosses WHERE userId = ? AND status = 'Active')").all(userId, userId) as any[];
       if (activeMedia.length === 0) {
-        if (throwOnEmpty) throw new Error("No active media found (excluding Movies & disabled enemies). Start consuming a Media Item to spawn a boss!");
+        if (throwOnEmpty) throw new Error("All your active media already have enemies. Defeat or survive them before requesting an Encore!");
         return;
       }
 
@@ -319,13 +325,13 @@ async function startServer() {
 
       const getBaseTarget = (type: string, lv: number) => {
         const levels = {
-          'Game': [1, 2.5, 5, 10, 20],
-          'Visual Novel': [1, 2.5, 5, 10, 20],
-          'Book': [20, 50, 100, 200, 400],
-          'Manga': [3, 6, 10, 17, 30],
-          'Series': [1, 3, 6, 12, 20],
-          'Comic': [2, 4, 7, 12, 15]
-        }[type] || [45, 90, 180, 360, 720]; // Fallback to old Master Pages scale
+          'Game': [2, 5, 10, 20, 40],
+          'Visual Novel': [2, 5, 10, 20, 40],
+          'Book': [40, 100, 200, 400, 800],
+          'Manga': [6, 12, 20, 34, 60],
+          'Series': [2, 6, 12, 24, 40],
+          'Comic': [4, 8, 14, 24, 30]
+        }[type] || [90, 180, 360, 720, 1440]; // Fallback to old Master Pages scale
 
         return levels[lv - 1];
       };
@@ -833,6 +839,17 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
     }
   } catch (e) {
     console.error("Taxonomy Seed Error:", e);
+  }
+
+  try {
+    const versionRow = db.prepare("PRAGMA user_version").get() as { user_version: number };
+    if (versionRow.user_version < 1) {
+      db.prepare("UPDATE world_bosses SET targetProgress = targetProgress * 2 WHERE status = 'Active'").run();
+      db.prepare("PRAGMA user_version = 1").run();
+      console.log('Migrated world_bosses to double target progress (user_version 1)');
+    }
+  } catch (e) {
+    console.error("Migration to user_version 1 failed:", e);
   }
 
   const safeJsonParse = (str: any) => {
