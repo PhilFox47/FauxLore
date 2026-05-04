@@ -149,7 +149,7 @@ export function LootReveal({ artifact, onClose }: LootRevealProps) {
               : { type: "spring", duration: 0.8, bounce: 0.4 }
           }
           className={cn(
-            "relative w-full max-w-[320px] sm:max-w-sm rounded-[2rem] border p-6 sm:p-8 text-center flex flex-col items-center justify-center overflow-hidden z-20 group",
+            "relative w-full max-w-[360px] sm:max-w-md rounded-[2rem] border p-6 sm:p-8 text-center flex flex-col items-center justify-center overflow-hidden z-20 group",
             !isHighTier && borderCls
           )}
           style={getCardStyle()}
@@ -187,40 +187,12 @@ export function LootReveal({ artifact, onClose }: LootRevealProps) {
 
           <div className="relative z-30 flex flex-col items-center w-full">
             
-            {/* The Gem Icon Container */}
-            <motion.div
-              animate={shake ? {} : { 
-                y: [0, -8, 0],
-              }}
-              transition={{ 
-                duration: 3,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
-              className="relative mb-8 mt-4"
-            >
-               {/* Under glow */}
-               <div className={cn("absolute inset-0 blur-2xl rounded-full opacity-60", bgCls)}></div>
-               
-               <div className={cn(
-                 "relative p-5 sm:p-6 rounded-[1.5rem] border shadow-2xl flex items-center justify-center backdrop-blur-xl transition-all duration-700",
-                 shake ? "scale-90 brightness-150" : "scale-100",
-                 isRainbow ? "border-purple-500/50 bg-gradient-to-br from-purple-900/40 to-black/80" : cn(borderCls, bgCls)
-               )}>
-                 {renderSlotIcon(artifact.slot || 'Accessory', cn(
-                   "w-16 h-16 sm:w-20 sm:h-20 transition-all duration-700 drop-shadow-xl",
-                   shake ? "animate-pulse" : "",
-                   isRainbow ? 'text-purple-300 drop-shadow-[0_0_15px_rgba(216,180,254,0.8)]' : colorCls
-                 ))}
-               </div>
-            </motion.div>
-
             {/* Rarity & Item Type Badge */}
             <motion.div
               initial={{ opacity: 0, scale: 0.8, y: 10 }}
               animate={{ opacity: showDetails ? 1 : 0, scale: showDetails ? 1 : 0.8, y: showDetails ? 0 : 10 }}
-              transition={{ duration: 0.6, delay: 0.1, type: "spring" }}
-              className="w-full flex justify-center items-center gap-2 mb-3"
+              transition={{ duration: 0.6, delay: 0.2, type: "spring" }}
+              className="w-full flex justify-center items-center gap-2 mb-6 mt-2"
             >
               <Sparkles className={cn("w-4 h-4", isRainbow ? 'text-yellow-400 animate-pulse' : colorCls)} />
               <span className={cn(
@@ -232,11 +204,51 @@ export function LootReveal({ artifact, onClose }: LootRevealProps) {
               <Sparkles className={cn("w-4 h-4", isRainbow ? 'text-yellow-400 animate-pulse' : colorCls)} />
             </motion.div>
 
+            {/* The Gem Icon Container */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.5, y: 20 }}
+              animate={showDetails ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.5, y: 20 }}
+              transition={{ 
+                duration: 0.6, 
+                delay: 0.8, 
+                type: "spring"
+              }}
+              className="relative mb-8 mt-2"
+            >
+               {/* Ambient bobbing after reveal */}
+               <motion.div
+                 animate={{ y: [0, -8, 0] }}
+                 transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 1.4 }}
+               >
+                 {/* Under glow */}
+                 <div className={cn("absolute inset-0 blur-2xl rounded-full opacity-60", bgCls, !showDetails && "hidden")}></div>
+                 
+                 <div className={cn(
+                   "relative p-5 sm:p-6 rounded-[1.5rem] border shadow-2xl flex items-center justify-center backdrop-blur-xl transition-all duration-700",
+                   shake ? "scale-90 brightness-150" : "scale-100",
+                   isRainbow ? "border-purple-500/50 bg-gradient-to-br from-purple-900/40 to-black/80" : cn(borderCls, bgCls)
+                 )}>
+                   {artifact.imageUrl ? (
+                      <img src={artifact.imageUrl} referrerPolicy="no-referrer" alt={artifact.name} className={cn(
+                        "w-32 h-32 sm:w-40 sm:h-40 rounded-xl object-cover transition-all duration-700 shadow-xl",
+                        shake ? "animate-pulse" : "",
+                      )} />
+                   ) : (
+                      renderSlotIcon(artifact.slot || 'Accessory', cn(
+                        "w-16 h-16 sm:w-20 sm:h-20 transition-all duration-700 drop-shadow-xl",
+                        shake ? "animate-pulse" : "",
+                        isRainbow ? 'text-purple-300 drop-shadow-[0_0_15px_rgba(216,180,254,0.8)]' : colorCls
+                      ))
+                   )}
+                 </div>
+               </motion.div>
+            </motion.div>
+
             {/* Item Name */}
             <motion.h2
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: showDetails ? 1 : 0, y: showDetails ? 0 : 20 }}
-              transition={{ duration: 0.6, delay: 0.2, type: "spring" }}
+              transition={{ duration: 0.6, delay: 1.5, type: "spring" }}
               className={cn(
                 "text-2xl sm:text-3xl font-black text-white mb-6 leading-tight tracking-tight px-2 drop-shadow-lg",
                 isRainbow && "text-transparent bg-clip-text bg-gradient-to-b from-white to-purple-200"
@@ -249,7 +261,7 @@ export function LootReveal({ artifact, onClose }: LootRevealProps) {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: showDetails ? 1 : 0, y: showDetails ? 0 : 20 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
+              transition={{ duration: 0.6, delay: 2.1 }}
               className="w-full relative mb-6"
             >
                <div className="absolute left-0 top-0 bottom-0 w-1 rounded-full bg-gradient-to-b from-transparent via-white/20 to-transparent"></div>
@@ -263,7 +275,7 @@ export function LootReveal({ artifact, onClose }: LootRevealProps) {
             <motion.div
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: showDetails ? 1 : 0, y: showDetails ? 0 : 20, scale: showDetails ? 1 : 0.95 }}
-              transition={{ duration: 0.6, delay: 0.4 }}
+              transition={{ duration: 0.6, delay: 2.6 }}
               className="w-full mb-8 relative p-[1px] rounded-2xl overflow-hidden group/stats"
             >
               {/* Animated border line */}
@@ -296,7 +308,7 @@ export function LootReveal({ artifact, onClose }: LootRevealProps) {
             <motion.button
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: showDetails ? 1 : 0, y: showDetails ? 0 : 20 }}
-              transition={{ duration: 0.6, delay: 0.5 }}
+              transition={{ duration: 0.6, delay: 3.2 }}
               onClick={onClose}
               disabled={!showDetails}
               className={cn(

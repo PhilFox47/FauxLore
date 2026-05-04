@@ -314,7 +314,7 @@ async function startServer() {
     return data.data[0].url;
   }
 
-  async function generateBossImageBackground(userId: string, bossId: string, bossName: string, mediaTitle: string, mediaType: string) {
+  async function generateBossImageBackground(userId: string, bossId: string, bossName: string, mediaTitle: string, mediaType: string, bossLevel: number = 1) {
     try {
       const sysSettings: any = db.prepare('SELECT geminiApiKey, nanoGptApiKey FROM system_settings WHERE id = \'system\'').get();
       const userSettings: any = db.prepare('SELECT geminiApiKey, nanoGptApiKey FROM settings WHERE userId = ?').get(userId);
@@ -322,9 +322,14 @@ async function startServer() {
       const nanoGptKey = userSettings?.nanoGptApiKey || sysSettings?.nanoGptApiKey;
       if (!geminiKey || !nanoGptKey) return;
 
+      const styleDesc = bossLevel >= 5 ? "looks incredibly epic, intimidating, and legendary, exuding aura and extreme danger." 
+                      : bossLevel >= 3 ? "looks formidable and elite, quite imposing and well-equipped." 
+                      : "looks relatively mundane, like a common foot soldier, grunt, or weak beast.";
+
       const prompt = `You are an expert AI image prompt engineer. An RPG boss named "${bossName}" has been encountered for the media "${mediaTitle}" (Type: ${mediaType}).
-Create a highly detailed, descriptive image prompt for the Chroma model.
-It should describe the boss in a dark, epic RPG style, perfectly capturing the essence of the character/concept from ${mediaTitle}. Include details about lighting, pose, background, and art style.
+Create a highly detailed, descriptive image prompt for the Chroma model to generate an image of ONLY the boss character or entity itself isolated, looking like an RPG icon or portrait, NOT a full background wallpaper. 
+The boss ${styleDesc} 
+Contextualize it perfectly to fit the world, lore, and visual aesthetic of "${mediaTitle}". Describe its armor, weapons, aura, posture, and facial expression depending on its description. Use a dark, epic RPG style.
 Return ONLY the raw prompt text, nothing else.`;
 
       const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
@@ -349,7 +354,7 @@ Return ONLY the raw prompt text, nothing else.`;
     }
   }
 
-  async function generateArtifactImageBackground(userId: string, artifactId: string, artifactName: string, artifactDesc: string, mediaTitle: string) {
+  async function generateArtifactImageBackground(userId: string, artifactId: string, artifactName: string, artifactDesc: string, mediaTitle: string, rarity: string = "Common") {
     try {
       const sysSettings: any = db.prepare('SELECT geminiApiKey, nanoGptApiKey FROM system_settings WHERE id = \'system\'').get();
       const userSettings: any = db.prepare('SELECT geminiApiKey, nanoGptApiKey FROM settings WHERE userId = ?').get(userId);
@@ -357,9 +362,16 @@ Return ONLY the raw prompt text, nothing else.`;
       const nanoGptKey = userSettings?.nanoGptApiKey || sysSettings?.nanoGptApiKey;
       if (!geminiKey || !nanoGptKey) return;
 
+      const rarityDesc = rarity === "Mythic" ? "is a multi-colored cosmic and impossible artifact, pulsing with god-like energy." 
+                       : rarity === "Legendary" ? "is legendary, glowing with a golden, intense aura and extreme craftsmanship." 
+                       : rarity === "Epic" ? "is epic, adorned with purple magical effects and ornate details."
+                       : rarity === "Rare" ? "is rare, looking special with a faint blue glow."
+                       : "is common and mundane, looking like standard, ordinary gear with no magical glow.";
+
       const prompt = `You are an expert AI image prompt engineer. An RPG loot item (artifact) named "${artifactName}" with the description "${artifactDesc}" has been found. It originates from the media "${mediaTitle}".
-Create a highly detailed, descriptive image prompt for the Chroma model.
-The image should show the item floating gloriously in a dramatic, magical lighting setting, like a legendary item drop in an RPG menu. Focus on the materials, details, particle effects, and aura around the item.
+Create a highly detailed, descriptive image prompt for the Chroma model to generate an image of ONLY the artifact itself as a single item icon on a dark, neutral background.
+The item ${rarityDesc} 
+Contextualize its design perfectly to fit the world, lore, and visual aesthetic of "${mediaTitle}". Describe its materials, engravings, and visual effects based on its rarity and description.
 Return ONLY the raw prompt text, nothing else.`;
 
       const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
@@ -1938,13 +1950,13 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       const userId = getAuthUser(req, res);
       if (!userId) return;
       const artifactId = req.params.id;
-      const artifact = db.prepare('SELECT name, description, mediaId FROM artifacts WHERE id = ? AND userId = ?').get(artifactId, userId) as any;
+      const artifact = db.prepare('SELECT name, description, mediaId, rarity FROM artifacts WHERE id = ? AND userId = ?').get(artifactId, userId) as any;
       if (!artifact) return res.status(404).json({ error: 'Not found' });
       const mediaItem = db.prepare('SELECT title FROM media WHERE id = ?').get(artifact.mediaId) as any;
       if (!mediaItem) return res.status(404).json({ error: 'Media not found' });
       
       // Await so the UI blocks and shows the loading spinner
-      await generateArtifactImageBackground(userId, artifactId, artifact.name, artifact.description, mediaItem.title);
+      await generateArtifactImageBackground(userId, artifactId, artifact.name, artifact.description, mediaItem.title, artifact.rarity);
       
       res.json({ success: true, message: 'Image generation finished.' });
     } catch (e) { res.status(500).json({ error: String(e) }); }
@@ -1955,12 +1967,12 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       const userId = getAuthUser(req, res);
       if (!userId) return;
       const bossId = req.params.id;
-      const boss = db.prepare('SELECT name, mediaId FROM world_bosses WHERE id = ? AND userId = ?').get(bossId, userId) as any;
+      const boss = db.prepare('SELECT name, mediaId, level FROM world_bosses WHERE id = ? AND userId = ?').get(bossId, userId) as any;
       if (!boss) return res.status(404).json({ error: 'Not found' });
       const mediaItem = db.prepare('SELECT title, mediaType FROM media WHERE id = ?').get(boss.mediaId) as any;
       if (!mediaItem) return res.status(404).json({ error: 'Media not found' });
 
-      await generateBossImageBackground(userId, bossId, boss.name, mediaItem.title, mediaItem.mediaType);
+      await generateBossImageBackground(userId, bossId, boss.name, mediaItem.title, mediaItem.mediaType, boss.level);
       
       res.json({ success: true, message: 'Image generation finished.' });
     } catch (e) { res.status(500).json({ error: String(e) }); }

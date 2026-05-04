@@ -5,6 +5,7 @@ import { cn } from '../lib/utils';
 import { MEDIA_COLORS, Artifact, RARITY_COLORS } from '../types/schema';
 import { generateAiArtifactWithGemini } from '../services/geminiService';
 import { v4 as uuidv4 } from 'uuid';
+import { DatabaseService } from '../services/db';
 import { LootReveal } from '../components/LootReveal';
 
 import { MediaDetailModal } from '../components/MediaDetailModal';
@@ -47,7 +48,16 @@ export function Armory() {
         isEquipped: false
       };
       await saveArtifact(newArtifact);
-      setLootedArtifact(newArtifact);
+      
+      try {
+        await generateArtifactImage(newArtifact.id);
+        const loadedArtifacts = await DatabaseService.getArtifacts();
+        const updatedArtifact = loadedArtifacts.find(a => a.id === newArtifact.id) || newArtifact;
+        setLootedArtifact(updatedArtifact);
+      } catch (e) {
+        console.error("Failed to generate and load image for artifact", e);
+        setLootedArtifact(newArtifact);
+      }
     } catch(e: any) {
       console.error("Failed to loot: " + e.message);
       alert("Failed to loot: " + e.message + "\n\nNote: Ensure your Gemini API Key is set in AI Studio Secrets.");
@@ -240,7 +250,7 @@ export function Armory() {
                                  <div className={cn("absolute inset-0 blur-xl opacity-40", RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text)}></div>
                                  {item.imageUrl ? (
                                     <div className="w-10 h-10 sm:w-12 sm:h-12 relative z-10 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 mx-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); setExpandedImage(item.imageUrl || null); }}>
-                                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                     </div>
                                  ) : (
                                     renderSlotIcon(slot, cn("w-6 h-6 sm:w-8 sm:h-8 relative z-10 drop-shadow-lg mx-auto", RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text))
@@ -458,14 +468,18 @@ export function Armory() {
         )}
       >
          <div className="flex flex-col h-full relative z-10">
-            <div className="flex gap-4 mb-4">
-              {artifact.imageUrl && (
-                <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 cursor-pointer" onClick={(e) => { e.stopPropagation(); setExpandedImage(artifact.imageUrl || null); }}>
-                  <img src={artifact.imageUrl} alt={artifact.name} className="w-full h-full object-cover" />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                 <div className="flex items-center justify-between mb-2">
+            {artifact.imageUrl && (
+              <div 
+                className="w-full aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 cursor-pointer mb-4 relative group/image" 
+                onClick={(e) => { e.stopPropagation(); setExpandedImage(artifact.imageUrl || null); }}
+              >
+                <img src={artifact.imageUrl} alt={artifact.name} className="w-full h-full object-cover transition-transform duration-700 group-hover/image:scale-105" referrerPolicy="no-referrer" />
+                <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-transparent pointer-events-none"></div>
+              </div>
+            )}
+            
+            <div className="flex-1 flex flex-col">
+                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <div className="text-zinc-500" title={artifact.slot}>
                         {renderSlotIcon(artifact.slot || 'Accessory', "w-4 h-4")}
@@ -502,13 +516,12 @@ export function Armory() {
                     </button>
                  </div>
                  
-                 <h3 className="text-lg font-black text-white mb-1 leading-tight relative drop-shadow-md z-10 truncate" title={artifact.name}>
+                 <h3 className="text-lg sm:text-xl font-black text-white mb-2 leading-tight relative drop-shadow-md break-words">
                    {artifact.name}
                  </h3>
-                 <p className="text-xs text-zinc-500 leading-relaxed italic line-clamp-2" title={artifact.description}>
+                 <p className="text-xs text-zinc-400 leading-relaxed italic mb-4">
                    "{artifact.description}"
                  </p>
-              </div>
             </div>
 
             <div className="mt-auto pt-4 border-t border-white/5 flex flex-col gap-3">
@@ -569,7 +582,7 @@ export function Armory() {
       {expandedImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" onClick={() => setExpandedImage(null)}>
           <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center">
-            <img src={expandedImage} alt="Expanded Artifact" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" />
+            <img src={expandedImage} alt="Expanded Artifact" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" referrerPolicy="no-referrer" />
             <button
               onClick={() => setExpandedImage(null)}
               className="absolute top-4 right-4 bg-black/50 hover:bg-black/80 text-white w-10 h-10 rounded-full flex items-center justify-center transition-colors"

@@ -525,15 +525,16 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                         </span>
                       </div>
 
-                      <div className="flex gap-4 mb-4 relative z-10">
-                        {boss.imageUrl && (
-                          <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg cursor-pointer" onClick={(e) => { e.stopPropagation(); setExpandedImage(boss.imageUrl || null); }}>
-                            <img src={boss.imageUrl} alt={boss.name} className="w-full h-full object-cover" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 mb-1">
-                            <h4 className="text-lg font-black text-white drop-shadow-md break-words">
+                      {boss.imageUrl && (
+                        <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 shadow-lg cursor-pointer mb-4 relative group/image" onClick={(e) => { e.stopPropagation(); setExpandedImage(boss.imageUrl || null); }}>
+                          <img src={boss.imageUrl} alt={boss.name} className="w-full h-full object-cover transition-transform duration-700 group-hover/image:scale-105" referrerPolicy="no-referrer" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-transparent pointer-events-none"></div>
+                        </div>
+                      )}
+                      
+                      <div className="flex-1 flex flex-col mb-4 relative z-10">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <h4 className="text-lg sm:text-xl font-black text-white drop-shadow-md break-words leading-tight">
                               {boss.name}
                             </h4>
                             <div className="flex gap-1 shrink-0">
@@ -581,7 +582,6 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                           <p className="text-xs text-zinc-400/80 truncate italic">
                             Target: {mediaItem?.title || "Unknown"}
                           </p>
-                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -652,22 +652,22 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                         </span>
                       </div>
 
-                      <div className="flex gap-4 mb-4 relative z-10">
-                        {boss.imageUrl && (
-                          <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg cursor-pointer" onClick={(e) => { e.stopPropagation(); setExpandedImage(boss.imageUrl || null); }}>
-                            <img src={boss.imageUrl} alt={boss.name} className="w-full h-full object-cover" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 mb-1">
-                            <h4 className="text-lg font-black text-white drop-shadow-md break-words">
+                      {boss.imageUrl && (
+                        <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 shadow-lg cursor-pointer mb-4 relative group/image" onClick={(e) => { e.stopPropagation(); setExpandedImage(boss.imageUrl || null); }}>
+                          <img src={boss.imageUrl} alt={boss.name} className="w-full h-full object-cover transition-transform duration-700 group-hover/image:scale-105" referrerPolicy="no-referrer" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-transparent pointer-events-none"></div>
+                        </div>
+                      )}
+                      
+                      <div className="flex-1 flex flex-col mb-4 relative z-10">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <h4 className="text-lg sm:text-xl font-black text-white drop-shadow-md break-words leading-tight">
                               {boss.name}
                             </h4>
                           </div>
                           <p className="text-xs text-zinc-400/80 truncate italic">
                             Target: {mediaItem?.title || "Unknown"}
                           </p>
-                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -862,7 +862,7 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
       {expandedImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" onClick={() => setExpandedImage(null)}>
           <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center">
-            <img src={expandedImage} alt="Expanded Boss" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" />
+            <img src={expandedImage} alt="Expanded Boss" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" referrerPolicy="no-referrer" />
             <button
               onClick={() => setExpandedImage(null)}
               className="absolute top-4 right-4 bg-black/50 hover:bg-black/80 text-white w-10 h-10 rounded-full flex items-center justify-center transition-colors"
