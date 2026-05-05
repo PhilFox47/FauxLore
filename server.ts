@@ -190,6 +190,12 @@ async function startServer() {
     fs.mkdirSync(backupsDir);
   }
 
+  // Uploads Manager
+  const uploadsDir = path.join(process.cwd(), 'uploads');
+  const aiImagesDir = path.join(uploadsDir, 'ai-images');
+  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
+  if (!fs.existsSync(aiImagesDir)) fs.mkdirSync(aiImagesDir);
+
   function createDatabaseBackup() {
     try {
       const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
@@ -328,8 +334,26 @@ async function startServer() {
     });
     if (!res.ok) throw new Error("NanoGPT Image Generation Failed: " + await res.text());
     const data = await res.json();
-    if (!data.data?.[0]?.url) throw new Error("NanoGPT did not return an image URL");
-    return data.data[0].url;
+    const remoteUrl = data.data?.[0]?.url;
+    if (!remoteUrl) throw new Error("NanoGPT did not return an image URL");
+
+    try {
+      // Download and store locally
+      const imageRes = await fetch(remoteUrl);
+      if (!imageRes.ok) throw new Error(`Failed to fetch image from remote URL: ${remoteUrl}`);
+      const arrayBuffer = await imageRes.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      
+      const fileName = `${uuidv4()}.webp`;
+      const filePath = path.join(aiImagesDir, fileName);
+      
+      fs.writeFileSync(filePath, buffer);
+      
+      return `/uploads/ai-images/${fileName}`;
+    } catch (e) {
+      console.error("Failed to store image locally, falling back to remote URL", e);
+      return remoteUrl;
+    }
   }
 
   async function generateBossImageBackground(userId: string, bossId: string, bossName: string, mediaTitle: string, mediaType: string, bossLevel: number = 1) {
@@ -2803,6 +2827,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       res.status(500).json({ error: error.message || "Failed to fetch metadata from MangaDex." });
     }
   });
+
+  app.use('/uploads', express.static(uploadsDir));
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
