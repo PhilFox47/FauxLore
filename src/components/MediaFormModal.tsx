@@ -98,7 +98,7 @@ export function MediaFormModal({
       isComplete = true;
     }
 
-    if (isComplete && formData.status !== "Completed") {
+    if (isComplete && formData.status !== "Completed" && formData.status !== "Extras") {
       setFormData((p) => ({ ...p, status: "Completed" }));
     }
   }, [
@@ -148,7 +148,7 @@ export function MediaFormModal({
     let finalData = { ...formData };
 
     if (
-      finalData.status === "Completed" &&
+      (finalData.status === "Completed" || finalData.status === "Extras") &&
       typeof finalData.userRating !== "number"
     ) {
       const ratingStr = window.prompt(

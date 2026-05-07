@@ -126,6 +126,7 @@ export function Lorebook() {
                                          case 'Active': return 'text-amber-400 font-black';
                                          case 'Planning': return 'text-blue-400 font-black';
                                          case 'Completed': return 'text-emerald-400 font-black drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]';
+                                         case 'Extras': return 'text-orange-400 font-black drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]';
                                          case 'Dropped': return 'text-red-400 font-black';
                                          default: return 'text-white font-black';
                                       }

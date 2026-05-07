@@ -5,7 +5,7 @@
 export const MEDIA_TYPES = ['Game', 'Book', 'Visual Novel', 'Manga', 'Series', 'Movie', 'Comic', 'Audiobook'] as const;
 export type MediaType = typeof MEDIA_TYPES[number];
 
-export const STATUSES = ['Planning', 'Active', 'On Hold', 'Completed', 'Dropped', 'Unreleased'] as const;
+export const STATUSES = ['Planning', 'Active', 'Extras', 'On Hold', 'Completed', 'Dropped', 'Unreleased'] as const;
 export type Status = typeof STATUSES[number];
 
 export interface MediaItem {

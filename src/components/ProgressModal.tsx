@@ -153,7 +153,7 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       extraUpdates.status = status;
     }
     
-    if (status === 'Completed') {
+    if (status === 'Completed' || status === 'Extras') {
       if (userRating !== '' && userRating !== item.userRating) {
         extraUpdates.userRating = userRating;
       }
@@ -406,11 +406,12 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
              >
                <option value="Active">Active (Engaged)</option>
                <option value="Planning">Planning (Scouted)</option>
+               <option value="Extras">Extras (Post-Game/Bonus)</option>
                <option value="Completed">Completed (Defeated)</option>
                <option value="Dropped">Dropped (Retreated)</option>
              </select>
 
-             {status === 'Completed' && (
+             {(status === 'Completed' || status === 'Extras') && (
                <div className="mt-3 space-y-3 p-4 bg-gradient-to-b from-amber-500/10 to-transparent border-t border-amber-500/20 rounded-b-xl relative">
                  <div>
                    <label className="flex items-center justify-between text-[9px] font-black text-amber-500/70 uppercase tracking-widest font-display mb-1.5">

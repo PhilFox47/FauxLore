@@ -65,21 +65,21 @@ export function Recaps() {
   }, [activeLogs, media]);
 
   const completedMedia = useMemo(() => {
-    // 1. Find all media that have a statusChange log to 'Completed' in this interval
+    // 1. Find all media that have a statusChange log to 'Completed' or 'Extras' in this interval
     const completedLogIds = new Set(
       activeLogs
-        .filter(l => l.metricType === 'statusChange' && l.note?.toLowerCase().includes('to completed'))
+        .filter(l => l.metricType === 'statusChange' && (l.note?.toLowerCase().includes('to completed') || l.note?.toLowerCase().includes('to extras')))
         .map(l => l.mediaId)
     );
 
-    // 2. Fallback for older items: completed status and updatedAt in interval
+    // 2. Fallback for older items: completed/extras status and updatedAt in interval
     const completedLegacy = activeMedia.filter(m => {
       if (completedLogIds.has(m.id)) return false;
       
       const hasStatusLogs = logs.some(l => l.mediaId === m.id && l.metricType === 'statusChange');
       if (hasStatusLogs) return false; // This item uses the new system, so if it didn't have a log in the interval, it didn't finish now.
 
-      return m.status === 'Completed' && isWithinInterval(parseISO(m.updatedAt), currentInterval);
+      return (m.status === 'Completed' || m.status === 'Extras') && isWithinInterval(parseISO(m.updatedAt), currentInterval);
     });
 
     const logBasedCompleted = media.filter(m => completedLogIds.has(m.id));
@@ -1482,7 +1482,7 @@ ${promptContext}`, settings.aiPersona);
                             Ongoing Chronicles
                           </h3>
                           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-                             {activeMedia.filter(m => m.status !== 'Completed').map(m => (
+                             {activeMedia.filter(m => m.status !== 'Completed' && m.status !== 'Extras').map(m => (
                                 <div key={m.id} className="group relative aspect-[3/4.5] rounded-2xl overflow-hidden border border-white/5 hover:border-white/20 transition-all shadow-xl">
                                    {m.coverImageUrl ? (
                                      <img src={m.coverImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={m.title} />

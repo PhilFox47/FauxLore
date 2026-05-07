@@ -44,7 +44,7 @@ export function MediaLibrary() {
 
   const completionRate = useMemo(() => {
     if (baseMediaItems.length === 0) return 0;
-    const completed = baseMediaItems.filter(m => m.status === 'Completed').length;
+    const completed = baseMediaItems.filter(m => m.status === 'Completed' || m.status === 'Extras').length;
     return Math.round((completed / baseMediaItems.length) * 100);
   }, [baseMediaItems]);
   

@@ -73,7 +73,11 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
 
     const chartData = uniqueDates.map(date => {
        cumulative += (dataByDate.get(date) || 0);
-       return { name: format(new Date(date), 'MMM d'), pages: Math.floor(cumulative) };
+       return { 
+         timestamp: new Date(date).getTime(),
+         name: format(new Date(date), 'MMM d'), 
+         pages: Math.floor(cumulative) 
+       };
     });
 
     return { currentMediaStreak: currentStreak, maxMediaStreak: max, activeDays: uniqueDates.length, startDate, chartData };
@@ -333,9 +337,20 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                         <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
-                    <XAxis dataKey="name" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                    <XAxis 
+                      dataKey="timestamp" 
+                      type="number" 
+                      scale="time"
+                      domain={['dataMin', 'dataMax']}
+                      tickFormatter={(tick) => format(new Date(tick), 'MMM d')}
+                      stroke="#52525b" 
+                      fontSize={10} 
+                      tickLine={false} 
+                      axisLine={false} 
+                    />
                     <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
                     <Tooltip 
+                      labelFormatter={(label) => typeof label === 'number' ? format(new Date(label), 'MMM d, yyyy') : label}
                       contentStyle={{ backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
                       itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
                       labelStyle={{ color: '#a1a1aa', fontSize: '10px', marginBottom: '4px' }}
@@ -385,7 +400,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                 .reduce((sum, log) => sum + log.delta, 0);
               
               allowedArtifactsCount = Math.floor(nonHistoricalPlaytime / 50);
-            } else if (item.status === 'Completed') {
+            } else if (item.status === 'Completed' || item.status === 'Extras') {
               allowedArtifactsCount = 1;
             }
             

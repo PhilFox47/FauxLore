@@ -36,7 +36,7 @@ export function Dashboard() {
     searchQuery,
     setSearchQuery,
     filteredAndSortedMedia: rawActiveMedia,
-  } = useMediaFilterSort(media, 'Active');
+  } = useMediaFilterSort(media, ['Active', 'Extras']);
 
   const activeMedia = useMemo(() => {
     return [...rawActiveMedia].sort((a, b) => {

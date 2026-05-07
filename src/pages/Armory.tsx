@@ -188,7 +188,7 @@ export function Armory() {
         .filter(l => l.mediaId === m.id && !l.isHistoric && !l.timestamp.startsWith('1970-01-01') && l.metricType === 'playtimeHours')
         .reduce((sum, log) => sum + log.delta, 0);
       allowedArtifactsCount = Math.floor(nonHistoricalPlaytime / 50);
-    } else if (m.status === 'Completed') {
+    } else if (m.status === 'Completed' || m.status === 'Extras') {
       allowedArtifactsCount = 1;
     }
     

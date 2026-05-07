@@ -3,8 +3,12 @@ import { MediaItem, Status } from '../types/schema';
 
 export type SortOption = 'updatedAt' | 'createdAt' | 'titleAsc' | 'titleDesc' | 'rating';
 
-export function useMediaFilterSort(mediaElements: MediaItem[], defaultStatus: Status | 'All' = 'All') {
-  const [statusFilters, setStatusFilters] = useState<Status[]>(defaultStatus === 'All' ? ["Active", "Planning", "On Hold", "Completed", "Dropped"] : [defaultStatus]);
+export function useMediaFilterSort(mediaElements: MediaItem[], defaultStatus: Status | 'All' | Status[] = 'All') {
+  const initialFilters: Status[] = defaultStatus === 'All' 
+    ? ["Active", "Extras", "Planning", "On Hold", "Completed", "Dropped"] 
+    : (Array.isArray(defaultStatus) ? defaultStatus : [defaultStatus]);
+    
+  const [statusFilters, setStatusFilters] = useState<Status[]>(initialFilters);
   const [sortBy, setSortBy] = useState<SortOption>('updatedAt');
   const [searchQuery, setSearchQuery] = useState('');
 

@@ -49,6 +49,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
       case 'Active': return <Play className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />;
       case 'On Hold': return <Pause className="w-3.5 h-3.5 fill-blue-400 text-blue-400" />;
       case 'Completed': return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" />;
+      case 'Extras': return <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" />;
       case 'Planning': return <Clock className="w-3.5 h-3.5 text-zinc-400" />;
       case 'Dropped': return <XCircle className="w-3.5 h-3.5 text-red-500" />;
       case 'Unreleased': return <Calendar className="w-3.5 h-3.5 text-zinc-400" />;

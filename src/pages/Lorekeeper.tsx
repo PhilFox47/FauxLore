@@ -157,7 +157,7 @@ export function Lorekeeper() {
 
   const getRecentMediaContext = (mediaType?: string) => {
     const recent = [...media]
-      .filter((m) => m.status === "Active" || m.status === "Completed")
+      .filter((m) => m.status === "Active" || m.status === "Completed" || m.status === "Extras")
       .filter((m) => mediaType ? m.mediaType === mediaType : true)
       .sort(
         (a, b) =>

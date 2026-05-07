@@ -237,6 +237,7 @@ export function Statistics() {
     'Active': '#10b981', // Emerald
     'Planning': '#8b5cf6', // Violet
     'Completed': '#3b82f6', // Blue
+    'Extras': '#f59e0b', // Amber
     'Dropped': '#ef4444' // Red
   };
 

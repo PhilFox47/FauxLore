@@ -169,7 +169,7 @@ export function analyzeBingeFactor(data: RecapAnalyticsData) {
   let bestBinge: { media: MediaItem, hours: number } | null = null;
   let minDiffHours = Infinity;
 
-  data.media.filter(m => m.status === 'Completed').forEach(m => {
+  data.media.filter(m => (m.status === 'Completed' || m.status === 'Extras')).forEach(m => {
     const itemLogs = data.logs.filter(l => l.mediaId === m.id).sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     if (itemLogs.length >= 2) {
       const first = new Date(itemLogs[0].timestamp);
@@ -224,7 +224,7 @@ export function analyzeBacklog(data: RecapAnalyticsData) {
    let planned = 0;
    
    data.media.forEach(m => {
-      if (m.status === 'Completed') completed++;
+      if ((m.status === 'Completed' || m.status === 'Extras')) completed++;
       if (m.status === 'Planning') planned++; // Still in planning despite being "active" (e.g. just added to list recently)
    });
 
@@ -340,7 +340,7 @@ export function determineArchetypes(data: RecapAnalyticsData) {
 
    const stats = {
       typeShares,
-      completionRate: data.media.filter(m => m.status === 'Completed').length / (data.media.length || 1),
+      completionRate: data.media.filter(m => (m.status === 'Completed' || m.status === 'Extras')).length / (data.media.length || 1),
       droppedCount: data.media.filter(m => m.status === 'Dropped').length,
       activeConcurrent,
       avgYear: analyzeTimeTraveler(data),
