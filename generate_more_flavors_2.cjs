@@ -1,0 +1,200 @@
+const fs = require('fs');
+
+const extraFlavors = {
+  "Game": [
+    "You have been disconnected from the server.",
+    "Updating... 99%... (Time remaining: 5 hours)",
+    "Are you sure you want to quit? Unsaved progress will be lost.",
+    "The princess is in another castle.",
+    "You have died from dysentery.",
+    "Do you want to change difficulty to 'Easy'?",
+    "A connection error has occurred.",
+    "Servers are currently undergoing maintenance.",
+    "It's not a bug, it's a feature.",
+    "Controller disconnected.",
+    "Please reconnect controller.",
+    "Would you kindly?",
+    "War. War never changes.",
+    "Hey! Listen!",
+    "It's dangerous to go alone! Take this.",
+    "I used to be an adventurer like you, then I took an arrow in the knee.",
+    "The cake is a lie.",
+    "You must construct additional pylons.",
+    "Snake? Snake!? SNAAAAAAAKE!",
+    "Praise the sun!",
+    "Do a barrel roll!",
+    "Finish him!",
+    "Flawless victory.",
+    "Fatality.",
+    "Get over here!",
+    "All your base are belong to us."
+  ],
+  "Book": [
+    "Just one more chapter...",
+    "Why is the next book not out yet?!",
+    "I only read the silmarillion for the plot.",
+    "The movies ruined it.",
+    "The book was much better.",
+    "To be fair, the book had more time to develop the characters.",
+    "I highlighted half the page.",
+    "Don't bend the spine!",
+    "I bought it because the cover looked pretty.",
+    "I have too many unread books, let me buy some more.",
+    "I smell old books.",
+    "Tsundoku is a lifestyle.",
+    "Reading slump cured.",
+    "The author killed my favorite character.",
+    "I am emotionally stable. (Lies).",
+    "Is it fantasy or is it just history with dragons?",
+    "My TBR list is basically a tower.",
+    "The ending left me hollow.",
+    "I need a sequel, NOW.",
+    "Book hangover."
+  ],
+  "Audiobook": [
+    "At least my hands are free.",
+    "Can the narrator please do a different voice for the female characters?",
+    "The Scottish accent is... questionable.",
+    "I was listening, but my mind wandered for the last 15 minutes.",
+    "Who is this character again?",
+    "Rewinding 30 seconds for the fifth time.",
+    "Do I know how their names are spelled? Absolutely not.",
+    "I consume literature through my ears.",
+    "The narrator just sighed and I felt it.",
+    "When the character screams and the narrator actually screams in your ear.",
+    "Listening at 2x speed is a flex.",
+    "The dramatic pause was a bit much.",
+    "Is it still reading? Yes. Yes it is.",
+    "I can 'read' and drive at the same time.",
+    "It's like someone is telling me a bedtime story.",
+    "I fell asleep and missed three whole chapters."
+  ],
+  "Visual Novel": [
+    "Skip all unseen text? Bold move.",
+    "Auto-playing text, engaging snack mode.",
+    "Which choice leads to the good ending?",
+    "Let me check the walkthrough real quick...",
+    "I accidentally overwrote my save.",
+    "Quick save before making any life decisions.",
+    "I have 50 saves from the last 10 minutes.",
+    "The bad endings are the best part.",
+    "I didn't want this route!",
+    "Tsundere detected.",
+    "Yandere approaches.",
+    "Childhood friend ignored.",
+    "The gallery is 99% complete.",
+    "I just want to unlock all the CGs.",
+    "The OST is beautiful.",
+    "Why is this slice-of-life segment 10 hours long?",
+    "The plot twist broke me.",
+    "Kinetic novels are just books with pictures.",
+    "I read for the 'plot'.",
+    "Ehhhhhhhh?!"
+  ],
+  "Manga": [
+    "Wait, I read that panel backwards.",
+    "Read right to left.",
+    "The double-page spread is gorgeous.",
+    "I can't wait for the anime adaptation.",
+    "The anime adaptation totally ruined it.",
+    "Read the manga, it's better.",
+    "Weekly chapter releases are torture.",
+    "The hiatus is indefinite.",
+    "Author took a break to do research.",
+    "The power scaling makes no sense.",
+    "Friendship is magic and also the strongest power.",
+    "The beach episode was necessary.",
+    "A dense protagonist? Groundbreaking.",
+    "Just confess already!",
+    "He's as dense as a black hole.",
+    "A misunderstanding that could be solved with one conversation.",
+    "I reincarnated as an overpowered protagonist.",
+    "B-baka!",
+    "It's not like I made it for you or anything!",
+    "Notice me, senpai!"
+  ],
+  "Series": [
+    "Skip intro.",
+    "Are you still watching?",
+    "Yes, Netflix, stop judging me.",
+    "Just one more episode.",
+    "I'll go to sleep after this one.",
+    "Ending on a cliffhanger, seriously?!",
+    "They cancelled it after one season.",
+    "The pilot is a bit rough, but it gets better in season 2.",
+    "We don't talk about the final season.",
+    "The spinoff is better than the original.",
+    "I need season 2 immediately.",
+    "The cancellation destroyed my soul.",
+    "A filler episode? Skip.",
+    "The bottle episode was actually a masterpiece.",
+    "It was Agatha all along.",
+    "I missed a part because I was looking at my phone.",
+    "Rewinding 10 seconds...",
+    "I can't believe they killed him off.",
+    "Bring him back!",
+    "They brought him back, death is cheap."
+  ],
+  "Movie": [
+    "The sequel nobody asked for.",
+    "A reboot of a remake of a reboot.",
+    "The CGI has not aged well.",
+    "Practical effects > CGI.",
+    "The director's cut fixes everything.",
+    "Wait until the post-credits scene.",
+    "There was no post-credits scene, I wasted my time.",
+    "The trailer showed the whole movie.",
+    "I miss the 90s action movies.",
+    "The pacing is all over the place.",
+    "A cinematic masterpiece.",
+    "It insists upon itself.",
+    "The book is better.",
+    "The soundtrack is epic.",
+    "Hans Zimmer goes hard.",
+    "That plot twist was obvious.",
+    "I did not see that coming.",
+    "Was it all a dream?!",
+    "Inception sound: BWAHHHH.",
+    "Lens flare by J.J. Abrams."
+  ],
+  "Comic": [
+    "The variant cover is amazing.",
+    "Bag and board everything.",
+    "The continuity is a nightmare.",
+    "Which universe is this?",
+    "Ah yes, another reboot.",
+    "Nobody stays dead in comics.",
+    "Except Thomas and Martha Wayne.",
+    "And Uncle Ben.",
+    "The crossover event that changes EVERYTHING.",
+    "Tie-in issue that adds absolutely nothing.",
+    "The artist changed halfway through.",
+    "Inked by someone else.",
+    "The coloring is phenomenal.",
+    "Speech bubble covering the best part of the art.",
+    "A splash page to end all splash pages.",
+    "Bam! Pow! Wham!",
+    "My pull list is getting too expensive.",
+    "I love short runs.",
+    "Graphic novels look better on the shelf.",
+    "I bought the omnibus but it's too heavy to read."
+  ]
+};
+
+let code = fs.readFileSync('src/lib/flavorTexts.ts', 'utf8');
+
+for (const [type, lines] of Object.entries(extraFlavors)) {
+  const searchString = `"${type}": [\n`;
+  const insertIndex = code.indexOf(searchString);
+  if (insertIndex !== -1) {
+    const splitIndex = insertIndex + searchString.length;
+    let insertion = '';
+    for (const line of lines) {
+      insertion += `    \`${line.replace(/`/g, '\\\\`')}\`,\n`;
+    }
+    code = code.slice(0, splitIndex) + insertion + code.slice(splitIndex);
+  }
+}
+
+fs.writeFileSync('src/lib/flavorTexts.ts', code);
+console.log("Added flavor texts part 2!");

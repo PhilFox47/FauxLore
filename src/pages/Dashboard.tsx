@@ -55,6 +55,24 @@ export function Dashboard() {
   const latestOracle = oracleMessages[0];
   const activeBosses = worldBosses.filter(b => b.status === 'Active');
 
+  React.useEffect(() => {
+    // Automated aging: Drop active items that have not been logged in 50 days (8 weeks ~ day 50)
+    const itemsToDrop = media.filter(item => {
+      if (item.status !== 'Active') return false;
+      const mediaLogs = logs.filter(l => l.mediaId === item.id);
+      const lastActiveMs = mediaLogs.length 
+        ? Math.max(...mediaLogs.map(l => new Date(l.date).getTime())) 
+        : new Date(item.updatedAt || item.createdAt).getTime();
+      const days = (Date.now() - lastActiveMs) / (1000 * 60 * 60 * 24);
+      return days >= 50;
+    });
+
+    if (itemsToDrop.length > 0) {
+      Promise.all(itemsToDrop.map(item => saveMediaItem({ ...item, status: 'Dropped' })))
+        .catch(console.error);
+    }
+  }, [media, logs, saveMediaItem]);
+
   const handleEdit = (item: MediaItem) => {
     setEditingItem(item);
     setIsFormOpen(true);

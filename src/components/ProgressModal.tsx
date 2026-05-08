@@ -266,12 +266,46 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
                    >
                      <Minus className="w-4 h-4" />
                    </button>
-                   <input 
-                     type="number"
-                     value={inputValue}
-                     onChange={(e) => setInputValue(e.target.value === '' ? '' : Number(e.target.value))}
-                     className={cn("flex-1 min-w-0 bg-black border-2 border-white/10 rounded-xl px-3 py-2 text-center text-2xl font-black text-white focus:outline-none font-display shadow-inner transition-colors", `focus:border-${colors.bg.split('-')[1]}-500`)}
-                   />
+                   {['Game', 'Visual Novel', 'Audiobook'].includes(item.mediaType) ? (
+                      <div className="flex-1 flex gap-2">
+                        <div className="flex-1 min-w-0 flex flex-col relative bg-black border-2 border-white/10 rounded-xl shadow-inner transition-colors focus-within:border-white/30">
+                          <span className="text-[9px] uppercase text-zinc-500 font-bold absolute top-1.5 left-0 right-0 text-center z-10 pointer-events-none">Hours</span>
+                          <input 
+                            type="number"
+                            min="0"
+                            value={typeof inputValue === 'number' ? Math.floor(inputValue) : ''}
+                            onChange={(e) => {
+                               const h = e.target.value === '' ? 0 : Number(e.target.value);
+                               const curM = typeof inputValue === 'number' ? Math.round((inputValue % 1) * 60) : 0;
+                               setInputValue(Number((h + (curM/60)).toFixed(2)));
+                            }}
+                            className={cn("w-full bg-transparent px-2 pt-5 pb-1 text-center text-xl sm:text-2xl font-black text-white focus:outline-none font-display")}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col relative bg-black border-2 border-white/10 rounded-xl shadow-inner transition-colors focus-within:border-white/30">
+                          <span className="text-[9px] uppercase text-zinc-500 font-bold absolute top-1.5 left-0 right-0 text-center z-10 pointer-events-none">Mins</span>
+                          <input 
+                            type="number"
+                            min="0"
+                            max="59"
+                            value={typeof inputValue === 'number' ? Math.round((inputValue % 1) * 60) : ''}
+                            onChange={(e) => {
+                               const m = e.target.value === '' ? 0 : Number(e.target.value);
+                               const curH = typeof inputValue === 'number' ? Math.floor(inputValue) : 0;
+                               setInputValue(Number((curH + (m/60)).toFixed(2)));
+                            }}
+                            className={cn("w-full bg-transparent px-2 pt-5 pb-1 text-center text-xl sm:text-2xl font-black text-white focus:outline-none font-display")}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <input 
+                        type="number"
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value === '' ? '' : Number(e.target.value))}
+                        className={cn("flex-1 min-w-0 bg-black border-2 border-white/10 rounded-xl px-3 py-2 text-center text-2xl font-black text-white focus:outline-none font-display shadow-inner transition-colors", `focus:border-${colors.bg.split('-')[1]}-500`)}
+                      />
+                    )}
                    <button 
                      type="button"
                      onClick={() => setInputValue(prev => typeof prev === 'number' ? prev + 1 : 1)}

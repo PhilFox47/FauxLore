@@ -64,18 +64,19 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
     const currentStreak = daysSinceLast <= 1 ? curr : 0;
 
     let cumulative = 0;
-    const dataByDate = new Map<string, number>();
-    historicalLogs.filter(l => l.metricType !== 'statusChange').forEach(l => {
-       const dateStr = format(new Date(l.timestamp), 'yyyy-MM-dd');
-       const pages = calculateScaledDelta(l.delta, item, settings);
-       dataByDate.set(dateStr, (dataByDate.get(dateStr) || 0) + pages);
-    });
+    
+    // Sort logs by exact time
+    const sortedLogs = [...historicalLogs]
+      .filter(l => l.metricType !== 'statusChange')
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-    const chartData = uniqueDates.map(date => {
-       cumulative += (dataByDate.get(date) || 0);
+    const chartData = sortedLogs.map((l) => {
+       const pages = calculateScaledDelta(l.delta, item, settings);
+       cumulative += pages;
+       const d = new Date(l.timestamp);
        return { 
-         timestamp: new Date(date).getTime(),
-         name: format(new Date(date), 'MMM d'), 
+         timestamp: d.getTime(),
+         name: format(d, 'MMM d, HH:mm'), 
          pages: Math.floor(cumulative) 
        };
     });
@@ -350,7 +351,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                     />
                     <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
                     <Tooltip 
-                      labelFormatter={(label) => typeof label === 'number' ? format(new Date(label), 'MMM d, yyyy') : label}
+                      labelFormatter={(label) => typeof label === 'number' ? format(new Date(label), 'MMM d, yyyy HH:mm') : label}
                       contentStyle={{ backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
                       itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
                       labelStyle={{ color: '#a1a1aa', fontSize: '10px', marginBottom: '4px' }}

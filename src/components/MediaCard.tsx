@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { MediaItem, getMetricForType, MEDIA_COLORS } from '../types/schema';
 import { 
   Play, 
@@ -22,7 +22,8 @@ import {
   RotateCcw,
   Sparkles,
   Flame,
-  Headphones
+  Headphones,
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
@@ -38,8 +39,37 @@ interface MediaCardProps {
 
 export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaCardProps) {
   const { logs } = useMediaContext();
-  const mediaLogs = React.useMemo(() => logs.filter(l => l.mediaId === item.id), [logs, item.id]);
-  const currentStreak = React.useMemo(() => calculateStreak(mediaLogs), [mediaLogs]);
+  
+  const mediaLogs = useMemo(() => logs.filter(l => l.mediaId === item.id), [logs, item.id]);
+  const currentStreak = useMemo(() => calculateStreak(mediaLogs), [mediaLogs]);
+
+  const daysSinceActive = useMemo(() => {
+    if (item.status !== 'Active') return 0;
+    const lastActiveMs = mediaLogs.length 
+      ? Math.max(...mediaLogs.map(l => new Date(l.date).getTime())) 
+      : new Date(item.updatedAt || item.createdAt).getTime();
+    return Math.floor((Date.now() - lastActiveMs) / (1000 * 60 * 60 * 24));
+  }, [item.status, mediaLogs, item.updatedAt, item.createdAt]);
+
+  let grayscale = 0;
+  let cobwebOpacity = 0;
+  let showRedWarning = false;
+  let daysUntilDrop = 0;
+
+  if (daysSinceActive > 7 && daysSinceActive <= 21) {
+    grayscale = ((daysSinceActive - 7) / 14) * 100;
+  } else if (daysSinceActive > 21) {
+    grayscale = 100;
+    if (daysSinceActive <= 42) {
+      cobwebOpacity = (daysSinceActive - 21) / 21;
+    } else {
+      cobwebOpacity = 1;
+    }
+    if (daysSinceActive >= 43) {
+      showRedWarning = true;
+      daysUntilDrop = Math.max(0, 50 - daysSinceActive);
+    }
+  }
 
   const metricType = getMetricForType(item.mediaType);
   const colors = MEDIA_COLORS[item.mediaType];
@@ -139,10 +169,39 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
          <img 
             src={item.coverImageUrl || coverFallback} 
             className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-all duration-700 group-hover:scale-105"
+            style={{ filter: `grayscale(${grayscale}%)` }}
             referrerPolicy="no-referrer"
          />
+         
+         {cobwebOpacity > 0 && (
+           <svg 
+             className="absolute inset-0 w-full h-full pointer-events-none mix-blend-screen"
+             style={{ opacity: cobwebOpacity }}
+             viewBox="0 0 100 100" 
+             preserveAspectRatio="none"
+           >
+             <g stroke="rgba(255, 255, 255, 0.4)" strokeWidth="0.5" fill="none">
+               <path d="M0,0 L100,100 M100,0 L0,100 M50,0 L50,100 M0,50 L100,50" />
+               <path d="M10,50 Q20,20 50,10 Q80,20 90,50 Q80,80 50,90 Q20,80 10,50" opacity="0.8"/>
+               <path d="M25,50 Q30,30 50,25 Q70,30 75,50 Q70,70 50,75 Q30,70 25,50" opacity="0.6"/>
+               <path d="M38,50 Q42,40 50,38 Q58,40 62,50 Q58,60 50,62 Q42,60 38,50" opacity="0.4"/>
+               <path d="M0,0 Q10,20 0,30 M100,0 Q90,20 100,30 M0,100 Q10,80 0,70 M100,100 Q90,80 100,70" />
+             </g>
+           </svg>
+         )}
+
+         {showRedWarning && (
+           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm z-30 pointer-events-none animation-pulse">
+             <AlertTriangle className="w-12 h-12 text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)] mb-2" />
+             <div className="flex flex-col items-center gap-1">
+               <span className="text-red-500 font-black uppercase tracking-[0.2em] text-[10px] bg-red-500/20 px-3 py-1 rounded-full border border-red-500/30">Neglected</span>
+               <span className="text-red-300 font-bold text-xs bg-red-900/40 px-2 py-0.5 rounded backdrop-blur-sm">Drop in {daysUntilDrop}d</span>
+             </div>
+           </div>
+         )}
+
          {/* Gradients to ensure text readability */}
-         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none" />
+         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none z-10" />
          
          {/* Floating Elements on Cover */}
          {/* Top Left: Status & Re-run */}

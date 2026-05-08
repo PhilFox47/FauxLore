@@ -170,7 +170,7 @@ export function calculateRPGState(
   const now = evalDate instanceof Date ? evalDate : new Date(evalDate);
   
   // Filter historical
-  const validLogs = logs.filter(l => !l.isHistoric && !l.timestamp.startsWith('1970-01-01'));
+  const validLogs = logs.filter(l => !l.isHistoric && (!l.timestamp || !l.timestamp.startsWith('1970-01-01')));
   
   // Initialize Media level EXP trackers
   const ALL_MEDIA_TYPES: MediaType[] = ['Game', 'Book', 'Audiobook', 'Visual Novel', 'Manga', 'Series', 'Movie', 'Comic'];
@@ -687,7 +687,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     () => { // 18. Relic Appraiser
       if (timeframe === 'weekly') return null;
       const target = getQTarget("Relic Appraiser", timeframe, timeframe === 'monthly' ? 3 : 1, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const current = artifacts.filter(a => a.earnedAt.startsWith(timeId)).length;
+      const current = artifacts.filter(a => a.earnedAt && a.earnedAt.startsWith(timeId)).length;
       return { title: "Relic Appraiser", desc: `Obtain ${target} new Artifacts`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 19. Level Grinder
