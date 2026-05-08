@@ -154,8 +154,9 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
     }
     
     if (status === 'Completed' || status === 'Extras') {
-      if (userRating !== '' && userRating !== item.userRating) {
-        extraUpdates.userRating = userRating;
+      const finalRating = userRating === '' ? 5 : userRating;
+      if (finalRating !== item.userRating) {
+        extraUpdates.userRating = finalRating;
       }
       if (userReview !== item.userReview) {
         extraUpdates.userReview = userReview;

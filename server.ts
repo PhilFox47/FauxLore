@@ -412,8 +412,9 @@ Return ONLY the raw prompt text, nothing else.`;
 
       const prompt = `You are an expert AI image prompt engineer. An RPG loot item (artifact) named "${artifactName}" with the description "${artifactDesc}" has been found. It originates from the media "${mediaTitle}".
 Create a highly detailed, descriptive image prompt for the Chroma model to generate an image of ONLY the artifact itself as a single item icon on a dark, neutral background.
-The item ${rarityDesc} 
-Contextualize its design perfectly to fit the world, lore, and visual aesthetic of "${mediaTitle}". Describe its materials, engravings, and visual effects based on its rarity and description.
+CRITICAL INSTRUCTION: Use Google Search to look up the item "${artifactName}" and the media "${mediaTitle}" to understand what the item actually is and what it looks like. Then, ensure the physical shape, literal object, and material mentioned in the name and description MUST be the exact subject of the image (e.g. if it's a tape spool, it must be a plastic tape spool, if it's a book, it must be a book). Do not turn the object into a stone ring, gem, or generic magical item unless specified.
+The item's aura and magic ${rarityDesc} 
+Contextualize its design to fit the world, lore, and visual aesthetic of "${mediaTitle}", but NEVER change the fundamental object type. Describe its physical materials, exact shape, engravings, and visual effects based heavily on its description.
 Return ONLY the raw prompt text, nothing else.`;
 
       const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {

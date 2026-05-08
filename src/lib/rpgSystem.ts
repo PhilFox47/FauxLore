@@ -38,7 +38,7 @@ export const QUEST_DEFINITIONS = [
   { id: '13', title: 'The Sprinter', desc: 'Start and complete an item within 72 hours (Target: X items)', timeframes: ['monthly'], defaultMonthly: 1 },
   { id: '14', title: 'Binge Trance', desc: 'Achieve X+ Master Pages on a single item in one day', timeframes: ['monthly', 'weekly'], defaultMonthly: 'Dynamic', defaultWeekly: 'Dynamic' },
   { id: '15', title: "Scribe's Duty", desc: 'Write X meaningful journal entries', timeframes: ['monthly', 'weekly'], defaultMonthly: 10, defaultWeekly: 3 },
-  { id: '16', title: "The Critic's Eye", desc: 'Finish and rate X item(s)', timeframes: ['monthly'], defaultMonthly: 'Random (1-2)' },
+  { id: '16', title: "The Critic's Eye", desc: 'Finish and rate/review X item(s)', timeframes: ['monthly'], defaultMonthly: 'Random (1-2)' },
   { id: '17', title: 'Boss Hunter', desc: 'Defeat X World Bosses', timeframes: ['monthly'], defaultMonthly: 'Random (1-2)' },
   { id: '18', title: 'Relic Appraiser', desc: 'Obtain X new Artifacts', timeframes: ['monthly'], defaultMonthly: 3 },
   { id: '19', title: 'Level Grinder', desc: 'Gain approximately X base EXP', timeframes: ['monthly', 'weekly'], defaultMonthly: 5000, defaultWeekly: 1000 },
@@ -49,7 +49,7 @@ export const QUEST_DEFINITIONS = [
   { id: '24', title: 'Format Focus', desc: 'Gain X Master Pages exclusively in one format', timeframes: ['weekly'], defaultWeekly: 50 },
   { id: '25', title: 'The Initiator', desc: "Move X item's status from 'Planning' to 'In Progress'", timeframes: ['weekly'], defaultWeekly: 1 },
   { id: '26', title: 'Weekly Sprinter', desc: 'Complete X media item', timeframes: ['weekly'], defaultWeekly: 1 },
-  { id: '27', title: "Reviewer's Strike", desc: 'Complete X item and give it a rating', timeframes: ['weekly'], defaultWeekly: 1 },
+  { id: '27', title: "Reviewer's Strike", desc: 'Complete X item and rate/review it', timeframes: ['weekly'], defaultWeekly: 1 },
   { id: '28', title: 'Fresh Blood', desc: 'Add X new item to your library and log progress on it', timeframes: ['weekly'], defaultWeekly: 1 },
   { id: '29', title: 'Dust It Off', desc: 'Log progress on X item that has been sitting without updates', timeframes: ['weekly'], defaultWeekly: 1 },
   { id: '30', title: 'Marathon Session', desc: 'Have a single progress entry that yields X+ Master Pages in one sitting', timeframes: ['weekly'], defaultWeekly: 50 },
@@ -675,9 +675,9 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       const current = logs.filter(l => {
          if (l.metricType !== 'statusChange' || !(l.note?.includes('to Completed') || l.note?.includes('to Extras'))) return false;
          const m = media.find(x => x.id === l.mediaId);
-         return m && (m.userRating || 0) > 0;
+         return m && ((m.userRating || 0) > 0 || (m.userReview && m.userReview.trim().length > 0));
       }).length;
-      return { title: "The Critic's Eye", desc: `Finish and rate ${target} item(s)`, target, current, type: 'entries' as const, reward: baseReward * 2 };
+      return { title: "The Critic's Eye", desc: `Finish and rate or review ${target} item(s)`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 17. Boss Hunter
       if (timeframe === 'weekly') return null;
@@ -832,9 +832,9 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       const current = logs.filter(l => {
          if (l.metricType !== 'statusChange' || !(l.note?.includes('to Completed') || l.note?.includes('to Extras'))) return false;
          const m = media.find(x => x.id === l.mediaId);
-         return m && m.userRating && m.userRating >= 1 && m.userRating <= 5;
+         return m && ((m.userRating && m.userRating >= 1 && m.userRating <= 5) || (m.userReview && m.userReview.trim().length > 0));
       }).length;
-      return { title: "Reviewer's Strike", desc: `Share your thoughts. Complete ${target} item(s) and give it a rating of 1 to 5`, target, current, type: 'entries' as const, reward: baseReward * 3 };
+      return { title: "Reviewer's Strike", desc: `Share your thoughts. Complete and rate/review ${target} item(s)`, target, current, type: 'entries' as const, reward: baseReward * 3 };
     },
     () => { // 28. Fresh Blood
       if (timeframe !== 'weekly') return null;
