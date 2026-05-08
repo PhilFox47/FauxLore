@@ -525,9 +525,17 @@ export function Armory() {
                  <h3 className="text-lg sm:text-xl font-black text-white mb-2 leading-tight relative drop-shadow-md break-words">
                    {artifact.name}
                  </h3>
-                 <p className="text-xs text-zinc-400 leading-relaxed italic mb-4">
-                   "{artifact.description}"
-                 </p>
+                 {artifact.targetType ? (
+                    <div className="flex flex-col gap-1 mb-4 border-l-2 border-purple-500/50 pl-3 relative z-10 pointer-events-none">
+                       <span className="text-[9px] text-purple-400 font-bold uppercase tracking-[0.2em] font-display">Target Affinity: <span className="text-zinc-300">{artifact.targetType}</span></span>
+                       <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest leading-tight">+{artifact.bonusPercent}% {artifact.targetValue} EXP</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1 mb-4 border-l-2 border-purple-500/50 pl-3 relative z-10 pointer-events-none">
+                       <span className="text-[9px] text-purple-400 font-bold uppercase tracking-[0.2em] font-display">Global Affinity</span>
+                       <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest leading-tight">+20% Base EXP</span>
+                    </div>
+                  )}
             </div>
 
             <div className="mt-auto pt-4 border-t border-white/5 flex flex-col gap-3">
