@@ -1530,7 +1530,7 @@ ${promptContext}`, settings.aiPersona);
                              {droppedMedia.map(m => (
                                 <div key={m.id} className="group relative aspect-[3/4.5] rounded-2xl overflow-hidden border border-rose-900/30 hover:border-rose-500/50 transition-all shadow-xl">
                                    {m.coverImageUrl ? (
-                                     <img src={m.coverImageUrl} className="w-full h-full object-cover grayscale opacity-60 group-hover:grayscale-[50%] group-hover:opacity-100 transition-all duration-700" alt={m.title} />
+                                     <img src={m.coverImageUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-700" alt={m.title} />
                                    ) : (
                                      <div className="w-full h-full bg-zinc-950 flex items-center justify-center text-zinc-800"><Skull /></div>
                                    )}

@@ -91,7 +91,7 @@ export function Graveyard() {
             <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-rose-900/0 via-zinc-600/20 to-rose-900/0 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             
             <div className="flex gap-6 mb-5">
-              <div className="w-28 shrink-0 aspect-[2/3] rounded-xl overflow-hidden shadow-lg ring-1 ring-white/5 grayscale group-hover:grayscale-[50%] transition-all duration-700">
+              <div className="w-28 shrink-0 aspect-[2/3] rounded-xl overflow-hidden shadow-lg ring-1 ring-white/5 transition-all duration-700">
                 <img src={item.coverImageUrl || 'https://images.unsplash.com/photo-1618519764611-bd0823006228?auto=format&fit=crop&q=80&w=400'} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt={item.title} />
               </div>
               <div className="flex flex-col flex-1 pt-1 justify-between">
