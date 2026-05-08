@@ -13,7 +13,7 @@ import { calculateRPGState } from '../lib/rpgSystem';
 import { MediaItem, MEDIA_COLORS, ProgressLog, RARITY_COLORS } from '../types/schema';
 import { cn } from '../lib/utils';
 import { generateAiRecapText, generateText } from '../services/nanoGptService';
-import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon, Skull } from 'lucide-react';
 import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog, analyzeContrarian } from '../lib/recapAnalytics';
 import Markdown from 'react-markdown';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
@@ -88,7 +88,18 @@ export function Recaps() {
   }, [activeLogs, activeMedia, currentInterval, logs, media]);
 
   const completedMediaIds = useMemo(() => new Set(completedMedia.map(m => m.id)), [completedMedia]);
-  const inProgressMedia = useMemo(() => activeMedia.filter(m => !completedMediaIds.has(m.id)), [activeMedia, completedMediaIds]);
+
+  const droppedMedia = useMemo(() => {
+    const droppedLogIds = new Set(
+      activeLogs
+        .filter(l => l.metricType === 'statusChange' && l.note?.toLowerCase().includes('to dropped'))
+        .map(l => l.mediaId)
+    );
+    return media.filter(m => droppedLogIds.has(m.id));
+  }, [activeLogs, media]);
+  const droppedMediaIds = useMemo(() => new Set(droppedMedia.map(m => m.id)), [droppedMedia]);
+
+  const inProgressMedia = useMemo(() => activeMedia.filter(m => !completedMediaIds.has(m.id) && !droppedMediaIds.has(m.id)), [activeMedia, completedMediaIds, droppedMediaIds]);
 
   const gatheredLoot = useMemo(() => {
     let intervalArtifacts = artifacts.filter(a => isWithinInterval(subHours(parseISO(a.earnedAt), 5), currentInterval));
@@ -302,6 +313,9 @@ Total Logs: ${activeLogs.length}
 MEDIA IN PROGRESS:
 ${inProgressMedia.map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') || 'None'}
 
+MEDIA DROPPED OR ABANDONED:
+${droppedMedia.length > 0 ? droppedMedia.map(m => `- ${m.title} (${m.mediaType}): ${m.dropReason ? `[Drop Reason: ${m.dropReason}]` : '[No reason specified]'}`).join('\n') : 'None'}
+
 MEDIA COMPLETED:
 ${completedMedia.length > 0 ? completedMedia.map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.userReview ? `[User Review: "${m.userReview}"] ` : ''}${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres: ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags: ' + m.tags.join(', ') : ''}`).join('\n') : 'None'}
 
@@ -323,7 +337,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
 CRITICAL INSTRUCTIONS:
 1. TITLE: Must be a punchy, clever name (1-5 words max). DO NOT include descriptions.
 2. VIBE & TONE: Follow your specified persona instructions exactly. Weave the persona deeply into the narrative structure.
-3. STRUCTURE & FOCUS: The core structure and primary focus of your recap MUST be the 'MEDIA COMPLETED' list (if any). Let what they finished dictate your narrative flow. After completing media, cover their 'MEDIA IN PROGRESS' as ongoing obsessions or endless slogs.
+3. STRUCTURE & FOCUS: The core structure and primary focus of your recap MUST be the 'MEDIA COMPLETED' list (if any). Let what they finished dictate your narrative flow. If there are any 'MEDIA DROPPED OR ABANDONED', enthusiastically mention why they gave up on them using the reason provided. Then, cover their 'MEDIA IN PROGRESS' as ongoing obsessions or endless slogs.
 4. ORGANIC WEAVING: You MUST organically weave Journal Notes, Locations, Gathered Loot, Ratings (Critic and User Ratings), Bosses Defeated, and Lorekeeper Leveling stats (Level ups, Quests) directly into the discussion of the specific media. DO NOT create standalone paragraphs for locations, lorekeeper info, gathered loot, ratings or notes. Examples: "Reading some One Piece this month really helped you finish the 'Read some Manga' Quest!", "Glad to see you followed your weekly quest and went to watch a Comedy Movie!", "You clearly enjoyed your time reading [Book] in [Location] based on your notes.", "It's no surprise you gave it an 4/5, considering critics loved it with a 92/100!", or "Finishing [Media] gave you that sweet [Loot Name]!".
 5. ACCURACY: DO NOT assume a media item is completed unless it explicitly is in the 'MEDIA COMPLETED' list! If it's just 'IN PROGRESS', treat it as their current ongoing obsession or slog.
 6. FORMATTING: Use Markdown beautifully (bolding, italics, blockquotes, bullet points). Make it very readable.
@@ -1497,6 +1511,38 @@ ${promptContext}`, settings.aiPersona);
                                       </div>
                                       <div className="text-[10px] font-black text-white truncate leading-none mb-1">{m.title}</div>
                                       <div className={`text-[8px] font-black uppercase tracking-widest ${MEDIA_COLORS[m.mediaType]?.text || 'text-white'} opacity-70`}>{m.mediaType}</div>
+                                   </div>
+                                </div>
+                             ))}
+                          </div>
+                      </div>
+                   )}
+
+                   {/* Dropped Media */}
+                   {droppedMedia.length > 0 && (
+                      <div className="bg-black/80 border border-rose-900/40 p-10 md:p-14 rounded-[3rem] relative overflow-hidden mt-8">
+                          <div className="absolute top-0 right-0 w-96 h-96 bg-rose-900/20 blur-[120px] -mr-32 -mt-32 rounded-full pointer-events-none" />
+                          <h3 className="text-xl font-black text-rose-500 mb-8 flex items-center gap-4">
+                            <Skull className="w-8 h-8 text-rose-500/80" />
+                            The Graveyard (Dropped)
+                          </h3>
+                          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+                             {droppedMedia.map(m => (
+                                <div key={m.id} className="group relative aspect-[3/4.5] rounded-2xl overflow-hidden border border-rose-900/30 hover:border-rose-500/50 transition-all shadow-xl">
+                                   {m.coverImageUrl ? (
+                                     <img src={m.coverImageUrl} className="w-full h-full object-cover grayscale opacity-60 group-hover:grayscale-[50%] group-hover:opacity-100 transition-all duration-700" alt={m.title} />
+                                   ) : (
+                                     <div className="w-full h-full bg-zinc-950 flex items-center justify-center text-zinc-800"><Skull /></div>
+                                   )}
+                                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+                                   <div className="absolute bottom-0 left-0 right-0 p-4">
+                                      <div className="text-[10px] font-black text-rose-200 truncate leading-none mb-1">{m.title}</div>
+                                      <div className="text-[8px] font-black uppercase tracking-widest text-rose-500/80">{m.mediaType}</div>
+                                      {m.dropReason && (
+                                        <div className="mt-2 text-[8px] text-zinc-400 italic line-clamp-2 leading-tight border-t border-rose-900/30 pt-1">
+                                          "{m.dropReason}"
+                                        </div>
+                                      )}
                                    </div>
                                 </div>
                              ))}
