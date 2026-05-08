@@ -545,7 +545,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
 
       let nextMonday = new Date();
       nextMonday.setDate(nextMonday.getDate() + ((1 + 7 - nextMonday.getDay()) % 7 || 7));
-      nextMonday.setHours(0, 0, 0, 0);
+      nextMonday.setHours(5, 0, 0, 0);
 
       const bossId = uuidv4();
       db.prepare(`
@@ -572,7 +572,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   });
 
   // Weekly boss spawn (Mondays)
-  cron.schedule('0 0 * * 1', () => {
+  cron.schedule('0 5 * * 1', () => {
     const users = db.prepare('SELECT id FROM users').all() as {id: string}[];
     for (const u of users) {
        db.prepare("UPDATE world_bosses SET status = 'Failed' WHERE userId = ? AND status = 'Active' AND expiresAt < ?").run(u.id, new Date().toISOString());

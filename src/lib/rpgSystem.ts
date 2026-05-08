@@ -1,6 +1,6 @@
 import { MediaItem, ProgressLog, getMetricForType, MediaType, WorldBoss } from '../types/schema';
 import { calculateScaledDelta } from './scaling';
-import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, differenceInDays } from 'date-fns';
+import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, differenceInDays, subHours } from 'date-fns';
 
 export function getQTarget(title: string, timeframe: 'monthly' | 'weekly', def: number, settings: any, rng?: () => number) {
   if (settings?.questConfigs?.[title]?.[timeframe] !== undefined && settings?.questConfigs?.[title]?.[timeframe] !== null && String(settings?.questConfigs?.[title]?.[timeframe]).trim() !== '') {
@@ -167,7 +167,8 @@ export function calculateRPGState(
   evalDate: any = new Date()
 ): RPGState {
   // Ensure evalDate is a Date object
-  const now = evalDate instanceof Date ? evalDate : new Date(evalDate);
+  const realNow = evalDate instanceof Date ? evalDate : new Date(evalDate);
+  const now = subHours(realNow, 5);
   
   // Filter historical
   const validLogs = logs.filter(l => !l.isHistoric && (!l.timestamp || !l.timestamp.startsWith('1970-01-01')));
@@ -227,7 +228,7 @@ export function calculateRPGState(
 
   let decayExp = 0;
   if (validLogs.length > 0) {
-    const dates = validLogs.map(l => parseISO(l.timestamp).getTime()).sort((a, b) => a - b);
+    const dates = validLogs.map(l => subHours(parseISO(l.timestamp), 5).getTime()).sort((a, b) => a - b);
     for (let i = 1; i < dates.length; i++) {
       const days = differenceInDays(dates[i], dates[i-1]);
       if (days > 3) decayExp -= (days - 3) * 50;
@@ -242,9 +243,9 @@ export function calculateRPGState(
   const currentWeekInfo = format(now, "RRRR-II");
   const currentMonthInfo = format(now, "yyyy-MM");
   
-  const currentWeekLogs = validLogs.filter(l => isWithinInterval(parseISO(l.timestamp), { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) }));
-  const currentMonthLogs = validLogs.filter(l => isWithinInterval(parseISO(l.timestamp), { start: startOfMonth(now), end: endOfMonth(now) }));
-  const currentYearLogs = validLogs.filter(l => isWithinInterval(parseISO(l.timestamp), { start: startOfYear(now), end: endOfYear(now) }));
+  const currentWeekLogs = validLogs.filter(l => isWithinInterval(subHours(parseISO(l.timestamp), 5), { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) }));
+  const currentMonthLogs = validLogs.filter(l => isWithinInterval(subHours(parseISO(l.timestamp), 5), { start: startOfMonth(now), end: endOfMonth(now) }));
+  const currentYearLogs = validLogs.filter(l => isWithinInterval(subHours(parseISO(l.timestamp), 5), { start: startOfYear(now), end: endOfYear(now) }));
 
   const quests: Quest[] = [];
 
@@ -258,7 +259,7 @@ export function calculateRPGState(
   const allWeeks = new Set<string>();
 
   validLogs.forEach(l => {
-    const d = parseISO(l.timestamp);
+    const d = subHours(parseISO(l.timestamp), 5);
     allYears.add(format(d, "yyyy"));
     allMonths.add(format(d, "yyyy-MM"));
     allWeeks.add(format(startOfWeek(d, { weekStartsOn: 1 }), "RRRR-II"));
@@ -275,7 +276,7 @@ export function calculateRPGState(
 
   // 2. Iterate backwards or just normally and compute
   for (const year of Array.from(allYears)) {
-    const yearLogs = validLogs.filter(l => format(parseISO(l.timestamp), "yyyy") === year);
+    const yearLogs = validLogs.filter(l => format(subHours(parseISO(l.timestamp), 5), "yyyy") === year);
     const tempQuests: Quest[] = [];
     generateYearlyQuests(tempQuests, yearLogs, media, settings, year);
     tempQuests.forEach(q => { if (q.isCompleted) questExp += q.expReward; });
@@ -283,7 +284,7 @@ export function calculateRPGState(
   }
 
   for (const month of Array.from(allMonths)) {
-    const monthLogs = validLogs.filter(l => format(parseISO(l.timestamp), "yyyy-MM") === month);
+    const monthLogs = validLogs.filter(l => format(subHours(parseISO(l.timestamp), 5), "yyyy-MM") === month);
     const tempQuests: Quest[] = [];
     const rng = mulberry32(parseInt(month.replace('-', '')));
     generateIntervalQuests(tempQuests, monthLogs, media, settings, 'monthly', month, 4, rng, worldBosses, artifacts, validLogs);
@@ -292,7 +293,7 @@ export function calculateRPGState(
   }
 
   for (const week of Array.from(allWeeks)) {
-    const weekLogs = validLogs.filter(l => format(startOfWeek(parseISO(l.timestamp), { weekStartsOn: 1 }), "RRRR-II") === week);
+    const weekLogs = validLogs.filter(l => format(startOfWeek(subHours(parseISO(l.timestamp), 5), { weekStartsOn: 1 }), "RRRR-II") === week);
     const tempQuests: Quest[] = [];
     const rng = mulberry32(parseInt(week.replace('-', '')));
     generateIntervalQuests(tempQuests, weekLogs, media, settings, 'weekly', week, 2, rng, worldBosses, artifacts, validLogs);
@@ -618,15 +619,15 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     },
     () => { // 11. Consistent Chronicler
       const target = getQTarget("Consistent Chronicler", timeframe, timeframe === 'monthly' ? 15 : 4, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const days = new Set(logs.map(l => format(parseISO(l.timestamp), "yyyy-MM-dd"))).size;
+      const days = new Set(logs.map(l => format(subHours(parseISO(l.timestamp), 5), "yyyy-MM-dd"))).size;
       return { title: "Consistent Chronicler", desc: `Log progress on ${target} different days`, target, current: days, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 12. Weekend Warrior
       const target = getQTarget("Weekend Warrior", timeframe, timeframe === 'monthly' ? 5 : 2, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = new Set(logs.filter(l => {
-        const d = parseISO(l.timestamp).getDay();
+        const d = subHours(parseISO(l.timestamp), 5).getDay();
         return d === 0 || d === 6; // Sunday or Saturday
-      }).map(l => format(parseISO(l.timestamp), "yyyy-MM-dd"))).size;
+      }).map(l => format(subHours(parseISO(l.timestamp), 5), "yyyy-MM-dd"))).size;
       return { title: "Weekend Warrior", desc: `Log progress on ${target} unique weekend days`, target, current, type: 'entries' as const, reward: baseReward * 1.5 };
     },
     () => { // 13. The Sprinter
@@ -653,7 +654,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       logs.forEach(l => {
         const m = media.find(x => x.id === l.mediaId);
         if (m) {
-          const day = format(parseISO(l.timestamp), "yyyy-MM-dd");
+          const day = format(subHours(parseISO(l.timestamp), 5), "yyyy-MM-dd");
           const key = day + "_" + m.id;
           dayMap[key] = (dayMap[key] || 0) + calculateScaledDelta(l.delta, m, settings);
         }
@@ -681,13 +682,13 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     () => { // 17. Boss Hunter
       if (timeframe === 'weekly') return null;
       const target = getQTarget("Boss Hunter", timeframe, Math.floor(rng() * 2) + 1, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const current = worldBosses.filter(b => b.status === 'Defeated' && b.updatedAt && b.updatedAt.startsWith(timeId)).length;
+      const current = worldBosses.filter(b => b.status === 'Defeated' && b.updatedAt && format(subHours(parseISO(b.updatedAt), 5), 'yyyy-MM') === timeId).length;
       return { title: "Boss Hunter", desc: `Defeat ${target} World Bosses`, target, current, type: 'entries' as const, reward: baseReward * 3 };
     },
     () => { // 18. Relic Appraiser
       if (timeframe === 'weekly') return null;
       const target = getQTarget("Relic Appraiser", timeframe, timeframe === 'monthly' ? 3 : 1, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const current = artifacts.filter(a => a.earnedAt && a.earnedAt.startsWith(timeId)).length;
+      const current = artifacts.filter(a => a.earnedAt && format(subHours(parseISO(a.earnedAt), 5), 'yyyy-MM') === timeId).length;
       return { title: "Relic Appraiser", desc: `Obtain ${target} new Artifacts`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 19. Level Grinder
@@ -698,7 +699,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     () => { // 20. Consecutive Commitment
       if (timeframe !== 'weekly') return null;
       const target = getQTarget("Consecutive Commitment", timeframe, 3, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const days = Array.from(new Set(logs.map(l => format(parseISO(l.timestamp), "yyyy-MM-dd")))).sort();
+      const days = Array.from(new Set(logs.map(l => format(subHours(parseISO(l.timestamp), 5), "yyyy-MM-dd")))).sort();
       let maxConsecutive = 0;
       let currentConsecutive = 1;
       for (let i = 1; i < days.length; i++) {
@@ -842,8 +843,8 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       const current = logs.filter(l => {
          const m = media.find(x => x.id === l.mediaId);
          if (m && l.metricType !== 'statusChange') {
-             const lDate = parseISO(l.timestamp);
-             const cDate = parseISO(m.createdAt);
+             const lDate = subHours(parseISO(l.timestamp), 5);
+             const cDate = subHours(parseISO(m.createdAt), 5);
              const lWeek = format(startOfWeek(lDate, { weekStartsOn: 1 }), "RRRR-II");
              const cWeek = format(startOfWeek(cDate, { weekStartsOn: 1 }), "RRRR-II");
              return lWeek === cWeek;

@@ -61,7 +61,7 @@ export function Dashboard() {
       if (item.status !== 'Active') return false;
       const mediaLogs = logs.filter(l => l.mediaId === item.id);
       const lastActiveMs = mediaLogs.length 
-        ? Math.max(...mediaLogs.map(l => new Date(l.date).getTime())) 
+        ? Math.max(...mediaLogs.map(l => new Date(l.timestamp).getTime())) 
         : new Date(item.updatedAt || item.createdAt).getTime();
       const days = (Date.now() - lastActiveMs) / (1000 * 60 * 60 * 24);
       return days >= 50;

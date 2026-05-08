@@ -1,6 +1,6 @@
 import { MediaItem, ProgressLog, Settings, MEDIA_TYPES } from '../types/schema';
 import { calculateScaledDelta } from './scaling';
-import { differenceInDays, parseISO, isSameDay, getHours } from 'date-fns';
+import { differenceInDays, parseISO, isSameDay, getHours, subHours, format } from 'date-fns';
 import { mulberry32 } from './rpgSystem';
 
 export interface RecapAnalyticsData {
@@ -262,7 +262,7 @@ export function extractJournals(data: RecapAnalyticsData) {
 
 export function calculateLongestStreak(data: RecapAnalyticsData) {
   if (data.logs.length === 0) return 0;
-  const uniqueDates = Array.from(new Set(data.logs.map(l => l.timestamp.split('T')[0]))).sort();
+  const uniqueDates = Array.from(new Set(data.logs.map(l => format(subHours(parseISO(l.timestamp), 5), 'yyyy-MM-dd')))).sort();
   if (uniqueDates.length === 0) return 0;
 
   let maxStreak = 1;

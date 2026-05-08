@@ -5,7 +5,7 @@ import {
   startOfWeek, endOfWeek, subWeeks, 
   startOfMonth, endOfMonth, subMonths, 
   startOfYear, endOfYear, subYears, 
-  format, isWithinInterval, parseISO,
+  format, isWithinInterval, parseISO, subHours,
   startOfISOWeek, endOfISOWeek, formatISO
 } from 'date-fns';
 import { calculateScaledDelta } from '../lib/scaling';
@@ -30,7 +30,7 @@ export function Recaps() {
   const validLogs = useMemo(() => logs.filter(log => !log.isHistoric && !log.timestamp.startsWith('1970-01-01')), [logs]);
 
   const currentInterval = useMemo(() => {
-    const now = new Date();
+    const now = subHours(new Date(), 5);
     if (timeframe === 'week') {
       const target = subWeeks(now, offsetOffset);
       return { start: startOfISOWeek(target), end: endOfISOWeek(target) };
@@ -50,7 +50,7 @@ export function Recaps() {
   }, [timeframe, currentInterval]);
 
   const activeLogs = useMemo(() => {
-    return validLogs.filter(log => isWithinInterval(parseISO(log.timestamp), currentInterval));
+    return validLogs.filter(log => isWithinInterval(subHours(parseISO(log.timestamp), 5), currentInterval));
   }, [validLogs, currentInterval]);
 
   const activeProgressLogs = useMemo(() => {
@@ -79,7 +79,7 @@ export function Recaps() {
       const hasStatusLogs = logs.some(l => l.mediaId === m.id && l.metricType === 'statusChange');
       if (hasStatusLogs) return false; // This item uses the new system, so if it didn't have a log in the interval, it didn't finish now.
 
-      return (m.status === 'Completed' || m.status === 'Extras') && isWithinInterval(parseISO(m.updatedAt), currentInterval);
+      return (m.status === 'Completed' || m.status === 'Extras') && isWithinInterval(subHours(parseISO(m.updatedAt), 5), currentInterval);
     });
 
     const logBasedCompleted = media.filter(m => completedLogIds.has(m.id));
@@ -91,7 +91,7 @@ export function Recaps() {
   const inProgressMedia = useMemo(() => activeMedia.filter(m => !completedMediaIds.has(m.id)), [activeMedia, completedMediaIds]);
 
   const gatheredLoot = useMemo(() => {
-    let intervalArtifacts = artifacts.filter(a => isWithinInterval(parseISO(a.earnedAt), currentInterval));
+    let intervalArtifacts = artifacts.filter(a => isWithinInterval(subHours(parseISO(a.earnedAt), 5), currentInterval));
     
     const rarityWeight: Record<string, number> = {
       'Mythic': 7,
@@ -195,7 +195,7 @@ export function Recaps() {
       const defeatedBosses = worldBosses.filter(b => 
         b.status === 'Defeated' && 
         b.updatedAt && 
-        isWithinInterval(parseISO(b.updatedAt), currentInterval)
+        isWithinInterval(subHours(parseISO(b.updatedAt), 5), currentInterval)
       );
 
       // PR Calculation
@@ -226,7 +226,7 @@ export function Recaps() {
                           timeframe === 'month' ? { start: startOfMonth(prevTarget), end: endOfMonth(prevTarget) } :
                           { start: startOfYear(prevTarget), end: endOfYear(prevTarget) };
       
-      const prevLogs = validLogs.filter(log => isWithinInterval(parseISO(log.timestamp), prevInterval) && log.metricType !== 'statusChange');
+      const prevLogs = validLogs.filter(log => isWithinInterval(subHours(parseISO(log.timestamp), 5), prevInterval) && log.metricType !== 'statusChange');
       const prevGenreDist = calculateGenres(prevLogs);
 
       // Previous recaps for continuity
@@ -242,7 +242,7 @@ export function Recaps() {
       let maxGapDays = 0;
       const progressLogs = activeProgressLogs;
       if (progressLogs.length > 1) {
-        const sortedDates = progressLogs.map(l => parseISO(l.timestamp).getTime()).sort();
+        const sortedDates = progressLogs.map(l => subHours(parseISO(l.timestamp), 5).getTime()).sort();
         for(let i=1; i<sortedDates.length; i++) {
            const gap = (sortedDates[i] - sortedDates[i-1]) / (1000 * 60 * 60 * 24);
            if (gap > maxGapDays) maxGapDays = gap;
@@ -250,10 +250,10 @@ export function Recaps() {
       }
 
       // Lorekeeper Stats
-      const historyLogsAtEnd = validLogs.filter(l => parseISO(l.timestamp).getTime() <= currentInterval.end.getTime());
+      const historyLogsAtEnd = validLogs.filter(l => subHours(parseISO(l.timestamp), 5).getTime() <= currentInterval.end.getTime());
       const rpgStateAtEnd = calculateRPGState(media, historyLogsAtEnd, settings, [], [], currentInterval.end);
       
-      const historyLogsAtStart = validLogs.filter(l => parseISO(l.timestamp).getTime() < currentInterval.start.getTime());
+      const historyLogsAtStart = validLogs.filter(l => subHours(parseISO(l.timestamp), 5).getTime() < currentInterval.start.getTime());
       const rpgStateAtStart = calculateRPGState(media, historyLogsAtStart, settings, [], [], new Date(currentInterval.start.getTime() - 1000));
 
       const finalClassName = aiTextCache[`rpg_title_${rpgStateAtEnd.level}`] || rpgStateAtEnd.className;
@@ -267,7 +267,7 @@ export function Recaps() {
       const failedBosses = worldBosses.filter(b => 
         b.status === 'Failed' && 
         b.expiresAt && 
-        isWithinInterval(parseISO(b.expiresAt), currentInterval)
+        isWithinInterval(subHours(parseISO(b.expiresAt), 5), currentInterval)
       );
 
       // Add analytics for specific new modules
@@ -1090,7 +1090,7 @@ ${promptContext}`, settings.aiPersona);
 
     const dayPages: Record<string, number> = {};
     activeProgressLogs.forEach(l => {
-      const day = format(parseISO(l.timestamp), 'EEEE');
+      const day = format(subHours(parseISO(l.timestamp), 5), 'EEEE');
       const m = activeMedia.find(x => x.id === l.mediaId);
       if (m) {
         dayPages[day] = (dayPages[day] || 0) + calculateScaledDelta(l.delta, m, settings);
@@ -1141,7 +1141,7 @@ ${promptContext}`, settings.aiPersona);
   };
 
   const renderLorekeeper = () => {
-     const historyLogsAtEnd = validLogs.filter(l => parseISO(l.timestamp).getTime() <= currentInterval.end.getTime());
+     const historyLogsAtEnd = validLogs.filter(l => subHours(parseISO(l.timestamp), 5).getTime() <= currentInterval.end.getTime());
      const rpgStateAtEnd = calculateRPGState(media, historyLogsAtEnd, settings, [], [], currentInterval.end);
      const activeQuests = rpgStateAtEnd.quests.filter(q => q.type.startsWith(timeframe));
      const completedQuests = activeQuests.filter(q => q.isCompleted);
