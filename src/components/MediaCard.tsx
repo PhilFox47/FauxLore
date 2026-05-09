@@ -205,7 +205,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
          
          {/* Floating Elements on Cover */}
          {/* Top Left: Status & Re-run */}
-         <div className="absolute top-3 left-3 flex flex-col gap-2">
+         <div className="absolute top-3 left-3 flex flex-col gap-2 z-20">
             <div className="flex items-center gap-1.5">
               <div className="bg-black/80 backdrop-blur-md rounded-full w-8 h-8 flex items-center justify-center border border-white/10 shadow-lg" title={item.status}>
                 {getStatusIcon(item.status)}
@@ -225,7 +225,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
          </div>
 
          {/* Top Right: Rating */}
-         <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5">
+         <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5 z-20">
             {item.userRating != null && (
               <div className="bg-amber-500 text-black px-2 py-1 rounded-lg shadow-[0_0_15px_rgba(245,158,11,0.5)] flex items-center gap-1 font-black text-xs font-mono tracking-tight leading-none">
                 <Star className="w-3 h-3 fill-black text-black" />
@@ -241,7 +241,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
          </div>
 
          {/* Bottom Overlay: Type */}
-         <div className="absolute bottom-3 left-3 right-3 flex justify-between items-end">
+         <div className="absolute bottom-3 left-3 right-3 flex justify-between items-end z-20">
             <div className={cn("bg-black/80 backdrop-blur-md border border-white/10 px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-lg", colors.text)}>
               {getMediaTypeIcon(item.mediaType, "w-3.5 h-3.5")}
               <span className="text-[9px] font-black uppercase tracking-[0.2em] leading-none font-display">

@@ -183,13 +183,15 @@ export function Armory() {
     const itemArtifacts = artifacts.filter(a => a.mediaId === m.id);
     let allowedArtifactsCount = 0;
     
+    if (m.status === 'Completed' || m.status === 'Extras') {
+      allowedArtifactsCount += 1;
+    }
+    
     if ((m.mediaType === 'Game' || m.mediaType === 'Visual Novel' || m.mediaType === 'Audiobook') && m.isOngoing) {
       const nonHistoricalPlaytime = logs
         .filter(l => l.mediaId === m.id && !l.isHistoric && !l.timestamp.startsWith('1970-01-01') && l.metricType === 'playtimeHours')
         .reduce((sum, log) => sum + log.delta, 0);
-      allowedArtifactsCount = Math.floor(nonHistoricalPlaytime / 50);
-    } else if (m.status === 'Completed' || m.status === 'Extras') {
-      allowedArtifactsCount = 1;
+      allowedArtifactsCount += Math.floor(nonHistoricalPlaytime / 50);
     }
     
     return itemArtifacts.length < allowedArtifactsCount;

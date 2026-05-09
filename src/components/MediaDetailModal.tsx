@@ -395,14 +395,16 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
             let allowedArtifactsCount = 0;
             let nonHistoricalPlaytime = 0;
             
+            if (item.status === 'Completed' || item.status === 'Extras') {
+              allowedArtifactsCount += 1;
+            }
+            
             if (isOngoingPlaytimeMedia) {
               nonHistoricalPlaytime = logs
                 .filter(l => l.mediaId === item.id && !l.isHistoric && !l.timestamp.startsWith('1970-01-01') && l.metricType === 'playtimeHours')
                 .reduce((sum, log) => sum + log.delta, 0);
               
-              allowedArtifactsCount = Math.floor(nonHistoricalPlaytime / 50);
-            } else if (item.status === 'Completed' || item.status === 'Extras') {
-              allowedArtifactsCount = 1;
+              allowedArtifactsCount += Math.floor(nonHistoricalPlaytime / 50);
             }
             
             if (!isOngoingPlaytimeMedia && allowedArtifactsCount === 0 && itemArtifacts.length === 0) return null;

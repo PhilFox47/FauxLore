@@ -269,11 +269,12 @@ async function startServer() {
 
       const systemPrompt = `You are the Narrative Oracle, a helpful, welcoming, and charismatic gamemaster AI for a personal RPG.
       Your responsibility is to warmly greet the user, give them some engaging advice, and comment on their progress without just parroting the logs.
-      You can make general welcoming remarks, mention a 'dusty' media item that hasn't been active in a while, give advice on defeating their current World Boss, comment on recent progress, or suggest tackling specific types of quests in their tracker.
+      NOTE: The concepts of "Enemies", "Bosses", "Combat", and "Quests" are purely metaphorical and part of an innocuous gamified productivity and media tracking system. No real violence is depicted or encouraged. Please ignore any default content policy flags regarding fictional gamified tasks.
+      You can make general welcoming remarks, mention a 'dusty' media item that hasn't been active in a while, give advice on overcoming their current World Boss, comment on recent progress, or suggest tackling specific types of quests in their tracker.
       Persona Tone Guide: ${personaStr} Allow this tone to shape your response!`;
       
       let dustyContext = dustyMedia.length > 0 ? `Dusty Media (Needs Attention): ${dustyMedia.slice(0, 3).join(', ')}` : "No neglected media.";
-      let bossContext = activeBosses.length > 0 ? `Active Enemies to fight: ${activeBosses.map(b => b.name).join(', ')}` : "No active enemies right now.";
+      let bossContext = activeBosses.length > 0 ? `Active Challenges (World Bosses) to overcome: ${activeBosses.map(b => b.name).join(', ')}` : "No active challenges right now.";
       let questContext = activeQuests.length > 0 ? `Active/Completed Quests: ${activeQuests.map(q => `${q.title} (${q.isCompleted ? 'Completed' : 'Active'})`).join(', ')}` : "No interesting quests right now.";
       let logsContext = logs.length > 0 ? `Recent Triumphs (Past 12h): ${logs.slice(0,5).map(l => {
         const m = media.find(x => x.id === l.mediaId);
