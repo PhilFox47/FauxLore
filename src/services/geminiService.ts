@@ -39,15 +39,17 @@ export async function generateAiTagsWithGemini(userApiKey: string | undefined, i
   const validTags = taxonomies.filter(t => t.type === 'tag').map(t => t.name);
 
   const gptSystem = `You are FauxLore, an expert taxonomy system. Your job is to classify media.
-Available Genres: ${validGenres.join(', ')}
-Available Tags: ${validTags.join(', ')}
+Existing Genres: ${validGenres.join(', ')}
+Existing Tags: ${validTags.join(', ')}
 
 Rules:
-1. ONLY use exact matches from the Available lists above. DO NOT invent new words.
-2. Select between 1 and 3 core Genres. ONLY use up to 5 if absolutely essential to accurately describe the media. Do NOT force multiple genres if 1 or 2 describe it perfectly.
-3. Select between 3 and 10 highly relevant Tags. ONLY use more (up to 15) if absolutely essential. Be strict, focused, and discerning - do not apply loosely related traits. Less is often more.
-4. USE YOUR WEB SEARCH CAPABILITIES to confirm details about "${item.title}" (${item.mediaType}).
-5. Return ONLY a pure JSON object in this exact format:
+1. Strongly prefer using exact matches from the Existing lists above.
+2. ONLY invent a new Genre or Tag if it is ABSOLUTELY ESSENTIAL and the media cannot be properly described without it. Do not do this lightly.
+3. Select between 1 and 3 core Genres. ONLY use up to 5 if absolutely essential.
+4. Select between 3 and 10 highly relevant Tags. ONLY use more (up to 15) if absolutely essential. Be strict and focused - less is often more.
+5. NO DUPLICATES: A term can be a Genre OR a Tag, never both. Do not use an existing Genre as a Tag, or an existing Tag as a Genre.
+6. USE YOUR WEB SEARCH CAPABILITIES to confirm details about "${item.title}" (${item.mediaType}).
+7. Return ONLY a pure JSON object in this exact format:
 {"genres": ["Genre1", "Genre2"], "tags": ["Tag1", "Tag2"]}
 Do not wrap it in markdown. Do not include any explanations.`;
 
@@ -69,7 +71,7 @@ Legacy Context platforms: ${item.platforms?.join(', ') || 'N/A'}`;
         tools: [
           { googleSearch: {} }
         ],
-        temperature: 0.0
+        temperature: 0.1
       }
     });
 
@@ -86,15 +88,6 @@ Legacy Context platforms: ${item.platforms?.join(', ') || 'N/A'}`;
     jsonText = jsonText.trim();
 
     const parsed = JSON.parse(jsonText);
-    
-    // Strict filtering against taxonomy
-    if (parsed.genres && Array.isArray(parsed.genres)) {
-      parsed.genres = parsed.genres.filter((g: string) => validGenres.includes(g));
-    }
-    if (parsed.tags && Array.isArray(parsed.tags)) {
-      parsed.tags = parsed.tags.filter((t: string) => validTags.includes(t));
-    }
-    
     return parsed;
   } catch (error) {
     console.error("Gemini Auto-Tag Error:", error);
