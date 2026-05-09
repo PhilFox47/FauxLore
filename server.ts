@@ -1043,7 +1043,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   try { db.prepare("ALTER TABLE artifacts ADD COLUMN imageUrl TEXT").run(); console.log("Migration: Added imageUrl to artifacts"); } catch (e) {}
   try { db.prepare("ALTER TABLE world_bosses ADD COLUMN imageUrl TEXT").run(); console.log("Migration: Added imageUrl to world_bosses"); } catch (e) {}
 
-  const safeJsonParse = (str: any) => {
+  function safeJsonParse(str: any) {
     try {
       if (typeof str === 'string') {
         const parsed = JSON.parse(str);
@@ -1054,23 +1054,25 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
     } catch(e) {
       return typeof str === 'string' && str ? [str] : [];
     }
-  };
+  }
 
-  const normalizeMedia = (row: any) => ({
-    ...row,
-    genres: row.genres ? safeJsonParse(row.genres) : [],
-    tags: row.tags ? safeJsonParse(row.tags) : [],
-    tropes: row.tropes ? safeJsonParse(row.tropes) : [],
-    platforms: row.platforms ? safeJsonParse(row.platforms) : [],
-    franchises: row.franchises ? safeJsonParse(row.franchises) : [],
-    watched: row.watched === 1,
-    isReRun: row.isReRun === 1,
-    isOngoing: row.isOngoing === 1,
-    noEnemies: row.noEnemies === 1,
-    expectedReleaseDate: row.expectedReleaseDate || null,
-    releaseStatus: row.releaseStatus || null,
-    lastSyncAt: row.lastSyncAt || null
-  });
+  function normalizeMedia(row: any) {
+    return {
+      ...row,
+      genres: row.genres ? safeJsonParse(row.genres) : [],
+      tags: row.tags ? safeJsonParse(row.tags) : [],
+      tropes: row.tropes ? safeJsonParse(row.tropes) : [],
+      platforms: row.platforms ? safeJsonParse(row.platforms) : [],
+      franchises: row.franchises ? safeJsonParse(row.franchises) : [],
+      watched: row.watched === 1,
+      isReRun: row.isReRun === 1,
+      isOngoing: row.isOngoing === 1,
+      noEnemies: row.noEnemies === 1,
+      expectedReleaseDate: row.expectedReleaseDate || null,
+      releaseStatus: row.releaseStatus || null,
+      lastSyncAt: row.lastSyncAt || null
+    };
+  }
 
   // Authorization Routes
   app.post("/api/auth/login", (req, res) => {
