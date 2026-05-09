@@ -3,6 +3,7 @@ import { useMediaContext } from '../contexts/MediaContext';
 import { CalendarClock, Clock, Edit2 } from 'lucide-react';
 import { isSameDay, format, isAfter, isPast, isToday } from 'date-fns';
 import { MediaDetailModal } from '../components/MediaDetailModal';
+import { MediaFormModal } from '../components/MediaFormModal';
 import { MediaItem } from '../types/schema';
 
 function Countdown({ targetDate }: { targetDate: string }) {
@@ -48,8 +49,10 @@ function Countdown({ targetDate }: { targetDate: string }) {
 }
 
 export function ReleaseRadar() {
-  const { media, logs } = useMediaContext();
+  const { media, logs, saveMediaItem, deleteMediaItem } = useMediaContext();
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
+  const [editingItem, setEditingItem] = useState<MediaItem | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const radarItems = useMemo(() => {
     return media.filter(m => m.status === 'Unreleased').sort((a, b) => {
@@ -163,7 +166,24 @@ export function ReleaseRadar() {
           item={selectedItem}
           logs={logs.filter(l => l.mediaId === selectedItem.id)}
           onClose={() => setSelectedItem(null)}
-          onEdit={() => {}}
+          onEdit={(item) => {
+            setSelectedItem(null);
+            setEditingItem(item);
+            setIsEditModalOpen(true);
+          }}
+        />
+      )}
+
+      {isEditModalOpen && (
+        <MediaFormModal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setEditingItem(null);
+          }}
+          onSave={saveMediaItem}
+          onDelete={deleteMediaItem}
+          initialData={editingItem || undefined}
         />
       )}
     </div>
