@@ -48,7 +48,7 @@ function Countdown({ targetDate }: { targetDate: string }) {
 }
 
 export function ReleaseRadar() {
-  const { media } = useMediaContext();
+  const { media, logs } = useMediaContext();
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
 
   const radarItems = useMemo(() => {
@@ -159,10 +159,11 @@ export function ReleaseRadar() {
 
       {selectedItem && (
         <MediaDetailModal
+          isOpen={true}
           item={selectedItem}
+          logs={logs.filter(l => l.mediaId === selectedItem.id)}
           onClose={() => setSelectedItem(null)}
           onEdit={() => {}}
-          onLogProgress={() => {}}
         />
       )}
     </div>
