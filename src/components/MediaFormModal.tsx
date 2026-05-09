@@ -713,11 +713,11 @@ export function MediaFormModal({
                   Expected Release Date
                 </label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   name="expectedReleaseDate"
                   value={
                     formData.expectedReleaseDate
-                      ? formData.expectedReleaseDate.split("T")[0]
+                      ? format(new Date(formData.expectedReleaseDate), "yyyy-MM-dd'T'HH:mm")
                       : ""
                   }
                   onChange={(e) =>

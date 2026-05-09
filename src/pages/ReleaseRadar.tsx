@@ -1,11 +1,55 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
-import { MediaCard } from '../components/MediaCard';
-import { CalendarClock, Clock } from 'lucide-react';
+import { CalendarClock, Clock, Edit2 } from 'lucide-react';
 import { isSameDay, format, isAfter, isPast, isToday } from 'date-fns';
+import { MediaDetailModal } from '../components/MediaDetailModal';
+import { MediaItem } from '../types/schema';
+
+function Countdown({ targetDate }: { targetDate: string }) {
+  const [timeLeft, setTimeLeft] = useState<{ days: number, hours: number, minutes: number, seconds: number } | null>(null);
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const difference = new Date(targetDate).getTime() - new Date().getTime();
+      if (difference > 0) {
+        setTimeLeft({
+          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+          minutes: Math.floor((difference / 1000 / 60) % 60),
+          seconds: Math.floor((difference / 1000) % 60),
+        });
+      } else {
+        setTimeLeft(null);
+      }
+    };
+
+    calculateTimeLeft();
+    const timer = setInterval(calculateTimeLeft, 1000);
+    return () => clearInterval(timer);
+  }, [targetDate]);
+
+  if (!timeLeft) return null;
+
+  return (
+    <div className="grid grid-cols-4 gap-2 md:gap-4 mt-auto">
+      {[
+        { label: 'Days', value: timeLeft.days },
+        { label: 'Hours', value: timeLeft.hours.toString().padStart(2, '0') },
+        { label: 'Minutes', value: timeLeft.minutes.toString().padStart(2, '0') },
+        { label: 'Seconds', value: timeLeft.seconds.toString().padStart(2, '0') },
+      ].map(unit => (
+        <div key={unit.label} className="bg-black/50 border border-white/5 rounded-xl p-2 md:p-3 flex flex-col items-center justify-center shadow-inner">
+          <span className="text-xl md:text-3xl font-black text-white font-mono drop-shadow-md">{unit.value}</span>
+          <span className="text-[9px] md:text-[10px] text-blue-400/80 uppercase tracking-[0.2em] font-bold mt-1 max-w-full truncate">{unit.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function ReleaseRadar() {
   const { media } = useMediaContext();
+  const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
 
   const radarItems = useMemo(() => {
     return media.filter(m => m.status === 'Unreleased').sort((a, b) => {
@@ -17,13 +61,13 @@ export function ReleaseRadar() {
 
   if (radarItems.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-center">
-        <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center mb-4">
-          <CalendarClock className="w-8 h-8 text-zinc-600" />
+      <div className="flex flex-col items-center justify-center p-12 text-center h-[50vh]">
+        <div className="w-20 h-20 bg-blue-500/10 rounded-[2rem] flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(59,130,246,0.15)] border border-blue-500/20">
+          <CalendarClock className="w-10 h-10 text-blue-400" />
         </div>
-        <h2 className="text-xl font-bold text-white mb-2">No Upcoming Releases</h2>
-        <p className="text-zinc-500 max-w-sm mb-6">
-          You don't have any unreleased media tracked.
+        <h2 className="text-2xl font-black text-white mb-2 tracking-tight">No Upcoming Releases</h2>
+        <p className="text-zinc-500 max-w-sm mb-6 text-sm">
+          You don't have any unreleased media tracked. Add some upcoming games or movies to build the hype!
         </p>
       </div>
     );
@@ -31,64 +75,96 @@ export function ReleaseRadar() {
 
   return (
     <div className="space-y-8 pb-10">
-      <div className="flex justify-between items-end mb-6">
+      <div className="flex justify-between items-end mb-8 mt-4">
         <div>
-          <h1 className="text-3xl font-black text-blue-400 px-1 tracking-tight">Release Radar</h1>
-          <p className="text-blue-300/60 mt-1 px-1">Upcoming drops and launches.</p>
+          <h1 className="text-4xl sm:text-5xl font-black px-1 tracking-tight bg-gradient-to-br from-blue-400 via-blue-200 to-indigo-400 bg-clip-text text-transparent drop-shadow-sm">Release Radar</h1>
+          <p className="text-blue-300/60 mt-2 px-2 font-medium tracking-wide">Upcoming drops and launches.</p>
         </div>
       </div>
 
-      <div className="relative border-l border-white/10 ml-4 md:ml-8 space-y-12 pb-10">
+      <div className="relative space-y-12 pb-10">
         {radarItems.map((item, index) => {
           const hasDate = !!item.expectedReleaseDate;
           const releaseDate = hasDate ? new Date(item.expectedReleaseDate!) : null;
           let label = "TBD";
           let labelColor = "text-zinc-500";
-          let dotColor = "bg-zinc-700";
+          let cardGlow = "";
 
           if (hasDate) {
             if (isToday(releaseDate!)) {
               label = "OUT TODAY!";
-              labelColor = "text-green-400 font-bold";
-              dotColor = "bg-green-500 shadow-[0_0_15px_rgba(34,197,94,0.5)]";
+              labelColor = "text-green-400 font-bold drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]";
+              cardGlow = "hover:border-green-500/50 shadow-[0_0_30px_rgba(74,222,128,0.1)]";
             } else if (isPast(releaseDate!)) {
               label = `Released on ${format(releaseDate!, 'MMM do, yyyy')}`;
               labelColor = "text-emerald-500/70";
-              dotColor = "bg-emerald-600/50";
             } else {
-              label = format(releaseDate!, 'MMMM do, yyyy');
-              labelColor = "text-blue-200";
-              dotColor = "bg-blue-500";
+              label = format(releaseDate!, 'MMMM do, yyyy, h:mm a');
+              labelColor = "text-blue-300 drop-shadow-[0_0_5px_rgba(147,197,253,0.5)]";
+              cardGlow = "hover:border-blue-500/50 hover:shadow-[0_0_40px_rgba(59,130,246,0.15)]";
             }
           }
 
           return (
-            <div key={item.id} className="relative pl-8 md:pl-12 group">
-              <div className={`absolute -left-[5px] top-4 w-2.5 h-2.5 rounded-full ${dotColor} border-2 border-[#111113] z-10 transition-transform group-hover:scale-150`} />
-              
-              <div className="bg-[#111113] border border-white/5 rounded-2xl p-5 flex flex-col md:flex-row gap-6 items-start hover:border-blue-500/20 transition-colors">
-                <div className="w-24 md:w-32 shrink-0">
-                  <MediaCard item={item} />
+            <div key={item.id} className="group relative">
+              <div className={`bg-[#0c0c0e] border border-white/10 rounded-3xl p-6 md:p-8 flex flex-col md:flex-row gap-8 lg:gap-12 items-stretch transition-all duration-500 cursor-pointer ${cardGlow}`} onClick={() => setSelectedItem(item)}>
+                
+                {/* Large Hype Cover */}
+                <div className="w-full md:w-56 lg:w-72 shrink-0 rounded-2xl overflow-hidden shadow-2xl aspect-[2/3] relative group-hover:-translate-y-2 transition-transform duration-500">
+                  <img src={item.coverImageUrl || "https://images.unsplash.com/photo-1618519764611-bd0823006228?auto=format&fit=crop&q=80&w=400"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={item.title} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                  <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+                    <span className="text-xs font-black uppercase tracking-[0.2em] bg-blue-500/20 text-blue-300 px-3 py-1.5 rounded-lg backdrop-blur-md border border-blue-500/30">
+                      {item.mediaType}
+                    </span>
+                  </div>
                 </div>
                 
-                <div className="flex flex-col flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock className="w-4 h-4 text-zinc-500" />
-                    <span className={`text-sm ${labelColor}`}>{label}</span>
+                {/* Information and Countdown */}
+                <div className="flex flex-col flex-1 py-2">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Clock className={`w-4 h-4 ${hasDate && isToday(releaseDate!) ? 'text-green-400' : 'text-blue-400'}`} />
+                    <span className={`text-xs md:text-sm tracking-widest uppercase ${labelColor}`}>{label}</span>
                   </div>
-                  <h3 className="font-bold text-2xl text-white leading-tight mb-2">{item.title}</h3>
-                  <div className="flex gap-2">
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-white/10 text-zinc-300 uppercase tracking-wider">{item.mediaType}</span>
-                    {item.platforms?.slice(0,2).map(p => (
-                      <span key={p} className="text-xs font-medium px-2 py-0.5 rounded border border-white/10 text-zinc-400">{p}</span>
+                  
+                  <h3 className="font-black text-3xl md:text-4xl lg:text-5xl text-white leading-tight mb-4 tracking-tight drop-shadow-md group-hover:text-blue-400 transition-colors">{item.title}</h3>
+                  
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {item.platforms?.map(p => (
+                      <span key={p} className="text-[10px] font-bold px-2.5 py-1 rounded-md border border-white/10 text-zinc-300 bg-white/5 uppercase tracking-wide">{p}</span>
                     ))}
+                    {item.developer && (
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-md text-zinc-400 uppercase tracking-wide flex items-center gap-1">
+                         <Edit2 className="w-3 h-3" /> {item.developer}
+                      </span>
+                    )}
                   </div>
+
+                  {item.description && (
+                    <p className="text-zinc-400 leading-relaxed text-sm lg:text-base line-clamp-3 mb-8 italic border-l-2 border-white/10 pl-4">
+                      "{item.description}"
+                    </p>
+                  )}
+                  
+                  {/* Countdown Zone */}
+                  {hasDate && !isPast(releaseDate!) && (
+                     <Countdown targetDate={item.expectedReleaseDate!} />
+                  )}
                 </div>
               </div>
             </div>
           );
         })}
       </div>
+
+      {selectedItem && (
+        <MediaDetailModal
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onEdit={() => {}}
+          onLogProgress={() => {}}
+        />
+      )}
     </div>
   );
 }
