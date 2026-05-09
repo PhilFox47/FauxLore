@@ -222,8 +222,24 @@ export function Lorekeeper() {
 CRITICAL RULE: DO NOT reference any specific franchise, character, or media title by name. Use general genre or medium terms instead, unless EXPLICITLY PERMITTED below.`;
 
       let generatedFormatRules = [];
-      if (generateMain) generatedFormatRules.push(`"main": "The Grand Master"`);
-      mediaTypesToGenerate.forEach(t => generatedFormatRules.push(`"${t}": "Title here"`));
+      let forbiddenTitles: string[] = [];
+
+      if (generateMain) {
+        generatedFormatRules.push(`"main": "The Grand Master"`);
+        const currentMain = aiTextCache[`rpg_title_${rpgState.level}`];
+        if (currentMain) forbiddenTitles.push(currentMain);
+      }
+
+      mediaTypesToGenerate.forEach(t => {
+        generatedFormatRules.push(`"${t}": "Title here"`);
+        const currentMed = aiTextCache[`rpg_title_${t}_${rpgState.mediaLevels[t].level}`];
+        if (currentMed) forbiddenTitles.push(currentMed);
+      });
+
+      let forbiddenRule = "";
+      if (forbiddenTitles.length > 0) {
+        forbiddenRule = `\nCRITICAL RULE: DO NOT generate exactly or similarly to these titles: ${forbiddenTitles.map(t => '"' + t + '"').join(', ')}. Create something fresh and entirely different!`;
+      }
 
       let perMediaContexts = mediaTypesToGenerate.map(t => {
           const typeContext = getRecentMediaContext(t);
@@ -252,7 +268,7 @@ ${perMediaContexts}
 Generate a truly creative, deeply thematic, and punchy RPG-style title for each requested category. 
 - Main Title: Combine their overall prestige with their unique media tastes (e.g. "Cyberpunk Architect", "Novice Spellslinger of the Cozy Arts").
 - Per-Media Titles: Heavily theme it ONLY around that specific media type AND that specific media level context. A level 1 Gamer should sound like a beginner, a level 50 Gamer should sound like an epic master. Match the "epicness" to their level context (e.g. beginner, experienced, etc.).
-
+${forbiddenRule}
 CRITICAL RULE: DO NOT include words like "Level", "Lvl", or the numerical level in the generated title itself. Just output the titular name.
 
 Respond EXCLUSIVELY in valid JSON format like this:
@@ -325,6 +341,9 @@ NO other text or markdown, JUST raw JSON.`;
         franchiseRule = `CRITICAL RULE: You MAY reference the specific franchise or title "${dominantMedia.title}" by name, because it accounts for more than 50% of their recent Master Pages. Do NOT reference any other specific franchise by name.`;
       }
 
+      const currentMain = aiTextCache[`rpg_title_${rpgState.level}`];
+      const forbiddenRule = currentMain ? `\nCRITICAL RULE: DO NOT generate exactly or similarly to this title: "${currentMain}". Create something fresh and entirely different!` : "";
+
       const titlePrompt = `The user is Level ${rpgState.level} (${levelContext}). 
 Their recently active/completed media are provided below. Give the "Most Recent" items significantly more weight in determining their title. The user's time investment is represented by "Master Pages".
 ${franchiseRule}
@@ -335,7 +354,7 @@ ${recentMediaStr}
 Generate a truly creative, deeply thematic, and punchy RPG-style title for them. Combine their level prestige with their unique media tastes.
 If they consume horror media, evoke a spooky atmosphere. If sci-fi, make it sound futuristic. If diverse, blend the concepts creatively.
 Use the provided Genres and Tags to make the title feel personalized and cool (e.g. "Cyberpunk Architect", "Novice Spellslinger of the Cozy Arts", "Veteran Mecha Commander").
-
+${forbiddenRule}
 NO extra comments, NO quotes, just the title. 2-6 words.`;
 
       const titleKey = `rpg_title_${rpgState.level}`;
