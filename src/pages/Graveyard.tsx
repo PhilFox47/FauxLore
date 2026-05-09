@@ -66,9 +66,9 @@ export function Graveyard() {
           switch(item.mediaType) {
             case 'Game':
             case 'Visual Novel':
-              if (item.isOngoing) { progressText = `${item.playtimeHours || 0}h`; }
+              if (item.isOngoing) { progressText = `${Number((item.playtimeHours || 0).toFixed(1))}h`; }
               else {
-                progressText = `${item.playtimeHours || 0}h`;
+                progressText = `${Number((item.playtimeHours || 0).toFixed(1))}h`;
                 if (item.averagePlaytime && item.averagePlaytime > 0) {
                   progressText += ` / ${item.averagePlaytime}h`;
                   progressPercent = ((item.playtimeHours || 0) / item.averagePlaytime) * 100;

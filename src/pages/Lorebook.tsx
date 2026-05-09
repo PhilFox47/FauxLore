@@ -160,9 +160,11 @@ export function Lorebook() {
                              
                              const absDelta = Math.abs(log.delta);
                              let unit = log.metricType as string;
+                             let displayDelta = absDelta;
                              if (unit === 'playtimeHours') {
                                 actionWord = log.delta > 0 ? "Logged" : "Reverted";
-                                unit = absDelta === 1 ? 'hour of playtime' : 'hours of playtime';
+                                displayDelta = Number(absDelta.toFixed(1));
+                                unit = displayDelta === 1 ? 'hour of playtime' : 'hours of playtime';
                              } else if (unit === 'episodesWatched') {
                                 unit = absDelta === 1 ? 'episode' : 'episodes';
                              } else if (unit === 'watchCount') {
@@ -175,7 +177,7 @@ export function Lorebook() {
                                 unit = absDelta === 1 ? 'issue' : 'issues';
                              }
 
-                             return <span><span className="font-bold text-white">{actionWord}</span> {absDelta} {unit}</span>;
+                             return <span><span className="font-bold text-white">{actionWord}</span> {displayDelta} {unit}</span>;
                           };
 
                           return (

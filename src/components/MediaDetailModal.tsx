@@ -601,7 +601,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                             {new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                           <span className="text-xs font-bold text-orange-400 ml-auto bg-orange-500/10 px-2 py-0.5 rounded">
-                            {log.metricType === 'statusChange' ? 'Status Update' : `+${log.delta} ${log.metricType}`}
+                            {log.metricType === 'statusChange' ? 'Status Update' : `+${log.metricType === 'playtimeHours' ? Number((log.delta).toFixed(1)) : log.delta} ${log.metricType}`}
                           </span>
                           <button 
                             onClick={() => handleEditClick(log)}

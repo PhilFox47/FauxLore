@@ -108,10 +108,10 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
   switch(item.mediaType) {
     case 'Game':
       if (item.isOngoing) {
-        progressText = `${item.playtimeHours || 0}h`;
+        progressText = `${Number((item.playtimeHours || 0).toFixed(1))}h`;
         progressPercent = 0;
       } else {
-        progressText = `${item.playtimeHours || 0}h`;
+        progressText = `${Number((item.playtimeHours || 0).toFixed(1))}h`;
         if (item.averagePlaytime && item.averagePlaytime > 0) {
           progressText += ` / ${item.averagePlaytime}h`;
           progressPercent = ((item.playtimeHours || 0) / item.averagePlaytime) * 100;
@@ -122,10 +122,10 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
       break;
     case 'Visual Novel':
       if (item.isOngoing) {
-        progressText = `${item.playtimeHours || 0}h`;
+        progressText = `${Number((item.playtimeHours || 0).toFixed(1))}h`;
         progressPercent = 0;
       } else {
-        progressText = `${item.playtimeHours || 0}h`;
+        progressText = `${Number((item.playtimeHours || 0).toFixed(1))}h`;
         if (item.averagePlaytime && item.averagePlaytime > 0) {
           progressText += ` / ${item.averagePlaytime}h`;
           progressPercent = ((item.playtimeHours || 0) / item.averagePlaytime) * 100;

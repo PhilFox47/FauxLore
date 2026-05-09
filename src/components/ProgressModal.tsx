@@ -254,7 +254,7 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
                    </label>
                    {mode === 'set' && (
                      <div className="text-[10px] text-zinc-500 font-mono font-bold bg-black/40 px-3 py-1 rounded shadow-inner border border-white/5">
-                        Current Frame: {currentVal}
+                        Current Frame: {metricType === 'playtimeHours' ? Number(currentVal.toFixed(1)) : currentVal}
                      </div>
                    )}
                  </div>

@@ -171,7 +171,7 @@ export function calculateRPGState(
   const now = subHours(realNow, 5);
   
   // Filter historical
-  const validLogs = logs.filter(l => !l.isHistoric && (!l.timestamp || !l.timestamp.startsWith('1970-01-01')));
+  const validLogs = logs.filter(l => l && l.timestamp && !l.isHistoric && !l.timestamp.startsWith('1970-01-01'));
   
   // Initialize Media level EXP trackers
   const ALL_MEDIA_TYPES: MediaType[] = ['Game', 'Book', 'Audiobook', 'Visual Novel', 'Manga', 'Series', 'Movie', 'Comic'];
