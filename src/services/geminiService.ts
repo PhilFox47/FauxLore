@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-export async function generateGeminiText(userApiKey: string | undefined, systemPrompt: string, userPrompt: string) {
+export async function generateGeminiText(userApiKey: string | undefined, systemPrompt: string, userPrompt: string, temperature: number = 0.9) {
   const apiKey = userApiKey || process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
     throw new Error("Gemini API Key is not configured. Please set it in Settings -> API Integrations.");
@@ -15,7 +15,7 @@ export async function generateGeminiText(userApiKey: string | undefined, systemP
         { role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }
       ],
       config: {
-        temperature: 0.9
+        temperature: temperature
       }
     });
 

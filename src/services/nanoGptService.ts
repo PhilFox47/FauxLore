@@ -242,7 +242,7 @@ export async function generateImage(apiKey: string, prompt: string): Promise<str
   return imageUrl;
 }
 
-export async function generateText(apiKey: string, model: string, systemPrompt: string, prompt: string) {
+export async function generateText(apiKey: string, model: string, systemPrompt: string, prompt: string, temperature: number = 0.9) {
   if (!apiKey) throw new Error("Nano-GPT API Key is missing. Please configure it in Settings.");
 
   const res = await fetch("https://nano-gpt.com/api/v1/chat/completions", {
@@ -253,6 +253,7 @@ export async function generateText(apiKey: string, model: string, systemPrompt: 
     },
     body: JSON.stringify({
       model: model || "gpt-4o-mini",
+      temperature: temperature,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: prompt }

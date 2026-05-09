@@ -281,10 +281,10 @@ NO other text or markdown, JUST raw JSON.`;
       if (settings.nanoGptApiKey) {
         const apiKey = settings.nanoGptApiKey;
         const model = settings.nanoGptModel || "gpt-4o-mini";
-        titleRes = await generateText(apiKey, model, systemPrompt, titlePrompt);
+        titleRes = await generateText(apiKey, model, systemPrompt, titlePrompt, 1.2);
       } else if (settings.geminiApiKey) {
         const apiKey = settings.geminiApiKey;
-        titleRes = await generateGeminiText(apiKey, systemPrompt, titlePrompt);
+        titleRes = await generateGeminiText(apiKey, systemPrompt, titlePrompt, 1.2);
       }
 
       const cleanJson = titleRes.replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -362,12 +362,13 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
       if (settings.nanoGptApiKey) {
         const apiKey = settings.nanoGptApiKey;
         const model = settings.nanoGptModel || "gpt-4o-mini";
-        titleRes = await generateText(apiKey, model, systemPrompt, titlePrompt);
+        titleRes = await generateText(apiKey, model, systemPrompt, titlePrompt, 1.2);
       } else if (settings.geminiApiKey) {
         titleRes = await generateGeminiText(
           settings.geminiApiKey,
           systemPrompt,
           titlePrompt,
+          1.2
         );
       }
 
@@ -399,13 +400,14 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
         if (settings.nanoGptApiKey) {
           const apiKey = settings.nanoGptApiKey;
           const model = settings.nanoGptModel || "gpt-4o-mini";
-          qTitleRes = await generateText(apiKey, model, systemPrompt, tPrompt);
+          qTitleRes = await generateText(apiKey, model, systemPrompt, tPrompt, 1.2);
           qDescRes = await generateText(apiKey, model, systemPrompt, dPrompt);
         } else if (settings.geminiApiKey) {
           qTitleRes = await generateGeminiText(
             settings.geminiApiKey,
             systemPrompt,
             tPrompt,
+            1.2
           );
           qDescRes = await generateGeminiText(
             settings.geminiApiKey,
@@ -1148,6 +1150,7 @@ function QuestCard({
               model,
               systemPrompt,
               titlePrompt,
+              1.2
             );
             qDescRes = await generateText(
               apiKey,
@@ -1161,6 +1164,7 @@ function QuestCard({
               apiKey,
               systemPrompt,
               titlePrompt,
+              1.2
             );
             qDescRes = await generateGeminiText(
               apiKey,
@@ -1218,9 +1222,9 @@ function QuestCard({
       let res = "";
       
       if (settings?.nanoGptApiKey) {
-        res = await generateText(settings.nanoGptApiKey, settings.nanoGptModel || "chatgpt-4o-latest", systemPrompt, prompt);
+        res = await generateText(settings.nanoGptApiKey, settings.nanoGptModel || "chatgpt-4o-latest", systemPrompt, prompt, type === 'title' ? 1.2 : 0.9);
       } else if (settings?.geminiApiKey) {
-        res = await generateGeminiText(settings.geminiApiKey, systemPrompt, prompt);
+        res = await generateGeminiText(settings.geminiApiKey, systemPrompt, prompt, type === 'title' ? 1.2 : 0.9);
       }
 
       await saveAiText(`quest_${type}_${quest.id}`, res);
