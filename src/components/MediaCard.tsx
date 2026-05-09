@@ -168,7 +168,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
        >
          <img 
             src={item.coverImageUrl || coverFallback} 
-            className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-all duration-700 group-hover:scale-105"
+            className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
             style={{ filter: `grayscale(${grayscale}%)` }}
             referrerPolicy="no-referrer"
          />
@@ -200,9 +200,6 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
            </div>
          )}
 
-         {/* Gradients to ensure text readability */}
-         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none z-10" />
-         
          {/* Floating Elements on Cover */}
          {/* Top Left: Status & Re-run */}
          <div className="absolute top-3 left-3 flex flex-col gap-2 z-20">
