@@ -87,10 +87,10 @@ export function MediaLibrary() {
   return (
     <>
       <header 
-        className="flex flex-col gap-6 sm:gap-8 mb-8 bg-gradient-to-br from-zinc-900 to-[#0A0A0C] border border-white/5 rounded-3xl p-8 relative overflow-hidden shadow-2xl"
+        className="flex flex-col gap-6 sm:gap-8 mb-8 bg-gradient-to-br from-zinc-900 to-[#0A0A0C] border border-white/5 rounded-3xl p-8 relative shadow-2xl z-20"
         style={{ '--accent': accentBase, '--accent-hover': accentHover } as React.CSSProperties}
       >
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.05] mix-blend-overlay"></div>
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.05] mix-blend-overlay rounded-3xl pointer-events-none"></div>
         
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="flex-1">

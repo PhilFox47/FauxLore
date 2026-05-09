@@ -5,6 +5,7 @@ import { IntegrationsService, GameMetadata } from "../services/integrations";
 import { cn } from "../lib/utils";
 import { useMediaContext } from "../contexts/MediaContext";
 import { generateAiTagsWithGemini } from "../services/geminiService";
+import { format } from "date-fns";
 
 interface MediaFormModalProps {
   isOpen: boolean;
@@ -716,9 +717,11 @@ export function MediaFormModal({
                   type="datetime-local"
                   name="expectedReleaseDate"
                   value={
-                    formData.expectedReleaseDate
-                      ? format(new Date(formData.expectedReleaseDate), "yyyy-MM-dd'T'HH:mm")
-                      : ""
+                    (() => {
+                      if (!formData.expectedReleaseDate) return "";
+                      const d = new Date(formData.expectedReleaseDate);
+                      return isNaN(d.getTime()) ? "" : format(d, "yyyy-MM-dd'T'HH:mm");
+                    })()
                   }
                   onChange={(e) =>
                     setFormData((p) => ({

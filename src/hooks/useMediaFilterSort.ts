@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
-import { MediaItem, Status } from '../types/schema';
+import { MediaItem, Status, STATUSES } from '../types/schema';
 
 export type SortOption = 'updatedAt' | 'createdAt' | 'titleAsc' | 'titleDesc' | 'rating';
 
 export function useMediaFilterSort(mediaElements: MediaItem[], defaultStatus: Status | 'All' | Status[] = 'All') {
   const initialFilters: Status[] = defaultStatus === 'All' 
-    ? ["Active", "Extras", "Planning", "On Hold", "Completed", "Dropped"] 
+    ? [...STATUSES] 
     : (Array.isArray(defaultStatus) ? defaultStatus : [defaultStatus]);
     
   const [statusFilters, setStatusFilters] = useState<Status[]>(initialFilters);

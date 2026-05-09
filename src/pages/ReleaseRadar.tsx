@@ -133,9 +133,9 @@ export function ReleaseRadar() {
                     {item.platforms?.map(p => (
                       <span key={p} className="text-[10px] font-bold px-2.5 py-1 rounded-md border border-white/10 text-zinc-300 bg-white/5 uppercase tracking-wide">{p}</span>
                     ))}
-                    {item.developer && (
+                    {item.creator && (
                       <span className="text-[10px] font-bold px-2.5 py-1 rounded-md text-zinc-400 uppercase tracking-wide flex items-center gap-1">
-                         <Edit2 className="w-3 h-3" /> {item.developer}
+                         <Edit2 className="w-3 h-3" /> {item.creator}
                       </span>
                     )}
                   </div>

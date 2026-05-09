@@ -278,7 +278,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4">
+      <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4 relative z-20">
         <div>
           <div className="flex items-center gap-3 mb-1">
              <h2 className="text-2xl font-semibold">Overview</h2>
