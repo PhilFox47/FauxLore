@@ -35,9 +35,12 @@ export async function generateAiTagsWithGemini(userApiKey: string | undefined, i
 
   const ai = new GoogleGenAI({ apiKey });
 
+  const validGenres = taxonomies.filter(t => t.type === 'genre').map(t => t.name);
+  const validTags = taxonomies.filter(t => t.type === 'tag').map(t => t.name);
+
   const gptSystem = `You are FauxLore, an expert taxonomy system. Your job is to classify media.
-Available Genres: ${taxonomies.filter(t => t.type === 'genre').map(t => t.name).join(', ')}
-Available Tags: ${taxonomies.filter(t => t.type === 'tag').map(t => t.name).join(', ')}
+Available Genres: ${validGenres.join(', ')}
+Available Tags: ${validTags.join(', ')}
 
 Rules:
 1. ONLY use exact matches from the Available lists above. DO NOT invent new words.
@@ -66,7 +69,7 @@ Legacy Context platforms: ${item.platforms?.join(', ') || 'N/A'}`;
         tools: [
           { googleSearch: {} }
         ],
-        temperature: 0.1
+        temperature: 0.0
       }
     });
 
@@ -82,7 +85,17 @@ Legacy Context platforms: ${item.platforms?.join(', ') || 'N/A'}`;
     }
     jsonText = jsonText.trim();
 
-    return JSON.parse(jsonText);
+    const parsed = JSON.parse(jsonText);
+    
+    // Strict filtering against taxonomy
+    if (parsed.genres && Array.isArray(parsed.genres)) {
+      parsed.genres = parsed.genres.filter((g: string) => validGenres.includes(g));
+    }
+    if (parsed.tags && Array.isArray(parsed.tags)) {
+      parsed.tags = parsed.tags.filter((t: string) => validTags.includes(t));
+    }
+    
+    return parsed;
   } catch (error) {
     console.error("Gemini Auto-Tag Error:", error);
     throw error;
