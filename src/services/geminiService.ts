@@ -41,8 +41,8 @@ Available Tags: ${taxonomies.filter(t => t.type === 'tag').map(t => t.name).join
 
 Rules:
 1. ONLY use exact matches from the Available lists above. DO NOT invent new words.
-2. Select between 1 and 5 Genres.
-3. Select between 5 and 30 logical Tags.
+2. Select between 1 and 3 core Genres. ONLY use up to 5 if absolutely essential to accurately describe the media. Do NOT force multiple genres if 1 or 2 describe it perfectly.
+3. Select between 3 and 10 highly relevant Tags. ONLY use more (up to 15) if absolutely essential. Be strict, focused, and discerning - do not apply loosely related traits. Less is often more.
 4. USE YOUR WEB SEARCH CAPABILITIES to confirm details about "${item.title}" (${item.mediaType}).
 5. Return ONLY a pure JSON object in this exact format:
 {"genres": ["Genre1", "Genre2"], "tags": ["Tag1", "Tag2"]}
