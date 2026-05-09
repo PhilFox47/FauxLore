@@ -287,7 +287,7 @@ export function calculateRPGState(
     const monthLogs = validLogs.filter(l => format(subHours(parseISO(l.timestamp), 5), "yyyy-MM") === month);
     const tempQuests: Quest[] = [];
     const rng = mulberry32(parseInt(month.replace('-', '')));
-    generateIntervalQuests(tempQuests, monthLogs, media, settings, 'monthly', month, 4, rng, worldBosses, artifacts, validLogs);
+    generateIntervalQuests(tempQuests, monthLogs, media, settings, 'monthly', month, 6, rng, worldBosses, artifacts, validLogs);
     tempQuests.forEach(q => { if (q.isCompleted) questExp += q.expReward; });
     if (month === currentMonthInfo) quests.push(...tempQuests);
   }
@@ -296,7 +296,7 @@ export function calculateRPGState(
     const weekLogs = validLogs.filter(l => format(startOfWeek(subHours(parseISO(l.timestamp), 5), { weekStartsOn: 1 }), "RRRR-II") === week);
     const tempQuests: Quest[] = [];
     const rng = mulberry32(parseInt(week.replace('-', '')));
-    generateIntervalQuests(tempQuests, weekLogs, media, settings, 'weekly', week, 2, rng, worldBosses, artifacts, validLogs);
+    generateIntervalQuests(tempQuests, weekLogs, media, settings, 'weekly', week, 4, rng, worldBosses, artifacts, validLogs);
     tempQuests.forEach(q => { if (q.isCompleted) questExp += q.expReward; });
     if (week === currentWeekInfo) quests.push(...tempQuests);
   }
@@ -456,6 +456,8 @@ function generateYearlyQuests(quests: Quest[], logs: ProgressLog[], media: Media
 
   MEDIA_TYPES.forEach((type, idx) => {
     const target = goals[type];
+    if (!target || target <= 0) return;
+
     const mpTarget = getMasterPagesForNativeUnit(target, type, settings);
     totalGoal += mpTarget;
     
@@ -481,18 +483,20 @@ function generateYearlyQuests(quests: Quest[], logs: ProgressLog[], media: Media
     });
   });
 
-  quests.push({
-    id: `${timeId}-yearly-total`,
-    type: 'yearly',
-    title: 'Grandmaster of Media',
-    description: `Consume ${totalGoal} Master Pages across all formats this year.`,
-    targetAmount: totalGoal,
-    currentAmount: Math.floor(currentTotalAmount),
-    expReward: 50000, // Fixed 50,000 for completing the ultimate total Yearly Quest
-    metric: 'pages',
-    isCompleted: currentTotalAmount >= totalGoal,
-    isFailed: false
-  });
+  if (totalGoal > 0) {
+    quests.push({
+      id: `${timeId}-yearly-total`,
+      type: 'yearly',
+      title: 'Grandmaster of Media',
+      description: `Consume ${totalGoal} Master Pages across all formats this year.`,
+      targetAmount: totalGoal,
+      currentAmount: Math.floor(currentTotalAmount),
+      expReward: 50000, // Fixed 50,000 for completing the ultimate total Yearly Quest
+      metric: 'pages',
+      isCompleted: currentTotalAmount >= totalGoal,
+      isFailed: false
+    });
+  }
 }
 
 function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: MediaItem[], settings: any, timeframe: 'monthly' | 'weekly', timeId: string, count: number, rng: () => number, worldBosses: WorldBoss[] = [], artifacts: any[] = [], allLogs: ProgressLog[] = []) {
@@ -518,7 +522,8 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     () => { // 2. The Specialist
       if (timeframe === 'weekly') return null;
       const possibleTypes = MEDIA_TYPES.filter(t => goals[t] > 0);
-      const chosenType = possibleTypes[Math.floor(rng() * possibleTypes.length)] || 'Book';
+      if (possibleTypes.length === 0) return null;
+      const chosenType = possibleTypes[Math.floor(rng() * possibleTypes.length)];
       const target = getQTarget("The Specialist", timeframe, Math.floor(rng() * 2) + 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = logs.filter(l => {
         if (l.metricType !== 'statusChange' || !(l.note?.includes('to Completed') || l.note?.includes('to Extras'))) return false;
@@ -647,8 +652,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       return { title: "The Sprinter", desc: `Start and complete ${target} item(s) within 72 hours`, target, current, type: 'entries' as const, reward: baseReward * 4 };
     },
     () => { // 14. Binge Trance
-      const threshold = getQTarget("Binge Trance", timeframe, Math.max(50, Math.floor(totalMasterPagesGoal / 52)), settings, typeof rng !== 'undefined' ? rng : undefined);
-      const target = 1;
+      const target = getQTarget("Binge Trance", timeframe, Math.max(50, Math.floor(totalMasterPagesGoal / 52)), settings, typeof rng !== 'undefined' ? rng : undefined);
       let current = 0;
       const dayMap: Record<string, number> = {};
       logs.forEach(l => {
@@ -660,9 +664,9 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
         }
       });
       for (const val of Object.values(dayMap)) {
-        if (val >= threshold) current = 1;
+        if (val > current) current = val;
       }
-      return { title: "Binge Trance", desc: `Achieve ${threshold}+ Master Pages on a single item in one day`, target, current, type: 'entries' as const, reward: baseReward * 3 };
+      return { title: "Binge Trance", desc: `Achieve ${target} Master Pages on a single item in one day`, target, current: Math.floor(current), type: 'pages' as const, reward: baseReward * 3 };
     },
     () => { // 15. Scribe's Duty
       const target = getQTarget("Scribe's Duty", timeframe, timeframe === 'monthly' ? 10 : 3, settings, typeof rng !== 'undefined' ? rng : undefined);
@@ -757,7 +761,8 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       if (timeframe !== 'weekly') return null;
       const target = getQTarget("Format Focus", timeframe, 50, settings, typeof rng !== 'undefined' ? rng : undefined);
       const possibleTypes = MEDIA_TYPES.filter(t => goals[t] > 0);
-      const chosenType = possibleTypes[Math.floor(rng() * possibleTypes.length)] || 'Manga';
+      if (possibleTypes.length === 0) return null;
+      const chosenType = possibleTypes[Math.floor(rng() * possibleTypes.length)];
       
       let current = 0;
       logs.forEach(l => {
@@ -892,17 +897,16 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     },
     () => { // 30. Marathon Session
       if (timeframe !== 'weekly') return null;
-      const target = 1;
-      const targetMp = getQTarget("Marathon Session", timeframe, 50, settings, typeof rng !== 'undefined' ? rng : undefined);
+      const target = getQTarget("Marathon Session", timeframe, 50, settings, typeof rng !== 'undefined' ? rng : undefined);
       let current = 0;
       logs.forEach(l => {
          const m = media.find(x => x.id === l.mediaId);
          if (m) {
              const mp = calculateScaledDelta(l.delta, m, settings);
-             if (mp >= targetMp) current = 1;
+             if (mp > current) current = mp;
          }
       });
-      return { title: "Marathon Session", desc: `Get lost in the zone. Have a single progress entry that yields ${targetMp}+ Master Pages in one sitting`, target, current, type: 'entries' as const, reward: baseReward * 2 };
+      return { title: "Marathon Session", desc: `Get lost in the zone. Have a single progress entry that yields ${target} Master Pages in one sitting`, target, current: Math.floor(current), type: 'pages' as const, reward: baseReward * 2 };
     },
     () => { // 31. Journalist
       if (timeframe !== 'weekly') return null;

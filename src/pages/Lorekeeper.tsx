@@ -520,9 +520,18 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
           </div>
 
           <div className="flex-1 w-full text-center md:text-left leading-normal">
-            <h3 className="text-4xl font-black text-white italic tracking-tight mb-2">
-              {getDynamicTitle()}
-            </h3>
+            <div className="flex items-center justify-center md:justify-start gap-2 mb-2 group/maintitle">
+              <h3 className="text-4xl font-black text-white italic tracking-tight">
+                {getDynamicTitle()}
+              </h3>
+              <button
+                onClick={(e) => { e.stopPropagation(); generateMissingTitles(true, [], true); }}
+                className="opacity-0 group-hover/maintitle:opacity-100 flex-shrink-0 p-2 rounded hover:bg-white/5 transition-all outline-none"
+                title="Regenerate Title"
+              >
+                <RefreshCw className="w-4 h-4 text-zinc-500 hover:text-zinc-300" />
+              </button>
+            </div>
             <p className="text-zinc-400 text-lg font-medium mb-6">
               {Math.floor(rpgState.currentExp).toLocaleString()} Total EXP
             </p>
@@ -581,7 +590,16 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                          {data.level}
                        </div>
                     </div>
-                    <div className="text-sm font-black uppercase tracking-widest line-clamp-2 leading-tight" style={{ color: accent }} title={currentTitle}>{currentTitle}</div>
+                    <div className="flex items-start justify-between group/medtitle w-full mt-1">
+                      <div className="text-sm font-black uppercase tracking-widest line-clamp-2 leading-tight pr-2" style={{ color: accent }} title={currentTitle}>{currentTitle}</div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); generateMissingTitles(false, [mediaType], true); }}
+                        className="opacity-0 group-hover/medtitle:opacity-100 flex-shrink-0 p-1 rounded hover:bg-white/5 transition-all outline-none"
+                        title="Regenerate Title"
+                      >
+                         <RefreshCw className="w-3 h-3 text-zinc-500 hover:text-zinc-300" />
+                      </button>
+                    </div>
                   </div>
                   
                   <div className="mt-auto relative z-10">
@@ -1161,6 +1179,40 @@ function QuestCard({
     isRerolling,
   ]);
 
+  const generateSpecificText = async (type: 'title' | 'desc') => {
+    setIsGenerating(true);
+    try {
+      const systemPrompt = getPersonaDescription(settings?.aiPersona) + FAUXLORE_CONTEXT;
+      let existingRule = "";
+      if (allQuests) {
+        const skipList = allQuests.map(q => aiTextCache[`quest_${type}_${q.id}`]).filter(Boolean);
+        if (skipList.length > 0) {
+          if (type === 'title') existingRule = `\nCRITICAL RULE: Do NOT use titles similar to these already generated titles: ${skipList.map(t => '"' + t + '"').join(", ")}.`;
+          else existingRule = `\nCRITICAL RULE: Do NOT start with or use phrases similar to the already generated descriptions. Vary your sentence structure! Previously generated descriptions:\n${skipList.map(d => '- "' + d + '"').join("\n")}.`;
+        }
+      }
+      
+      const prompt = type === 'title' 
+        ? `Rewrite this Quest Title to sound natural, conversational and motivating. DON'T use RPG tropes like 'Saga', 'Undying', 'Eternal', 'Valor'. Keep it simple and human. Original: "${quest.title}".${existingRule} Give ONLY the title.`
+        : `Rewrite this Quest Description to sound natural and friendly, like a helpful friend encouraging you to read or play. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Limit the response to 1-2 short sentences. CRITICAL: You MUST explicitly include clear instructions on what needs to be done based on the original description! Example: 'Time to read some good books! Read at least 100 pages this week.'${existingRule} Original: "${quest.description}". Give ONLY the description.`;
+        
+      let res = "";
+      
+      if (settings?.nanoGptApiKey) {
+        res = await generateText(settings.nanoGptApiKey, settings.nanoGptModel || "chatgpt-4o-latest", systemPrompt, prompt);
+      } else if (settings?.geminiApiKey) {
+        res = await generateGeminiText(settings.geminiApiKey, systemPrompt, prompt);
+      }
+
+      await saveAiText(`quest_${type}_${quest.id}`, res);
+      await refreshData();
+    } catch(e) {
+      console.error(e);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const dynTitle = dynTitleCached || quest.title;
   const dynDesc = dynDescCached || quest.description;
 
@@ -1169,7 +1221,7 @@ function QuestCard({
   return (
     <div
       className={cn(
-        "p-6 rounded-2xl border relative overflow-hidden transition-all flex flex-col justify-between",
+        "p-6 rounded-2xl border relative overflow-hidden transition-all flex flex-col justify-between group",
         quest.isCompleted
           ? "bg-emerald-900/20 border-emerald-500/30"
           : "bg-zinc-900/50 border-white/5 shadow-xl",
@@ -1179,21 +1231,32 @@ function QuestCard({
         <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-[40px]" />
       )}
 
-      <div className="flex justify-between items-start mb-4 relative z-10">
-        <div className="flex items-center gap-3 pr-2">
+      <div className="flex justify-between items-start mb-4 relative z-10 w-full overflow-hidden">
+        <div className="flex items-center gap-3 pr-2 w-full">
           {quest.isCompleted ? (
             <CheckCircle2 className="w-8 h-8 text-emerald-400 shrink-0" />
           ) : (
             <CircleDashed className="w-8 h-8 text-zinc-600 shrink-0" />
           )}
-          <div>
-            <div className="flex items-center gap-2 mb-1">
+          <div className="w-full">
+            <div className="flex flex-wrap items-center gap-2 mb-1 justify-between group/title w-full">
               {showLoading ? (
                 <div className="h-6 w-32 bg-white/10 rounded animate-pulse"></div>
               ) : (
-                <h5 className="font-bold text-white text-lg leading-tight">
-                  {dynTitle}
-                </h5>
+                <div className="flex items-center gap-2 max-w-[85%]">
+                  <h5 className="font-bold text-white text-lg leading-tight break-words">
+                    {dynTitle}
+                  </h5>
+                  {!quest.isCompleted && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); generateSpecificText('title'); }}
+                      className="opacity-0 group-hover/title:opacity-100 p-1 rounded hover:bg-white/5 transition-all outline-none"
+                      title="Regenerate Requirement"
+                    >
+                      <RefreshCw className="w-3 h-3 text-zinc-600 hover:text-zinc-400" />
+                    </button>
+                  )}
+                </div>
               )}
               {onReroll && !quest.isCompleted && (
                 <button
@@ -1217,7 +1280,18 @@ function QuestCard({
                 <div className="h-4 w-32 bg-white/10 rounded animate-pulse"></div>
               </div>
             ) : (
-              <p className="text-sm text-zinc-400">{dynDesc}</p>
+              <div className="flex items-center gap-2 group/desc">
+                <p className="text-sm text-zinc-400 break-words">{dynDesc}</p>
+                {!quest.isCompleted && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); generateSpecificText('desc'); }}
+                    className="opacity-0 group-hover/desc:opacity-100 flex-shrink-0 p-1 rounded hover:bg-white/5 transition-all outline-none"
+                    title="Regenerate Description"
+                  >
+                    <RefreshCw className="w-3 h-3 text-zinc-600 hover:text-zinc-400" />
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
