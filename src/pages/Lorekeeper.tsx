@@ -268,8 +268,10 @@ ${perMediaContexts}
 Generate a truly creative, deeply thematic, and punchy RPG-style title for each requested category. 
 CRITICAL STRATEGY: The consumed media MUST heavily influence the titles! Use the genres, tags, or specific themes of the most dominant recently consumed media to shape the core identity of the title. Do NOT just use generic RPG terms (like "Warrior", "Mage", "Hero") unless heavily modified by the media's theme. For example, if their recent top media is a cyberpunk game, the title should sound futuristic/hacker-like. If it's a cozy slice-of-life anime, it should sound relaxed/pastoral.
 
-- Main Title: Embed the essence of their OVERALL MEDIA CONTEXT into their prestige level (e.g. "Neon-Drenched Novice", "Architect of the Cozy Arts", "Void-Touched Grandmaster").
-- Per-Media Titles: Theme this ONLY around the specific media type's context AND their category level. Match the "epicness" to their level (newbie vs. master), but let the media's genres dictate the flavor.
+BREAK THE FORMULA: Do NOT simply output "[Theme] [Theme] [Class]" like "Chaos-Tuned Cosmopolitan Recruit". Use wildly varied grammatical structures! Examples: "They Who Walk In Neon", "The Cyber-Spook", "One Who Reads In The Dark", "Collector of Cozy Moments", "Sleepless Streamer", "Wandering Between Worlds", "Architect of the Cozy Arts". Be completely unpredictable, loose, and dynamic in how the words are arranged.
+
+- Main Title: Embed the essence of their OVERALL MEDIA CONTEXT into their prestige level, making sure the structure is unique.
+- Per-Media Titles: Theme this ONLY around the specific media type's context AND their category level. Match the "epicness" to their level (newbie vs. master), but let the media's genres dictate the flavor in a non-formulaic way.
 ${forbiddenRule}
 CRITICAL RULE: DO NOT include words like "Level", "Lvl", or the numerical level in the generated title itself. Just output the titular name.
 
@@ -356,7 +358,10 @@ ${recentMediaStr}
 Generate a truly creative, deeply thematic, and punchy RPG-style title for them.
 CRITICAL STRATEGY: The consumed media MUST heavily influence the title! Use the genres, tags, or specific themes of their most dominant/recent media to shape the core identity. Do NOT just use generic RPG terms (like "Warrior", "Mage") unless heavily modified by the media's theme. Combine their level prestige with their unique media flavors.
 If they consume horror media, evoke a spooky, dread-filled atmosphere. If sci-fi, make it sound hyper-futuristic or neon-drenched. If cozy slice-of-life, make it pastoral and relaxed. If diverse, blend the concepts creatively.
-Embed the essence of their Media Context into the title (e.g. "Neon-Drenched Novice", "Void-Touched Grandmaster", "Architect of the Cozy Arts").
+
+BREAK THE FORMULA: Do NOT simply output "[Theme] [Theme] [Class]" like "Chaos-Tuned Cosmopolitan Recruit". Use wildly varied grammatical structures! Examples: "They Who Walk In Neon", "The Cyber-Spook", "One Who Reads In The Dark", "Collector of Cozy Moments", "Sleepless Streamer", "Wandering Between Worlds", "Architect of the Cozy Arts". Be completely unpredictable, loose, and dynamic in how the words are arranged.
+
+Embed the essence of their Media Context into the title in a non-formulaic way.
 ${forbiddenRule}
 NO extra comments, NO quotes, just the title. 2-6 words.`;
 
