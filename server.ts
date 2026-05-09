@@ -279,12 +279,17 @@ async function startServer() {
         const m = media.find(x => x.id === l.mediaId);
         return `${m?.title} (+${l.delta} ${l.metricType})`;
       }).join(', ')}` : "No recent logs (Past 12h).";
+      
+      const recentMessages = db.prepare('SELECT message FROM oracle_messages WHERE userId = ? ORDER BY timestamp DESC LIMIT 20').all(userId) as any[];
+      let recentMessagesContext = recentMessages.length > 0 ? `Previous Messages you've sent recently (DO NOT repeat these concepts, greetings, or topics. Be fresh!):\n${recentMessages.map((m, i) => `${i+1}. "${m.message}"`).join('\n')}` : "";
 
       const userPrompt = `Time of Day: ${type === 'morning' ? 'Morning' : 'Evening'}
       ${logsContext}
       ${bossContext}
       ${questContext}
       ${dustyContext}
+      
+      ${recentMessagesContext}
       
       Keep it short (2-3 sentences, approx 250 characters). Don't be too cryptic—be charismatic and welcoming!
       Start with a greeting! If it's Morning, suggest a focus for the day (e.g., tackle an enemy, finish a quest, or pick up a dusty book/game). If Evening, summarize their triumphs or encourage them to log something if they haven't.`;
@@ -580,6 +585,31 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
        spawnWorldBoss(u.id);
     }
   });
+
+  async function checkMissedOracleMessages() {
+    const users = db.prepare('SELECT id FROM users').all() as {id: string}[];
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    for (const u of users) {
+      if (currentHour >= 9) {
+          const lastMorning = db.prepare("SELECT timestamp FROM oracle_messages WHERE userId = ? AND type = 'morning' ORDER BY timestamp DESC LIMIT 1").get(u.id) as any;
+          const isTodayMorning = lastMorning && (new Date(lastMorning.timestamp).toDateString() === now.toDateString());
+          if (!isTodayMorning) {
+              await generateOracleMessage(u.id, 'morning');
+          }
+      }
+      if (currentHour >= 21) {
+          const lastEvening = db.prepare("SELECT timestamp FROM oracle_messages WHERE userId = ? AND type = 'evening' ORDER BY timestamp DESC LIMIT 1").get(u.id) as any;
+          const isTodayEvening = lastEvening && (new Date(lastEvening.timestamp).toDateString() === now.toDateString());
+          if (!isTodayEvening) {
+              await generateOracleMessage(u.id, 'evening');
+          }
+      }
+    }
+  }
+  
+  checkMissedOracleMessages();
 
   
   // Create Tables
