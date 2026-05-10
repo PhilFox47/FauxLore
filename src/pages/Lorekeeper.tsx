@@ -269,6 +269,7 @@ Generate a truly creative, themed, yet casual and natural title for each request
 CRITICAL STRATEGY: The consumed media MUST heavily influence the titles! Use the genres, tags, or specific themes of the most dominant recently consumed media to shape the core identity of the title. Note that when genres and tags are listed, they are ordered from most defining (most important) to least defining. Do NOT just use generic RPG terms (like "Warrior", "Mage", "Hero"). For example, if their recent top media is a cyberpunk game, the title should sound like a casual futuristic alias. If it's a cozy slice-of-life anime, it should sound very pastoral and relaxed. Scale the "epicness" with the level so higher levels sound cooler and more impressive, but retain a casual, human touch.
 
 BREAK THE FORMULA: Do NOT simply output "[Theme] [Theme] [Class]". Use wildly varied grammatical structures! Examples: "Neon Walker", "The Cyber-Spook", "Reads In The Dark", "Collector of Cozy", "Sleepless Streamer", "Wandering Around", "Architect of the Cozy Arts", "Pizza Box Hoarder". Be completely unpredictable, loose, and dynamic in how the words are arranged.
+CRITICAL RULE: DO NOT append a meaningless 'class' or 'level descriptor' to the end of the title (e.g., avoid ending with words like 'Enthusiast', 'Hobbyist', 'Player', 'Recruit', 'Master', 'Novice', 'Fan', 'Aficionado'). Instead, incorporate the level of prestige holistically into the tone and overall vibe of the title.
 
 - Main Title: Embed the essence of their OVERALL MEDIA CONTEXT into their prestige level, making sure the structure is unique.
 - Per-Media Titles: Theme this ONLY around the specific media type's context AND their category level. Match the "epicness" to their level (newbie vs. master), but let the media's genres dictate the flavor in a non-formulaic way.
@@ -360,6 +361,7 @@ CRITICAL STRATEGY: The consumed media MUST heavily influence the title! Use the 
 If they consume horror media, evoke a slightly spooky atmosphere. If sci-fi, make it sound futuristic. If cozy slice-of-life, make it pastoral and relaxed. If diverse, blend the concepts creatively.
 
 BREAK THE FORMULA: Do NOT simply output "[Theme] [Theme] [Class]". Use wildly varied grammatical structures! Examples: "Neon Walker", "The Cyber-Spook", "Reads In The Dark", "Collector of Cozy", "Sleepless Streamer", "Wandering Around", "Architect of the Cozy Arts", "Pizza Box Hoarder". Be completely unpredictable, loose, and dynamic in how the words are arranged.
+CRITICAL RULE: DO NOT append a meaningless 'class' or 'level descriptor' to the end of the title (e.g., avoid ending with words like 'Enthusiast', 'Hobbyist', 'Player', 'Recruit', 'Master', 'Novice', 'Fan', 'Aficionado'). Instead, incorporate the level of prestige holistically into the tone and overall vibe of the title.
 
 Embed the essence of their Media Context into the title in a non-formulaic way.
 ${forbiddenRule}
