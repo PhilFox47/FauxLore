@@ -516,7 +516,8 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     () => { // 1. The Finisher
       if (timeframe === 'weekly') return null;
       const target = getQTarget("The Finisher", timeframe, Math.floor(rng() * 3) + 1, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const current = logs.filter(l => l.metricType === 'statusChange' && (l.note?.includes('to Completed') || l.note?.includes('to Extras'))).length;
+      const validLogs = logs.filter(l => l.metricType === 'statusChange' && (l.note?.includes('to Completed') || l.note?.includes('to Extras')));
+      const current = new Set(validLogs.map(l => l.mediaId)).size;
       return { title: "The Finisher", desc: "Complete " + target + " total media item(s)", target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 2. The Specialist
@@ -525,11 +526,12 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       if (possibleTypes.length === 0) return null;
       const chosenType = possibleTypes[Math.floor(rng() * possibleTypes.length)];
       const target = getQTarget("The Specialist", timeframe, Math.floor(rng() * 2) + 1, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const current = logs.filter(l => {
+      const validLogs = logs.filter(l => {
         if (l.metricType !== 'statusChange' || !(l.note?.includes('to Completed') || l.note?.includes('to Extras'))) return false;
         const m = media.find(x => x.id === l.mediaId);
         return m?.mediaType === chosenType;
-      }).length;
+      });
+      const current = new Set(validLogs.map(l => l.mediaId)).size;
       return { title: "The Specialist", desc: "Complete " + target + " " + chosenType + "(s)", target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 3. Endurance Trial
@@ -552,11 +554,12 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       const allGenres = Array.from(new Set(media.flatMap(m => m.genres || [])));
       const chosenGenre = allGenres[Math.floor(rng() * allGenres.length)] || 'Fantasy';
       const target = getQTarget("Scholar of the Arcane", timeframe, Math.floor(rng() * 2) + 1, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const current = logs.filter(l => {
+      const validLogs = logs.filter(l => {
         if (l.metricType !== 'statusChange' || !(l.note?.includes('to Completed') || l.note?.includes('to Extras'))) return false;
         const m = media.find(x => x.id === l.mediaId);
         return m?.genres?.includes(chosenGenre);
-      }).length;
+      });
+      const current = new Set(validLogs.map(l => l.mediaId)).size;
       return { title: "Scholar of the Arcane", desc: `Complete ${target} item(s) in the '${chosenGenre}' genre`, target, current, type: 'entries' as const, reward: baseReward * 2.5 };
     },
     () => { // 6. Time Traveler's Archive
@@ -586,7 +589,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     () => { // 8. The Leviathan
       if (timeframe === 'weekly') return null;
       const target = getQTarget("The Leviathan", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const current = logs.filter(l => {
+      const validLogs = logs.filter(l => {
         if (l.metricType !== 'statusChange' || !(l.note?.includes('to Completed') || l.note?.includes('to Extras'))) return false;
         const m = media.find(x => x.id === l.mediaId);
         if (!m) return false;
@@ -594,17 +597,19 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
         if (m.mediaType === 'Book' && m.totalPages && m.totalPages >= 800) return true;
         if (m.mediaType === 'Series' && m.totalEpisodes && m.totalEpisodes >= 50) return true;
         return false;
-      }).length;
+      });
+      const current = new Set(validLogs.map(l => l.mediaId)).size;
       return { title: "The Leviathan", desc: `Complete ${target} massive media item(s) (e.g. 80+ Hr Game, 800+ Pg Book)`, target, current, type: 'entries' as const, reward: baseReward * 5 };
     },
     () => { // 9. Franchise Loyalist
       if (timeframe === 'weekly') return null;
       const target = getQTarget("Franchise Loyalist", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const current = logs.filter(l => {
-        if (l.metricType !== 'statusChange' || !(l.note?.includes('to Completed') || l.note?.includes('to Extras'))) return false;
+      const validLogs = logs.filter(l => {
+        if (l.metricType !== 'statusChange' || !(l.note?.toLowerCase().includes('to completed') || l.note?.toLowerCase().includes('to extras'))) return false;
         const m = media.find(x => x.id === l.mediaId);
         return m?.franchises && m.franchises.length > 0;
-      }).length;
+      });
+      const current = new Set(validLogs.map(l => l.mediaId)).size;
       return { title: "Franchise Loyalist", desc: `Complete ${target} item(s) belonging to a Franchise`, target, current, type: 'entries' as const, reward: baseReward * 1.5 };
     },
     () => { // 10. The Backlog Slayer
@@ -615,11 +620,12 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       const backlogItems = media.filter(m => m.status === 'Planning' && new Date(m.createdAt) < threeMonthsAgo);
       if (backlogItems.length < 3) return null; // Skip if backlog is small
       
-      const current = logs.filter(l => {
+      const validLogs = logs.filter(l => {
         if (l.metricType !== 'statusChange' || !(l.note?.includes('to Completed') || l.note?.includes('to Extras'))) return false;
         const m = media.find(x => x.id === l.mediaId);
         return m && new Date(m.createdAt) < threeMonthsAgo;
-      }).length;
+      });
+      const current = new Set(validLogs.map(l => l.mediaId)).size;
       return { title: "The Backlog Slayer", desc: `Complete ${target} item(s) that has been 'Planning' for over 3 months`, target, current, type: 'entries' as const, reward: baseReward * 3 };
     },
     () => { // 11. Consistent Chronicler
@@ -638,17 +644,18 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     () => { // 13. The Sprinter
       if (timeframe === 'weekly') return null;
       const target = getQTarget("The Sprinter", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
-      let current = 0;
       const completedLogs = logs.filter(l => l.metricType === 'statusChange' && (l.note?.includes('to Completed') || l.note?.includes('to Extras')));
+      const validMediaIds = new Set<string>();
       completedLogs.forEach(cL => {
         const earliestLog = allLogs.find(l => l.mediaId === cL.mediaId && l.metricType !== 'statusChange');
         if (earliestLog) {
           const diffMs = new Date(cL.timestamp).getTime() - new Date(earliestLog.timestamp).getTime();
           if (diffMs <= 72 * 60 * 60 * 1000) {
-            current++;
+            validMediaIds.add(cL.mediaId);
           }
         }
       });
+      const current = validMediaIds.size;
       return { title: "The Sprinter", desc: `Start and complete ${target} item(s) within 72 hours`, target, current, type: 'entries' as const, reward: baseReward * 4 };
     },
     () => { // 14. Binge Trance
@@ -676,11 +683,12 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     () => { // 16. The Critic's Eye
       if (timeframe === 'weekly') return null;
       const target = getQTarget("The Critic's Eye", timeframe, Math.floor(rng() * 2) + 1, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const current = logs.filter(l => {
+      const validLogs = logs.filter(l => {
          if (l.metricType !== 'statusChange' || !(l.note?.includes('to Completed') || l.note?.includes('to Extras'))) return false;
          const m = media.find(x => x.id === l.mediaId);
          return m && ((m.userRating || 0) > 0 || (m.userReview && m.userReview.trim().length > 0));
-      }).length;
+      });
+      const current = new Set(validLogs.map(l => l.mediaId)).size;
       return { title: "The Critic's Eye", desc: `Finish and rate or review ${target} item(s)`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 17. Boss Hunter
@@ -776,7 +784,8 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     () => { // 25. The Initiator
       if (timeframe !== 'weekly') return null;
       const target = getQTarget("The Initiator", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const current = logs.filter(l => l.metricType === 'statusChange' && l.note === 'Planning to In Progress').length;
+      const validLogs = logs.filter(l => l.metricType === 'statusChange' && l.note === 'Planning to In Progress');
+      const current = new Set(validLogs.map(l => l.mediaId)).size;
       return { title: "The Initiator", desc: `Take the first step. Move ${target} item's status from 'Planning' to 'In Progress'`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 26. Weekly Sprinter
@@ -805,7 +814,8 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       });
       if (!isClose) return null;
       
-      const current = logs.filter(l => l.metricType === 'statusChange' && (l.note?.includes('to Completed') || l.note?.includes('to Extras'))).length;
+      const validLogs = logs.filter(l => l.metricType === 'statusChange' && (l.note?.includes('to Completed') || l.note?.includes('to Extras')));
+      const current = new Set(validLogs.map(l => l.mediaId)).size;
       return { title: "Weekly Sprinter", desc: `Finish what you started. Complete ${target} media item(s)`, target, current, type: 'entries' as const, reward: baseReward * 3 };
     },
     () => { // 27. Reviewer's Strike
@@ -834,11 +844,12 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       });
       if (!isClose) return null;
 
-      const current = logs.filter(l => {
+      const validLogs = logs.filter(l => {
          if (l.metricType !== 'statusChange' || !(l.note?.includes('to Completed') || l.note?.includes('to Extras'))) return false;
          const m = media.find(x => x.id === l.mediaId);
          return m && ((m.userRating && m.userRating >= 1 && m.userRating <= 5) || (m.userReview && m.userReview.trim().length > 0));
-      }).length;
+      });
+      const current = new Set(validLogs.map(l => l.mediaId)).size;
       return { title: "Reviewer's Strike", desc: `Share your thoughts. Complete and rate/review ${target} item(s)`, target, current, type: 'entries' as const, reward: baseReward * 3 };
     },
     () => { // 28. Fresh Blood
@@ -880,20 +891,21 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       });
       if (!hasDustyItem) return null;
       
-      let current = 0;
+      const validMediaIds = new Set<string>();
       logs.forEach(l => {
          const itemLogs = allLogs.filter(al => al.mediaId === l.mediaId && new Date(al.timestamp) < new Date(l.timestamp));
          if (itemLogs.length > 0) {
              const latestBefore = itemLogs.reduce((latest, cur) => new Date(cur.timestamp) > new Date(latest.timestamp) ? cur : latest);
              const timeDiff = new Date(l.timestamp).getTime() - new Date(latestBefore.timestamp).getTime();
-             if (timeDiff > 30 * 24 * 60 * 60 * 1000) current = 1;
+             if (timeDiff > 30 * 24 * 60 * 60 * 1000) validMediaIds.add(l.mediaId);
          } else {
              const m = media.find(x => x.id === l.mediaId);
              if (m && (new Date(l.timestamp).getTime() - new Date(m.createdAt).getTime() > 30 * 24 * 60 * 60 * 1000)) {
-                 current = 1;
+                 validMediaIds.add(l.mediaId);
              }
          }
       });
+      const current = validMediaIds.size;
       return { title: "Dust It Off", desc: `Clear out the backlog. Log progress on ${target} item(s) that has been sitting in your library without updates for over a month`, target, current, type: 'entries' as const, reward: baseReward * 3 };
     },
     () => { // 30. Marathon Session

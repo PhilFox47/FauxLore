@@ -267,7 +267,7 @@ export function Armory() {
                                <div className="text-[8px] sm:text-[9px] font-bold text-center uppercase tracking-widest mt-1 w-full px-1">
                                  <span className={cn(RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text)}>{item.rarity}</span>
                                </div>
-                               <div className="text-[8px] sm:text-[9px] text-zinc-500 text-center leading-tight mt-1 line-clamp-2 w-full px-1">{item.description}</div>
+                               <div className="text-[8px] sm:text-[9px] text-emerald-400/80 font-black text-center uppercase tracking-widest mt-1 w-full px-1">+{item.bonusPercent}% {item.targetValue} EXP</div>
                                
                                {/* Durability Bar */}
                                <div className="w-full mt-3 h-1.5 bg-black rounded-full overflow-hidden border border-white/5 shadow-inner p-[1px]">

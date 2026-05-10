@@ -3024,6 +3024,15 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
 
   app.use('/uploads', express.static(uploadsDir));
 
+  // Middleware to block common scanner probes to prevent Vite from crashing or cluttering logs
+  app.use((req, res, next) => {
+    const suspiciousPaths = ['.env', '/etc/passwd', '/etc/shadow', '.git', '.npmrc', 'docker-compose.yml', 'Dockerfile', '.bash_history', '.bashrc', '/proc/self/cmdline', '/proc/self/environ', 'config/default.json', 'config/production.json'];
+    if (suspiciousPaths.some(p => req.path.includes(p))) {
+      return res.status(404).end();
+    }
+    next();
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

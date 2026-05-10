@@ -95,10 +95,10 @@ export function Dashboard() {
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 auto-rows-[minmax(180px,auto)] gap-4 xl:gap-6 mb-8 w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 auto-rows-[minmax(180px,auto)] gap-4 xl:gap-6 mb-8 w-full">
         
         {/* Bento: RPG Hero (2x2) */}
-        <div className="md:col-span-2 xl:col-span-2 xl:row-span-2 bg-gradient-to-br from-[#121214] to-[#0A0A0C] border border-white/5 border-t-white/10 rounded-[2rem] p-6 lg:p-10 relative overflow-hidden shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_20px_40px_-10px_rgba(0,0,0,0.8)] flex flex-col justify-between group">
+        <div className="md:col-span-2 lg:col-span-3 xl:col-span-3 xl:row-span-2 bg-gradient-to-br from-[#121214] to-[#0A0A0C] border border-white/5 border-t-white/10 rounded-[2rem] p-6 lg:p-10 relative overflow-hidden shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_20px_40px_-10px_rgba(0,0,0,0.8)] flex flex-col justify-between group">
           <div className="absolute -top-32 -right-32 w-96 h-96 bg-orange-500/10 rounded-full blur-[100px] pointer-events-none transition-transform duration-1000 group-hover:scale-110" />
           
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
@@ -277,6 +277,40 @@ export function Dashboard() {
            </div>
         </div>
       </div>
+
+       {/* Bento: Armory Effects (Horizontal, new row) */}
+       <div className="bg-gradient-to-br from-emerald-950/20 to-[#0A0A0C] border border-emerald-500/20 border-t-emerald-400/30 rounded-[2rem] p-6 relative overflow-hidden shadow-lg flex flex-col md:flex-row gap-6 mb-8 w-full">
+          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent"></div>
+          <div className="flex flex-col md:w-48 shrink-0 justify-center">
+             <div className="flex items-center gap-2 mb-2">
+                <Award className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-xs font-black text-emerald-500/80 uppercase tracking-[0.2em] font-display">Active Effects</h3>
+             </div>
+             <p className="text-[10px] text-zinc-500 font-semibold leading-relaxed">
+               Currently active boons based on equipped artifacts.
+             </p>
+          </div>
+          <div className="flex-1 flex overflow-x-auto gap-3 pb-2 custom-scrollbar">
+            {artifacts.filter(a => a.isEquipped && a.durability > 0).length === 0 ? (
+              <div className="w-full flex items-center justify-center text-center p-4 bg-emerald-950/10 rounded-2xl border border-dashed border-emerald-900/50">
+                <p className="text-xs font-black text-emerald-900/80 uppercase tracking-widest">No active effects</p>
+              </div>
+            ) : (
+              artifacts.filter(a => a.isEquipped && a.durability > 0).map(art => (
+                <div key={art.id} className="min-w-[160px] bg-emerald-950/30 border border-emerald-500/20 rounded-2xl p-4 flex flex-col relative overflow-hidden hover:border-emerald-500/50 transition-colors shadow-inner shrink-0 group">
+                   <div className="absolute inset-0 shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] pointer-events-none rounded-2xl" />
+                   <div className="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                   <div className="relative z-10 flex flex-col h-full justify-center text-center">
+                      <h4 className="text-[11px] font-bold text-emerald-100 line-clamp-1 font-display mb-2">{art.name}</h4>
+                      <div className="text-[11px] text-emerald-400 font-black uppercase tracking-widest leading-tight">
+                         +{art.bonusPercent}% {art.targetValue} EXP
+                      </div>
+                   </div>
+                </div>
+              ))
+            )}
+          </div>
+       </div>
 
       <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4 relative z-20">
         <div>
