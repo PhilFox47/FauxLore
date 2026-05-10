@@ -88,6 +88,45 @@ Legacy Context platforms: ${item.platforms?.join(', ') || 'N/A'}`;
     jsonText = jsonText.trim();
 
     const parsed = JSON.parse(jsonText);
+    
+    // Cross-污染 cleanup: ensure known genres aren't tags, and known tags aren't genres
+    const finalGenres = new Set<string>();
+    const finalTags = new Set<string>();
+
+    const getKnownGenre = (val: string) => validGenres.find(g => g.toLowerCase() === val.toLowerCase());
+    const getKnownTag = (val: string) => validTags.find(t => t.toLowerCase() === val.toLowerCase());
+
+    if (Array.isArray(parsed.genres)) {
+      for (let g of parsed.genres) {
+        g = g.trim();
+        const knownTag = getKnownTag(g);
+        const knownGenre = getKnownGenre(g);
+        
+        if (knownTag && !knownGenre) {
+          finalTags.add(knownTag);
+        } else {
+          finalGenres.add(knownGenre || g);
+        }
+      }
+    }
+
+    if (Array.isArray(parsed.tags)) {
+      for (let t of parsed.tags) {
+        t = t.trim();
+        const knownGenre = getKnownGenre(t);
+        const knownTag = getKnownTag(t);
+        
+        if (knownGenre && !knownTag) {
+          finalGenres.add(knownGenre);
+        } else {
+          finalTags.add(knownTag || t);
+        }
+      }
+    }
+
+    parsed.genres = Array.from(finalGenres);
+    parsed.tags = Array.from(finalTags);
+
     return parsed;
   } catch (error) {
     console.error("Gemini Auto-Tag Error:", error);
