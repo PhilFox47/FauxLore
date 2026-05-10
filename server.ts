@@ -2485,6 +2485,80 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
     }
   });
 
+  app.put("/api/taxonomy/:id/edit", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      
+      const user: any = db.prepare('SELECT role FROM users WHERE id = ?').get(userId);
+      if (user?.role !== 'Admin') {
+        return res.status(403).json({ error: 'Only admins can modify taxonomy' });
+      }
+
+      const id = req.params.id;
+      const { newName } = req.body;
+      
+      if (!newName || typeof newName !== 'string' || newName.trim() === '') {
+         return res.status(400).json({ error: 'Invalid name provided' });
+      }
+
+      const taxItem: any = db.prepare('SELECT * FROM global_taxonomy WHERE id = ?').get(id);
+      
+      if (!taxItem) {
+        return res.status(404).json({ error: 'Taxonomy item not found' });
+      }
+      
+      const oldName = taxItem.name;
+
+      const existing = db.prepare('SELECT id FROM global_taxonomy WHERE name = ? AND type = ? AND id != ?').get(newName.trim(), taxItem.type, id);
+      if (existing) {
+        return res.status(400).json({ error: `A ${taxItem.type} with this name already exists.` });
+      }
+
+      db.transaction(() => {
+        db.prepare('UPDATE global_taxonomy SET name = ? WHERE id = ?').run(newName.trim(), id);
+        
+        const allMedia: any[] = db.prepare('SELECT id, genres, tags FROM media').all();
+        const updateMedia = db.prepare('UPDATE media SET genres = ?, tags = ? WHERE id = ?');
+        
+        for (const m of allMedia) {
+          let updated = false;
+          let mGenres = [];
+          let mTags = [];
+          try {
+            mGenres = JSON.parse(m.genres || '[]');
+            mTags = JSON.parse(m.tags || '[]');
+          } catch (e) {
+            continue;
+          }
+          
+          if (taxItem.type === 'genre') {
+            const idx = mGenres.findIndex((g: string) => g.toLowerCase() === oldName.toLowerCase());
+            if (idx !== -1) {
+              mGenres[idx] = newName.trim();
+              mGenres = Array.from(new Set(mGenres)); // deduplicate
+              updated = true;
+            }
+          } else {
+            const idx = mTags.findIndex((t: string) => t.toLowerCase() === oldName.toLowerCase());
+            if (idx !== -1) {
+              mTags[idx] = newName.trim();
+              mTags = Array.from(new Set(mTags)); // deduplicate
+              updated = true;
+            }
+          }
+          
+          if (updated) {
+            updateMedia.run(JSON.stringify(mGenres), JSON.stringify(mTags), m.id);
+          }
+        }
+      })();
+      res.json({ success: true, newName: newName.trim() });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.put("/api/taxonomy/:id/move", (req, res) => {
     try {
       const userId = getAuthUser(req, res);

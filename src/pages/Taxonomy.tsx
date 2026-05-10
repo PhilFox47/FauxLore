@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Search, Plus, Trash2, Tag, BookOpen, Hexagon, BarChart, Settings, BrainCircuit, ListFilter, X, ArrowRightLeft } from 'lucide-react';
+import { Search, Plus, Trash2, Tag, BookOpen, Hexagon, BarChart, Settings, BrainCircuit, ListFilter, X, ArrowRightLeft, Pencil } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { DatabaseService } from '../services/db';
 import { generateText } from '../services/nanoGptService';
 
 export function Taxonomy() {
-  const { taxonomies, addTaxonomy, deleteTaxonomy, moveTaxonomy, media, saveMediaItem, settings } = useMediaContext();
+  const { taxonomies, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, media, saveMediaItem, settings } = useMediaContext();
   const { user } = useAuth();
   
   const [activeTab, setActiveTab] = useState<'genre' | 'tag'>('genre');
@@ -87,6 +87,19 @@ export function Taxonomy() {
     } catch (error: any) {
       console.error(error);
       alert('Failed to move taxonomy: ' + error.message);
+    }
+  };
+
+  const handleEdit = async (id: string, currentName: string) => {
+    if (!isAdmin) return;
+    const newName = prompt(`Enter new name for ${activeTab} "${currentName}":\nThis will also update all media items using it.`, currentName);
+    if (!newName || newName.trim() === '' || newName.trim() === currentName) return;
+    
+    try {
+      await editTaxonomy(id, newName.trim());
+    } catch (error: any) {
+      console.error(error);
+      alert('Failed to edit taxonomy: ' + error.message);
     }
   };
 
@@ -270,6 +283,13 @@ Return JSON only.`;
                   <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded-full ml-1 opacity-70" title="Usage Count">{t.usageCount}</span>
                   {isAdmin && (
                     <>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleEdit(t.id, t.name); }}
+                        className="ml-1 opacity-50 hover:opacity-100 hover:text-green-400 transition-colors"
+                        title={"Edit " + activeTab}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleMove(t.id, t.name); }}
                         className="ml-1 opacity-50 hover:opacity-100 hover:text-blue-400 transition-colors"

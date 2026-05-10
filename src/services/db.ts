@@ -355,6 +355,18 @@ export const DatabaseService = {
     }
   },
 
+  async editTaxonomy(id: string, newName: string): Promise<void> {
+    const res = await apiFetch(`/api/taxonomy/${id}/edit`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newName })
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(`Failed to edit taxonomy: ${errorData.error || res.statusText}`);
+    }
+  },
+
   async moveTaxonomy(id: string): Promise<void> {
     const res = await apiFetch(`/api/taxonomy/${id}/move`, { method: 'PUT' });
     if (!res.ok) {
