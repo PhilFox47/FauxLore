@@ -355,6 +355,14 @@ export const DatabaseService = {
     }
   },
 
+  async moveTaxonomy(id: string): Promise<void> {
+    const res = await apiFetch(`/api/taxonomy/${id}/move`, { method: 'PUT' });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(`Failed to move taxonomy: ${errorData.error || res.statusText}`);
+    }
+  },
+
   async getAllFranchises() {
     try {
       const res = await apiFetch('/api/franchises');

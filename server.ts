@@ -2485,6 +2485,78 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
     }
   });
 
+  app.put("/api/taxonomy/:id/move", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      
+      const user: any = db.prepare('SELECT role FROM users WHERE id = ?').get(userId);
+      if (user?.role !== 'Admin') {
+        return res.status(403).json({ error: 'Only admins can modify taxonomy' });
+      }
+
+      const id = req.params.id;
+      const taxItem: any = db.prepare('SELECT * FROM global_taxonomy WHERE id = ?').get(id);
+      
+      if (!taxItem) {
+        return res.status(404).json({ error: 'Taxonomy item not found' });
+      }
+
+      const newType = taxItem.type === 'genre' ? 'tag' : 'genre';
+      
+      const existing = db.prepare('SELECT id FROM global_taxonomy WHERE name = ? AND type = ?').get(taxItem.name, newType);
+      if (existing) {
+        return res.status(400).json({ error: \`A \${newType} with this name already exists.\` });
+      }
+
+      db.transaction(() => {
+        db.prepare('UPDATE global_taxonomy SET type = ? WHERE id = ?').run(newType, id);
+        
+        const allMedia: any[] = db.prepare('SELECT id, genres, tags FROM media').all();
+        const updateMedia = db.prepare('UPDATE media SET genres = ?, tags = ? WHERE id = ?');
+        
+        for (const m of allMedia) {
+          let updated = false;
+          let mGenres = [];
+          let mTags = [];
+          try {
+            mGenres = JSON.parse(m.genres || '[]');
+            mTags = JSON.parse(m.tags || '[]');
+          } catch (e) {
+            continue;
+          }
+          
+          if (taxItem.type === 'genre') {
+            const idx = mGenres.findIndex((g: string) => g.toLowerCase() === taxItem.name.toLowerCase());
+            if (idx !== -1) {
+              mGenres.splice(idx, 1);
+              if (!mTags.find((t: string) => t.toLowerCase() === taxItem.name.toLowerCase())) {
+                mTags.push(taxItem.name);
+              }
+              updated = true;
+            }
+          } else {
+            const idx = mTags.findIndex((t: string) => t.toLowerCase() === taxItem.name.toLowerCase());
+            if (idx !== -1) {
+              mTags.splice(idx, 1);
+              if (!mGenres.find((g: string) => g.toLowerCase() === taxItem.name.toLowerCase())) {
+                mGenres.push(taxItem.name);
+              }
+              updated = true;
+            }
+          }
+          
+          if (updated) {
+            updateMedia.run(JSON.stringify(mGenres), JSON.stringify(mTags), m.id);
+          }
+        }
+      })();
+      res.json({ success: true, newType });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // TMDB proxy integration for Movies and Series
   app.get("/api/tmdb/search", async (req, res) => {
     try {

@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Search, Plus, Trash2, Tag, BookOpen, Hexagon, BarChart, Settings, BrainCircuit, ListFilter, X } from 'lucide-react';
+import { Search, Plus, Trash2, Tag, BookOpen, Hexagon, BarChart, Settings, BrainCircuit, ListFilter, X, ArrowRightLeft } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { DatabaseService } from '../services/db';
 import { generateText } from '../services/nanoGptService';
 
 export function Taxonomy() {
-  const { taxonomies, addTaxonomy, deleteTaxonomy, media, saveMediaItem, settings } = useMediaContext();
+  const { taxonomies, addTaxonomy, deleteTaxonomy, moveTaxonomy, media, saveMediaItem, settings } = useMediaContext();
   const { user } = useAuth();
   
   const [activeTab, setActiveTab] = useState<'genre' | 'tag'>('genre');
@@ -77,6 +77,16 @@ export function Taxonomy() {
     } catch (error) {
       console.error(error);
       alert('Failed to delete ' + activeTab);
+    }
+  };
+
+  const handleMove = async (id: string, name: string) => {
+    if (!isAdmin || !confirm(`Are you sure you want to move "${name}" to ${activeTab === 'genre' ? 'tags' : 'genres'}? This will also update all media items using it.`)) return;
+    try {
+      await moveTaxonomy(id);
+    } catch (error: any) {
+      console.error(error);
+      alert('Failed to move taxonomy: ' + error.message);
     }
   };
 
@@ -258,14 +268,25 @@ Return JSON only.`;
                 >
                   {t.name}
                   <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded-full ml-1 opacity-70" title="Usage Count">{t.usageCount}</span>
-                  {isAdmin && t.usageCount === 0 && (
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
-                      className="ml-1 opacity-50 hover:opacity-100 hover:text-red-400 transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                  {isAdmin && (
+                    <>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleMove(t.id, t.name); }}
+                        className="ml-1 opacity-50 hover:opacity-100 hover:text-blue-400 transition-colors"
+                        title={activeTab === 'genre' ? "Move to Tags" : "Move to Genres"}
+                      >
+                        <ArrowRightLeft className="w-3 h-3" />
+                      </button>
+                      {t.usageCount === 0 && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
+                          className="ml-1 opacity-50 hover:opacity-100 hover:text-red-400 transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               ))}
