@@ -265,10 +265,10 @@ ${mainContext.text}${franchiseRule}
 
 ${perMediaContexts}
 
-Generate a truly creative, deeply thematic, and punchy RPG-style title for each requested category. 
-CRITICAL STRATEGY: The consumed media MUST heavily influence the titles! Use the genres, tags, or specific themes of the most dominant recently consumed media to shape the core identity of the title. Note that when genres and tags are listed, they are ordered from most defining (most important) to least defining. Do NOT just use generic RPG terms (like "Warrior", "Mage", "Hero") unless heavily modified by the media's theme. For example, if their recent top media is a cyberpunk game, the title should sound futuristic/hacker-like. If it's a cozy slice-of-life anime, it should sound relaxed/pastoral.
+Generate a truly creative, themed, yet casual and natural title for each requested category. Avoid overly dramatic high-fantasy or pompous terminology; keep it grounded and playful.
+CRITICAL STRATEGY: The consumed media MUST heavily influence the titles! Use the genres, tags, or specific themes of the most dominant recently consumed media to shape the core identity of the title. Note that when genres and tags are listed, they are ordered from most defining (most important) to least defining. Do NOT just use generic RPG terms (like "Warrior", "Mage", "Hero"). For example, if their recent top media is a cyberpunk game, the title should sound like a casual futuristic alias. If it's a cozy slice-of-life anime, it should sound very pastoral and relaxed. Scale the "epicness" with the level so higher levels sound cooler and more impressive, but retain a casual, human touch.
 
-BREAK THE FORMULA: Do NOT simply output "[Theme] [Theme] [Class]" like "Chaos-Tuned Cosmopolitan Recruit". Use wildly varied grammatical structures! Examples: "They Who Walk In Neon", "The Cyber-Spook", "One Who Reads In The Dark", "Collector of Cozy Moments", "Sleepless Streamer", "Wandering Between Worlds", "Architect of the Cozy Arts". Be completely unpredictable, loose, and dynamic in how the words are arranged.
+BREAK THE FORMULA: Do NOT simply output "[Theme] [Theme] [Class]". Use wildly varied grammatical structures! Examples: "Neon Walker", "The Cyber-Spook", "Reads In The Dark", "Collector of Cozy", "Sleepless Streamer", "Wandering Around", "Architect of the Cozy Arts", "Pizza Box Hoarder". Be completely unpredictable, loose, and dynamic in how the words are arranged.
 
 - Main Title: Embed the essence of their OVERALL MEDIA CONTEXT into their prestige level, making sure the structure is unique.
 - Per-Media Titles: Theme this ONLY around the specific media type's context AND their category level. Match the "epicness" to their level (newbie vs. master), but let the media's genres dictate the flavor in a non-formulaic way.
@@ -355,11 +355,11 @@ ${franchiseRule}
 Media Context (Analyze the Genres, Tags, and Media Types carefully!):
 ${recentMediaStr}
 
-Generate a truly creative, deeply thematic, and punchy RPG-style title for them.
-CRITICAL STRATEGY: The consumed media MUST heavily influence the title! Use the genres, tags, or specific themes of their most dominant/recent media to shape the core identity. Note that when genres and tags are listed, they are ordered from most defining to least. Do NOT just use generic RPG terms (like "Warrior", "Mage") unless heavily modified by the media's theme. Combine their level prestige with their unique media flavors.
-If they consume horror media, evoke a spooky, dread-filled atmosphere. If sci-fi, make it sound hyper-futuristic or neon-drenched. If cozy slice-of-life, make it pastoral and relaxed. If diverse, blend the concepts creatively.
+Generate a truly creative, themed, yet casual and natural title for them. Avoid overly dramatic high-fantasy or pompous terminology; keep it grounded and playful.
+CRITICAL STRATEGY: The consumed media MUST heavily influence the title! Use the genres, tags, or specific themes of their most dominant/recent media to shape the core identity. Note that when genres and tags are listed, they are ordered from most defining to least. Do NOT just use generic RPG terms (like "Warrior", "Mage"). For example, if their recent top media is a cyberpunk game, the title should sound like a casual futuristic alias. Combine their level prestige with their unique media flavors. Retain a casual, human touch.
+If they consume horror media, evoke a slightly spooky atmosphere. If sci-fi, make it sound futuristic. If cozy slice-of-life, make it pastoral and relaxed. If diverse, blend the concepts creatively.
 
-BREAK THE FORMULA: Do NOT simply output "[Theme] [Theme] [Class]" like "Chaos-Tuned Cosmopolitan Recruit". Use wildly varied grammatical structures! Examples: "They Who Walk In Neon", "The Cyber-Spook", "One Who Reads In The Dark", "Collector of Cozy Moments", "Sleepless Streamer", "Wandering Between Worlds", "Architect of the Cozy Arts". Be completely unpredictable, loose, and dynamic in how the words are arranged.
+BREAK THE FORMULA: Do NOT simply output "[Theme] [Theme] [Class]". Use wildly varied grammatical structures! Examples: "Neon Walker", "The Cyber-Spook", "Reads In The Dark", "Collector of Cozy", "Sleepless Streamer", "Wandering Around", "Architect of the Cozy Arts", "Pizza Box Hoarder". Be completely unpredictable, loose, and dynamic in how the words are arranged.
 
 Embed the essence of their Media Context into the title in a non-formulaic way.
 ${forbiddenRule}
@@ -620,7 +620,7 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                        </div>
                     </div>
                     <div className="flex items-start justify-between group/medtitle w-full mt-1">
-                      <div className="text-xs sm:text-sm font-black uppercase tracking-widest line-clamp-3 leading-tight pr-2" style={{ color: accent }} title={currentTitle}>{currentTitle}</div>
+                      <div className="text-[10px] sm:text-xs font-black uppercase tracking-widest leading-tight pr-2" style={{ color: accent }} title={currentTitle}>{currentTitle}</div>
                       <button
                         onClick={(e) => { e.stopPropagation(); generateMissingTitles(false, [mediaType], true); }}
                         className="opacity-0 group-hover/medtitle:opacity-100 flex-shrink-0 p-1 rounded hover:bg-white/5 transition-all outline-none"
