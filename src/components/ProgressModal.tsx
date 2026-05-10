@@ -50,11 +50,21 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       setStatus(item.status);
       setUserRating(item.userRating ?? '');
       setUserReview(item.userReview ?? '');
+      
+      let defaultLocation = localStorage.getItem('fauxlore_last_location') || '';
+      const itemLogs = logs.filter(l => l.mediaId === item.id && l.location && l.location.trim().length > 0);
+      if (itemLogs.length > 0) {
+        const sortedLogs = [...itemLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        defaultLocation = sortedLogs[0].location as string;
+      }
+      setLocation(defaultLocation);
+
       const now = new Date();
       setLogDate(format(now, 'yyyy-MM-dd'));
       setLogTime(format(now, 'HH:mm'));
       setIsHistorical(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, item]);
 
   // Auto-complete status logic

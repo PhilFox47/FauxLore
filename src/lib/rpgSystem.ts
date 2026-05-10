@@ -845,7 +845,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       if (timeframe !== 'weekly') return null;
       const target = getQTarget("Fresh Blood", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       
-      const current = logs.filter(l => {
+      const validLogs = logs.filter(l => {
          const m = media.find(x => x.id === l.mediaId);
          if (m && l.metricType !== 'statusChange') {
              const lDate = subHours(parseISO(l.timestamp), 5);
@@ -855,7 +855,8 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
              return lWeek === cWeek;
          }
          return false;
-      }).length > 0 ? 1 : 0;
+      });
+      const current = new Set(validLogs.map(l => l.mediaId)).size;
       return { title: "Fresh Blood", desc: `Try something brand new. Add ${target} new item(s) to your library and log progress on it in the same week`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 29. Dust It Off
@@ -917,7 +918,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
   ];
 
   // Filter out nulls and apply overrides
-  const validTemplates = templates.map(t => t()).filter(Boolean) as NonNullable<ReturnType<typeof templates[0]>>[];
+  const validTemplates = templates.map(t => t()).filter(Boolean).filter((q: any) => q && q.target > 0) as NonNullable<ReturnType<typeof templates[0]>>[];
 
   // Fisher-Yates shuffle using RNG
   const shuffled = [...validTemplates];

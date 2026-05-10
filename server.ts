@@ -1658,6 +1658,20 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
            newStatus = 'Active';
         }
         
+        if (newStatus !== mediaRow.status && mediaRow.status !== undefined) {
+           db.prepare(`
+             INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note, location, isHistoric)
+             VALUES (@id, @userId, @mediaId, @timestamp, 'statusChange', 0, @note, null, @isHistoric)
+           `).run({
+             id: crypto.randomUUID(),
+             userId: userId,
+             mediaId: log.mediaId,
+             timestamp: log.timestamp,
+             note: `Status changed from ${mediaRow.status} to ${newStatus}`,
+             isHistoric: log.isHistoric ? 1 : 0
+           });
+        }
+
         let newUserRating = log.userRating !== undefined ? log.userRating : (mediaRow.userRating !== undefined ? mediaRow.userRating : null);
         let newUserReview = log.userReview !== undefined ? log.userReview : (mediaRow.userReview !== undefined ? mediaRow.userReview : null);
         let newWatched = log.watched !== undefined ? (log.watched ? 1 : 0) : (mediaRow.watched !== undefined ? mediaRow.watched : null);
