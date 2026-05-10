@@ -2506,7 +2506,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       
       const existing = db.prepare('SELECT id FROM global_taxonomy WHERE name = ? AND type = ?').get(taxItem.name, newType);
       if (existing) {
-        return res.status(400).json({ error: \`A \${newType} with this name already exists.\` });
+        return res.status(400).json({ error: `A ${newType} with this name already exists.` });
       }
 
       db.transaction(() => {
