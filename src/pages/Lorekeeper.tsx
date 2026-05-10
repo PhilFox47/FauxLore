@@ -620,7 +620,7 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
                        </div>
                     </div>
                     <div className="flex items-start justify-between group/medtitle w-full mt-1">
-                      <div className="text-sm font-black uppercase tracking-widest line-clamp-2 leading-tight pr-2" style={{ color: accent }} title={currentTitle}>{currentTitle}</div>
+                      <div className="text-xs sm:text-sm font-black uppercase tracking-widest line-clamp-3 leading-tight pr-2" style={{ color: accent }} title={currentTitle}>{currentTitle}</div>
                       <button
                         onClick={(e) => { e.stopPropagation(); generateMissingTitles(false, [mediaType], true); }}
                         className="opacity-0 group-hover/medtitle:opacity-100 flex-shrink-0 p-1 rounded hover:bg-white/5 transition-all outline-none"
