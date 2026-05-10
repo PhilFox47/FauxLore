@@ -135,8 +135,8 @@ export async function generateAiArtifact(apiKey: string, model: string, item: an
   let contextSnippet = `Title: ${item.title}\nType: ${item.mediaType}`;
   if (item.creator) contextSnippet += `\nCreator: ${item.creator}`;
   if (item.description) contextSnippet += `\nSynopsis: ${item.description.substring(0, 300)}...`;
-  if (item.genres && item.genres.length > 0) contextSnippet += `\nGenres: ${item.genres.join(", ")}`;
-  if (item.tags && item.tags.length > 0) contextSnippet += `\nTags: ${item.tags.join(", ")}`;
+  if (item.genres && item.genres.length > 0) contextSnippet += `\nGenres (ordered from most to least defining): ${item.genres.join(", ")}`;
+  if (item.tags && item.tags.length > 0) contextSnippet += `\nTags (ordered from most to least defining): ${item.tags.join(", ")}`;
 
   const res = await fetch("https://nano-gpt.com/api/v1/chat/completions", {
     method: "POST",

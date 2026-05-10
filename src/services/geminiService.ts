@@ -45,8 +45,8 @@ Existing Tags: ${validTags.join(', ')}
 Rules:
 1. Strongly prefer using exact matches from the Existing lists above.
 2. ONLY invent a new Genre or Tag if it is ABSOLUTELY ESSENTIAL and the media cannot be properly described without it. Do not do this lightly.
-3. Select between 1 and 3 core Genres. ONLY use up to 5 if absolutely essential.
-4. Select between 3 and 10 highly relevant Tags. ONLY use more (up to 15) if absolutely essential. Be strict and focused - less is often more.
+3. Select between 1 and 3 core Genres. ONLY use up to 5 if absolutely essential. Order them from most defining/important to least.
+4. Select between 3 and 10 highly relevant Tags. ONLY use more (up to 15) if absolutely essential. Be strict and focused - less is often more. Order them from most defining/important to least.
 5. NO DUPLICATES: A term can be a Genre OR a Tag, never both. Do not use an existing Genre as a Tag, or an existing Tag as a Genre.
 6. USE YOUR WEB SEARCH CAPABILITIES to confirm details about "${item.title}" (${item.mediaType}).
 7. Return ONLY a pure JSON object in this exact format:
@@ -204,8 +204,8 @@ Title: ${item.title}
 Type: ${item.mediaType}
 Creator/Author: ${item.creator || item.publisher || 'Unknown'}
 Synopsis/Description: ${item.description || 'No description provided.'}
-Genres: ${item.genres?.join(", ") || 'N/A'}
-Tags: ${item.tags?.join(", ") || 'N/A'}
+Genres (ordered by importance): ${item.genres?.join(", ") || 'N/A'}
+Tags (ordered by importance): ${item.tags?.join(", ") || 'N/A'}
 `;
 
   const legacySnippet = oldArtifact ? `\nThe item is a legacy artifact! You MUST incorporate its essence.
