@@ -1904,13 +1904,13 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
 
         const getBaseTarget = (type: string, lv: number) => {
           const levels = {
-            'Game': [1, 2.5, 5, 10, 20],
-            'Visual Novel': [1, 2.5, 5, 10, 20],
-            'Book': [20, 50, 100, 200, 400],
-            'Manga': [3, 6, 10, 17, 30],
-            'Series': [1, 3, 6, 12, 20],
-            'Comic': [2, 4, 7, 12, 15]
-          }[type] || [45, 90, 180, 360, 720]; 
+            'Game': [2, 5, 10, 20, 40],
+            'Visual Novel': [2, 5, 10, 20, 40],
+            'Book': [40, 100, 200, 400, 800],
+            'Manga': [6, 12, 20, 34, 60],
+            'Series': [2, 6, 12, 24, 40],
+            'Comic': [4, 8, 14, 24, 30]
+          }[type] || [90, 180, 360, 720, 1440]; // Fallback to old Master Pages scale
           return levels[lv - 1];
         };
 
