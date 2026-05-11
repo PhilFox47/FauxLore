@@ -59,7 +59,7 @@ export function Dashboard() {
     // Automated aging: Drop active items that have not been logged in 50 days (8 weeks ~ day 50)
     const itemsToDrop = media.filter(item => {
       if (item.status !== 'Active') return false;
-      const mediaLogs = logs.filter(l => l.mediaId === item.id);
+      const mediaLogs = logs.filter(l => l.mediaId === item.id && !l.isHistoric);
       const lastActiveMs = mediaLogs.length 
         ? Math.max(...mediaLogs.map(l => new Date(l.timestamp).getTime())) 
         : new Date(item.updatedAt || item.createdAt).getTime();

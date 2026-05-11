@@ -34,6 +34,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     timezone: '',
     aiPersona: 'witty',
     enemyDifficulty: 1.0,
+    mediaDifficulty: {
+      'Game': 1.0,
+      'Book': 1.0,
+      'Visual Novel': 1.0,
+      'Manga': 1.0,
+      'Series': 1.0,
+      'Movie': 1.0,
+      'Comic': 1.0,
+      'Audiobook': 1.0
+    } as Record<string, number>,
     yearlyGoals: {
       'Game': 100,
       'Book': 5000,
@@ -72,6 +82,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
         aiPersona: settings.aiPersona || 'witty',
         enemyDifficulty: settings.enemyDifficulty ?? 1.0,
+        mediaDifficulty: {
+          'Game': settings.mediaDifficulty?.['Game'] ?? 1.0,
+          'Book': settings.mediaDifficulty?.['Book'] ?? 1.0,
+          'Visual Novel': settings.mediaDifficulty?.['Visual Novel'] ?? 1.0,
+          'Manga': settings.mediaDifficulty?.['Manga'] ?? 1.0,
+          'Series': settings.mediaDifficulty?.['Series'] ?? 1.0,
+          'Movie': settings.mediaDifficulty?.['Movie'] ?? 1.0,
+          'Comic': settings.mediaDifficulty?.['Comic'] ?? 1.0,
+          'Audiobook': settings.mediaDifficulty?.['Audiobook'] ?? 1.0
+        },
         yearlyGoals: {
           'Game': settings.yearlyGoals?.['Game'] ?? 100,
           'Book': settings.yearlyGoals?.['Book'] ?? 5000,
@@ -108,6 +128,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
             aiPersona: settings.aiPersona || 'witty',
             enemyDifficulty: settings.enemyDifficulty ?? 1.0,
+            mediaDifficulty: {
+              'Game': settings.mediaDifficulty?.['Game'] ?? 1.0,
+              'Book': settings.mediaDifficulty?.['Book'] ?? 1.0,
+              'Visual Novel': settings.mediaDifficulty?.['Visual Novel'] ?? 1.0,
+              'Manga': settings.mediaDifficulty?.['Manga'] ?? 1.0,
+              'Series': settings.mediaDifficulty?.['Series'] ?? 1.0,
+              'Movie': settings.mediaDifficulty?.['Movie'] ?? 1.0,
+              'Comic': settings.mediaDifficulty?.['Comic'] ?? 1.0,
+              'Audiobook': settings.mediaDifficulty?.['Audiobook'] ?? 1.0
+            },
             yearlyGoals: {
               'Game': settings.yearlyGoals?.['Game'] ?? 100,
               'Book': settings.yearlyGoals?.['Book'] ?? 5000,
@@ -153,6 +183,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
          yearlyGoals: {
            ...prev.yearlyGoals,
            [key]: isNaN(numValue) ? 0 : numValue
+         }
+       }));
+    } else if (name.startsWith('diff__')) {
+       const key = name.replace('diff__', '');
+       const numValue = parseFloat(value);
+       setFormData(prev => ({
+         ...prev,
+         mediaDifficulty: {
+           ...prev.mediaDifficulty,
+           [key]: isNaN(numValue) ? 1.0 : numValue
          }
        }));
     } else {
@@ -316,6 +356,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         timezone: formData.timezone,
         aiPersona: formData.aiPersona,
         enemyDifficulty: formData.enemyDifficulty,
+        mediaDifficulty: formData.mediaDifficulty,
         masterPageConfig: {
           gamePagesPerHour: formData.gamePagesPerHour,
           vnPagesPerHour: formData.vnPagesPerHour,
@@ -542,6 +583,39 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     Lower difficulty reduces the progress required (Hours, Chapters, Pages, etc.) to defeat active World Bosses. 
                     Changes are applied instantly to all of your currently active encounters.
                   </p>
+                </div>
+
+                <div className="bg-orange-500/5 border border-orange-500/10 p-4 rounded-xl mt-4">
+                  <h4 className="text-sm font-medium text-zinc-300 mb-4">Media-Specific Difficulty</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                    {Object.entries({
+                      'Game': { label: 'Games' },
+                      'Visual Novel': { label: 'Visual Novels' },
+                      'Book': { label: 'Books' },
+                      'Audiobook': { label: 'Audiobooks' },
+                      'Manga': { label: 'Manga' },
+                      'Comic': { label: 'Comics' },
+                      'Series': { label: 'Series' },
+                      'Movie': { label: 'Movies' }
+                    }).map(([key, config]) => (
+                      <div key={key}>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-xs font-medium text-zinc-400">{config.label}</label>
+                          <span className="text-[10px] font-black text-orange-400/80">{(formData.mediaDifficulty[key as keyof typeof formData.mediaDifficulty] * 100).toFixed(0)}%</span>
+                        </div>
+                        <input 
+                          type="range"
+                          name={`diff__${key}`}
+                          min="0.1"
+                          max="2.0"
+                          step="0.1"
+                          value={formData.mediaDifficulty[key as keyof typeof formData.mediaDifficulty]}
+                          onChange={handleChange}
+                          className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-orange-500/70"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 

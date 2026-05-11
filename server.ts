@@ -463,8 +463,19 @@ Return ONLY the raw prompt text, nothing else.`;
       }
 
       const mediaItem = activeMedia[Math.floor(Math.random() * activeMedia.length)];
-      const settings: any = db.prepare('SELECT geminiApiKey, enemyDifficulty FROM settings WHERE userId = ?').get(userId);
-      const difficulty = settings?.enemyDifficulty ?? 1.0;
+      const settings: any = db.prepare('SELECT geminiApiKey, enemyDifficulty, mediaDifficulty FROM settings WHERE userId = ?').get(userId);
+      const enemyDifficulty = settings?.enemyDifficulty ?? 1.0;
+      let mDiff = 1.0;
+      if (settings?.mediaDifficulty) {
+        try {
+          const parsed = JSON.parse(settings.mediaDifficulty);
+          if (parsed[mediaItem.mediaType] !== undefined) {
+             mDiff = parsed[mediaItem.mediaType];
+          }
+        } catch(e) {}
+      }
+      
+      const difficulty = enemyDifficulty * mDiff;
       
       const r = Math.random();
       let level = 1;
@@ -733,6 +744,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       lastActiveDate TEXT,
       currentStreak INTEGER,
       enemyDifficulty REAL DEFAULT 1.0,
+      mediaDifficulty TEXT,
       questOffsets TEXT,
       questRerollsUsed TEXT,
       questConfigs TEXT
@@ -822,6 +834,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   try { db.exec("ALTER TABLE media ADD COLUMN userReview TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN dropReason TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE settings ADD COLUMN enemyDifficulty REAL DEFAULT 1.0"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE settings ADD COLUMN mediaDifficulty TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE settings ADD COLUMN questConfigs TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE world_bosses ADD COLUMN unit TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE ai_recaps ADD COLUMN data TEXT"); } catch (e) { /* Ignore if it exists */ }
@@ -1830,13 +1843,15 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       const userRec: any = db.prepare('SELECT role FROM users WHERE id = ?').get(userId);
       const isAdmin = userRec?.role === 'Admin';
       
-      const oldSettings: any = db.prepare('SELECT enemyDifficulty, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey FROM settings WHERE userId = ?').get(userId);
+      const oldSettings: any = db.prepare('SELECT enemyDifficulty, mediaDifficulty, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey FROM settings WHERE userId = ?').get(userId);
       const oldDifficulty = oldSettings?.enemyDifficulty ?? 1.0;
       const newDifficulty = settings.enemyDifficulty ?? 1.0;
+      const oldMediaDifficulty = oldSettings?.mediaDifficulty || null;
+      const newMediaDifficulty = settings.mediaDifficulty ? JSON.stringify(settings.mediaDifficulty) : null;
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, questOffsets, questRerollsUsed, questConfigs)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @questOffsets, @questRerollsUsed, @questConfigs)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -1852,6 +1867,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           lastActiveDate=excluded.lastActiveDate,
           currentStreak=excluded.currentStreak,
           enemyDifficulty=excluded.enemyDifficulty,
+          mediaDifficulty=excluded.mediaDifficulty,
           questOffsets=excluded.questOffsets,
           questRerollsUsed=excluded.questRerollsUsed,
           questConfigs=excluded.questConfigs
@@ -1871,13 +1887,14 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         lastActiveDate: settings.lastActiveDate || null,
         currentStreak: settings.currentStreak || 0,
         enemyDifficulty: newDifficulty,
+        mediaDifficulty: newMediaDifficulty,
         questOffsets: settings.questOffsets ? JSON.stringify(settings.questOffsets) : null,
         questRerollsUsed: settings.questRerollsUsed ? JSON.stringify(settings.questRerollsUsed) : null,
         questConfigs: settings.questConfigs ? JSON.stringify(settings.questConfigs) : null
       });
 
       // Update active bosses if difficulty changed
-      if (oldDifficulty !== newDifficulty) {
+      if (oldDifficulty !== newDifficulty || oldMediaDifficulty !== newMediaDifficulty) {
         const activeBosses = db.prepare(`
           SELECT wb.id, wb.level, wb.currentProgress, m.mediaType 
           FROM world_bosses wb
@@ -1898,8 +1915,13 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         };
 
         for (const boss of activeBosses) {
+          let mDiff = 1.0;
+          if (settings.mediaDifficulty && settings.mediaDifficulty[boss.mediaType] !== undefined) {
+             mDiff = settings.mediaDifficulty[boss.mediaType];
+          }
+
           const baseTarget = getBaseTarget(boss.mediaType, boss.level);
-          const newTarget = Math.max(0.1, baseTarget * newDifficulty);
+          const newTarget = Math.max(0.1, baseTarget * newDifficulty * mDiff);
           
           // Check if the boss is now defeated by this change
           const newStatus = boss.currentProgress >= newTarget ? 'Defeated' : 'Active';
@@ -1912,6 +1934,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         ...saved,
         masterPageConfig: saved.masterPageConfig ? JSON.parse(saved.masterPageConfig) : undefined,
         yearlyGoals: saved.yearlyGoals ? JSON.parse(saved.yearlyGoals) : undefined,
+        mediaDifficulty: saved.mediaDifficulty ? JSON.parse(saved.mediaDifficulty) : undefined,
         questOffsets: saved.questOffsets ? JSON.parse(saved.questOffsets) : undefined,
         questRerollsUsed: saved.questRerollsUsed ? JSON.parse(saved.questRerollsUsed) : undefined
       });

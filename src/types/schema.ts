@@ -156,6 +156,7 @@ export interface Settings {
   lastActiveDate?: string;
   currentStreak?: number;
   enemyDifficulty?: number; // 0.1 to 2.0 multiplier
+  mediaDifficulty?: Partial<Record<MediaType, number>>; // 0.1 to 2.0 multiplier per media type
   questOffsets?: Record<string, number>;
   questConfigs?: Record<string, any>;
   questRerollsUsed?: Record<string, number>;
