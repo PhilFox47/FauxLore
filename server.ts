@@ -1827,6 +1827,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         ...row,
         masterPageConfig: row.masterPageConfig ? JSON.parse(row.masterPageConfig) : undefined,
         yearlyGoals: row.yearlyGoals ? JSON.parse(row.yearlyGoals) : undefined,
+        mediaDifficulty: row.mediaDifficulty ? JSON.parse(row.mediaDifficulty) : undefined,
         questOffsets: row.questOffsets ? JSON.parse(row.questOffsets) : undefined,
         questRerollsUsed: row.questRerollsUsed ? JSON.parse(row.questRerollsUsed) : undefined,
         questConfigs: row.questConfigs ? JSON.parse(row.questConfigs) : undefined

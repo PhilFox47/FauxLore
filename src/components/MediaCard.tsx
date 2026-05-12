@@ -46,7 +46,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
   const daysSinceActive = useMemo(() => {
     if (item.status !== 'Active') return 0;
     const lastActiveMs = mediaLogs.length 
-      ? Math.max(...mediaLogs.map(l => new Date(l.timestamp).getTime())) 
+      ? Math.max(...mediaLogs.map(l => new Date(l.timestamp).getTime()), new Date(item.updatedAt || item.createdAt).getTime()) 
       : new Date(item.updatedAt || item.createdAt).getTime();
     return Math.floor((Date.now() - lastActiveMs) / (1000 * 60 * 60 * 24));
   }, [item.status, mediaLogs, item.updatedAt, item.createdAt]);

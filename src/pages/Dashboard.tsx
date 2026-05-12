@@ -59,10 +59,13 @@ export function Dashboard() {
     // Automated aging: Drop active items that have not been logged in 50 days (8 weeks ~ day 50)
     const itemsToDrop = media.filter(item => {
       if (item.status !== 'Active') return false;
-      const mediaLogs = logs.filter(l => l.mediaId === item.id && !l.isHistoric);
+      const mediaLogs = logs.filter(l => l.mediaId === item.id);
+      
+      // Get the absolute latest timestamp among ALL logs, including statusChange and historic ones
       const lastActiveMs = mediaLogs.length 
-        ? Math.max(...mediaLogs.map(l => new Date(l.timestamp).getTime())) 
+        ? Math.max(...mediaLogs.map(l => new Date(l.timestamp).getTime()), new Date(item.updatedAt || item.createdAt).getTime()) 
         : new Date(item.updatedAt || item.createdAt).getTime();
+        
       const days = (Date.now() - lastActiveMs) / (1000 * 60 * 60 * 24);
       return days >= 50;
     });
