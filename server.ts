@@ -181,11 +181,12 @@ async function startServer() {
   app.use(express.json());
 
   // Initialize SQLite Database
-  const dbPath = path.join(process.cwd(), 'fauxlore.db');
+  const dataDir = process.env.DATA_DIR || process.cwd();
+  const dbPath = path.join(dataDir, 'fauxlore.db');
   const db = new Database(dbPath);
 
   // Backup Manager
-  const backupsDir = path.join(process.cwd(), 'backups');
+  const backupsDir = path.join(dataDir, 'backups');
   if (!fs.existsSync(backupsDir)) {
     fs.mkdirSync(backupsDir);
   }
