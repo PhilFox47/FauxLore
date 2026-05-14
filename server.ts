@@ -192,7 +192,7 @@ async function startServer() {
   }
 
   // Uploads Manager
-  const uploadsDir = path.join(process.cwd(), 'uploads');
+  const uploadsDir = path.join(dataDir, 'uploads');
   const aiImagesDir = path.join(uploadsDir, 'ai-images');
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
   if (!fs.existsSync(aiImagesDir)) fs.mkdirSync(aiImagesDir);
@@ -3068,7 +3068,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*all', (req, res) => {
+    app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

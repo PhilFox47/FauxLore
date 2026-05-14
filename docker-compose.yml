@@ -5,11 +5,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: fauxlore-app
     ports:
       - "3000:3000"
     volumes:
       - ./data:/app/data
-      - .env:/app/.env
     environment:
       - NODE_ENV=production
       - DATA_DIR=/app/data
+    restart: unless-stopped

@@ -1,6 +1,5 @@
-FROM node:22-alpine
+FROM node:22-bookworm-slim
 
-# Set working directory
 WORKDIR /app
 
 # Install dependencies first for caching 
@@ -10,11 +9,11 @@ RUN npm install
 # Copy application files
 COPY . .
 
-# Build the Vite frontend
+# Build the Vite frontend and Backend Server
 RUN npm run build
 
 # Expose port 3000
 EXPOSE 3000
 
 # Start the application
-CMD ["npm", "run", "start"]
+CMD ["npm", "start"]
