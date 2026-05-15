@@ -47,7 +47,7 @@ export const QUEST_DEFINITIONS = [
   { id: '22', title: 'Deep Focus', desc: 'Log progress on the same media item at least X times', timeframes: ['weekly'], defaultWeekly: 4 },
   { id: '23', title: 'Genre Hopper', desc: 'Log Progress on X items that do not share any genres', timeframes: ['weekly'], defaultWeekly: 1 },
   { id: '24', title: 'Format Focus', desc: 'Gain X Master Pages exclusively in one format', timeframes: ['weekly'], defaultWeekly: 50 },
-  { id: '25', title: 'The Initiator', desc: "Move X item's status from 'Planning' to 'In Progress'", timeframes: ['weekly'], defaultWeekly: 1 },
+  { id: '25', title: 'The Initiator', desc: "Move X item's status from 'Planning' to 'Active'", timeframes: ['weekly'], defaultWeekly: 1 },
   { id: '26', title: 'Weekly Sprinter', desc: 'Complete X media item', timeframes: ['weekly'], defaultWeekly: 1 },
   { id: '27', title: "Reviewer's Strike", desc: 'Complete X item and rate/review it', timeframes: ['weekly'], defaultWeekly: 1 },
   { id: '28', title: 'Fresh Blood', desc: 'Add X new item to your library and log progress on it', timeframes: ['weekly'], defaultWeekly: 1 },
@@ -784,9 +784,9 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     () => { // 25. The Initiator
       if (timeframe !== 'weekly') return null;
       const target = getQTarget("The Initiator", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const validLogs = logs.filter(l => l.metricType === 'statusChange' && l.note === 'Planning to In Progress');
+      const validLogs = logs.filter(l => l.metricType === 'statusChange' && l.note && (l.note.includes('Planning to In Progress') || l.note.includes('Status changed from Planning to Active')));
       const current = new Set(validLogs.map(l => l.mediaId)).size;
-      return { title: "The Initiator", desc: `Take the first step. Move ${target} item's status from 'Planning' to 'In Progress'`, target, current, type: 'entries' as const, reward: baseReward * 2 };
+      return { title: "The Initiator", desc: `Take the first step. Move ${target} item's status from 'Planning' to 'Active'`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 26. Weekly Sprinter
       if (timeframe !== 'weekly') return null;
