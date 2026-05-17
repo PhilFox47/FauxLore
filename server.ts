@@ -974,6 +974,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   
   try { db.prepare("UPDATE media SET status = 'Active' WHERE status = 'Playing'").run(); } catch(e) {}
   try { db.prepare("UPDATE media SET status = 'Planning' WHERE status = 'Backlog'").run(); } catch(e) {}
+  try { db.prepare("UPDATE world_bosses SET status = 'Defeated', currentProgress = targetProgress WHERE status = 'Active' AND mediaId IN (SELECT id FROM media WHERE status = 'Completed')").run(); } catch(e) {}
 
   // Auto-assign default_user records to the first Admin user
   try {
@@ -1735,10 +1736,13 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           // 2. Boss Progress
           const boss: any = db.prepare("SELECT * FROM world_bosses WHERE userId = ? AND mediaId = ? AND status = 'Active'").get(userId, log.mediaId);
           if (boss) {
+            const updatedMedia = db.prepare("SELECT status FROM media WHERE id = ?").get(log.mediaId) as any;
+            const isCompleted = updatedMedia && updatedMedia.status === 'Completed';
+
             // Use native log delta instead of scaledPages for media-specific boss goals
             const newProgress = boss.currentProgress + log.delta;
-            if (newProgress >= boss.targetProgress) {
-              db.prepare("UPDATE world_bosses SET currentProgress = ?, status = 'Defeated', updatedAt = ? WHERE id = ?").run(boss.targetProgress, new Date().toISOString(), boss.id);
+            if (newProgress >= boss.targetProgress || isCompleted) {
+              db.prepare("UPDATE world_bosses SET currentProgress = ?, status = 'Defeated', updatedAt = ? WHERE id = ?").run(isCompleted ? boss.targetProgress : newProgress, new Date().toISOString(), boss.id);
             } else {
               db.prepare("UPDATE world_bosses SET currentProgress = ?, updatedAt = ? WHERE id = ?").run(newProgress, new Date().toISOString(), boss.id);
             }
