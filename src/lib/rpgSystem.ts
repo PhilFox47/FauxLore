@@ -218,11 +218,22 @@ export function calculateRPGState(
     const mType = bossMedia ? bossMedia.mediaType : null;
 
     if (boss.status === 'Defeated') {
-      bossExp += bExp;
-      if (mType) mediaExpTrackers[mType] += (bExp * 2);
+      let payoutPercent = 1.0;
+      if (boss.currentProgress < boss.targetProgress && boss.targetProgress > 0) {
+        const ratio = boss.currentProgress / boss.targetProgress;
+        payoutPercent = Math.min(1.0, ratio * 2);
+      }
+      const actualExp = Math.round(bExp * payoutPercent);
+      bossExp += actualExp;
+      if (mType) mediaExpTrackers[mType] += (actualExp * 2);
     } else if (boss.status === 'Failed') {
-      penaltyExp -= bExp;
-      if (mType) mediaExpTrackers[mType] -= (bExp * 2);
+      let penaltyPercent = 1.0;
+      if (bossMedia && bossMedia.status === 'Dropped') {
+        penaltyPercent = 0.5;
+      }
+      const actualPenalty = Math.round(bExp * penaltyPercent);
+      penaltyExp -= actualPenalty;
+      if (mType) mediaExpTrackers[mType] -= (actualPenalty * 2);
     }
   });
 

@@ -975,6 +975,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   try { db.prepare("UPDATE media SET status = 'Active' WHERE status = 'Playing'").run(); } catch(e) {}
   try { db.prepare("UPDATE media SET status = 'Planning' WHERE status = 'Backlog'").run(); } catch(e) {}
   try { db.prepare("UPDATE world_bosses SET status = 'Defeated', currentProgress = targetProgress WHERE status = 'Active' AND mediaId IN (SELECT id FROM media WHERE status = 'Completed')").run(); } catch(e) {}
+  try { db.prepare("UPDATE world_bosses SET status = 'Failed' WHERE status = 'Active' AND mediaId IN (SELECT id FROM media WHERE status = 'Dropped')").run(); } catch(e) {}
 
   // Auto-assign default_user records to the first Admin user
   try {
@@ -1558,10 +1559,18 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         try {
           db.prepare(`
             UPDATE world_bosses 
-            SET status = 'Defeated', currentProgress = targetProgress 
+            SET status = 'Defeated'
             WHERE userId = ? AND mediaId = ? AND status = 'Active'
           `).run(userId, item.id);
         } catch (e) { console.error("Could not defeat boss on media completion", e); }
+      } else if (item.status === 'Dropped') {
+        try {
+          db.prepare(`
+            UPDATE world_bosses 
+            SET status = 'Failed'
+            WHERE userId = ? AND mediaId = ? AND status = 'Active'
+          `).run(userId, item.id);
+        } catch (e) { console.error("Could not fail boss on media drop", e); }
       }
 
       const saved = db.prepare('SELECT * FROM media WHERE id = ?').get(item.id);
@@ -1742,7 +1751,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
             // Use native log delta instead of scaledPages for media-specific boss goals
             const newProgress = boss.currentProgress + log.delta;
             if (newProgress >= boss.targetProgress || isCompleted) {
-              db.prepare("UPDATE world_bosses SET currentProgress = ?, status = 'Defeated', updatedAt = ? WHERE id = ?").run(isCompleted ? boss.targetProgress : newProgress, new Date().toISOString(), boss.id);
+              db.prepare("UPDATE world_bosses SET currentProgress = ?, status = 'Defeated', updatedAt = ? WHERE id = ?").run(newProgress, new Date().toISOString(), boss.id);
             } else {
               db.prepare("UPDATE world_bosses SET currentProgress = ?, updatedAt = ? WHERE id = ?").run(newProgress, new Date().toISOString(), boss.id);
             }
