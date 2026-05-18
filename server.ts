@@ -478,13 +478,49 @@ Return ONLY the raw prompt text, nothing else.`;
       
       const difficulty = enemyDifficulty * mDiff;
       
+      const dayIndex = new Date().getDay();
       const r = Math.random();
       let level = 1;
-      if (r < 0.20) level = 1;
-      else if (r < 0.50) level = 2;
-      else if (r < 0.80) level = 3;
-      else if (r < 0.95) level = 4;
-      else level = 5;
+      
+      switch(dayIndex) {
+        case 1: // Monday
+          if (r < 0.3) level = 3;
+          else if (r < 0.6) level = 4;
+          else level = 5;
+          break;
+        case 2: // Tuesday
+          if (r < 0.1) level = 2;
+          else if (r < 0.3) level = 3;
+          else if (r < 0.6) level = 4;
+          else level = 5;
+          break;
+        case 3: // Wednesday
+          if (r < 0.05) level = 1;
+          else if (r < 0.20) level = 2;
+          else if (r < 0.60) level = 3;
+          else if (r < 0.90) level = 4;
+          else level = 5;
+          break;
+        case 4: // Thursday
+          if (r < 0.1) level = 1;
+          else if (r < 0.3) level = 2;
+          else if (r < 0.6) level = 3;
+          else level = 4;
+          break;
+        case 5: // Friday
+          if (r < 0.2) level = 1;
+          else if (r < 0.55) level = 2;
+          else level = 3;
+          break;
+        case 6: // Saturday
+          if (r < 0.4) level = 1;
+          else level = 2;
+          break;
+        case 0: // Sunday
+        default:
+          level = 1;
+          break;
+      }
 
       const getBaseTarget = (type: string, lv: number) => {
         const levels = {
