@@ -32,6 +32,76 @@ export function Armory() {
     setIsLootingMediaId(item.id);
     try {
       const generated = await generateAiArtifactWithGemini(settings?.geminiApiKey, item);
+      
+      const itemArtifacts = artifacts?.filter(a => a.mediaId === item.id) || [];
+      let allowedArtifactsCount = 0;
+      if (item.status === 'Completed' || item.status === 'Extras') {
+         allowedArtifactsCount += 1;
+      }
+      const isPlaytimeMedia = ['Game', 'Audiobook', 'Visual Novel'].includes(item.mediaType);
+      if (isPlaytimeMedia && item.isOngoing) {
+         const nonHistoricalPlaytime = logs
+            .filter(l => l.mediaId === item.id && !l.isHistoric && !l.timestamp.startsWith('1970-01-01') && l.metricType === 'playtimeHours')
+            .reduce((sum, log) => sum + log.delta, 0);
+         allowedArtifactsCount += Math.floor(nonHistoricalPlaytime / 50);
+      }
+      
+      let totalEstimatedHours = 0;
+      switch (item.mediaType) {
+        case 'Game':
+        case 'Visual Novel':
+        case 'Audiobook':
+          totalEstimatedHours = item.playtimeHours || 0;
+          break;
+        case 'Movie':
+          totalEstimatedHours = 2;
+          break;
+        case 'Series':
+          totalEstimatedHours = (item.episodesWatched || 0) * 0.4;
+          break;
+        case 'Manga':
+          totalEstimatedHours = (item.chaptersRead || 0) / 6;
+          break;
+        case 'Comic':
+          totalEstimatedHours = (item.issuesRead || 0) * 0.25;
+          break;
+        case 'Book':
+          totalEstimatedHours = (item.pagesRead || 0) / 40;
+          break;
+        default:
+          totalEstimatedHours = 10;
+          break;
+      }
+      
+      let durabilityMultiplier = 1.0;
+      switch (item.mediaType) {
+        case 'Game': durabilityMultiplier = 0.5; break;
+        case 'Visual Novel': durabilityMultiplier = 0.7; break;
+        case 'Audiobook': durabilityMultiplier = 1.0; break;
+        case 'Series': durabilityMultiplier = 1.3; break;
+        case 'Movie': durabilityMultiplier = 2.0; break;
+        case 'Manga': durabilityMultiplier = 2.0; break;
+        case 'Comic': durabilityMultiplier = 2.0; break;
+        case 'Book': durabilityMultiplier = 4.0; break;
+        default: durabilityMultiplier = 1.0; break;
+      }
+
+      let calculatedDurability = 100;
+      if (isPlaytimeMedia && item.isOngoing) {
+          if (item.status === 'Completed' || item.status === 'Extras') {
+              const isFinalLoot = (itemArtifacts.length === allowedArtifactsCount - 1);
+              if (isFinalLoot) {
+                 calculatedDurability = Math.max(1, Math.round((totalEstimatedHours - (itemArtifacts.length * 50)) * durabilityMultiplier));
+              } else {
+                 calculatedDurability = Math.max(1, Math.round(50 * durabilityMultiplier));
+              }
+          } else {
+              calculatedDurability = Math.max(1, Math.round(50 * durabilityMultiplier));
+          }
+      } else {
+          calculatedDurability = Math.max(1, Math.round(totalEstimatedHours * durabilityMultiplier));
+      }
+
       const newArtifact: Artifact = {
         id: uuidv4(),
         mediaId: item.id,
@@ -44,8 +114,8 @@ export function Armory() {
         targetValue: generated.targetValue,
         bonusPercent: generated.bonusPercent,
         earnedAt: new Date().toISOString(),
-        durability: 100,
-        maxDurability: 100,
+        durability: calculatedDurability,
+        maxDurability: calculatedDurability,
         isEquipped: false
       };
       
