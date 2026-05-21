@@ -1,4 +1,6 @@
-export const MEDIA_FLAVOR_TEXTS: Record<string, string[]> = {
+import fs from 'fs';
+
+const texts = {
   Game: [
     "Just one more turn.", "Rolling for initiative.", "Praising the sun.", "Press F to pay respects.",
     "The cake is a lie.", "It's dangerous to go alone.", "Wasted.", "You died.", "Finish him!",
@@ -578,7 +580,13 @@ export const MEDIA_FLAVOR_TEXTS: Record<string, string[]> = {
   ]
 };
 
+const content = \`export const MEDIA_FLAVOR_TEXTS: Record<string, string[]> = \${JSON.stringify(texts, null, 2)};
+
 export function getRandomFlavorText(mediaType: string): string {
   const texts = MEDIA_FLAVOR_TEXTS[mediaType] || ["Your entire history, collection, and backlog.", "Where did the time go?", "Cultured tastes.", "To be consumed.", "Ah, a classic."];
   return texts[Math.floor(Math.random() * texts.length)];
 }
+\`;
+
+fs.writeFileSync('src/lib/flavorTexts.ts', content);
+console.log("Wrote " + Object.keys(texts).map(k => k + ": " + texts[k].length).join(", "));
