@@ -250,6 +250,8 @@ export function Armory() {
   };
 
   const unlootedMedia = media.filter(m => {
+    if (isLootingMediaId === m.id) return true;
+    
     const itemArtifacts = artifacts.filter(a => a.mediaId === m.id);
     let allowedArtifactsCount = 0;
     

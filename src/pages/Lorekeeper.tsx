@@ -1114,19 +1114,21 @@ function QuestCard({
 
   const dynTitleCached = aiTextCache[`quest_title_${quest.id}`];
   const dynDescCached = aiTextCache[`quest_desc_${quest.id}`];
+  const originalStrCached = aiTextCache[`quest_original_${quest.id}`];
 
   useEffect(() => {
     const currentQuestStr = quest.title + "|" + quest.description;
 
-    if (
-      (!dynTitleCached || !dynDescCached) &&
+    const needsFetch = 
+      (!dynTitleCached || !dynDescCached || (originalStrCached !== undefined && originalStrCached !== currentQuestStr)) &&
       (settings?.nanoGptApiKey || settings?.geminiApiKey) &&
       fetchedForRef.current !== currentQuestStr &&
       !quest.isFailed &&
       !quest.isCompleted &&
       !isRerolling &&
-      ["monthly", "weekly", "yearly"].includes(quest.type)
-    ) {
+      ["monthly", "weekly", "yearly"].includes(quest.type);
+
+    if (needsFetch) {
       fetchedForRef.current = currentQuestStr;
       setIsGenerating(true);
       (async () => {
@@ -1189,6 +1191,9 @@ function QuestCard({
           const qDescKey = `quest_desc_${quest.id}`;
           await saveAiText(qDescKey, qDescRes);
 
+          const originalKey = `quest_original_${quest.id}`;
+          await saveAiText(originalKey, currentQuestStr);
+
           await refreshData();
         } catch (e) {
           console.error(e);
@@ -1203,6 +1208,7 @@ function QuestCard({
     quest.description,
     dynTitleCached,
     dynDescCached,
+    originalStrCached,
     settings,
     refreshData,
     saveAiText,
@@ -1238,6 +1244,7 @@ function QuestCard({
       }
 
       await saveAiText(`quest_${type}_${quest.id}`, res);
+      await saveAiText(`quest_original_${quest.id}`, quest.title + "|" + quest.description);
       await refreshData();
     } catch(e) {
       console.error(e);
