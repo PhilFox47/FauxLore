@@ -99,7 +99,14 @@ export function MediaLibrary() {
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 font-display">The Vault</span>
             </div>
             <h2 className="text-4xl sm:text-5xl font-black text-white font-display tracking-tight leading-none mb-2">{decodedMediaType}s</h2>
-            <p className="text-zinc-400 font-medium italic">{flavorText}</p>
+            <div className="relative group w-fit">
+              <p className="text-zinc-400 font-medium italic cursor-help">
+                "{flavorText.quote}"
+              </p>
+              <div className="absolute left-0 top-full mt-2 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0 whitespace-nowrap bg-zinc-800 border border-white/10 text-zinc-200 text-xs px-3 py-1.5 rounded-md shadow-xl pointer-events-none z-50 font-sans tracking-wide">
+                {flavorText.source || 'Unknown Origin'}
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-6 sm:gap-10 mt-2 lg:mt-0 pt-6 lg:pt-0 border-t lg:border-t-0 border-white/5 shrink-0">
