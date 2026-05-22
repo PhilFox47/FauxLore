@@ -1770,12 +1770,32 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           }
 
           // 1. Wear out equipment (Equipped items lose durability based on progress)
-          const equippedItems: any[] = db.prepare("SELECT id, durability FROM artifacts WHERE userId = ? AND isEquipped = 1 AND durability > 0").all(userId);
+          const equippedItems: any[] = db.prepare("SELECT id, durability, targetType, targetValue FROM artifacts WHERE userId = ? AND isEquipped = 1 AND durability > 0").all(userId);
           if (equippedItems.length > 0) {
-            const updateDurability = db.prepare("UPDATE artifacts SET durability = MAX(0, durability - ?) WHERE id = ?");
-            // Each log hit reduces 1 random item durability or all? Let's do 1 random item per log to be fair.
-            const randomItem = equippedItems[Math.floor(Math.random() * equippedItems.length)];
-            updateDurability.run(1, randomItem.id);
+            let parsedGenres: string[] = [];
+            let parsedFranchises: string[] = [];
+            try { parsedGenres = mediaRow.genres ? (typeof mediaRow.genres === 'string' ? JSON.parse(mediaRow.genres) : mediaRow.genres) : []; } catch(e) {}
+            try { parsedFranchises = mediaRow.franchises ? (typeof mediaRow.franchises === 'string' ? JSON.parse(mediaRow.franchises) : mediaRow.franchises) : []; } catch(e) {}
+            const mediaTitleLC = mediaRow.title ? mediaRow.title.toLowerCase() : '';
+
+            const applicableItems = equippedItems.filter(a => {
+              if (a.targetType === 'Genre' && parsedGenres.includes(a.targetValue)) return true;
+              else if (a.targetType === 'MediaType' && mediaRow.mediaType === a.targetValue) return true;
+              else if (a.targetType === 'Franchise') {
+                if (parsedFranchises.includes(a.targetValue) || mediaTitleLC.includes(a.targetValue?.toLowerCase() || '')) return true;
+                return false;
+              } else if (!a.targetType || a.targetType === null) {
+                return true; // Backward compatibility / generic base items
+              }
+              return false;
+            });
+
+            if (applicableItems.length > 0) {
+              const updateDurability = db.prepare("UPDATE artifacts SET durability = MAX(0, durability - ?) WHERE id = ?");
+              for (const item of applicableItems) {
+                 updateDurability.run(1, item.id);
+              }
+            }
           }
 
           // 2. Boss Progress
