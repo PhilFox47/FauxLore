@@ -38,7 +38,7 @@ interface MediaContextType {
   rerollBoss: (id: string) => Promise<void>;
   generateBossImage: (id: string) => Promise<void>;
   generateArtifactImage: (id: string) => Promise<void>;
-  spawnBoss: () => Promise<void>;
+  spawnBoss: (mediaType?: string) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -250,8 +250,8 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     await refreshData();
   }, [refreshData]);
 
-  const spawnBoss = useCallback(async () => {
-    await DatabaseService.spawnBoss();
+  const spawnBoss = useCallback(async (mediaType?: string) => {
+    await DatabaseService.spawnBoss(mediaType);
     await refreshData();
   }, [refreshData]);
 

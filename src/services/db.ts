@@ -250,8 +250,14 @@ export const DatabaseService = {
     }
   },
 
-  async spawnBoss(): Promise<any[]> {
-    const res = await apiFetch('/api/world-bosses/spawn', { method: 'POST' });
+  async spawnBoss(mediaType?: string): Promise<any[]> {
+    const res = await apiFetch('/api/world-bosses/spawn', { 
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ mediaType })
+    });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       throw new Error(data.error || 'Failed to spawn boss');

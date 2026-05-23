@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, useRef } from "react";
 import { format, differenceInDays, parseISO, subDays } from 'date-fns';
 import { useMediaContext } from "../contexts/MediaContext";
 import { calculateRPGState } from "../lib/rpgSystem";
-import { MEDIA_HEX } from "../types/schema";
+import { MEDIA_HEX, MEDIA_TYPES } from "../types/schema";
 import {
   Shield,
   Swords,
@@ -59,6 +59,7 @@ export function Lorekeeper() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isRegeneratingTitle, setIsRegeneratingTitle] = useState(false);
   const [isSpawningBoss, setIsSpawningBoss] = useState(false);
+  const [encoreMediaType, setEncoreMediaType] = useState<string>("All Media Types");
   const [dateRange, setDateRange] = useState<'7days' | '30days' | '90days' | '1year' | 'all' | 'custom'>('all');
   const [customStartDate, setCustomStartDate] = useState(() => format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [customEndDate, setCustomEndDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
@@ -664,11 +665,22 @@ NO extra comments, NO quotes, just the title. 2-6 words.`;
             </p>
           </div>
           <div className="flex gap-4">
+            <select
+              title="Spawn Enemy associated with this specific Media Type"
+              value={encoreMediaType}
+              onChange={(e) => setEncoreMediaType(e.target.value)}
+              className="bg-black/40 hover:bg-zinc-800 border border-white/5 px-4 py-3 rounded-2xl flex items-center justify-center gap-2 transition-all font-bold text-zinc-400 outline-none focus:border-red-500/30"
+            >
+              <option value="All Media Types">All Media Types</option>
+              {MEDIA_TYPES.map(type => (
+                 <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
             <button
               onClick={async () => {
                 setIsSpawningBoss(true);
                 try {
-                  await spawnBoss();
+                  await spawnBoss(encoreMediaType);
                 } catch (e: any) {
                   alert(e.message || "Failed to spawn boss");
                 } finally {

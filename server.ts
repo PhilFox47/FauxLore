@@ -447,17 +447,32 @@ Return ONLY the raw prompt text, nothing else.`;
   }
 
   // World Boss Spawner
-  async function spawnWorldBoss(userId: string, throwOnEmpty = false) {
+  async function spawnWorldBoss(userId: string, throwOnEmpty = false, targetMediaType?: string) {
     try {
       // Exclude Movies from boss spawns as they are either watched or unwatched (not ongoing)
       // Also exclude media where user explicitly disabled enemies
-      const allActiveMedia = db.prepare("SELECT id FROM media WHERE userId = ? AND status = 'Active' AND mediaType != 'Movie' AND (noEnemies = 0 OR noEnemies IS NULL)").all(userId) as any[];
+      let queryExt = "";
+      let paramsActive: any[] = [userId];
+      let paramsSpawn: any[] = [userId, userId];
+      
+      if (targetMediaType && targetMediaType !== 'All' && targetMediaType !== 'All Media Types') {
+          queryExt = " AND mediaType = ?";
+          paramsActive.push(targetMediaType);
+          paramsSpawn.push(targetMediaType);
+      }
+
+      const allActiveMedia = db.prepare(`SELECT id FROM media WHERE userId = ? AND status = 'Active' AND mediaType != 'Movie' AND (noEnemies = 0 OR noEnemies IS NULL)${queryExt}`).all(...paramsActive) as any[];
       if (allActiveMedia.length === 0) {
-        if (throwOnEmpty) throw new Error("No active media found (excluding Movies & disabled enemies). Start consuming a Media Item to spawn an enemy!");
+        if (throwOnEmpty) {
+            if (targetMediaType && targetMediaType !== 'All' && targetMediaType !== 'All Media Types') {
+                throw new Error(`No active ${targetMediaType} found (excluding disabled enemies).`);
+            }
+            throw new Error("No active media found (excluding Movies & disabled enemies). Start consuming a Media Item to spawn an enemy!");
+        }
         return;
       }
 
-      const activeMedia = db.prepare("SELECT id, title, mediaType FROM media WHERE userId = ? AND status = 'Active' AND mediaType != 'Movie' AND (noEnemies = 0 OR noEnemies IS NULL) AND id NOT IN (SELECT mediaId FROM world_bosses WHERE userId = ? AND status = 'Active')").all(userId, userId) as any[];
+      const activeMedia = db.prepare(`SELECT id, title, mediaType FROM media WHERE userId = ? AND status = 'Active' AND mediaType != 'Movie' AND (noEnemies = 0 OR noEnemies IS NULL) AND id NOT IN (SELECT mediaId FROM world_bosses WHERE userId = ? AND status = 'Active')${queryExt}`).all(...paramsSpawn) as any[];
       if (activeMedia.length === 0) {
         if (throwOnEmpty) throw new Error("All your active media already have enemies. Defeat or survive them before requesting an Encore!");
         return;
@@ -2264,7 +2279,9 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       const userId = getAuthUser(req, res);
       if (!userId) return;
       
-      await spawnWorldBoss(userId, true);
+      const { mediaType } = req.body || {};
+
+      await spawnWorldBoss(userId, true, mediaType);
       const rows = db.prepare('SELECT * FROM world_bosses WHERE userId = ? ORDER BY createdAt DESC').all(userId) as any[];
       res.json(rows);
     } catch (e: any) { 
