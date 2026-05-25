@@ -16,6 +16,7 @@ import { generateAiRecapText, generateText } from '../services/nanoGptService';
 import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon, Skull } from 'lucide-react';
 import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog, analyzeContrarian } from '../lib/recapAnalytics';
 import Markdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 
 type Timeframe = 'week' | 'month' | 'year';
@@ -353,6 +354,7 @@ CRITICAL INSTRUCTIONS:
 8. CONTINUITY: Read the "PREVIOUS RECAPS" section and comment on running themes or evolving habits to keep the meta-narrative alive.
 9. PR ALERT: If the user hit a Personal Record (PR) in Master Pages, celebrate it enthusiastically!
 10. ANTI-SLOP & HUMAN VOICE: Write like a real human being. DO NOT use flowery, overly dramatic, or cliché AI words (e.g. avoid "delve", "tapestry", "embark", "testament", "symphony", "not merely", "in the realm of"). Keep the prose grounded, conversational, and punchy. No robotic conclusions like "In conclusion" or "One thing is certain" or "overall...".
+11. DYNAMIC GRAPHICS: You have full support for inline HTML and Tailwind CSS utility classes. You are highly encouraged to build unique, stylized HTML infographics, data cards, gradient banners, or decorative UI elements directly within your Markdown response to make the recap visually stunning.
 
 Context: 
 ${promptContext}`, settings.aiPersona);
@@ -1361,7 +1363,7 @@ ${promptContext}`, settings.aiPersona);
                          {currentRecap ? (
                              <>
                              <div className={`prose prose-invert prose-lg md:prose-xl max-w-none prose-p:leading-relaxed prose-strong:text-white prose-headings:text-white prose-a:text-white prose-blockquote:border-l-4 ${timeframe === 'week' ? 'prose-orange' : (timeframe === 'month' ? 'prose-indigo' : 'prose-emerald')} prose-blockquote:bg-white/5 prose-blockquote:px-8 prose-blockquote:py-4 prose-blockquote:rounded-r-3xl`}>
-                               <Markdown>{currentRecap.summary}</Markdown>
+                               <Markdown rehypePlugins={[rehypeRaw]}>{currentRecap.summary}</Markdown>
                             </div>
                             {renderAIRoast()}
                             {renderMonthlyStats()}
