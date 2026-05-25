@@ -262,10 +262,18 @@ export function Recaps() {
 
       // Lorekeeper Stats
       const historyLogsAtEnd = validLogs.filter(l => subHours(parseISO(l.timestamp), 5).getTime() <= currentInterval.end.getTime());
-      const rpgStateAtEnd = calculateRPGState(media, historyLogsAtEnd, settings, [], [], currentInterval.end);
+      
+      const bossesAtEnd = worldBosses.filter(b => b.status === 'Defeated' && b.updatedAt && parseISO(b.updatedAt).getTime() <= currentInterval.end.getTime());
+      const artifactsAtEnd = artifacts.filter(a => a.earnedAt && parseISO(a.earnedAt).getTime() <= currentInterval.end.getTime());
+      
+      const rpgStateAtEnd = calculateRPGState(media, historyLogsAtEnd, settings, bossesAtEnd, artifactsAtEnd, currentInterval.end);
       
       const historyLogsAtStart = validLogs.filter(l => subHours(parseISO(l.timestamp), 5).getTime() < currentInterval.start.getTime());
-      const rpgStateAtStart = calculateRPGState(media, historyLogsAtStart, settings, [], [], new Date(currentInterval.start.getTime() - 1000));
+      
+      const bossesAtStart = worldBosses.filter(b => b.status === 'Defeated' && b.updatedAt && parseISO(b.updatedAt).getTime() < currentInterval.start.getTime());
+      const artifactsAtStart = artifacts.filter(a => a.earnedAt && parseISO(a.earnedAt).getTime() < currentInterval.start.getTime());
+      
+      const rpgStateAtStart = calculateRPGState(media, historyLogsAtStart, settings, bossesAtStart, artifactsAtStart, new Date(currentInterval.start.getTime() - 1000));
 
       const finalClassName = aiTextCache[`rpg_title_${rpgStateAtEnd.level}`] || rpgStateAtEnd.className;
 
@@ -336,14 +344,15 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
       
 CRITICAL INSTRUCTIONS:
 1. TITLE: Must be a punchy, clever name (1-5 words max). DO NOT include descriptions.
-2. VIBE & TONE: Follow your specified persona instructions exactly. Weave the persona deeply into the narrative structure.
-3. STRUCTURE & FOCUS: The core structure and primary focus of your recap MUST be the 'MEDIA COMPLETED' list (if any). Let what they finished dictate your narrative flow. If there are any 'MEDIA DROPPED OR ABANDONED', enthusiastically mention why they gave up on them using the reason provided. Then, cover their 'MEDIA IN PROGRESS' as ongoing obsessions or endless slogs.
-4. ORGANIC WEAVING: You MUST organically weave Journal Notes, Locations, Gathered Loot, Ratings (Critic and User Ratings), Bosses Defeated, and Lorekeeper Leveling stats (Level ups, Quests) directly into the discussion of the specific media. DO NOT create standalone paragraphs for locations, lorekeeper info, gathered loot, ratings or notes. Examples: "Reading some One Piece this month really helped you finish the 'Read some Manga' Quest!", "Glad to see you followed your weekly quest and went to watch a Comedy Movie!", "You clearly enjoyed your time reading [Book] in [Location] based on your notes.", "It's no surprise you gave it an 4/5, considering critics loved it with a 92/100!", or "Finishing [Media] gave you that sweet [Loot Name]!".
-5. ACCURACY: DO NOT assume a media item is completed unless it explicitly is in the 'MEDIA COMPLETED' list! If it's just 'IN PROGRESS', treat it as their current ongoing obsession or slog.
-6. FORMATTING: Use Markdown beautifully (bolding, italics, blockquotes, bullet points). Make it very readable.
-7. LENGTH: Give a detailed recap (Weekly: 2-3 paragraphs. Monthly/Yearly: 4-6 paragraphs) highlighting their key moments, weird obsessions, or big wins.
-8. CONTINUITY: Read the "PREVIOUS RECAPS" section and if relevant, comment on running themes, jokes, or unbroken streaks. Keep the lore alive.
-9. PR ALERT: If the user hit a Personal Record (PR) in Master Pages, definitely celebrate it with some hype!
+2. VIBE & TONE: Follow your specified persona instructions exactly. Weave the persona deeply into the narrative structure. Act more like a commentator, cultural critic, or storytelling analyst rather than a simple summarizer.
+3. STRUCTURE & FOCUS: Do NOT just iterate through a list of logs or summarize the data. Transform the data into a cohesive, analytical narrative. Find the overarching themes of what they consumed (e.g., "The week of sci-fi obsession", "Struggling to finish anything"). Focus on 'MEDIA COMPLETED' to discuss how they ended those journeys, explore 'JOURNAL NOTES' to analyze their emotional state and opinions, and interpret their overall engagement. Comment on 'MEDIA DROPPED' with dramatic emphasis.
+4. ORGANIC WEAVING: Weave Journal Notes, Locations, Loot, Ratings, Bosses, and Quest stats seamlessly into your analysis. DO NOT create forced standalone paragraphs or lists for these. Use them as supporting evidence for your commentary.
+5. ACCURACY: DO NOT assume a media item is completed unless explicitly listed in 'MEDIA COMPLETED'.
+6. FORMATTING: Use flowing, beautifully crafted paragraphs for an essay-like reading experience. You may use limited bolding and italics for emphasis. Do NOT use bulleted lists just to list media—write descriptive prose instead.
+7. LENGTH: Give a detailed, transformative recap (Weekly: 2-3 paragraphs. Monthly/Yearly: 4-6 paragraphs). Highlight their evolving tastes, funny habits, or major milestones.
+8. CONTINUITY: Read the "PREVIOUS RECAPS" section and comment on running themes or evolving habits to keep the meta-narrative alive.
+9. PR ALERT: If the user hit a Personal Record (PR) in Master Pages, celebrate it enthusiastically!
+10. ANTI-SLOP & HUMAN VOICE: Write like a real human being. DO NOT use flowery, overly dramatic, or cliché AI words (e.g. avoid "delve", "tapestry", "embark", "testament", "symphony", "not merely", "in the realm of"). Keep the prose grounded, conversational, and punchy. No robotic conclusions like "In conclusion" or "One thing is certain" or "overall...".
 
 Context: 
 ${promptContext}`, settings.aiPersona);
@@ -1156,7 +1165,9 @@ ${promptContext}`, settings.aiPersona);
 
   const renderLorekeeper = () => {
      const historyLogsAtEnd = validLogs.filter(l => subHours(parseISO(l.timestamp), 5).getTime() <= currentInterval.end.getTime());
-     const rpgStateAtEnd = calculateRPGState(media, historyLogsAtEnd, settings, [], [], currentInterval.end);
+     const bossesAtEnd = worldBosses.filter(b => b.status === 'Defeated' && b.updatedAt && parseISO(b.updatedAt).getTime() <= currentInterval.end.getTime());
+     const artifactsAtEnd = artifacts.filter(a => a.earnedAt && parseISO(a.earnedAt).getTime() <= currentInterval.end.getTime());
+     const rpgStateAtEnd = calculateRPGState(media, historyLogsAtEnd, settings, bossesAtEnd, artifactsAtEnd, currentInterval.end);
      const activeQuests = rpgStateAtEnd.quests.filter(q => q.type.startsWith(timeframe));
      const completedQuests = activeQuests.filter(q => q.isCompleted);
      const missedQuests = activeQuests.filter(q => !q.isCompleted);
