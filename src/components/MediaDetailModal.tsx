@@ -425,7 +425,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                       itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
                       labelStyle={{ color: '#a1a1aa', fontSize: '10px', marginBottom: '4px' }}
                     />
-                    <Area type="monotone" dataKey="pages" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorPages)" />
+                    <Area type="stepAfter" dataKey="pages" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorPages)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
