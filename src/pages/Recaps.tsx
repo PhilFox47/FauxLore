@@ -354,7 +354,7 @@ CRITICAL INSTRUCTIONS:
 8. CONTINUITY: Read the "PREVIOUS RECAPS" section and comment on running themes or evolving habits to keep the meta-narrative alive.
 9. PR ALERT: If the user hit a Personal Record (PR) in Master Pages, celebrate it enthusiastically!
 10. ANTI-SLOP & HUMAN VOICE: Write like a real human being. DO NOT use flowery, overly dramatic, or cliché AI words (e.g. avoid "delve", "tapestry", "embark", "testament", "symphony", "not merely", "in the realm of"). Keep the prose grounded, conversational, and punchy. No robotic conclusions like "In conclusion" or "One thing is certain" or "overall...".
-11. DYNAMIC GRAPHICS: You have full support for inline HTML and Tailwind CSS utility classes. You are highly encouraged to build unique, stylized HTML infographics, data cards, gradient banners, or decorative UI elements directly within your Markdown response to make the recap visually stunning.
+11. DYNAMIC GRAPHICS & STYLIC HTML: You have full support for inline HTML and Tailwind CSS utility classes. You MUST go wild with styling! Use custom fonts, vibrant colors, gradients, dynamic HTML infographics, stylized data cards, floating badges, and crazy formatting directly within your Markdown response to make the recap visually stunning and unique. Feel free to use complex Tailwind utility combinations for wild layouts!
 
 Context: 
 ${promptContext}`, settings.aiPersona);
