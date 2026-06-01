@@ -45,6 +45,7 @@ export interface MediaItem {
   playtimeHours?: number;
   isOngoing?: boolean;
   noEnemies?: boolean;
+  isHighPriority?: boolean;
   storyHeavyModifier?: number; // 0.5x to 1.5x
   releaseStatus?: string;
   lastSyncAt?: string;

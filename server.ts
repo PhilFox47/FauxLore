@@ -472,13 +472,23 @@ Return ONLY the raw prompt text, nothing else.`;
         return;
       }
 
-      const activeMedia = db.prepare(`SELECT id, title, mediaType FROM media WHERE userId = ? AND status = 'Active' AND mediaType != 'Movie' AND (noEnemies = 0 OR noEnemies IS NULL) AND id NOT IN (SELECT mediaId FROM world_bosses WHERE userId = ? AND status = 'Active')${queryExt}`).all(...paramsSpawn) as any[];
+      const activeMedia = db.prepare(`SELECT id, title, mediaType, isHighPriority FROM media WHERE userId = ? AND status = 'Active' AND mediaType != 'Movie' AND (noEnemies = 0 OR noEnemies IS NULL) AND id NOT IN (SELECT mediaId FROM world_bosses WHERE userId = ? AND status = 'Active')${queryExt}`).all(...paramsSpawn) as any[];
       if (activeMedia.length === 0) {
         if (throwOnEmpty) throw new Error("All your active media already have enemies. Defeat or survive them before requesting an Encore!");
         return;
       }
 
-      const mediaItem = activeMedia[Math.floor(Math.random() * activeMedia.length)];
+      // Create a weighted pool
+      const pool: any[] = [];
+      for (const m of activeMedia) {
+        pool.push(m);
+        // Double the chance if it's high priority
+        if (m.isHighPriority) {
+          pool.push(m);
+        }
+      }
+
+      const mediaItem = pool[Math.floor(Math.random() * pool.length)];
       const settings: any = db.prepare('SELECT geminiApiKey, enemyDifficulty, mediaDifficulty FROM settings WHERE userId = ?').get(userId);
       const enemyDifficulty = settings?.enemyDifficulty ?? 1.0;
       let mDiff = 1.0;
@@ -882,6 +892,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   try { db.exec("ALTER TABLE media ADD COLUMN releaseStatus TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN lastSyncAt TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN noEnemies INTEGER DEFAULT 0"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE media ADD COLUMN isHighPriority INTEGER DEFAULT 0"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN storyHeavyModifier REAL"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN userReview TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN dropReason TEXT"); } catch (e) { /* Ignore if it exists */ }
@@ -1136,6 +1147,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       isReRun: row.isReRun === 1,
       isOngoing: row.isOngoing === 1,
       noEnemies: row.noEnemies === 1,
+      isHighPriority: row.isHighPriority === 1,
       expectedReleaseDate: row.expectedReleaseDate || null,
       releaseStatus: row.releaseStatus || null,
       lastSyncAt: row.lastSyncAt || null
@@ -1524,7 +1536,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           status, userRating, userReview, dropReason, genres, tags, tropes, platforms, franchises,
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
-          issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, language, isOngoing, noEnemies, storyHeavyModifier, releaseStatus, lastSyncAt, createdAt, updatedAt,
+          issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, language, isOngoing, noEnemies, isHighPriority, storyHeavyModifier, releaseStatus, lastSyncAt, createdAt, updatedAt,
           subtitle, maturityRating
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
@@ -1532,7 +1544,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           @status, @userRating, @userReview, @dropReason, @genres, @tags, @tropes, @platforms, @franchises,
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
-          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @language, @isOngoing, @noEnemies, @storyHeavyModifier, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
+          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @language, @isOngoing, @noEnemies, @isHighPriority, @storyHeavyModifier, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
           @subtitle, @maturityRating
         )
         ON CONFLICT(id) DO UPDATE SET
@@ -1548,7 +1560,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           totalEpisodes=excluded.totalEpisodes, watched=excluded.watched, watchCount=excluded.watchCount,
           runtimeMinutes=excluded.runtimeMinutes, issuesRead=excluded.issuesRead, totalIssues=excluded.totalIssues,
           isReRun=excluded.isReRun, originalMediaId=excluded.originalMediaId, expectedReleaseDate=excluded.expectedReleaseDate,
-          language=excluded.language, isOngoing=excluded.isOngoing, noEnemies=excluded.noEnemies, storyHeavyModifier=excluded.storyHeavyModifier,
+          language=excluded.language, isOngoing=excluded.isOngoing, noEnemies=excluded.noEnemies, isHighPriority=excluded.isHighPriority, storyHeavyModifier=excluded.storyHeavyModifier,
           releaseStatus=excluded.releaseStatus, lastSyncAt=excluded.lastSyncAt,
           subtitle=excluded.subtitle, maturityRating=excluded.maturityRating
       `);
@@ -1599,6 +1611,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         maturityRating: item.maturityRating || null,
         isOngoing: item.isOngoing ? 1 : 0,
         noEnemies: item.noEnemies ? 1 : 0,
+        isHighPriority: item.isHighPriority ? 1 : 0,
         storyHeavyModifier: item.storyHeavyModifier ?? null,
         releaseStatus: item.releaseStatus || null,
         lastSyncAt: item.lastSyncAt || null,
@@ -1610,7 +1623,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         try {
           db.prepare(`
             UPDATE world_bosses 
-            SET status = 'Defeated'
+            SET status = 'Defeated', currentProgress = targetProgress
             WHERE userId = ? AND mediaId = ? AND status = 'Active'
           `).run(userId, item.id);
         } catch (e) { console.error("Could not defeat boss on media completion", e); }
@@ -1822,7 +1835,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
             // Use native log delta instead of scaledPages for media-specific boss goals
             const newProgress = boss.currentProgress + log.delta;
             if (newProgress >= boss.targetProgress || isCompleted) {
-              db.prepare("UPDATE world_bosses SET currentProgress = ?, status = 'Defeated', updatedAt = ? WHERE id = ?").run(newProgress, new Date().toISOString(), boss.id);
+              const finalProgress = isCompleted ? Math.max(newProgress, boss.targetProgress) : newProgress;
+              db.prepare("UPDATE world_bosses SET currentProgress = ?, status = 'Defeated', updatedAt = ? WHERE id = ?").run(finalProgress, new Date().toISOString(), boss.id);
             } else {
               db.prepare("UPDATE world_bosses SET currentProgress = ?, updatedAt = ? WHERE id = ?").run(newProgress, new Date().toISOString(), boss.id);
             }
@@ -2090,6 +2104,44 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       });
       res.json({ success: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/nano-gpt/chat/completions", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const apiKey = req.headers['x-nano-gpt-key'];
+      if (!apiKey) {
+         res.status(401).json({ error: "Missing API key" });
+         return;
+      }
+      const remoteRes = await fetch("https://nano-gpt.com/api/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        body: JSON.stringify(req.body)
+      });
+      const text = await remoteRes.text();
+      res.status(remoteRes.status).send(text);
+    } catch (e: any) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/nano-gpt/images/generations", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const apiKey = req.headers['x-nano-gpt-key'];
+      if (!apiKey) {
+         res.status(401).json({ error: "Missing API key" });
+         return;
+      }
+      const remoteRes = await fetch("https://nano-gpt.com/api/v1/images/generations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        body: JSON.stringify(req.body)
+      });
+      const text = await remoteRes.text();
+      res.status(remoteRes.status).send(text);
+    } catch (e: any) { res.status(500).json({ error: String(e) }); }
   });
 
   app.delete("/api/ai-text", (req, res) => {

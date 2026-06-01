@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
 import { useMediaContext } from '../contexts/MediaContext';
-import { X, Edit2, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame } from 'lucide-react';
+import { X, Edit2, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame, Ghost, Target } from 'lucide-react';
 import { calculateScaledDelta } from '../lib/scaling';
 import { cn } from '../lib/utils';
 import { format, differenceInDays } from 'date-fns';
@@ -319,6 +319,8 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
               {item.maturityRating && item.maturityRating !== 'NOT_MATURE' && <span className="px-3 py-1 bg-red-500/20 text-red-100 border border-red-500/30 rounded-md text-xs font-medium backdrop-blur-sm shadow-sm">{item.maturityRating}</span>}
               <span className="px-3 py-1 bg-white/10 text-white rounded-md text-xs font-medium backdrop-blur-sm shadow-sm">{item.status}</span>
               {item.year && <span className="px-3 py-1 bg-white/10 text-white rounded-md text-xs font-medium backdrop-blur-sm shadow-sm">{item.year}</span>}
+              {item.noEnemies && <span className="px-3 py-1 bg-orange-500/20 text-orange-200 border border-orange-500/30 rounded-md text-xs font-medium backdrop-blur-sm shadow-sm flex items-center gap-1"><Ghost className="w-3 h-3"/> No Enemies</span>}
+              {item.isHighPriority && <span className="px-3 py-1 bg-rose-500/20 text-rose-200 border border-rose-500/30 rounded-md text-xs font-medium backdrop-blur-sm shadow-sm flex items-center gap-1"><Target className="w-3 h-3"/> High Priority</span>}
             </div>
 
             <div className="flex flex-col gap-3 w-full">

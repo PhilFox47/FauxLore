@@ -1,3 +1,5 @@
+import { apiFetch } from './db';
+
 export function getPersonaDescription(personaStr?: string): string {
   switch (personaStr) {
     case 'mystic':
@@ -19,11 +21,11 @@ export async function generateAiRecapText(apiKey: string, model: string, prompt:
   
   const personaDesc = getPersonaDescription(persona);
   
-  const res = await fetch("https://nano-gpt.com/api/v1/chat/completions", {
+  const res = await apiFetch("/api/nano-gpt/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`
+      "x-nano-gpt-key": apiKey
     },
     body: JSON.stringify({
       model: model || "gpt-4o-mini", // Cost efficient model fallback
@@ -138,11 +140,11 @@ export async function generateAiArtifact(apiKey: string, model: string, item: an
   if (item.genres && item.genres.length > 0) contextSnippet += `\nGenres (ordered from most to least defining): ${item.genres.join(", ")}`;
   if (item.tags && item.tags.length > 0) contextSnippet += `\nTags (ordered from most to least defining): ${item.tags.join(", ")}`;
 
-  const res = await fetch("https://nano-gpt.com/api/v1/chat/completions", {
+  const res = await apiFetch("/api/nano-gpt/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`
+      "x-nano-gpt-key": apiKey
     },
     body: JSON.stringify({
       model: model || "gpt-4o-mini",
@@ -213,11 +215,11 @@ export async function generateAiArtifact(apiKey: string, model: string, item: an
 export async function generateImage(apiKey: string, prompt: string): Promise<string> {
   if (!apiKey) throw new Error("Nano-GPT API Key is missing.");
 
-  const res = await fetch("https://nano-gpt.com/api/v1/images/generations", {
+  const res = await apiFetch("/api/nano-gpt/images/generations", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`
+      "x-nano-gpt-key": apiKey
     },
     body: JSON.stringify({
       model: "chroma",
@@ -245,11 +247,11 @@ export async function generateImage(apiKey: string, prompt: string): Promise<str
 export async function generateText(apiKey: string, model: string, systemPrompt: string, prompt: string, temperature: number = 0.9) {
   if (!apiKey) throw new Error("Nano-GPT API Key is missing. Please configure it in Settings.");
 
-  const res = await fetch("https://nano-gpt.com/api/v1/chat/completions", {
+  const res = await apiFetch("/api/nano-gpt/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`
+      "x-nano-gpt-key": apiKey
     },
     body: JSON.stringify({
       model: model || "gpt-4o-mini",

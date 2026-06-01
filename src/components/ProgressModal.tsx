@@ -159,11 +159,29 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       extraUpdates.watched = false;
     }
 
-    if (status !== item.status) {
-      extraUpdates.status = status;
+    // In-flight status resolution
+    let finalStatus = status;
+    let isActuallyComplete = false;
+    
+    if (item.mediaType === 'Movie') {
+        if (inputValue === 1) isActuallyComplete = true;
+    } else {
+        const newTotal = mode === 'set' ? inputValue : currentVal + inputValue;
+        if (item.mediaType === 'Series' && item.totalEpisodes && newTotal >= item.totalEpisodes) isActuallyComplete = true;
+        if (item.mediaType === 'Manga' && item.totalChapters && newTotal >= item.totalChapters) isActuallyComplete = true;
+        if (item.mediaType === 'Book' && item.totalPages && newTotal >= item.totalPages) isActuallyComplete = true;
+        if (item.mediaType === 'Comic' && item.totalIssues && newTotal >= item.totalIssues) isActuallyComplete = true;
+    }
+
+    if (isActuallyComplete) {
+        finalStatus = 'Completed';
+    }
+
+    if (finalStatus !== item.status) {
+      extraUpdates.status = finalStatus;
     }
     
-    if (status === 'Completed' || status === 'Extras') {
+    if (finalStatus === 'Completed' || finalStatus === 'Extras') {
       const finalRating = userRating === '' ? 5 : userRating;
       if (finalRating !== item.userRating) {
         extraUpdates.userRating = finalRating;

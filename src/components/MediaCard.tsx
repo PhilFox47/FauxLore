@@ -23,7 +23,8 @@ import {
   Sparkles,
   Flame,
   Headphones,
-  AlertTriangle
+  AlertTriangle,
+  Target
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
@@ -249,6 +250,11 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
             {item.noEnemies && (
               <div className="flex items-center justify-center bg-orange-500/20 text-orange-400 backdrop-blur-md w-7 h-7 rounded-full border border-orange-500/20 shadow-lg" title="Enemy Generation Disabled">
                 <Ghost className="w-3.5 h-3.5 opacity-80" />
+              </div>
+            )}
+            {item.isHighPriority && (
+              <div className="flex items-center justify-center bg-rose-500/20 text-rose-400 backdrop-blur-md w-7 h-7 rounded-full border border-rose-500/20 shadow-lg" title="High Priority Target">
+                <Target className="w-3.5 h-3.5 opacity-80" />
               </div>
             )}
          </div>

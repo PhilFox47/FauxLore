@@ -665,6 +665,28 @@ export function MediaFormModal({
             </label>
           </div>
 
+          <div className="flex items-center gap-2 mb-4 bg-rose-500/5 border border-rose-500/10 p-3 rounded-xl">
+            <input
+              type="checkbox"
+              id="isHighPriority"
+              name="isHighPriority"
+              checked={formData.isHighPriority || false}
+              onChange={(e) =>
+                setFormData((p) => ({
+                  ...p,
+                  isHighPriority: e.target.checked,
+                }))
+              }
+              className="w-4 h-4 rounded bg-zinc-800 border-zinc-700 text-rose-500 focus:ring-rose-500 cursor-pointer"
+            />
+            <label htmlFor="isHighPriority" className="text-xs font-semibold text-rose-200 cursor-pointer select-none">
+              High Priority Target
+              <span className="block text-[10px] font-normal text-zinc-500 mt-0.5">
+                Double the chance of Enemy Generation to keep you motivated.
+              </span>
+            </label>
+          </div>
+
           {(formData.mediaType === 'Game' || formData.mediaType === 'Visual Novel') && (
             <div className="mb-4 bg-white/5 border border-white/10 p-4 rounded-xl">
               <label className="block text-sm font-medium text-purple-400 mb-1">
