@@ -1,11 +1,12 @@
 {
-  "name": "react-example",
+  "name": "fauxlore",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "A self-hosted media tracking app (games, books, anime, manga, movies and more) with deep statistics and a gamified RPG layer.",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "dev": "tsx server/index.ts",
+    "build": "vite build && esbuild server/index.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",

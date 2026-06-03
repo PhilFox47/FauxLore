@@ -1,0 +1,251 @@
+import type { Express } from "express";
+import type { ServerContext } from "../context";
+
+export function registerLogRoutes(app: Express, ctx: ServerContext) {
+  const { db, getAuthUser } = ctx;
+
+  app.get("/api/logs", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const rows = db.prepare('SELECT * FROM logs WHERE userId = ? ORDER BY timestamp DESC').all(userId);
+      res.json(rows.map((r: any) => ({
+        ...r,
+        isHistoric: r.isHistoric === 1
+      })));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+
+
+  app.post("/api/logs", (req, res) => {
+    try {
+      const log = req.body;
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      db.prepare(`
+        INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note, location, isHistoric)
+        VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note, @location, @isHistoric)
+      `).run({
+        id: log.id,
+        userId: userId,
+        mediaId: log.mediaId,
+        timestamp: log.timestamp,
+        metricType: log.metricType,
+        delta: log.delta,
+        note: log.note || null,
+        location: log.location || null,
+        isHistoric: log.isHistoric ? 1 : 0
+      });
+
+      // Update Streak Mode
+      try {
+        const todayStr = new Date(log.timestamp).toISOString().split('T')[0];
+        const settingsRow: any = db.prepare('SELECT lastActiveDate, currentStreak FROM settings WHERE userId = ?').get(userId);
+        
+        let newStreak = settingsRow?.currentStreak || 0;
+        let lastActiveDate = settingsRow?.lastActiveDate || "";
+
+        if (lastActiveDate !== todayStr) {
+          const yesterday = new Date(log.timestamp);
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+          if (lastActiveDate === yesterdayStr) {
+            newStreak += 1;
+          } else {
+            newStreak = 1; // start a new streak if gap > 1 day
+          }
+          
+          db.prepare(`
+            INSERT INTO settings (userId, lastActiveDate, currentStreak) 
+            VALUES (?, ?, ?) 
+            ON CONFLICT(userId) DO UPDATE SET lastActiveDate=excluded.lastActiveDate, currentStreak=excluded.currentStreak
+          `).run(userId, todayStr, newStreak);
+        }
+      } catch(e) {}
+
+      // Skip clearing AI recaps automatically as it causes unexpected regenerations.
+      // Users can refresh manually if needed.
+      
+      const mediaRow = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(log.mediaId, userId) as any;
+      if (mediaRow) {
+        const type = log.metricType;
+        const now = new Date().toISOString();
+        
+        let newStatus = log.status !== undefined ? log.status : mediaRow.status;
+        if (newStatus === 'Planning' && log.delta > 0) {
+           newStatus = 'Active';
+        }
+        
+        if (newStatus !== mediaRow.status && mediaRow.status !== undefined) {
+           db.prepare(`
+             INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note, location, isHistoric)
+             VALUES (@id, @userId, @mediaId, @timestamp, 'statusChange', 0, @note, null, @isHistoric)
+           `).run({
+             id: crypto.randomUUID(),
+             userId: userId,
+             mediaId: log.mediaId,
+             timestamp: log.timestamp,
+             note: `Status changed from ${mediaRow.status} to ${newStatus}`,
+             isHistoric: log.isHistoric ? 1 : 0
+           });
+        }
+
+        let newUserRating = log.userRating !== undefined ? log.userRating : (mediaRow.userRating !== undefined ? mediaRow.userRating : null);
+        let newUserReview = log.userReview !== undefined ? log.userReview : (mediaRow.userReview !== undefined ? mediaRow.userReview : null);
+        let newWatched = log.watched !== undefined ? (log.watched ? 1 : 0) : (mediaRow.watched !== undefined ? mediaRow.watched : null);
+        
+        if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {
+          if (log.isHistoric) {
+            db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, status = ?, userRating = ?, userReview = ?, watched = ? WHERE id = ? AND userId = ?`).run(log.delta, newStatus, newUserRating, newUserReview, newWatched, log.mediaId, userId);
+          } else {
+            db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, updatedAt = ?, status = ?, userRating = ?, userReview = ?, watched = ? WHERE id = ? AND userId = ?`).run(log.delta, now, newStatus, newUserRating, newUserReview, newWatched, log.mediaId, userId);
+          }
+        } else {
+          if (log.isHistoric) {
+            db.prepare(`UPDATE media SET status = ?, userRating = ?, userReview = ?, watched = ? WHERE id = ? AND userId = ?`).run(newStatus, newUserRating, newUserReview, newWatched, log.mediaId, userId);
+          } else {
+            db.prepare(`UPDATE media SET updatedAt = ?, status = ?, userRating = ?, userReview = ?, watched = ? WHERE id = ? AND userId = ?`).run(now, newStatus, newUserRating, newUserReview, newWatched, log.mediaId, userId);
+          }
+        }
+      }
+      // Durability Loss & Boss Progress
+      if (mediaRow) {
+        try {
+          const settingsRow: any = db.prepare('SELECT masterPageConfig FROM settings WHERE userId = ?').get(userId);
+          const mpConfig = settingsRow?.masterPageConfig ? JSON.parse(settingsRow.masterPageConfig) : {};
+          
+          let scaledPages = log.delta;
+          if (log.metricType === 'playtimeHours') {
+            scaledPages = log.delta * (mediaRow.mediaType === 'Visual Novel' ? (mpConfig.vnPagesPerHour || 24) : (mpConfig.gamePagesPerHour || 12));
+          } else if (log.metricType === 'chaptersRead') {
+            scaledPages = log.delta * (mpConfig.mangaPagesPerChapter || 5);
+          } else if (log.metricType === 'episodesWatched') {
+            scaledPages = log.delta * (mpConfig.episodesWatchedMultiplier || 30);
+          } else if (log.metricType === 'watchCount') {
+            scaledPages = log.delta * (mpConfig.moviePagesPerMovie || 100);
+          } else if (log.metricType === 'issuesRead') {
+            scaledPages = log.delta * (mpConfig.comicPagesPerIssue || 20);
+          }
+
+          // 1. Wear out equipment (Equipped items lose durability based on progress)
+          const equippedItems: any[] = db.prepare("SELECT id, durability, targetType, targetValue FROM artifacts WHERE userId = ? AND isEquipped = 1 AND durability > 0").all(userId);
+          if (equippedItems.length > 0) {
+            let parsedGenres: string[] = [];
+            let parsedFranchises: string[] = [];
+            try { parsedGenres = mediaRow.genres ? (typeof mediaRow.genres === 'string' ? JSON.parse(mediaRow.genres) : mediaRow.genres) : []; } catch(e) {}
+            try { parsedFranchises = mediaRow.franchises ? (typeof mediaRow.franchises === 'string' ? JSON.parse(mediaRow.franchises) : mediaRow.franchises) : []; } catch(e) {}
+            const mediaTitleLC = mediaRow.title ? mediaRow.title.toLowerCase() : '';
+
+            const applicableItems = equippedItems.filter(a => {
+              if (a.targetType === 'Genre' && parsedGenres.includes(a.targetValue)) return true;
+              else if (a.targetType === 'MediaType' && mediaRow.mediaType === a.targetValue) return true;
+              else if (a.targetType === 'Franchise') {
+                if (parsedFranchises.includes(a.targetValue) || mediaTitleLC.includes(a.targetValue?.toLowerCase() || '')) return true;
+                return false;
+              } else if (!a.targetType || a.targetType === null) {
+                return true; // Backward compatibility / generic base items
+              }
+              return false;
+            });
+
+            if (applicableItems.length > 0) {
+              const updateDurability = db.prepare("UPDATE artifacts SET durability = MAX(0, durability - ?) WHERE id = ?");
+              for (const item of applicableItems) {
+                 updateDurability.run(1, item.id);
+              }
+            }
+          }
+
+          // 2. Boss Progress
+          const boss: any = db.prepare("SELECT * FROM world_bosses WHERE userId = ? AND mediaId = ? AND status = 'Active'").get(userId, log.mediaId);
+          if (boss) {
+            const updatedMedia = db.prepare("SELECT status FROM media WHERE id = ?").get(log.mediaId) as any;
+            const isCompleted = updatedMedia && updatedMedia.status === 'Completed';
+
+            // Use native log delta instead of scaledPages for media-specific boss goals
+            const newProgress = boss.currentProgress + log.delta;
+            if (newProgress >= boss.targetProgress || isCompleted) {
+              const finalProgress = isCompleted ? Math.max(newProgress, boss.targetProgress) : newProgress;
+              db.prepare("UPDATE world_bosses SET currentProgress = ?, status = 'Defeated', updatedAt = ? WHERE id = ?").run(finalProgress, new Date().toISOString(), boss.id);
+            } else {
+              db.prepare("UPDATE world_bosses SET currentProgress = ?, updatedAt = ? WHERE id = ?").run(newProgress, new Date().toISOString(), boss.id);
+            }
+          }
+        } catch(e) { console.error("Durability/Boss update failed", e); }
+      }
+
+      res.json(db.prepare('SELECT * FROM logs WHERE id = ?').get(log.id));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.put("/api/logs/:id", (req, res) => {
+    try {
+      const logId = req.params.id;
+      const updates = req.body;
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+
+      const existingLog = db.prepare('SELECT * FROM logs WHERE id = ? AND userId = ?').get(logId, userId) as any;
+      if (!existingLog) return res.status(404).json({ error: 'Log not found or unauthorized' });
+
+      const newTimestamp = updates.timestamp !== undefined ? updates.timestamp : existingLog.timestamp;
+      const newNote = updates.note !== undefined ? updates.note : existingLog.note;
+      const newDelta = updates.delta !== undefined ? updates.delta : existingLog.delta;
+      const newLocation = updates.location !== undefined ? updates.location : existingLog.location;
+      
+      const deltaDiff = newDelta - existingLog.delta;
+
+      db.prepare(`
+        UPDATE logs SET timestamp = ?, delta = ?, note = ?, location = ?
+        WHERE id = ? AND userId = ?
+      `).run(newTimestamp, newDelta, newNote, newLocation, logId, userId);
+
+      // Skip clearing AI recaps automatically
+
+      // Update media item total logic
+      if (deltaDiff !== 0) {
+        const mediaRow = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(existingLog.mediaId, userId) as any;
+        if (mediaRow) {
+          const type = existingLog.metricType;
+          const now = new Date().toISOString();
+          if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {
+            db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, updatedAt = ? WHERE id = ? AND userId = ?`).run(deltaDiff, now, existingLog.mediaId, userId);
+          }
+        }
+      }
+
+      res.json(db.prepare('SELECT * FROM logs WHERE id = ?').get(logId));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.delete("/api/logs/:id", (req, res) => {
+    try {
+      const logId = req.params.id;
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+
+      const existingLog = db.prepare('SELECT * FROM logs WHERE id = ? AND userId = ?').get(logId, userId) as any;
+      if (!existingLog) return res.status(404).json({ error: 'Log not found or unauthorized' });
+
+      db.prepare('DELETE FROM logs WHERE id = ? AND userId = ?').run(logId, userId);
+
+      // Skip clearing AI recaps automatically
+
+      // Revert media item metrics
+      const mediaRow = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(existingLog.mediaId, userId) as any;
+      if (mediaRow) {
+        const type = existingLog.metricType;
+        const now = new Date().toISOString();
+        if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {
+          // Subtracting the delta, ensuring it doesn't drop below 0
+          db.prepare(`UPDATE media SET ${type} = MAX(0, IFNULL(${type}, 0) - ?), updatedAt = ? WHERE id = ? AND userId = ?`).run(existingLog.delta, now, existingLog.mediaId, userId);
+        }
+      }
+
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+}
