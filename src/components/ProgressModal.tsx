@@ -67,29 +67,8 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, item]);
 
-  // Auto-complete status logic
-  useEffect(() => {
-    if (!item) return;
-
-    let isComplete = false;
-    
-    if (item.mediaType === 'Movie') {
-        if (inputValue === 1) isComplete = true;
-    } else {
-        if (typeof inputValue === 'number') {
-            const newTotal = mode === 'set' ? inputValue : currentVal + inputValue;
-            
-            if (item.mediaType === 'Series' && item.totalEpisodes && newTotal >= item.totalEpisodes) isComplete = true;
-            if (item.mediaType === 'Manga' && item.totalChapters && newTotal >= item.totalChapters) isComplete = true;
-            if (item.mediaType === 'Book' && item.totalPages && newTotal >= item.totalPages) isComplete = true;
-            if (item.mediaType === 'Comic' && item.totalIssues && newTotal >= item.totalIssues) isComplete = true;
-        }
-    }
-
-    if (isComplete) {
-        setStatus('Completed');
-    }
-  }, [inputValue, mode, currentVal, item?.mediaType, item?.totalEpisodes, item?.totalChapters, item?.totalPages, item?.totalIssues]);
+  // Status is only ever changed by the user via the manual dropdown below.
+  // (Auto-completing media when logged progress reached its total was removed.)
 
   if (!isOpen || !item || !colors) return null;
 
@@ -159,23 +138,9 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       extraUpdates.watched = false;
     }
 
-    // In-flight status resolution
-    let finalStatus = status;
-    let isActuallyComplete = false;
-    
-    if (item.mediaType === 'Movie') {
-        if (inputValue === 1) isActuallyComplete = true;
-    } else {
-        const newTotal = mode === 'set' ? inputValue : currentVal + inputValue;
-        if (item.mediaType === 'Series' && item.totalEpisodes && newTotal >= item.totalEpisodes) isActuallyComplete = true;
-        if (item.mediaType === 'Manga' && item.totalChapters && newTotal >= item.totalChapters) isActuallyComplete = true;
-        if (item.mediaType === 'Book' && item.totalPages && newTotal >= item.totalPages) isActuallyComplete = true;
-        if (item.mediaType === 'Comic' && item.totalIssues && newTotal >= item.totalIssues) isActuallyComplete = true;
-    }
-
-    if (isActuallyComplete) {
-        finalStatus = 'Completed';
-    }
+    // Status only changes when the user manually picks a different one in the
+    // dropdown; logging progress never auto-completes a media item.
+    const finalStatus = status;
 
     if (finalStatus !== item.status) {
       extraUpdates.status = finalStatus;
