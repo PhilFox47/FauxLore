@@ -39,12 +39,12 @@ export function registerArtifactRoutes(app: Express, ctx: ServerContext) {
         targetValue: artifact.targetValue || null,
         bonusPercent: artifact.bonusPercent || 0
       });
-      
-      const mediaItem = db.prepare('SELECT title FROM media WHERE id = ?').get(artifact.mediaId) as any;
-      if (mediaItem) {
-        generateArtifactImageBackground(userId, artifact.id, artifact.name, artifact.description, mediaItem.title);
-      }
-      
+
+      // Image generation is triggered explicitly by the client via
+      // POST /api/artifacts/:id/generate-image (which uses the artifact's real
+      // rarity). Generating here too would produce a duplicate, wrong-rarity
+      // image that gets overwritten moments later during the loot reveal.
+
       res.json({ success: true, artifact });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
