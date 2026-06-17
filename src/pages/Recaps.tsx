@@ -6,7 +6,8 @@ import {
   startOfMonth, endOfMonth, subMonths, 
   startOfYear, endOfYear, subYears, 
   format, isWithinInterval, parseISO, subHours,
-  startOfISOWeek, endOfISOWeek, formatISO
+  startOfISOWeek, endOfISOWeek, formatISO,
+  eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, getDay
 } from 'date-fns';
 import { calculateScaledDelta } from '../lib/scaling';
 import { calculateRPGState } from '../lib/rpgSystem';
@@ -14,8 +15,8 @@ import { MediaItem, MEDIA_COLORS, ProgressLog, RARITY_COLORS } from '../types/sc
 import { cn } from '../lib/utils';
 import { generateAiRecapText, generateText } from '../services/nanoGptService';
 import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon, Skull } from 'lucide-react';
-import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog, analyzeContrarian } from '../lib/recapAnalytics';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
+import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog, analyzeContrarian, extractJournals, calculateLongestStreak } from '../lib/recapAnalytics';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, AreaChart, Area, Legend } from 'recharts';
 
 type Timeframe = 'week' | 'month' | 'year';
 
@@ -46,6 +47,32 @@ function CountUp({ value, duration = 1300, className }: { value: number; duratio
     return () => cancelAnimationFrame(raf);
   }, [value, duration]);
   return <span className={className}>{Math.round(display).toLocaleString()}</span>;
+}
+
+/** Hex colors per media type, for charts (recharts needs hex, not Tailwind classes). */
+const TYPE_HEX: Record<string, string> = {
+  Game: '#f97316',
+  Book: '#3b82f6',
+  Audiobook: '#06b6d4',
+  'Visual Novel': '#ec4899',
+  Manga: '#a855f7',
+  Series: '#10b981',
+  Movie: '#ef4444',
+  Comic: '#eab308',
+};
+const typeHex = (t: string) => TYPE_HEX[t] || '#71717a';
+
+/** Consistent chapter header used across every recap section for visual rhythm. */
+function SectionHeader({ icon, title, eyebrow, accent }: { icon?: React.ReactNode; title: string; eyebrow?: string; accent?: string }) {
+  return (
+    <div className="flex items-center gap-4 mb-8">
+      {icon && <div className={cn("p-3 rounded-2xl border bg-white/5 border-white/10 shrink-0", accent)}>{icon}</div>}
+      <div className="min-w-0">
+        {eyebrow && <div className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 font-black mb-1">{eyebrow}</div>}
+        <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight leading-none truncate">{title}</h3>
+      </div>
+    </div>
+  );
 }
 
 /** Soft upward fade-in when the block scrolls into view. */
@@ -431,8 +458,8 @@ ${promptContext}`, settings.aiPersona);
         data: {
           totalMasterPages,
           isNewPR,
-          defeatedBosses: defeatedBosses.map(b => ({ name: b.name, level: b.level, mediaId: b.mediaId })),
-          failedBosses: failedBosses.map(b => ({ name: b.name, level: b.level, mediaId: b.mediaId })),
+          defeatedBosses: defeatedBosses.map(b => ({ id: b.id, name: b.name, level: b.level, mediaId: b.mediaId, imageUrl: b.imageUrl })),
+          failedBosses: failedBosses.map(b => ({ id: b.id, name: b.name, level: b.level, mediaId: b.mediaId, imageUrl: b.imageUrl })),
           currentGenreDist,
           prevGenreDist,
           levelUps,
@@ -654,10 +681,14 @@ ${promptContext}`, settings.aiPersona);
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
           {bosses.map((boss: any, idx: number) => {
             const m = media.find(x => x.id === boss.mediaId);
+            const liveBoss = worldBosses.find(wb => (boss.id && wb.id === boss.id) || (wb.mediaId === boss.mediaId && wb.name === boss.name));
+            const bossImg = boss.imageUrl || liveBoss?.imageUrl;
             return (
               <div key={idx} className="group relative bg-zinc-900 border border-white/5 rounded-3xl p-6 flex flex-col items-center justify-center text-center hover:border-white/20 transition-all">
-                <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mb-4 border border-red-500/20 group-hover:scale-110 transition-transform">
-                  <Ghost className="w-8 h-8 text-red-500/50" />
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 border border-red-500/20 group-hover:scale-110 transition-transform overflow-hidden bg-red-500/10">
+                  {bossImg
+                    ? <img src={bossImg} alt={boss.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    : <Ghost className="w-8 h-8 text-red-500/50" />}
                 </div>
                 <div className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1">LV {boss.level} BOSS</div>
                 <div className="text-sm font-black text-white leading-tight mb-2">{boss.name}</div>
@@ -1263,20 +1294,25 @@ ${promptContext}`, settings.aiPersona);
               {gatheredLoot.map((artifact, idx) => {
                  const style = RARITY_COLORS[artifact.rarity] || RARITY_COLORS['Common'];
                  return (
-                 <div key={idx} className="flex flex-col gap-2 p-3 bg-black/40 rounded-2xl border border-white/5 relative overflow-hidden group">
-                    <div className="flex justify-between items-start gap-4 z-10 relative">
-                       <span className={cn("font-bold text-sm line-clamp-2", style.text)}>{artifact.name}</span>
-                       <span className={cn("text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full border whitespace-nowrap", style.text, style.bg, style.border.replace('500', '500/30'))}>
-                          {artifact.rarity}
-                       </span>
-                    </div>
-                    <p className="text-xs text-zinc-500 z-10 relative line-clamp-2">{artifact.description}</p>
-                    {artifact.targetType && (
-                       <div className="flex items-center justify-between mt-1 opacity-70">
-                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{artifact.targetType}: {artifact.targetValue}</span>
-                          <span className="text-[10px] text-green-400 font-black tracking-widest">+{artifact.bonusPercent || 20}%</span>
-                       </div>
+                 <div key={idx} className="flex gap-3 p-3 bg-black/40 rounded-2xl border border-white/5 relative overflow-hidden group">
+                    {artifact.imageUrl && (
+                       <img src={artifact.imageUrl} alt={artifact.name} referrerPolicy="no-referrer" className={cn("w-14 h-14 rounded-xl object-cover shrink-0 border", style.border.replace('500', '500/30'))} />
                     )}
+                    <div className="flex flex-col gap-2 min-w-0 flex-1">
+                       <div className="flex justify-between items-start gap-4 z-10 relative">
+                          <span className={cn("font-bold text-sm line-clamp-2", style.text)}>{artifact.name}</span>
+                          <span className={cn("text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full border whitespace-nowrap", style.text, style.bg, style.border.replace('500', '500/30'))}>
+                             {artifact.rarity}
+                          </span>
+                       </div>
+                       <p className="text-xs text-zinc-500 z-10 relative line-clamp-2">{artifact.description}</p>
+                       {artifact.targetType && (
+                          <div className="flex items-center justify-between mt-1 opacity-70">
+                             <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{artifact.targetType}: {artifact.targetValue}</span>
+                             <span className="text-[10px] text-green-400 font-black tracking-widest">+{artifact.bonusPercent || 20}%</span>
+                          </div>
+                       )}
+                    </div>
                  </div>
               );})}
            </div>
@@ -1386,6 +1422,215 @@ ${promptContext}`, settings.aiPersona);
           </div>
         )}
       </div>
+    );
+  };
+
+  const accentHex = timeframe === 'week' ? '#f97316' : timeframe === 'month' ? '#6366f1' : '#10b981';
+
+  // GitHub-style activity heatmap for the period (consistency / time-capsule).
+  const renderActivityCalendar = () => {
+    const days = eachDayOfInterval({ start: currentInterval.start, end: currentInterval.end });
+    if (days.length < 2) return null;
+
+    const dayMap: Record<string, number> = {};
+    activeProgressLogs.forEach(l => {
+      const key = format(subHours(parseISO(l.timestamp), 5), 'yyyy-MM-dd');
+      const m = activeMedia.find(x => x.id === l.mediaId);
+      if (m) dayMap[key] = (dayMap[key] || 0) + calculateScaledDelta(l.delta, m, settings);
+    });
+
+    const max = Math.max(1, ...Object.values(dayMap));
+    const activeDays = Object.values(dayMap).filter(v => v > 0).length;
+    const lead = (getDay(days[0]) + 6) % 7; // Monday-first weekday offset
+    const opacities = [0, 0.28, 0.5, 0.75, 1];
+    const levelOf = (v: number) => (v <= 0 ? 0 : v < max * 0.25 ? 1 : v < max * 0.5 ? 2 : v < max * 0.75 ? 3 : 4);
+
+    return (
+      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem]">
+        <SectionHeader icon={<CalendarDays className={`w-6 h-6 ${theme.text}`} />} eyebrow="Consistency" title="Activity Map" accent={theme.border} />
+        <div className="overflow-x-auto no-scrollbar pb-2">
+          <div className="grid grid-rows-7 grid-flow-col gap-1.5 w-fit">
+            {Array.from({ length: lead }).map((_, i) => <div key={`lead-${i}`} className="w-3.5 h-3.5" />)}
+            {days.map((d) => {
+              const v = dayMap[format(d, 'yyyy-MM-dd')] || 0;
+              const lvl = levelOf(v);
+              return (
+                <div
+                  key={format(d, 'yyyy-MM-dd')}
+                  title={`${format(d, 'MMM d')} — ${Math.round(v)} MP`}
+                  className="w-3.5 h-3.5 rounded-[3px] border border-white/5"
+                  style={{ backgroundColor: lvl === 0 ? 'rgba(255,255,255,0.04)' : accentHex, opacity: lvl === 0 ? 1 : opacities[lvl] }}
+                />
+              );
+            })}
+          </div>
+        </div>
+        <div className="flex items-center justify-between mt-6 flex-wrap gap-3">
+          <span className="text-xs text-zinc-500 font-bold"><span className="text-white font-black">{activeDays}</span> active {activeDays === 1 ? 'day' : 'days'} of {days.length}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest mr-1">Less</span>
+            {opacities.map((o, i) => (
+              <div key={i} className="w-3 h-3 rounded-[3px] border border-white/5" style={{ backgroundColor: i === 0 ? 'rgba(255,255,255,0.04)' : accentHex, opacity: i === 0 ? 1 : o }} />
+            ))}
+            <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest ml-1">More</span>
+          </div>
+        </div>
+      </Reveal>
+    );
+  };
+
+  // Master-pages momentum across the last few comparable intervals (sparkline).
+  const renderTrend = () => {
+    const count = timeframe === 'week' ? 8 : timeframe === 'month' ? 6 : 5;
+    const points: { label: string; value: number }[] = [];
+    for (let i = count - 1; i >= 0; i--) {
+      const target = timeframe === 'week' ? subWeeks(currentInterval.start, i)
+        : timeframe === 'month' ? subMonths(currentInterval.start, i)
+        : subYears(currentInterval.start, i);
+      const intv = timeframe === 'week' ? { start: startOfWeek(target, { weekStartsOn: 1 }), end: endOfWeek(target, { weekStartsOn: 1 }) }
+        : timeframe === 'month' ? { start: startOfMonth(target), end: endOfMonth(target) }
+        : { start: startOfYear(target), end: endOfYear(target) };
+      const label = timeframe === 'week' ? format(intv.start, 'MMM d') : timeframe === 'month' ? format(intv.start, 'MMM') : format(intv.start, 'yyyy');
+      const pages = validLogs
+        .filter(l => l.metricType !== 'statusChange' && isWithinInterval(subHours(parseISO(l.timestamp), 5), intv))
+        .reduce((acc, l) => { const m = media.find(x => x.id === l.mediaId); return m ? acc + calculateScaledDelta(l.delta, m, settings) : acc; }, 0);
+      points.push({ label, value: Math.round(pages) });
+    }
+    if (points.filter(p => p.value > 0).length < 2) return null;
+
+    const peak = Math.max(...points.map(p => p.value));
+    const peakLabel = points.find(p => p.value === peak)?.label;
+
+    return (
+      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem]">
+        <SectionHeader icon={<Activity className={`w-6 h-6 ${theme.text}`} />} eyebrow={timeframe === 'year' ? 'Year over year' : timeframe === 'month' ? 'Month over month' : 'Week over week'} title="Momentum" accent={theme.border} />
+        <div className="h-[200px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={points} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={accentHex} stopOpacity={0.5} />
+                  <stop offset="100%" stopColor={accentHex} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="label" tick={{ fill: '#71717a', fontSize: 10, fontWeight: 900 }} axisLine={false} tickLine={false} />
+              <YAxis hide />
+              <Tooltip contentStyle={{ backgroundColor: '#09090b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }} itemStyle={{ color: accentHex }} labelStyle={{ color: '#fff' }} formatter={(v: any) => [`${v} MP`, 'Master Pages']} />
+              <Area type="monotone" dataKey="value" stroke={accentHex} strokeWidth={3} fill="url(#trendFill)" dot={{ r: 3, fill: accentHex }} activeDot={{ r: 5 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+        {peakLabel && <p className="text-xs text-zinc-500 font-bold mt-4">Peak output in <span className="text-white font-black">{peakLabel}</span> with {peak.toLocaleString()} Master Pages.</p>}
+      </Reveal>
+    );
+  };
+
+  // Stacked media-type composition across sub-intervals ("your year in formats").
+  const renderTypeStack = () => {
+    const buckets = timeframe === 'year' ? eachMonthOfInterval(currentInterval)
+      : timeframe === 'month' ? eachWeekOfInterval(currentInterval, { weekStartsOn: 1 })
+      : eachDayOfInterval(currentInterval);
+    if (buckets.length < 2) return null;
+    const fmt = timeframe === 'year' ? 'MMM' : timeframe === 'month' ? "'W'w" : 'EEE';
+
+    const bucketData: Record<string, any> = {};
+    buckets.forEach(b => { bucketData[format(b, fmt)] = { label: format(b, fmt) }; });
+    const typesUsed = new Set<string>();
+    activeProgressLogs.forEach(l => {
+      const m = activeMedia.find(x => x.id === l.mediaId);
+      if (!m) return;
+      const k = format(subHours(parseISO(l.timestamp), 5), fmt);
+      if (!bucketData[k]) bucketData[k] = { label: k };
+      bucketData[k][m.mediaType] = (bucketData[k][m.mediaType] || 0) + calculateScaledDelta(l.delta, m, settings);
+      typesUsed.add(m.mediaType);
+    });
+    const data = buckets.map(b => bucketData[format(b, fmt)]);
+    const types = Array.from(typesUsed);
+    if (types.length === 0) return null;
+
+    return (
+      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem]">
+        <SectionHeader icon={<BarChart3 className={`w-6 h-6 ${theme.text}`} />} eyebrow="Composition" title={timeframe === 'year' ? 'Your Year in Formats' : timeframe === 'month' ? 'Your Month in Formats' : 'Your Week in Formats'} accent={theme.border} />
+        <div className="h-[280px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+              <XAxis dataKey="label" tick={{ fill: '#71717a', fontSize: 10, fontWeight: 900 }} axisLine={false} tickLine={false} />
+              <YAxis hide />
+              <Tooltip cursor={{ fill: 'rgba(255,255,255,0.04)' }} contentStyle={{ backgroundColor: '#09090b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }} />
+              <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }} />
+              {types.map((t, i) => (
+                <Bar key={t} dataKey={t} stackId="a" fill={typeHex(t)} radius={i === types.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Reveal>
+    );
+  };
+
+  // A memorable journal note as a pull-quote (the human voice of the capsule).
+  const renderJournalQuote = () => {
+    const journals = extractJournals({ timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings });
+    if (journals.length === 0) return null;
+    const j = journals[0];
+    return (
+      <Reveal className={`relative overflow-hidden rounded-[2rem] border ${theme.border} ${theme.bg} p-8 md:p-12`}>
+        <div className={`absolute -top-16 -left-4 text-[14rem] leading-none font-black ${theme.text} opacity-10 select-none pointer-events-none`}>“</div>
+        <div className="relative z-10">
+          <div className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 font-black mb-4">From your journal</div>
+          <p className="text-2xl md:text-3xl font-light text-white leading-snug italic max-w-3xl">{j.note}</p>
+          <div className="mt-6 flex items-center gap-3 text-sm flex-wrap">
+            <span className={`font-black ${MEDIA_COLORS[j.media.mediaType]?.text || 'text-zinc-300'}`}>{j.media.title}</span>
+            <span className="text-zinc-600">•</span>
+            <span className="text-zinc-500 font-bold">{format(parseISO(j.date), 'MMM d, yyyy')}</span>
+          </div>
+        </div>
+      </Reveal>
+    );
+  };
+
+  // Closing "sealed capsule" summary — the period at a glance, dated now.
+  const renderTimeCapsule = () => {
+    const cfg = { timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings };
+    const archetypes = determineArchetypes(cfg);
+    const streak = calculateLongestStreak(cfg);
+    const ranked = activeMedia.map(m => {
+      const pages = activeProgressLogs.filter(l => l.mediaId === m.id).reduce((acc, l) => acc + calculateScaledDelta(l.delta, m, settings), 0);
+      return { item: m, pages };
+    }).filter(r => r.pages > 0).sort((a, b) => b.pages - a.pages);
+    const top = ranked[0]?.item;
+
+    const rows = [
+      { label: 'Top media', value: top ? top.title : '—' },
+      { label: 'You were', value: archetypes[0]?.name || '—' },
+      { label: 'Theme', value: currentRecap?.data?.aiTheme || '—' },
+      { label: 'Longest streak', value: `${streak} ${streak === 1 ? 'day' : 'days'}` },
+      { label: 'Master Pages', value: Math.round(totalMasterPages).toLocaleString() },
+      { label: 'Conquered', value: `${completedMedia.length}` },
+    ];
+
+    return (
+      <Reveal className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-gradient-to-b from-zinc-950 to-black p-8 md:p-12">
+        <div className={`absolute top-0 right-0 w-72 h-72 ${theme.glow} blur-[120px] rounded-full -mr-24 -mt-24 pointer-events-none`} />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 mb-8 pb-8 border-b border-white/10">
+          <div>
+            <div className={`text-[10px] uppercase tracking-[0.4em] ${theme.text} font-black mb-2`}>Time Capsule</div>
+            <h3 className="text-3xl md:text-4xl font-black text-white tracking-tighter">{formatIntervalLabel()}</h3>
+          </div>
+          <div className="md:text-right">
+            <div className="text-[10px] uppercase tracking-widest text-zinc-600 font-black">Sealed</div>
+            <div className="text-sm font-bold text-zinc-400">{format(new Date(), 'MMM d, yyyy')}</div>
+          </div>
+        </div>
+        <div className="relative z-10 grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-6">
+          {rows.map(r => (
+            <div key={r.label}>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-black mb-1">{r.label}</div>
+              <div className="text-lg font-black text-white truncate">{r.value}</div>
+            </div>
+          ))}
+        </div>
+      </Reveal>
     );
   };
 
@@ -1510,6 +1755,9 @@ ${promptContext}`, settings.aiPersona);
                    {/* #1 Spotlight (Last.fm / Wrapped-style top media moment) */}
                    {renderSpotlight()}
 
+                   {/* A line from your journal */}
+                   {renderJournalQuote()}
+
                    {/* Primary Grid Layout */}
                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                       {/* Left Side: Rankings & Large Visuals */}
@@ -1570,6 +1818,11 @@ ${promptContext}`, settings.aiPersona);
                       </h3>
                       {renderTypeBreakdown()}
                    </div>
+
+                   {/* New visualization chapters */}
+                   {renderActivityCalendar()}
+                   {renderTypeStack()}
+                   {renderTrend()}
 
                    {/* Conquered Gallery */}
                    {completedMedia.length > 0 && (
@@ -1670,6 +1923,9 @@ ${promptContext}`, settings.aiPersona);
                           </div>
                       </div>
                    )}
+
+                   {/* Sealed time capsule (closing) */}
+                   {renderTimeCapsule()}
                  </>
                ) : (
                   <div className="flex flex-col items-center justify-center text-center py-40 px-4">
