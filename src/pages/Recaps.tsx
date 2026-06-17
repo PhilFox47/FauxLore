@@ -15,11 +15,53 @@ import { cn } from '../lib/utils';
 import { generateAiRecapText, generateText } from '../services/nanoGptService';
 import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon, Skull } from 'lucide-react';
 import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog, analyzeContrarian } from '../lib/recapAnalytics';
-import Markdown from 'react-markdown';
-import rehypeRaw from 'rehype-raw';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 
 type Timeframe = 'week' | 'month' | 'year';
+
+/** Splits an AI plain-text narrative into clean paragraphs (blank-line separated). */
+function toParagraphs(text: string): string[] {
+  return String(text || '')
+    .replace(/\r\n/g, '\n')
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+}
+
+/** A number that animates up from 0 (eased) whenever it mounts or its value changes. */
+function CountUp({ value, duration = 1300, className }: { value: number; duration?: number; className?: string }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const to = value || 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      setDisplay(to * eased);
+      if (t < 1) raf = requestAnimationFrame(tick);
+      else setDisplay(to);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+  return <span className={className}>{Math.round(display).toLocaleString()}</span>;
+}
+
+/** Soft upward fade-in when the block scrolls into view. */
+function Reveal({ children, className, delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+  return (
+    <motion.div
+      className={className}
+      initial={{ opacity: 0, y: 28 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-8%' }}
+      transition={{ duration: 0.55, delay, ease: [0.22, 1, 0.36, 1] }}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 export function Recaps() {
   const { media, logs, settings, aiRecaps, saveAiRecap, artifacts, worldBosses, isLoading, aiTextCache } = useMediaContext();
@@ -349,12 +391,12 @@ CRITICAL INSTRUCTIONS:
 3. STRUCTURE & FOCUS: Do NOT just iterate through a list of logs or summarize the data. Transform the data into a cohesive, analytical narrative. Find the overarching themes of what they consumed (e.g., "The week of sci-fi obsession", "Struggling to finish anything"). Focus on 'MEDIA COMPLETED' to discuss how they ended those journeys, explore 'JOURNAL NOTES' to analyze their emotional state and opinions, and interpret their overall engagement. Comment on 'MEDIA DROPPED' with dramatic emphasis.
 4. ORGANIC WEAVING: Weave Journal Notes, Locations, Loot, Ratings, Bosses, and Quest stats seamlessly into your analysis. DO NOT create forced standalone paragraphs or lists for these. Use them as supporting evidence for your commentary.
 5. ACCURACY: DO NOT assume a media item is completed unless explicitly listed in 'MEDIA COMPLETED'.
-6. FORMATTING: Use flowing, beautifully crafted paragraphs for an essay-like reading experience. You may use limited bolding and italics for emphasis. Do NOT use bulleted lists just to list media—write descriptive prose instead.
+6. FORMATTING: Write in PLAIN TEXT only. Use flowing, beautifully crafted paragraphs for an essay-like reading experience. Separate paragraphs with a single blank line. Do NOT use any Markdown or HTML — no asterisks, underscores, backticks, hashes, headings, links, bullet points, or tables. No styling of any kind, just clean prose. Convey emphasis through word choice, not formatting.
 7. LENGTH: Give a detailed, transformative recap (Weekly: 2-3 paragraphs. Monthly/Yearly: 4-6 paragraphs). Highlight their evolving tastes, funny habits, or major milestones.
 8. CONTINUITY: Read the "PREVIOUS RECAPS" section and comment on running themes or evolving habits to keep the meta-narrative alive.
 9. PR ALERT: If the user hit a Personal Record (PR) in Master Pages, celebrate it enthusiastically!
 10. ANTI-SLOP & HUMAN VOICE: Write like a real human being. DO NOT use flowery, overly dramatic, or cliché AI words (e.g. avoid "delve", "tapestry", "embark", "testament", "symphony", "not merely", "in the realm of"). Keep the prose grounded, conversational, and punchy. No robotic conclusions like "In conclusion" or "One thing is certain" or "overall...".
-11. DYNAMIC GRAPHICS & STYLIC HTML: You have full support for inline HTML and Tailwind CSS utility classes. You MUST go wild with styling! Use custom fonts, vibrant colors, gradients, dynamic HTML infographics, stylized data cards, floating badges, and crazy formatting directly within your Markdown response to make the recap visually stunning and unique. Feel free to use complex Tailwind utility combinations for wild layouts!
+11. NO MARKUP: This text is rendered as plain paragraphs in a styled card, so any Markdown symbols or HTML tags would show up as literal characters and look broken. Output prose only.
 
 Context: 
 ${promptContext}`, settings.aiPersona);
@@ -1282,6 +1324,71 @@ ${promptContext}`, settings.aiPersona);
      );
   };
 
+  // The single highest-engagement media of the period (Spotify "top song" moment).
+  const renderSpotlight = () => {
+    const ranked = activeMedia.map(m => {
+      const pages = activeProgressLogs.filter(l => l.mediaId === m.id).reduce((acc, l) => acc + calculateScaledDelta(l.delta, m, settings), 0);
+      return { item: m, pages };
+    }).filter(r => r.pages > 0).sort((a, b) => b.pages - a.pages);
+    if (ranked.length === 0) return null;
+
+    const top = ranked[0];
+    const m = top.item;
+    const share = totalMasterPages > 0 ? Math.round((top.pages / totalMasterPages) * 100) : 0;
+
+    return (
+      <Reveal className={`relative overflow-hidden rounded-[2.5rem] border ${theme.border} bg-black`}>
+        {m.coverImageUrl && (
+          <div className="absolute inset-0 bg-cover bg-center opacity-30 blur-2xl scale-110" style={{ backgroundImage: `url(${m.coverImageUrl})` }} />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-black/40" />
+        <div className="relative z-10 flex flex-col sm:flex-row items-center gap-8 p-8 md:p-12">
+          <div className="w-40 h-56 md:w-48 md:h-72 rounded-2xl overflow-hidden border border-white/10 shadow-2xl shrink-0 bg-zinc-900">
+            {m.coverImageUrl
+              ? <img src={m.coverImageUrl} className="w-full h-full object-cover" alt={m.title} />
+              : <div className="w-full h-full flex items-center justify-center text-zinc-700"><Library className="w-12 h-12" /></div>}
+          </div>
+          <div className="flex-1 min-w-0 text-center sm:text-left">
+            <div className={`text-[11px] font-black uppercase tracking-[0.3em] ${theme.text} mb-3`}>Your #1 this {timeframe}</div>
+            <h3 className="text-4xl md:text-6xl font-black text-white tracking-tighter leading-[0.95] mb-4 break-words">{m.title}</h3>
+            <div className="flex items-center justify-center sm:justify-start gap-3 flex-wrap">
+              <span className={`text-[11px] font-black uppercase tracking-widest ${MEDIA_COLORS[m.mediaType]?.text || 'text-zinc-400'}`}>{m.mediaType}</span>
+              <span className="text-zinc-700">•</span>
+              <span className="text-white font-black"><CountUp value={Math.round(top.pages)} /> MP</span>
+              <span className="text-zinc-700">•</span>
+              <span className="text-zinc-400 font-bold text-sm">{share}% of your {timeframe}</span>
+            </div>
+          </div>
+        </div>
+      </Reveal>
+    );
+  };
+
+  // "This {period}, you were {archetype}" identity banner + theme chip (Wrapped-style).
+  const renderIdentity = () => {
+    const archetypes = determineArchetypes({ timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings });
+    const topArch = archetypes[0];
+    const themeText = currentRecap?.data?.aiTheme;
+    if (!topArch && !themeText) return null;
+    return (
+      <div className="mt-2 flex flex-col gap-4 relative z-10">
+        {topArch && (
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 font-black mb-1">This {timeframe}, you were</div>
+            <div className={`text-3xl md:text-5xl font-black tracking-tighter ${theme.text}`}>{topArch.name}</div>
+          </div>
+        )}
+        {themeText && (
+          <div className="inline-flex items-center gap-2 w-fit px-4 py-2 rounded-full border border-white/10 bg-white/5 backdrop-blur">
+            <Sparkles className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-black">Theme</span>
+            <span className="text-sm font-black text-white">"{themeText}"</span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full max-h-full overflow-hidden w-full bg-[#080809]">
       <div className="flex-shrink-0 p-4 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 bg-zinc-950/80 sticky top-0 z-10 backdrop-blur-xl">
@@ -1357,14 +1464,16 @@ ${promptContext}`, settings.aiPersona);
                          </button>
                       </div>
 
-                      {renderThemeOfTheMonth()}
+                      {renderIdentity()}
 
-                      <div className="text-xl md:text-2xl text-zinc-400 relative z-10 leading-relaxed font-light">
+                      <div className="text-xl md:text-2xl text-zinc-400 relative z-10 leading-relaxed font-light mt-8">
                          {currentRecap ? (
                              <>
-                             <div className={`prose prose-invert prose-lg md:prose-xl max-w-none prose-p:leading-relaxed prose-strong:text-white prose-headings:text-white prose-a:text-white prose-blockquote:border-l-4 ${timeframe === 'week' ? 'prose-orange' : (timeframe === 'month' ? 'prose-indigo' : 'prose-emerald')} prose-blockquote:bg-white/5 prose-blockquote:px-8 prose-blockquote:py-4 prose-blockquote:rounded-r-3xl`}>
-                               <Markdown rehypePlugins={[rehypeRaw]}>{currentRecap.summary}</Markdown>
-                            </div>
+                             <div className="max-w-3xl space-y-5">
+                               {toParagraphs(currentRecap.summary).map((p, i) => (
+                                 <p key={i} className={cn("text-lg md:text-xl text-zinc-300/90 leading-relaxed font-light", i === 0 && "first-letter:float-left first-letter:mr-3 first-letter:text-6xl first-letter:font-black first-letter:leading-[0.8] first-letter:text-white")}>{p}</p>
+                               ))}
+                             </div>
                             {renderAIRoast()}
                             {renderMonthlyStats()}
                             {renderBossTrophyRoom()}
@@ -1382,25 +1491,24 @@ ${promptContext}`, settings.aiPersona);
                       </div>
                    </div>
 
-                   {/* Macro Stats Bar */}
-                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="bg-black/40 border border-white/5 p-6 rounded-3xl flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-all">
-                         <div className="text-3xl font-black text-white mb-1">{activeLogs.length}</div>
-                         <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black">Logged Actions</div>
-                      </div>
-                      <div className="bg-black/40 border border-white/5 p-6 rounded-3xl flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-all">
-                         <div className="text-3xl font-black text-white mb-1">{completedMedia.length}</div>
-                         <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black">Media Conquered</div>
-                      </div>
-                      <div className="bg-black/40 border border-white/5 p-6 rounded-3xl flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-all">
-                         <div className={`text-3xl font-black ${theme.text} mb-1`}>{Math.round(totalMasterPages)}</div>
-                         <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black">Master Pages</div>
-                      </div>
-                      <div className="bg-black/40 border border-white/5 p-6 rounded-3xl flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-all">
-                         <div className="text-3xl font-black text-white mb-1">{activeMedia.length}</div>
-                         <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black">Active Journeys</div>
-                      </div>
-                   </div>
+                   {/* Hero Numbers */}
+                   <Reveal className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {[
+                        { label: 'Master Pages', value: Math.round(totalMasterPages), accent: true },
+                        { label: 'Media Conquered', value: completedMedia.length, accent: false },
+                        { label: 'Logged Actions', value: activeLogs.length, accent: false },
+                        { label: 'Active Journeys', value: activeMedia.length, accent: false },
+                      ].map((s) => (
+                        <div key={s.label} className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-3xl flex flex-col items-center justify-center text-center relative overflow-hidden group hover:bg-white/[0.04] transition-all">
+                           <div className={`absolute -top-10 -right-10 w-24 h-24 ${theme.glow} blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity`} />
+                           <CountUp value={s.value} className={cn("text-4xl md:text-6xl font-black tracking-tighter mb-2", s.accent ? theme.text : "text-white")} />
+                           <div className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] font-black">{s.label}</div>
+                        </div>
+                      ))}
+                   </Reveal>
+
+                   {/* #1 Spotlight (Last.fm / Wrapped-style top media moment) */}
+                   {renderSpotlight()}
 
                    {/* Primary Grid Layout */}
                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

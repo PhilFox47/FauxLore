@@ -30,7 +30,7 @@ export async function generateAiRecapText(apiKey: string, model: string, prompt:
     body: JSON.stringify({
       model: model || "gpt-4o-mini", // Cost efficient model fallback
       messages: [
-        { role: "system", content: `You are FauxLore's AI recap generator. ${personaDesc} You MUST return a JSON object with exactly two keys: 'title' (a short, punchy title) and 'summary' (a detailed Markdown-formatted narrative). DO NOT include any other text besides the JSON object. VERY IMPORTANT: Escape all double quotes in your summary with backslashes.` },
+        { role: "system", content: `You are FauxLore's AI recap generator. ${personaDesc} You MUST return a JSON object with exactly two keys: 'title' (a short, punchy title) and 'summary' (a narrative written in PLAIN TEXT). The summary must NOT contain any Markdown or HTML: no asterisks, underscores, backticks, hashes, angle brackets, links, or styling of any kind — just clean prose. Separate paragraphs with a single blank line (\\n\\n). DO NOT include any other text besides the JSON object. VERY IMPORTANT: Escape all double quotes in your summary with backslashes.` },
         { role: "user", content: prompt }
       ],
       response_format: { type: "json_object" }
