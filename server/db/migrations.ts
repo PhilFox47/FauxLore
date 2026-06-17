@@ -16,6 +16,7 @@ export function runMigrations(db: Db) {
   try { db.exec("ALTER TABLE media ADD COLUMN lastSyncAt TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN noEnemies INTEGER DEFAULT 0"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN isHighPriority INTEGER DEFAULT 0"); } catch (e) { /* Ignore if it exists */ }
+  try { db.exec("ALTER TABLE media ADD COLUMN noAutoDrop INTEGER DEFAULT 0"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN storyHeavyModifier REAL"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN userReview TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN dropReason TEXT"); } catch (e) { /* Ignore if it exists */ }

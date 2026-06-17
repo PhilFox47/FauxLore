@@ -24,7 +24,8 @@ import {
   Flame,
   Headphones,
   AlertTriangle,
-  Target
+  Target,
+  Anchor
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
@@ -57,18 +58,21 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
   let showRedWarning = false;
   let daysUntilDrop = 0;
 
-  if (daysSinceActive > 7 && daysSinceActive <= 21) {
-    grayscale = ((daysSinceActive - 7) / 14) * 100;
-  } else if (daysSinceActive > 21) {
-    grayscale = 100;
-    if (daysSinceActive <= 42) {
-      cobwebOpacity = (daysSinceActive - 21) / 21;
-    } else {
-      cobwebOpacity = 1;
-    }
-    if (daysSinceActive >= 43) {
-      showRedWarning = true;
-      daysUntilDrop = Math.max(0, 50 - daysSinceActive);
+  // Inactivity aging visuals are skipped when the user opted out of auto-dropping.
+  if (!item.noAutoDrop) {
+    if (daysSinceActive > 7 && daysSinceActive <= 21) {
+      grayscale = ((daysSinceActive - 7) / 14) * 100;
+    } else if (daysSinceActive > 21) {
+      grayscale = 100;
+      if (daysSinceActive <= 42) {
+        cobwebOpacity = (daysSinceActive - 21) / 21;
+      } else {
+        cobwebOpacity = 1;
+      }
+      if (daysSinceActive >= 43) {
+        showRedWarning = true;
+        daysUntilDrop = Math.max(0, 50 - daysSinceActive);
+      }
     }
   }
 
@@ -255,6 +259,11 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
             {item.isHighPriority && (
               <div className="flex items-center justify-center bg-rose-500/20 text-rose-400 backdrop-blur-md w-7 h-7 rounded-full border border-rose-500/20 shadow-lg" title="High Priority Target">
                 <Target className="w-3.5 h-3.5 opacity-80" />
+              </div>
+            )}
+            {item.noAutoDrop && (
+              <div className="flex items-center justify-center bg-sky-500/20 text-sky-400 backdrop-blur-md w-7 h-7 rounded-full border border-sky-500/20 shadow-lg" title="No Automatic Drop">
+                <Anchor className="w-3.5 h-3.5 opacity-80" />
               </div>
             )}
          </div>

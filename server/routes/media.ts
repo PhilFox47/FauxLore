@@ -69,7 +69,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           status, userRating, userReview, dropReason, genres, tags, tropes, platforms, franchises,
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
-          issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, language, isOngoing, noEnemies, isHighPriority, storyHeavyModifier, releaseStatus, lastSyncAt, createdAt, updatedAt,
+          issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, language, isOngoing, noEnemies, isHighPriority, noAutoDrop, storyHeavyModifier, releaseStatus, lastSyncAt, createdAt, updatedAt,
           subtitle, maturityRating
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
@@ -77,7 +77,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           @status, @userRating, @userReview, @dropReason, @genres, @tags, @tropes, @platforms, @franchises,
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
-          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @language, @isOngoing, @noEnemies, @isHighPriority, @storyHeavyModifier, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
+          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @language, @isOngoing, @noEnemies, @isHighPriority, @noAutoDrop, @storyHeavyModifier, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
           @subtitle, @maturityRating
         )
         ON CONFLICT(id) DO UPDATE SET
@@ -93,7 +93,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           totalEpisodes=excluded.totalEpisodes, watched=excluded.watched, watchCount=excluded.watchCount,
           runtimeMinutes=excluded.runtimeMinutes, issuesRead=excluded.issuesRead, totalIssues=excluded.totalIssues,
           isReRun=excluded.isReRun, originalMediaId=excluded.originalMediaId, expectedReleaseDate=excluded.expectedReleaseDate,
-          language=excluded.language, isOngoing=excluded.isOngoing, noEnemies=excluded.noEnemies, isHighPriority=excluded.isHighPriority, storyHeavyModifier=excluded.storyHeavyModifier,
+          language=excluded.language, isOngoing=excluded.isOngoing, noEnemies=excluded.noEnemies, isHighPriority=excluded.isHighPriority, noAutoDrop=excluded.noAutoDrop, storyHeavyModifier=excluded.storyHeavyModifier,
           releaseStatus=excluded.releaseStatus, lastSyncAt=excluded.lastSyncAt,
           subtitle=excluded.subtitle, maturityRating=excluded.maturityRating
       `);
@@ -145,6 +145,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
         isOngoing: item.isOngoing ? 1 : 0,
         noEnemies: item.noEnemies ? 1 : 0,
         isHighPriority: item.isHighPriority ? 1 : 0,
+        noAutoDrop: item.noAutoDrop ? 1 : 0,
         storyHeavyModifier: item.storyHeavyModifier ?? null,
         releaseStatus: item.releaseStatus || null,
         lastSyncAt: item.lastSyncAt || null,

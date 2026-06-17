@@ -687,6 +687,28 @@ export function MediaFormModal({
             </label>
           </div>
 
+          <div className="flex items-center gap-2 mb-4 bg-sky-500/5 border border-sky-500/10 p-3 rounded-xl">
+            <input
+              type="checkbox"
+              id="noAutoDrop"
+              name="noAutoDrop"
+              checked={formData.noAutoDrop || false}
+              onChange={(e) =>
+                setFormData((p) => ({
+                  ...p,
+                  noAutoDrop: e.target.checked,
+                }))
+              }
+              className="w-4 h-4 rounded bg-zinc-800 border-zinc-700 text-sky-500 focus:ring-sky-500 cursor-pointer"
+            />
+            <label htmlFor="noAutoDrop" className="text-xs font-semibold text-sky-200 cursor-pointer select-none">
+              No Automatic Drop
+              <span className="block text-[10px] font-normal text-zinc-500 mt-0.5">
+                Never auto-drop this from inactivity, and keep the cover from aging (greyscale, cobwebs).
+              </span>
+            </label>
+          </div>
+
           {(formData.mediaType === 'Game' || formData.mediaType === 'Visual Novel') && (
             <div className="mb-4 bg-white/5 border border-white/10 p-4 rounded-xl">
               <label className="block text-sm font-medium text-purple-400 mb-1">

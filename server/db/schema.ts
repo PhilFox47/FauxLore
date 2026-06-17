@@ -49,6 +49,7 @@ export function initSchema(db: Db) {
       language TEXT,
       isOngoing INTEGER,
       noEnemies INTEGER DEFAULT 0,
+      noAutoDrop INTEGER DEFAULT 0,
       releaseStatus TEXT,
       lastSyncAt TEXT,
       createdAt TEXT,

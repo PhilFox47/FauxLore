@@ -26,6 +26,7 @@
       isOngoing: row.isOngoing === 1,
       noEnemies: row.noEnemies === 1,
       isHighPriority: row.isHighPriority === 1,
+      noAutoDrop: row.noAutoDrop === 1,
       expectedReleaseDate: row.expectedReleaseDate || null,
       releaseStatus: row.releaseStatus || null,
       lastSyncAt: row.lastSyncAt || null

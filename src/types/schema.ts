@@ -46,6 +46,7 @@ export interface MediaItem {
   isOngoing?: boolean;
   noEnemies?: boolean;
   isHighPriority?: boolean;
+  noAutoDrop?: boolean;
   storyHeavyModifier?: number; // 0.5x to 1.5x
   releaseStatus?: string;
   lastSyncAt?: string;
