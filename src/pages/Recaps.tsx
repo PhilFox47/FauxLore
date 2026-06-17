@@ -1458,41 +1458,37 @@ ${promptContext}`, settings.aiPersona);
     return (
       <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem]">
         <SectionHeader icon={<CalendarDays className={`w-6 h-6 ${theme.text}`} />} eyebrow="Consistency" title="Activity Map" accent={theme.border} />
-        <div className="flex flex-col lg:flex-row gap-8">
-          <div className="min-w-0 flex-1">
-            <div className="overflow-x-auto no-scrollbar pb-2">
-              <div className="grid grid-rows-7 grid-flow-col gap-1.5 w-fit">
-                {Array.from({ length: lead }).map((_, i) => <div key={`lead-${i}`} className="w-3.5 h-3.5" />)}
-                {days.map((d) => {
-                  const v = dayMap[format(d, 'yyyy-MM-dd')] || 0;
-                  const lvl = levelOf(v);
-                  return (
-                    <div
-                      key={format(d, 'yyyy-MM-dd')}
-                      title={`${format(d, 'MMM d')} — ${Math.round(v)} MP`}
-                      className="w-3.5 h-3.5 rounded-[3px] border border-white/5"
-                      style={{ backgroundColor: lvl === 0 ? 'rgba(255,255,255,0.04)' : accentHex, opacity: lvl === 0 ? 1 : opacities[lvl] }}
-                    />
-                  );
-                })}
-              </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-7">
+          {stats.map(s => (
+            <div key={s.label} className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-center">
+              <div className="text-2xl font-black text-white leading-none">{s.value}</div>
+              <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-500 font-black mt-1.5">{s.label}</div>
             </div>
-            <div className="flex items-center gap-1.5 mt-4">
-              <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest mr-1">Less</span>
-              {opacities.map((o, i) => (
-                <div key={i} className="w-3 h-3 rounded-[3px] border border-white/5" style={{ backgroundColor: i === 0 ? 'rgba(255,255,255,0.04)' : accentHex, opacity: i === 0 ? 1 : o }} />
-              ))}
-              <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest ml-1">More</span>
-            </div>
+          ))}
+        </div>
+        <div className="overflow-x-auto no-scrollbar pb-1">
+          <div className="grid grid-rows-7 grid-flow-col gap-1.5 w-fit mx-auto">
+            {Array.from({ length: lead }).map((_, i) => <div key={`lead-${i}`} className="w-3.5 h-3.5" />)}
+            {days.map((d) => {
+              const v = dayMap[format(d, 'yyyy-MM-dd')] || 0;
+              const lvl = levelOf(v);
+              return (
+                <div
+                  key={format(d, 'yyyy-MM-dd')}
+                  title={`${format(d, 'MMM d')} — ${Math.round(v)} MP`}
+                  className="w-3.5 h-3.5 rounded-[3px] border border-white/5"
+                  style={{ backgroundColor: lvl === 0 ? 'rgba(255,255,255,0.04)' : accentHex, opacity: lvl === 0 ? 1 : opacities[lvl] }}
+                />
+              );
+            })}
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-1 gap-5 lg:w-44 shrink-0 lg:border-l lg:border-white/5 lg:pl-8">
-            {stats.map(s => (
-              <div key={s.label}>
-                <div className="text-2xl font-black text-white leading-none">{s.value}</div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-black mt-1">{s.label}</div>
-              </div>
-            ))}
-          </div>
+        </div>
+        <div className="flex items-center justify-center gap-1.5 mt-5">
+          <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest mr-1">Less</span>
+          {opacities.map((o, i) => (
+            <div key={i} className="w-3 h-3 rounded-[3px] border border-white/5" style={{ backgroundColor: i === 0 ? 'rgba(255,255,255,0.04)' : accentHex, opacity: i === 0 ? 1 : o }} />
+          ))}
+          <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest ml-1">More</span>
         </div>
       </Reveal>
     );
@@ -1512,7 +1508,7 @@ ${promptContext}`, settings.aiPersona);
     const data = names.map((n, i) => ({ name: n, value: Math.round(totals[i]) }));
     const peakIdx = totals.indexOf(Math.max(...totals));
     return (
-      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem]">
+      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem] lg:col-span-3">
         <SectionHeader icon={<CalendarDays className={`w-6 h-6 ${theme.text}`} />} eyebrow="Rhythm" title="By Weekday" accent={theme.border} />
         <div className="h-[200px] w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -1545,7 +1541,7 @@ ${promptContext}`, settings.aiPersona);
     const data = buckets.map((c, i) => ({ name: `${i + 1}★`, value: c }));
     const avg = sum / rated;
     return (
-      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem]">
+      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem] lg:col-span-2">
         <SectionHeader icon={<Star className={`w-6 h-6 ${theme.text}`} />} eyebrow="Taste" title="How You Rate" accent={theme.border} />
         <div className="h-[200px] w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -1579,7 +1575,7 @@ ${promptContext}`, settings.aiPersona);
       { name: 'Carried over', value: returning, color: '#3f3f46' },
     ].filter(d => d.value > 0);
     return (
-      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem]">
+      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem] lg:col-span-2">
         <SectionHeader icon={<Library className={`w-6 h-6 ${theme.text}`} />} eyebrow="Renewal" title="New vs Carried Over" accent={theme.border} />
         <div className="flex items-center gap-6">
           <div className="w-[120px] h-[120px] shrink-0">
@@ -1621,7 +1617,7 @@ ${promptContext}`, settings.aiPersona);
       </div>
     );
     return (
-      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem]">
+      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem] lg:col-span-2">
         <SectionHeader icon={<History className={`w-6 h-6 ${theme.text}`} />} eyebrow="Bookends" title="How It Played Out" accent={theme.border} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {row('Opened', fm, first.timestamp)}
@@ -1654,7 +1650,7 @@ ${promptContext}`, settings.aiPersona);
     const peakLabel = points.find(p => p.value === peak)?.label;
 
     return (
-      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem]">
+      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem] lg:col-span-3">
         <SectionHeader icon={<Activity className={`w-6 h-6 ${theme.text}`} />} eyebrow={timeframe === 'year' ? 'Year over year' : timeframe === 'month' ? 'Month over month' : 'Week over week'} title="Momentum" accent={theme.border} />
         <div className="h-[200px] w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -1971,15 +1967,15 @@ ${promptContext}`, settings.aiPersona);
                       {renderTypeBreakdown()}
                    </div>
 
-                   {/* Insights — full-width activity map, then a packed two-up grid */}
+                   {/* Insights — full-width activity map, then a gap-free spanned grid */}
                    {renderActivityCalendar()}
-                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+                   <div className="grid grid-cols-1 lg:grid-cols-6 gap-6 grid-flow-dense">
                       {renderTrend()}
                       {renderWeekdayBars()}
                       {renderRatingSpread()}
                       {renderNewVsReturning()}
+                      {renderBookends()}
                    </div>
-                   {renderBookends()}
                    {renderTypeStack()}
 
                    {/* Conquered Gallery */}
