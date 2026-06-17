@@ -285,27 +285,29 @@ export function calculateLongestStreak(data: RecapAnalyticsData) {
 // -------------------------------------------------------------
 // Archetypes Engine
 // -------------------------------------------------------------
+const pct = (n: number) => Math.round((n || 0) * 100);
+
 const ARCHETYPES = [
-  { id: '1', name: 'The Weeb', conditions: (data: RecapAnalyticsData, stats: any) => (stats.typeShares['Manga'] || 0) + (stats.typeShares['Visual Novel'] || 0) > 0.6 },
-  { id: '2', name: 'The Bookworm', conditions: (data: RecapAnalyticsData, stats: any) => (stats.typeShares['Book'] || 0) > 0.7 },
-  { id: '3', name: 'The Gamer', conditions: (data: RecapAnalyticsData, stats: any) => (stats.typeShares['Game'] || 0) > 0.7 },
-  { id: '4', name: 'The Completionist', conditions: (data: RecapAnalyticsData, stats: any) => stats.completionRate > 0.7 && stats.droppedCount === 0 },
-  { id: '5', name: 'The Plate Spinner', conditions: (data: RecapAnalyticsData, stats: any) => stats.activeConcurrent >= 5 },
-  { id: '6', name: 'The Retro Scavenger', conditions: (data: RecapAnalyticsData, stats: any) => stats.avgYear > 0 && stats.avgYear < 2010 },
-  { id: '7', name: 'The Trendsetter', conditions: (data: RecapAnalyticsData, stats: any) => stats.avgYear > 0 && stats.avgYear >= new Date().getFullYear() - 1 },
-  { id: '8', name: 'The Hater', conditions: (data: RecapAnalyticsData, stats: any) => stats.avgRating > 0 && stats.avgRating <= 4 },
-  { id: '9', name: 'The Lover', conditions: (data: RecapAnalyticsData, stats: any) => stats.avgRating >= 8 },
-  { id: '10', name: 'The Cinematic Soul', conditions: (data: RecapAnalyticsData, stats: any) => (stats.typeShares['Movie'] || 0) > 0.7 },
-  { id: '11', name: 'The Serial Watcher', conditions: (data: RecapAnalyticsData, stats: any) => (stats.typeShares['Series'] || 0) > 0.7 },
-  { id: '12', name: 'The Marathon Runner', conditions: (data: RecapAnalyticsData, stats: any) => stats.maxStreak >= 14 },
-  { id: '13', name: 'The Drip Feeder', conditions: (data: RecapAnalyticsData, stats: any) => stats.avgPagesPerLog < 10 },
-  { id: '14', name: 'The Hyper-Fixator', conditions: (data: RecapAnalyticsData, stats: any) => stats.topMediaShare > 0.6 },
-  { id: '15', name: 'The Omnivore', conditions: (data: RecapAnalyticsData, stats: any) => Object.keys(stats.typeShares).length >= 4 && Object.values(stats.typeShares).every(s => (s as number) > 0.1) },
-  { id: '16', name: 'The Sunk Cost Victim', conditions: (data: RecapAnalyticsData, stats: any) => !!analyzeSunkCost(data) },
-  { id: '17', name: 'The Contrarian', conditions: (data: RecapAnalyticsData, stats: any) => !!analyzeContrarian(data) },
-  { id: '18', name: 'The Hoarder', conditions: (data: RecapAnalyticsData, stats: any) => analyzeBacklog(data).net > 15 },
-  { id: '19', name: 'The Gravedigger', conditions: (data: RecapAnalyticsData, stats: any) => analyzeGraveyard(data).dropped.length >= 5 },
-  { id: '20', name: 'The Night Owl', conditions: (data: RecapAnalyticsData, stats: any) => analyzeHabits(data)?.profile === 'Night Owl' },
+  { id: '1', name: 'The Weeb', conditions: (data: RecapAnalyticsData, stats: any) => (stats.typeShares['Manga'] || 0) + (stats.typeShares['Visual Novel'] || 0) > 0.6, reason: (s: any) => `Manga and visual novels were ${pct((s.typeShares['Manga'] || 0) + (s.typeShares['Visual Novel'] || 0))}% of everything you logged.` },
+  { id: '2', name: 'The Bookworm', conditions: (data: RecapAnalyticsData, stats: any) => (stats.typeShares['Book'] || 0) > 0.7, reason: (s: any) => `Books made up ${pct(s.typeShares['Book'])}% of your master pages.` },
+  { id: '3', name: 'The Gamer', conditions: (data: RecapAnalyticsData, stats: any) => (stats.typeShares['Game'] || 0) > 0.7, reason: (s: any) => `Games dominated at ${pct(s.typeShares['Game'])}% of your master pages.` },
+  { id: '4', name: 'The Completionist', conditions: (data: RecapAnalyticsData, stats: any) => stats.completionRate > 0.7 && stats.droppedCount === 0, reason: (s: any) => `You finished ${pct(s.completionRate)}% of what you touched — and dropped nothing.` },
+  { id: '5', name: 'The Plate Spinner', conditions: (data: RecapAnalyticsData, stats: any) => stats.activeConcurrent >= 5, reason: (s: any) => `You kept ${s.activeConcurrent} titles spinning at once.` },
+  { id: '6', name: 'The Retro Scavenger', conditions: (data: RecapAnalyticsData, stats: any) => stats.avgYear > 0 && stats.avgYear < 2010, reason: (s: any) => `Your media averaged the year ${s.avgYear} — certified vintage.` },
+  { id: '7', name: 'The Trendsetter', conditions: (data: RecapAnalyticsData, stats: any) => stats.avgYear > 0 && stats.avgYear >= new Date().getFullYear() - 1, reason: (s: any) => `You rode the bleeding edge, averaging ${s.avgYear} releases.` },
+  { id: '8', name: 'The Hater', conditions: (data: RecapAnalyticsData, stats: any) => stats.avgRating > 0 && stats.avgRating <= 4, reason: () => `A tough crowd — your ratings ran cold this time.` },
+  { id: '9', name: 'The Lover', conditions: (data: RecapAnalyticsData, stats: any) => stats.avgRating >= 8, reason: () => `You adored nearly everything you experienced.` },
+  { id: '10', name: 'The Cinematic Soul', conditions: (data: RecapAnalyticsData, stats: any) => (stats.typeShares['Movie'] || 0) > 0.7, reason: (s: any) => `Movies were ${pct(s.typeShares['Movie'])}% of your intake.` },
+  { id: '11', name: 'The Serial Watcher', conditions: (data: RecapAnalyticsData, stats: any) => (stats.typeShares['Series'] || 0) > 0.7, reason: (s: any) => `Series ate ${pct(s.typeShares['Series'])}% of your time.` },
+  { id: '12', name: 'The Marathon Runner', conditions: (data: RecapAnalyticsData, stats: any) => stats.maxStreak >= 14, reason: (s: any) => `You logged something ${s.maxStreak} days in a row.` },
+  { id: '13', name: 'The Drip Feeder', conditions: (data: RecapAnalyticsData, stats: any) => stats.avgPagesPerLog < 10, reason: (s: any) => `You sipped slowly — about ${Math.round(s.avgPagesPerLog)} master pages per log.` },
+  { id: '14', name: 'The Hyper-Fixator', conditions: (data: RecapAnalyticsData, stats: any) => stats.topMediaShare > 0.6, reason: (s: any) => `One title hogged ${pct(s.topMediaShare)}% of your attention.` },
+  { id: '15', name: 'The Omnivore', conditions: (data: RecapAnalyticsData, stats: any) => Object.keys(stats.typeShares).length >= 4 && Object.values(stats.typeShares).every(s => (s as number) > 0.1), reason: (s: any) => `You spread evenly across ${Object.keys(s.typeShares).length} different media types.` },
+  { id: '16', name: 'The Sunk Cost Victim', conditions: (data: RecapAnalyticsData, stats: any) => !!analyzeSunkCost(data), reason: (s: any, d: RecapAnalyticsData) => { const w = analyzeSunkCost(d); return w ? `You poured ${Math.round(w.pages)} master pages into "${w.media.title}" despite rating it low.` : `You poured real effort into something you barely enjoyed.`; } },
+  { id: '17', name: 'The Contrarian', conditions: (data: RecapAnalyticsData, stats: any) => !!analyzeContrarian(data), reason: (s: any, d: RecapAnalyticsData) => { const c = analyzeContrarian(d); return c ? `You ${c.type === 'loved' ? 'loved' : 'panned'} "${c.media.title}" while the critics disagreed.` : `Your scores went to war with the critics.`; } },
+  { id: '18', name: 'The Hoarder', conditions: (data: RecapAnalyticsData, stats: any) => analyzeBacklog(data).net > 15, reason: (s: any, d: RecapAnalyticsData) => `Your backlog grew by ${analyzeBacklog(d).net} as additions outpaced finishes.` },
+  { id: '19', name: 'The Gravedigger', conditions: (data: RecapAnalyticsData, stats: any) => analyzeGraveyard(data).dropped.length >= 5, reason: (s: any, d: RecapAnalyticsData) => `You sent ${analyzeGraveyard(d).dropped.length} titles to the graveyard.` },
+  { id: '20', name: 'The Night Owl', conditions: (data: RecapAnalyticsData, stats: any) => analyzeHabits(data)?.profile === 'Night Owl', reason: () => `Most of your logging happened deep in the night.` },
 ];
 
 export function determineArchetypes(data: RecapAnalyticsData) {
@@ -362,5 +364,5 @@ export function determineArchetypes(data: RecapAnalyticsData) {
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     
-    return shuffled.slice(0, 3);
+    return shuffled.slice(0, 3).map(a => ({ id: a.id, name: a.name, reason: a.reason(stats, data) }));
 }

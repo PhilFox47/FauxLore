@@ -410,20 +410,20 @@ PREVIOUS RECAPS (Chronological):
 ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title}): \n${r.summary}`).join('\n\n') : 'No past recaps available.'}
 `;
 
-      const aiResponsePromise = generateAiRecapText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', `Based on the following data, generate a title and a creative, highly energetic recap of this ${timeframe}'s media consumption.
-      
+      const aiResponsePromise = generateAiRecapText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', `Write a title and a sharp, opinionated recap of this ${timeframe}'s media life. You are a commentator and analyst who has been following this person closely — NOT a summarizer. The data below is your evidence, not your script.
+
 CRITICAL INSTRUCTIONS:
-1. TITLE: Must be a punchy, clever name (1-5 words max). DO NOT include descriptions.
-2. VIBE & TONE: Follow your specified persona instructions exactly. Weave the persona deeply into the narrative structure. Act more like a commentator, cultural critic, or storytelling analyst rather than a simple summarizer.
-3. STRUCTURE & FOCUS: Do NOT just iterate through a list of logs or summarize the data. Transform the data into a cohesive, analytical narrative. Find the overarching themes of what they consumed (e.g., "The week of sci-fi obsession", "Struggling to finish anything"). Focus on 'MEDIA COMPLETED' to discuss how they ended those journeys, explore 'JOURNAL NOTES' to analyze their emotional state and opinions, and interpret their overall engagement. Comment on 'MEDIA DROPPED' with dramatic emphasis.
-4. ORGANIC WEAVING: Weave Journal Notes, Locations, Loot, Ratings, Bosses, and Quest stats seamlessly into your analysis. DO NOT create forced standalone paragraphs or lists for these. Use them as supporting evidence for your commentary.
-5. ACCURACY: DO NOT assume a media item is completed unless explicitly listed in 'MEDIA COMPLETED'.
-6. FORMATTING: Write in PLAIN TEXT only. Use flowing, beautifully crafted paragraphs for an essay-like reading experience. Separate paragraphs with a single blank line. Do NOT use any Markdown or HTML — no asterisks, underscores, backticks, hashes, headings, links, bullet points, or tables. No styling of any kind, just clean prose. Convey emphasis through word choice, not formatting.
-7. LENGTH: Give a detailed, transformative recap (Weekly: 2-3 paragraphs. Monthly/Yearly: 4-6 paragraphs). Highlight their evolving tastes, funny habits, or major milestones.
-8. CONTINUITY: Read the "PREVIOUS RECAPS" section and comment on running themes or evolving habits to keep the meta-narrative alive.
-9. PR ALERT: If the user hit a Personal Record (PR) in Master Pages, celebrate it enthusiastically!
-10. ANTI-SLOP & HUMAN VOICE: Write like a real human being. DO NOT use flowery, overly dramatic, or cliché AI words (e.g. avoid "delve", "tapestry", "embark", "testament", "symphony", "not merely", "in the realm of"). Keep the prose grounded, conversational, and punchy. No robotic conclusions like "In conclusion" or "One thing is certain" or "overall...".
-11. NO MARKUP: This text is rendered as plain paragraphs in a styled card, so any Markdown symbols or HTML tags would show up as literal characters and look broken. Output prose only.
+1. TITLE: A punchy, clever name (1-5 words max). No description.
+2. THESIS, NOT A LIST: Open by naming the single biggest story of this ${timeframe} — an obsession, a slump, a genre bender, a finishing spree, a crisis of commitment — and build the whole piece around that throughline. NEVER walk through the logs item by item. The moment you catch yourself writing "they also..." or listing what happened, stop and cut it.
+3. ANALYZE, DON'T ECHO: Your entire job is interpretation. Spot patterns and name them out loud: shifts in taste, changes in pace, what they gravitate toward versus avoid, contradictions between what they rate highly and what they actually sink time into, bingeing versus grazing, and what their dropped media and journal notes reveal about their headspace. Make claims, then back them with the data — never just restate the data.
+4. TAKE A STANCE: Have real opinions. Tease them about their patterns, push them, gently call out the backlog they keep ignoring, and genuinely celebrate the wins. React like a friend who has been watching, not a report generator.
+5. CONTINUITY & FOLLOW-UP (important): Treat "PREVIOUS RECAPS" as one ongoing story and explicitly follow up on it. Did they finally finish the thing you flagged last time? Is the slump over, or worse? Did a habit you called out improve? Are they still avoiding something? Reward streaks, callbacks, and repeats by name. If there are NO previous recaps, set the baseline and say what you'll be watching for next time.
+6. EVIDENCE, WOVEN IN: Use journal notes, locations, ratings, loot, bosses, dropped titles and quest stats as supporting evidence for your points — woven naturally into prose, never as standalone lists, bullet points, or roll-calls.
+7. ACCURACY: Only treat something as completed if it appears in 'MEDIA COMPLETED'. Do not invent events or feelings the data doesn't support.
+8. LENGTH & ARC: Weekly: 2-3 tight paragraphs. Monthly/Yearly: 4-6 paragraphs with a clear arc — the story, the evidence, and where it's heading.
+9. PR ALERT: If they hit a Personal Record in Master Pages, make a real moment of it.
+10. HUMAN VOICE / ANTI-SLOP: Write like a smart, real person talking. Avoid AI clichés ("delve", "tapestry", "embark", "testament", "symphony", "not merely", "in the realm of") and limp conclusions ("In conclusion", "Overall", "One thing is certain"). Be specific, grounded, and a little unhinged when it's earned.
+11. PLAIN TEXT ONLY: Output prose in blank-line-separated paragraphs. No Markdown or HTML — no asterisks, underscores, hashes, bullets, headings, or links. They render as literal characters and look broken.
 
 Context: 
 ${promptContext}`, settings.aiPersona);
@@ -1141,13 +1141,13 @@ ${promptContext}`, settings.aiPersona);
          </h3>
          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
             {earned.map(a => (
-               <div key={a.id} className="bg-white/5 border border-white/10 p-5 rounded-2xl flex items-center gap-5 group hover:bg-white/10 hover:border-white/20 transition-all cursor-default">
-                  <div className={`w-14 h-14 rounded-2xl ${theme.bg} flex items-center justify-center shrink-0 border ${theme.border} group-hover:scale-110 transition-transform shadow-xl`}>
-                     <Star className={`w-7 h-7 ${theme.text} fill-current opacity-30`} />
+               <div key={a.id} className="bg-white/5 border border-white/10 p-5 rounded-2xl flex items-start gap-4 group hover:bg-white/10 hover:border-white/20 transition-all cursor-default">
+                  <div className={`w-12 h-12 rounded-2xl ${theme.bg} flex items-center justify-center shrink-0 border ${theme.border} group-hover:scale-110 transition-transform shadow-xl`}>
+                     <Star className={`w-6 h-6 ${theme.text} fill-current opacity-30`} />
                   </div>
-                  <div>
-                    <div className="text-white font-black text-lg tracking-tight leading-none mb-1">{a.name}</div>
-                    <div className={`text-[10px] ${theme.text} font-black uppercase tracking-widest opacity-70`}>Unlocked</div>
+                  <div className="min-w-0">
+                    <div className="text-white font-black text-lg tracking-tight leading-tight mb-1.5">{a.name}</div>
+                    <div className="text-xs text-zinc-400 leading-snug">{a.reason}</div>
                   </div>
                </div>
             ))}
@@ -1445,35 +1445,187 @@ ${promptContext}`, settings.aiPersona);
     const opacities = [0, 0.28, 0.5, 0.75, 1];
     const levelOf = (v: number) => (v <= 0 ? 0 : v < max * 0.25 ? 1 : v < max * 0.5 ? 2 : v < max * 0.75 ? 3 : 4);
 
+    const streak = calculateLongestStreak({ timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings });
+    let busiestKey = ''; let busiestVal = 0;
+    Object.entries(dayMap).forEach(([k, v]) => { if (v > busiestVal) { busiestVal = v; busiestKey = k; } });
+    const stats = [
+      { label: 'Active days', value: `${activeDays}/${days.length}` },
+      { label: 'Longest streak', value: `${streak}d` },
+      { label: 'Busiest day', value: busiestKey ? format(parseISO(busiestKey), 'MMM d') : '—' },
+      { label: 'Best haul', value: `${Math.round(busiestVal)} MP` },
+    ];
+
     return (
       <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem]">
         <SectionHeader icon={<CalendarDays className={`w-6 h-6 ${theme.text}`} />} eyebrow="Consistency" title="Activity Map" accent={theme.border} />
-        <div className="overflow-x-auto no-scrollbar pb-2">
-          <div className="grid grid-rows-7 grid-flow-col gap-1.5 w-fit">
-            {Array.from({ length: lead }).map((_, i) => <div key={`lead-${i}`} className="w-3.5 h-3.5" />)}
-            {days.map((d) => {
-              const v = dayMap[format(d, 'yyyy-MM-dd')] || 0;
-              const lvl = levelOf(v);
-              return (
-                <div
-                  key={format(d, 'yyyy-MM-dd')}
-                  title={`${format(d, 'MMM d')} — ${Math.round(v)} MP`}
-                  className="w-3.5 h-3.5 rounded-[3px] border border-white/5"
-                  style={{ backgroundColor: lvl === 0 ? 'rgba(255,255,255,0.04)' : accentHex, opacity: lvl === 0 ? 1 : opacities[lvl] }}
-                />
-              );
-            })}
+        <div className="flex flex-col lg:flex-row gap-8">
+          <div className="min-w-0 flex-1">
+            <div className="overflow-x-auto no-scrollbar pb-2">
+              <div className="grid grid-rows-7 grid-flow-col gap-1.5 w-fit">
+                {Array.from({ length: lead }).map((_, i) => <div key={`lead-${i}`} className="w-3.5 h-3.5" />)}
+                {days.map((d) => {
+                  const v = dayMap[format(d, 'yyyy-MM-dd')] || 0;
+                  const lvl = levelOf(v);
+                  return (
+                    <div
+                      key={format(d, 'yyyy-MM-dd')}
+                      title={`${format(d, 'MMM d')} — ${Math.round(v)} MP`}
+                      className="w-3.5 h-3.5 rounded-[3px] border border-white/5"
+                      style={{ backgroundColor: lvl === 0 ? 'rgba(255,255,255,0.04)' : accentHex, opacity: lvl === 0 ? 1 : opacities[lvl] }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 mt-4">
+              <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest mr-1">Less</span>
+              {opacities.map((o, i) => (
+                <div key={i} className="w-3 h-3 rounded-[3px] border border-white/5" style={{ backgroundColor: i === 0 ? 'rgba(255,255,255,0.04)' : accentHex, opacity: i === 0 ? 1 : o }} />
+              ))}
+              <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest ml-1">More</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-1 gap-5 lg:w-44 shrink-0 lg:border-l lg:border-white/5 lg:pl-8">
+            {stats.map(s => (
+              <div key={s.label}>
+                <div className="text-2xl font-black text-white leading-none">{s.value}</div>
+                <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-black mt-1">{s.label}</div>
+              </div>
+            ))}
           </div>
         </div>
-        <div className="flex items-center justify-between mt-6 flex-wrap gap-3">
-          <span className="text-xs text-zinc-500 font-bold"><span className="text-white font-black">{activeDays}</span> active {activeDays === 1 ? 'day' : 'days'} of {days.length}</span>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest mr-1">Less</span>
-            {opacities.map((o, i) => (
-              <div key={i} className="w-3 h-3 rounded-[3px] border border-white/5" style={{ backgroundColor: i === 0 ? 'rgba(255,255,255,0.04)' : accentHex, opacity: i === 0 ? 1 : o }} />
-            ))}
-            <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest ml-1">More</span>
+      </Reveal>
+    );
+  };
+
+  // Master pages by weekday — finds the "power day".
+  const renderWeekdayBars = () => {
+    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const totals = [0, 0, 0, 0, 0, 0, 0];
+    activeProgressLogs.forEach(l => {
+      const m = activeMedia.find(x => x.id === l.mediaId);
+      if (!m) return;
+      const idx = (getDay(subHours(parseISO(l.timestamp), 5)) + 6) % 7; // Mon = 0
+      totals[idx] += calculateScaledDelta(l.delta, m, settings);
+    });
+    if (totals.every(v => v === 0)) return null;
+    const data = names.map((n, i) => ({ name: n, value: Math.round(totals[i]) }));
+    const peakIdx = totals.indexOf(Math.max(...totals));
+    return (
+      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem]">
+        <SectionHeader icon={<CalendarDays className={`w-6 h-6 ${theme.text}`} />} eyebrow="Rhythm" title="By Weekday" accent={theme.border} />
+        <div className="h-[200px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+              <XAxis dataKey="name" tick={{ fill: '#71717a', fontSize: 10, fontWeight: 900 }} axisLine={false} tickLine={false} />
+              <YAxis hide />
+              <Tooltip cursor={{ fill: 'rgba(255,255,255,0.04)' }} contentStyle={{ backgroundColor: '#09090b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }} formatter={(v: any) => [`${v} MP`, 'Master Pages']} />
+              <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                {data.map((_, i) => <Cell key={i} fill={accentHex} opacity={i === peakIdx ? 1 : 0.4} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <p className="text-xs text-zinc-500 font-bold mt-4">Your power day is <span className="text-white font-black">{names[peakIdx]}</span>.</p>
+      </Reveal>
+    );
+  };
+
+  // Distribution of your own ratings across engaged media.
+  const renderRatingSpread = () => {
+    const buckets = [0, 0, 0, 0, 0];
+    let rated = 0; let sum = 0;
+    activeMedia.forEach(m => {
+      if (m.userRating && m.userRating > 0) {
+        const star = Math.min(5, Math.max(1, Math.round(m.userRating)));
+        buckets[star - 1]++; rated++; sum += m.userRating;
+      }
+    });
+    if (rated === 0) return null;
+    const data = buckets.map((c, i) => ({ name: `${i + 1}★`, value: c }));
+    const avg = sum / rated;
+    return (
+      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem]">
+        <SectionHeader icon={<Star className={`w-6 h-6 ${theme.text}`} />} eyebrow="Taste" title="How You Rate" accent={theme.border} />
+        <div className="h-[200px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+              <XAxis dataKey="name" tick={{ fill: '#71717a', fontSize: 10, fontWeight: 900 }} axisLine={false} tickLine={false} />
+              <YAxis hide />
+              <Tooltip cursor={{ fill: 'rgba(255,255,255,0.04)' }} contentStyle={{ backgroundColor: '#09090b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }} formatter={(v: any) => [`${v} titles`, 'Count']} />
+              <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#fbbf24" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <p className="text-xs text-zinc-500 font-bold mt-4">Average score: <span className="text-amber-400 font-black">{avg.toFixed(1)}★</span> across {rated} rated {rated === 1 ? 'title' : 'titles'}.</p>
+      </Reveal>
+    );
+  };
+
+  // Fresh starts vs. titles carried over from before this period.
+  const renderNewVsReturning = () => {
+    let fresh = 0; let returning = 0;
+    activeMedia.forEach(m => {
+      const firstEver = validLogs
+        .filter(l => l.mediaId === m.id && l.metricType !== 'statusChange')
+        .sort((a, b) => +parseISO(a.timestamp) - +parseISO(b.timestamp))[0];
+      if (!firstEver) return;
+      if (isWithinInterval(subHours(parseISO(firstEver.timestamp), 5), currentInterval)) fresh++;
+      else returning++;
+    });
+    if (fresh + returning === 0) return null;
+    const data = [
+      { name: 'New starts', value: fresh, color: accentHex },
+      { name: 'Carried over', value: returning, color: '#3f3f46' },
+    ].filter(d => d.value > 0);
+    return (
+      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem]">
+        <SectionHeader icon={<Library className={`w-6 h-6 ${theme.text}`} />} eyebrow="Renewal" title="New vs Carried Over" accent={theme.border} />
+        <div className="flex items-center gap-6">
+          <div className="w-[120px] h-[120px] shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                <Pie data={data} innerRadius="62%" outerRadius="95%" paddingAngle={4} dataKey="value" startAngle={90} endAngle={-270} stroke="none">
+                  {data.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
           </div>
+          <div className="space-y-4">
+            {data.map(d => (
+              <div key={d.name} className="flex items-center gap-3">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }} />
+                <span className="text-2xl font-black text-white leading-none">{d.value}</span>
+                <span className="text-[11px] font-black uppercase tracking-widest text-zinc-500">{d.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Reveal>
+    );
+  };
+
+  // First and last thing you touched this period (bookends).
+  const renderBookends = () => {
+    const prog = [...activeProgressLogs].sort((a, b) => +parseISO(a.timestamp) - +parseISO(b.timestamp));
+    if (prog.length < 2) return null;
+    const first = prog[0]; const last = prog[prog.length - 1];
+    const fm = activeMedia.find(m => m.id === first.mediaId);
+    const lm = activeMedia.find(m => m.id === last.mediaId);
+    const row = (label: string, m: any, ts: string) => (
+      <div className="flex items-center gap-4 bg-black/30 border border-white/5 rounded-2xl p-4">
+        <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-black w-16 shrink-0">{label}</span>
+        {m?.coverImageUrl && <img src={m.coverImageUrl} alt="" referrerPolicy="no-referrer" className="w-9 h-12 object-cover rounded-md shrink-0 border border-white/10" />}
+        <span className="text-white font-bold truncate flex-1">{m?.title || 'Unknown'}</span>
+        <span className="text-zinc-500 text-xs font-bold shrink-0">{format(parseISO(ts), 'MMM d')}</span>
+      </div>
+    );
+    return (
+      <Reveal className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-[2rem]">
+        <SectionHeader icon={<History className={`w-6 h-6 ${theme.text}`} />} eyebrow="Bookends" title="How It Played Out" accent={theme.border} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {row('Opened', fm, first.timestamp)}
+          {row('Closed', lm, last.timestamp)}
         </div>
       </Reveal>
     );
@@ -1819,10 +1971,16 @@ ${promptContext}`, settings.aiPersona);
                       {renderTypeBreakdown()}
                    </div>
 
-                   {/* New visualization chapters */}
+                   {/* Insights — full-width activity map, then a packed two-up grid */}
                    {renderActivityCalendar()}
+                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+                      {renderTrend()}
+                      {renderWeekdayBars()}
+                      {renderRatingSpread()}
+                      {renderNewVsReturning()}
+                   </div>
+                   {renderBookends()}
                    {renderTypeStack()}
-                   {renderTrend()}
 
                    {/* Conquered Gallery */}
                    {completedMedia.length > 0 && (
