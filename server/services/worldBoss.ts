@@ -10,46 +10,55 @@ export function createWorldBossService(
 ) {
   async function spawnWorldBoss(userId: string, throwOnEmpty = false, targetMediaType?: string) {
     try {
-      // Exclude Movies from boss spawns as they are either watched or unwatched (not ongoing)
-      // Also exclude media where user explicitly disabled enemies
-      let queryExt = "";
-      let paramsActive: any[] = [userId];
-      let paramsSpawn: any[] = [userId, userId];
-      
-      if (targetMediaType && targetMediaType !== 'All' && targetMediaType !== 'All Media Types') {
-          queryExt = " AND mediaType = ?";
-          paramsActive.push(targetMediaType);
-          paramsSpawn.push(targetMediaType);
-      }
+      // Eligible media: non-movies that are 'Active', plus Movies that are 'Active' OR
+      // 'Planning' (movies usually jump straight from Planning to Watched). Excludes media
+      // with enemies disabled and media that already has an active enemy.
+      const typeFilter = (targetMediaType && targetMediaType !== 'All' && targetMediaType !== 'All Media Types') ? targetMediaType : null;
+      const queryExt = typeFilter ? " AND mediaType = ?" : "";
+      const eligibleWhere = `userId = ? AND (noEnemies = 0 OR noEnemies IS NULL) AND ((mediaType != 'Movie' AND status = 'Active') OR (mediaType = 'Movie' AND status IN ('Active', 'Planning')))`;
 
-      const allActiveMedia = db.prepare(`SELECT id FROM media WHERE userId = ? AND status = 'Active' AND mediaType != 'Movie' AND (noEnemies = 0 OR noEnemies IS NULL)${queryExt}`).all(...paramsActive) as any[];
-      if (allActiveMedia.length === 0) {
+      const anyParams: any[] = typeFilter ? [userId, typeFilter] : [userId];
+      const anyEligible = db.prepare(`SELECT id FROM media WHERE ${eligibleWhere}${queryExt}`).all(...anyParams) as any[];
+      if (anyEligible.length === 0) {
         if (throwOnEmpty) {
-            if (targetMediaType && targetMediaType !== 'All' && targetMediaType !== 'All Media Types') {
-                throw new Error(`No active ${targetMediaType} found (excluding disabled enemies).`);
-            }
-            throw new Error("No active media found (excluding Movies & disabled enemies). Start consuming a Media Item to spawn an enemy!");
+          if (typeFilter) throw new Error(`No eligible ${typeFilter} found (excluding disabled enemies).`);
+          throw new Error("No eligible media found (excluding disabled enemies). Start consuming a Media Item to spawn an enemy!");
         }
         return;
       }
 
-      const activeMedia = db.prepare(`SELECT id, title, mediaType, isHighPriority FROM media WHERE userId = ? AND status = 'Active' AND mediaType != 'Movie' AND (noEnemies = 0 OR noEnemies IS NULL) AND id NOT IN (SELECT mediaId FROM world_bosses WHERE userId = ? AND status = 'Active')${queryExt}`).all(...paramsSpawn) as any[];
-      if (activeMedia.length === 0) {
-        if (throwOnEmpty) throw new Error("All your active media already have enemies. Defeat or survive them before requesting an Encore!");
+      const spawnParams: any[] = typeFilter ? [userId, userId, typeFilter] : [userId, userId];
+      const candidates = db.prepare(`SELECT id, title, mediaType, isHighPriority FROM media WHERE ${eligibleWhere} AND id NOT IN (SELECT mediaId FROM world_bosses WHERE userId = ? AND status = 'Active')${queryExt}`).all(...spawnParams) as any[];
+      if (candidates.length === 0) {
+        if (throwOnEmpty) throw new Error("All your eligible media already have enemies. Defeat or survive them before requesting an Encore!");
         return;
       }
 
-      // Create a weighted pool
-      const pool: any[] = [];
-      for (const m of activeMedia) {
-        pool.push(m);
-        // Double the chance if it's high priority
-        if (m.isHighPriority) {
-          pool.push(m);
-        }
+      // --- Weighted type roll ---
+      // Pick a media TYPE first, weighted by sqrt(number of eligible entries) so large
+      // libraries get a slight edge without dominating; then pick a specific entry within
+      // that type (high-priority entries get doubled odds).
+      const byType: Record<string, any[]> = {};
+      for (const c of candidates) {
+        (byType[c.mediaType] = byType[c.mediaType] || []).push(c);
+      }
+      const types = Object.keys(byType);
+      const typeWeights = types.map(t => Math.sqrt(byType[t].length));
+      const totalTypeWeight = typeWeights.reduce((a, b) => a + b, 0);
+      let tr = Math.random() * totalTypeWeight;
+      let chosenType = types[0];
+      for (let i = 0; i < types.length; i++) {
+        tr -= typeWeights[i];
+        if (tr < 0) { chosenType = types[i]; break; }
       }
 
-      const mediaItem = pool[Math.floor(Math.random() * pool.length)];
+      const entryPool: any[] = [];
+      for (const m of byType[chosenType]) {
+        entryPool.push(m);
+        if (m.isHighPriority) entryPool.push(m);
+      }
+      const mediaItem = entryPool[Math.floor(Math.random() * entryPool.length)];
+
       const settings: any = db.prepare('SELECT geminiApiKey, enemyDifficulty, mediaDifficulty FROM settings WHERE userId = ?').get(userId);
       const enemyDifficulty = settings?.enemyDifficulty ?? 1.0;
       let mDiff = 1.0;
@@ -61,51 +70,45 @@ export function createWorldBossService(
           }
         } catch(e) {}
       }
-      
+
       const difficulty = enemyDifficulty * mDiff;
-      
-      const dayIndex = new Date().getDay();
-      const r = Math.random();
-      let level = 1;
-      
-      switch(dayIndex) {
-        case 1: // Monday
-          if (r < 0.3) level = 3;
-          else if (r < 0.6) level = 4;
-          else level = 5;
-          break;
-        case 2: // Tuesday
-          if (r < 0.1) level = 2;
-          else if (r < 0.3) level = 3;
-          else if (r < 0.6) level = 4;
-          else level = 5;
-          break;
-        case 3: // Wednesday
-          if (r < 0.05) level = 1;
-          else if (r < 0.20) level = 2;
-          else if (r < 0.60) level = 3;
-          else if (r < 0.90) level = 4;
-          else level = 5;
-          break;
-        case 4: // Thursday
-          if (r < 0.1) level = 1;
-          else if (r < 0.3) level = 2;
-          else if (r < 0.6) level = 3;
-          else level = 4;
-          break;
-        case 5: // Friday
-          if (r < 0.2) level = 1;
-          else if (r < 0.55) level = 2;
-          else level = 3;
-          break;
-        case 6: // Saturday
-          if (r < 0.4) level = 1;
-          else level = 2;
-          break;
-        case 0: // Sunday
-        default:
-          level = 1;
-          break;
+
+      // --- Level determination ---
+      // Movies are ALWAYS level 2. Everything else rolls by weekday using relative weights
+      // for levels [1,2,3,4,5] (normalized at pick time so they need not sum to 100).
+      const LEVEL_WEIGHTS_BY_DAY: Record<number, number[]> = {
+        1: [10, 25, 30, 25, 10], // Monday
+        2: [10, 25, 30, 30, 5],  // Tuesday
+        3: [15, 30, 35, 20, 0],  // Wednesday
+        4: [15, 35, 40, 10, 0],  // Thursday
+        5: [25, 40, 30, 0, 0],   // Friday
+        6: [55, 45, 10, 0, 0],   // Saturday
+        0: [80, 20, 0, 0, 0],    // Sunday
+      };
+
+      let level: number;
+      if (mediaItem.mediaType === 'Movie') {
+        level = 2;
+      } else {
+        const weights = LEVEL_WEIGHTS_BY_DAY[new Date().getDay()] || LEVEL_WEIGHTS_BY_DAY[0];
+        const totalLevelWeight = weights.reduce((a, b) => a + b, 0);
+        let lr = Math.random() * totalLevelWeight;
+        level = 1;
+        for (let i = 0; i < weights.length; i++) {
+          lr -= weights[i];
+          if (lr < 0) { level = i + 1; break; }
+        }
+
+        // Enforce active-enemy caps with a downgrade cascade:
+        // L5 max 1, L4 max 1, L3 max 3, L1/L2 unlimited. If the rolled level is full,
+        // step down one level at a time until it fits (or reaches level 1).
+        const LEVEL_CAPS: Record<number, number> = { 3: 3, 4: 1, 5: 1 };
+        const activeCounts: Record<number, number> = {};
+        (db.prepare("SELECT level, COUNT(*) as c FROM world_bosses WHERE userId = ? AND status = 'Active' GROUP BY level").all(userId) as any[])
+          .forEach(row => { activeCounts[row.level] = row.c; });
+        while (level > 1 && LEVEL_CAPS[level] !== undefined && (activeCounts[level] || 0) >= LEVEL_CAPS[level]) {
+          level--;
+        }
       }
 
       const getBaseTarget = (type: string, lv: number) => {
@@ -115,7 +118,8 @@ export function createWorldBossService(
           'Book': [40, 100, 200, 400, 800],
           'Manga': [6, 12, 20, 34, 60],
           'Series': [2, 6, 12, 24, 40],
-          'Comic': [4, 8, 14, 24, 30]
+          'Comic': [4, 8, 14, 24, 30],
+          'Movie': [1, 1, 1, 1, 1]
         }[type] || [90, 180, 360, 720, 1440]; // Fallback to old Master Pages scale
 
         return levels[lv - 1];
@@ -127,11 +131,13 @@ export function createWorldBossService(
         'Book': 'Pages',
         'Manga': 'Chapters',
         'Series': 'Episodes',
-        'Comic': 'Issues'
+        'Comic': 'Issues',
+        'Movie': 'Movies'
       }[type] || 'Units');
 
       const baseTarget = getBaseTarget(mediaItem.mediaType, level);
-      const target = Math.max(0.1, baseTarget * difficulty);
+      // A movie boss is beaten simply by watching the movie once, regardless of difficulty.
+      const target = mediaItem.mediaType === 'Movie' ? 1 : Math.max(0.1, baseTarget * difficulty);
       const unit = getUnit(mediaItem.mediaType);
       
       let bossName = "";
@@ -194,8 +200,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(bossId, userId, mediaItem.id, bossName, level, target, 0, nextMonday.toISOString(), new Date().toISOString(), new Date().toISOString(), unit);
       
-      // Auto-generate image in background
-      generateBossImageBackground(userId, bossId, bossName, mediaItem.title, mediaItem.mediaType);
+      // Auto-generate image in background (styled to the boss's level)
+      generateBossImageBackground(userId, bossId, bossName, mediaItem.title, mediaItem.mediaType, level);
     } catch (e) { 
         console.error("Boss spawn failed", e); 
         if (throwOnEmpty) throw e;
