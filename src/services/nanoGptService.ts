@@ -222,9 +222,11 @@ export async function generateImage(apiKey: string, prompt: string): Promise<str
       "x-nano-gpt-key": apiKey
     },
     body: JSON.stringify({
-      model: "chroma",
+      model: "z-image-turbo",
       prompt: prompt,
       size: "1536x1536",
+      num_inference_steps: 8,
+      guidance_scale: 1,
       response_format: "url"
     })
   });
