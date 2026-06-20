@@ -22,8 +22,8 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
 
       const settings = req.body;
       db.prepare(`
-        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey)
-        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey)
+        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey, imageModel, imageSize, imageSteps, imageGuidance, imageNegativePrompt)
+        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey, @imageModel, @imageSize, @imageSteps, @imageGuidance, @imageNegativePrompt)
         ON CONFLICT(id) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -32,7 +32,12 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
           nanoGptApiKey=excluded.nanoGptApiKey,
           nanoGptModel=excluded.nanoGptModel,
           geminiApiKey=excluded.geminiApiKey,
-          googleBooksApiKey=excluded.googleBooksApiKey
+          googleBooksApiKey=excluded.googleBooksApiKey,
+          imageModel=excluded.imageModel,
+          imageSize=excluded.imageSize,
+          imageSteps=excluded.imageSteps,
+          imageGuidance=excluded.imageGuidance,
+          imageNegativePrompt=excluded.imageNegativePrompt
       `).run({
         igdbClientId: settings.igdbClientId || null,
         igdbClientSecret: settings.igdbClientSecret || null,
@@ -41,7 +46,12 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
         nanoGptApiKey: settings.nanoGptApiKey || null,
         nanoGptModel: settings.nanoGptModel || null,
         geminiApiKey: settings.geminiApiKey || null,
-        googleBooksApiKey: settings.googleBooksApiKey || null
+        googleBooksApiKey: settings.googleBooksApiKey || null,
+        imageModel: settings.imageModel || null,
+        imageSize: settings.imageSize || null,
+        imageSteps: (settings.imageSteps === undefined || settings.imageSteps === null || settings.imageSteps === '') ? null : Number(settings.imageSteps),
+        imageGuidance: (settings.imageGuidance === undefined || settings.imageGuidance === null || settings.imageGuidance === '') ? null : Number(settings.imageGuidance),
+        imageNegativePrompt: settings.imageNegativePrompt || null
       });
       res.json({ success: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }

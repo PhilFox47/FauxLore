@@ -152,6 +152,12 @@ export interface Settings {
   nanoGptApiKey?: string;
   nanoGptModel?: string;
   geminiApiKey?: string;
+  // Image generation (system-wide; merged in from system_settings on the client)
+  imageModel?: string;
+  imageSize?: string;
+  imageSteps?: number;
+  imageGuidance?: number;
+  imageNegativePrompt?: string;
   timezone?: string;
   aiPersona?: string;
   yearlyGoals?: Partial<Record<MediaType, number>>;

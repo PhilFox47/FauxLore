@@ -31,6 +31,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     nanoGptApiKey: '',
     nanoGptModel: '',
     geminiApiKey: '',
+    imageModel: 'z-image-turbo',
+    imageSize: '1024x1024',
+    imageSteps: 10,
+    imageGuidance: 1.5,
+    imageNegativePrompt: '',
     timezone: '',
     aiPersona: 'witty',
     enemyDifficulty: 1.0,
@@ -79,6 +84,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         nanoGptApiKey: settings.nanoGptApiKey || '',
         nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
         geminiApiKey: settings.geminiApiKey || '',
+        imageModel: settings.imageModel || 'z-image-turbo',
+        imageSize: settings.imageSize || '1024x1024',
+        imageSteps: settings.imageSteps ?? 10,
+        imageGuidance: settings.imageGuidance ?? 1.5,
+        imageNegativePrompt: settings.imageNegativePrompt || '',
         timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
         aiPersona: settings.aiPersona || 'witty',
         enemyDifficulty: settings.enemyDifficulty ?? 1.0,
@@ -125,6 +135,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             nanoGptApiKey: settings.nanoGptApiKey || '',
             nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
             geminiApiKey: settings.geminiApiKey || '',
+            imageModel: settings.imageModel || 'z-image-turbo',
+            imageSize: settings.imageSize || '1024x1024',
+            imageSteps: settings.imageSteps ?? 10,
+            imageGuidance: settings.imageGuidance ?? 1.5,
+            imageNegativePrompt: settings.imageNegativePrompt || '',
             timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
             aiPersona: settings.aiPersona || 'witty',
             enemyDifficulty: settings.enemyDifficulty ?? 1.0,
@@ -353,6 +368,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         nanoGptApiKey: formData.nanoGptApiKey,
         nanoGptModel: formData.nanoGptModel,
         geminiApiKey: formData.geminiApiKey,
+        imageModel: formData.imageModel,
+        imageSize: formData.imageSize,
+        imageSteps: formData.imageSteps,
+        imageGuidance: formData.imageGuidance,
+        imageNegativePrompt: formData.imageNegativePrompt,
         timezone: formData.timezone,
         aiPersona: formData.aiPersona,
         enemyDifficulty: formData.enemyDifficulty,
@@ -897,6 +917,42 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       placeholder="..."
                     />
                     <p className="text-[10px] text-zinc-500 mt-1">Required for advanced Item Generation with web search capabilities.</p>
+                  </div>
+                </div>
+
+                <div className="mt-8 space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                    <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">Image Generation (Enemies &amp; Loot)</h3>
+                  </div>
+                  <p className="text-xs text-zinc-500">NanoGPT model &amp; parameters for generated enemy / loot art. Leave a field blank to use the built-in default (z-image-turbo, 1024x1024, 10 steps, CFG 1.5).</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">Image Model</label>
+                      <input name="imageModel" value={formData.imageModel} onChange={handleChange} className="input-field" placeholder="z-image-turbo" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">Resolution</label>
+                      <input name="imageSize" value={formData.imageSize} onChange={handleChange} className="input-field" placeholder="1024x1024" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">Steps</label>
+                      <input type="number" min="1" max="60" name="imageSteps" value={formData.imageSteps} onChange={handleChange} className="input-field" placeholder="10" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">Guidance (CFG)</label>
+                      <input type="number" step="0.1" min="0" max="12" name="imageGuidance" value={formData.imageGuidance} onChange={handleChange} className="input-field" placeholder="1.5" />
+                      <p className="text-[10px] text-zinc-500 mt-1">Z-Image-Turbo: keep ~1.5. Negative prompts only apply when CFG &gt; 1.</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Base Negative Prompt</label>
+                    <textarea
+                      value={formData.imageNegativePrompt}
+                      onChange={(e) => setFormData(prev => ({ ...prev, imageNegativePrompt: e.target.value }))}
+                      className="input-field h-20 resize-none"
+                      placeholder="Leave blank for the default (watermark, blurry, soft focus, deformed, ...)"
+                    />
+                    <p className="text-[10px] text-zinc-500 mt-1">Enemy- and loot-specific negatives are appended automatically.</p>
                   </div>
                 </div>
 

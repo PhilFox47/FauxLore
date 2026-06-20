@@ -96,7 +96,12 @@ export function initSchema(db: Db) {
       nanoGptApiKey TEXT,
       nanoGptModel TEXT,
       geminiApiKey TEXT,
-      googleBooksApiKey TEXT
+      googleBooksApiKey TEXT,
+      imageModel TEXT,
+      imageSize TEXT,
+      imageSteps INTEGER,
+      imageGuidance REAL,
+      imageNegativePrompt TEXT
     );
 
     CREATE TABLE IF NOT EXISTS global_taxonomy (

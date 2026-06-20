@@ -125,6 +125,11 @@ export function runMigrations(db: Db) {
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptModel TEXT").run(); console.log("Migration: Added nanoGptModel"); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN geminiApiKey TEXT").run(); console.log("Migration: Added geminiApiKey"); } catch (e) {}
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN googleBooksApiKey TEXT").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE system_settings ADD COLUMN imageModel TEXT").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE system_settings ADD COLUMN imageSize TEXT").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE system_settings ADD COLUMN imageSteps INTEGER").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE system_settings ADD COLUMN imageGuidance REAL").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE system_settings ADD COLUMN imageNegativePrompt TEXT").run(); } catch(e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN googleBooksApiKey TEXT").run(); } catch(e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN lastActiveDate TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN currentStreak INTEGER").run(); } catch (e) {}
