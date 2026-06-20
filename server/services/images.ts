@@ -11,14 +11,21 @@ import type { Db } from "../context";
  */
 const IMAGE_GEN = {
   model: "z-image-turbo",
-  size: "1536x1536",
+  size: "1024x1024",
   num_inference_steps: 8,
-  guidance_scale: 1,
+  // Z-Image-Turbo only applies the negative prompt when CFG > 1, so keep guidance
+  // just above 1 (recommended 1.5-2.0 band). High CFG (4+) over-saturates.
+  guidance_scale: 1.5,
 } as const;
+
+// Shared negative prompts (honoured because guidance_scale > 1).
+const BASE_NEGATIVE = "text, words, letters, watermark, signature, logo, UI, frame, border, low quality, blurry, jpeg artifacts, deformed, disfigured, bad anatomy, extra limbs, cropped";
+const BOSS_NEGATIVE = `${BASE_NEGATIVE}, multiple characters, duplicate, collage, cluttered background`;
+const LOOT_NEGATIVE = `${BASE_NEGATIVE}, hands, fingers, person, character, multiple items, clutter, background scenery`;
 
 /** AI image generation (Gemini art-direction prompt -> NanoGPT Z-Image-Turbo) and local storage. */
 export function createImageService({ db, aiImagesDir }: { db: Db; aiImagesDir: string }) {
-  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string): Promise<string> {
+  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, negativePrompt: string = BASE_NEGATIVE): Promise<string> {
     const res = await fetch("https://nano-gpt.com/api/v1/images/generations", {
       method: "POST",
       headers: {
@@ -28,6 +35,7 @@ export function createImageService({ db, aiImagesDir }: { db: Db; aiImagesDir: s
       body: JSON.stringify({
         model: IMAGE_GEN.model,
         prompt: prompt,
+        negative_prompt: negativePrompt,
         size: IMAGE_GEN.size,
         num_inference_steps: IMAGE_GEN.num_inference_steps,
         guidance_scale: IMAGE_GEN.guidance_scale,
@@ -107,7 +115,7 @@ Return ONLY the final image prompt text, nothing else.`;
       const imagePrompt = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
       if (!imagePrompt) throw new Error("Empty boss prompt");
 
-      const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt);
+      const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt, BOSS_NEGATIVE);
       db.prepare("UPDATE world_bosses SET imageUrl = ? WHERE id = ?").run(imageUrl, bossId);
     } catch (e) {
       console.error("Boss Image Background Gen Error:", e);
@@ -161,7 +169,7 @@ Return ONLY the final image prompt text, nothing else.`;
       const imagePrompt = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
       if (!imagePrompt) throw new Error("Empty artifact prompt");
 
-      const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt);
+      const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt, LOOT_NEGATIVE);
       db.prepare("UPDATE artifacts SET imageUrl = ? WHERE id = ?").run(imageUrl, artifactId);
     } catch (e) {
       console.error("Artifact Image Background Gen Error:", e);

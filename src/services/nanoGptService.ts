@@ -224,9 +224,10 @@ export async function generateImage(apiKey: string, prompt: string): Promise<str
     body: JSON.stringify({
       model: "z-image-turbo",
       prompt: prompt,
-      size: "1536x1536",
+      negative_prompt: "text, words, letters, watermark, signature, logo, UI, frame, border, low quality, blurry, jpeg artifacts, deformed, disfigured, bad anatomy, extra limbs, cropped",
+      size: "1024x1024",
       num_inference_steps: 8,
-      guidance_scale: 1,
+      guidance_scale: 1.5,
       response_format: "url"
     })
   });
