@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Search, Plus, Trash2, Tag, BookOpen, Hexagon, BarChart, Settings, BrainCircuit, ListFilter, X, ArrowRightLeft, Pencil } from 'lucide-react';
+import { Search, Plus, Trash2, Tag, BookOpen, Hexagon, BarChart, Settings, BrainCircuit, ListFilter, X, ArrowRightLeft, Pencil, AlertTriangle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { DatabaseService } from '../services/db';
 import { generateText } from '../services/nanoGptService';
+import { MediaFormModal } from '../components/MediaFormModal';
 
 export function Taxonomy() {
-  const { taxonomies, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, media, saveMediaItem, settings } = useMediaContext();
+  const { taxonomies, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, media, saveMediaItem, deleteMediaItem, settings } = useMediaContext();
   const { user } = useAuth();
   
   const [activeTab, setActiveTab] = useState<'genre' | 'tag'>('genre');
@@ -18,8 +19,18 @@ export function Taxonomy() {
   const [migratingId, setMigratingId] = useState<string|null>(null);
   const [sortBy, setSortBy] = useState<'Alphabetical' | 'Usage Count'>('Alphabetical');
   const [selectedTaxonomy, setSelectedTaxonomy] = useState<{id: string; name: string; type: string} | null>(null);
+  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [missingFilter, setMissingFilter] = useState<'any' | 'tags' | 'franchise'>('any');
 
   const isAdmin = user?.role === 'Admin';
+
+  // Media missing tags and/or a franchise — surfaced so gaps are easy to find & fix.
+  const mediaMissingInfo = useMemo(() => {
+    return media
+      .map(m => ({ item: m, noTags: !m.tags || m.tags.length === 0, noFranchise: !m.franchises || m.franchises.length === 0 }))
+      .filter(x => x.noTags || x.noFranchise)
+      .filter(x => missingFilter === 'any' ? true : missingFilter === 'tags' ? x.noTags : x.noFranchise);
+  }, [media, missingFilter]);
 
   const missingTaxonomyMedia = useMemo(() => {
     const globalGenres = taxonomies.filter(t => t.type === 'genre').map(t => t.name.toLowerCase().trim());
@@ -319,9 +330,58 @@ Return JSON only.`;
           </div>
         </div>
 
-        {/* Right Column: Migration Helper */}
+        {/* Right Column: Library health + AI helpers */}
         <div className="w-1/3 flex flex-col gap-4 overflow-hidden">
-          <div className="bg-[#121214] rounded-2xl border border-white/5 p-6 flex flex-col h-full overflow-hidden">
+
+          {/* Needs Attention: media missing tags and/or franchise */}
+          <div className="bg-[#121214] rounded-2xl border border-white/5 p-6 flex flex-col flex-1 min-h-0 overflow-hidden">
+            <div className="flex items-center gap-2 mb-2 text-amber-400">
+              <AlertTriangle className="w-5 h-5" />
+              <h2 className="font-bold">Needs Attention <span className="text-zinc-500 font-normal text-sm">({mediaMissingInfo.length})</span></h2>
+            </div>
+            <p className="text-xs text-zinc-400 mb-3">Entries with no tags and/or no franchise assigned.</p>
+            <div className="flex gap-1 mb-3">
+              {(['any', 'tags', 'franchise'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setMissingFilter(f)}
+                  className={cn("px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-colors",
+                    missingFilter === f ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5")}
+                >
+                  {f === 'any' ? 'All' : f === 'tags' ? 'No tags' : 'No franchise'}
+                </button>
+              ))}
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              {mediaMissingInfo.slice(0, 100).map(({ item, noTags, noFranchise }) => (
+                <div key={item.id} className="bg-white/5 border border-white/5 p-3 rounded-xl flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-white text-sm truncate">{item.title}</div>
+                    <div className="text-[10px] text-zinc-500 mb-1.5">{item.mediaType}</div>
+                    <div className="flex flex-wrap gap-1">
+                      {noTags && <span className="text-[9px] px-1.5 py-0.5 bg-teal-500/20 text-teal-300 rounded border border-teal-500/20">No tags</span>}
+                      {noFranchise && <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-300 rounded border border-amber-500/20">No franchise</span>}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setEditingItem(item)}
+                    title="Edit entry"
+                    className="shrink-0 p-2 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+              {mediaMissingInfo.length === 0 && (
+                <div className="text-center text-zinc-600 text-sm mt-8">Every entry has tags and a franchise. 🎉</div>
+              )}
+              {mediaMissingInfo.length > 100 && (
+                <div className="text-center text-zinc-600 text-[11px] pt-2">Showing first 100 of {mediaMissingInfo.length}.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-[#121214] rounded-2xl border border-white/5 p-6 flex flex-col flex-1 min-h-0 overflow-hidden">
              <div className="flex items-center gap-2 mb-4 text-purple-400">
                <BrainCircuit className="w-5 h-5" />
                <h2 className="font-bold">AI Consistency Tagging</h2>
@@ -408,6 +468,16 @@ Return JSON only.`;
             </div>
           </div>
         </div>
+      )}
+
+      {editingItem && (
+        <MediaFormModal
+          isOpen={true}
+          initialData={editingItem}
+          onClose={() => setEditingItem(null)}
+          onSave={(data) => { saveMediaItem(data); setEditingItem(null); }}
+          onDelete={(id) => { deleteMediaItem(id); setEditingItem(null); }}
+        />
       )}
     </div>
   );

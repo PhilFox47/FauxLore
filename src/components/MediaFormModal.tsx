@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { MediaItem, MEDIA_TYPES, STATUSES, MediaType } from "../types/schema";
 import { X, Search, Loader2, RefreshCw, BrainCircuit } from "lucide-react";
 import { IntegrationsService, GameMetadata } from "../services/integrations";
@@ -6,6 +6,85 @@ import { cn } from "../lib/utils";
 import { useMediaContext } from "../contexts/MediaContext";
 import { generateAiTagsWithGemini } from "../services/geminiService";
 import { format } from "date-fns";
+
+/**
+ * Franchise input: free-text (comma-separated) with a dropdown of already-known
+ * franchises that text-match the token currently being typed.
+ */
+function FranchiseInput({ value, onChange, options, placeholder }: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const lastComma = value.lastIndexOf(",");
+  const before = value.slice(0, lastComma + 1);
+  const token = value.slice(lastComma + 1).trim().toLowerCase();
+  const already = value.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+
+  const suggestions = useMemo(() => {
+    const seen = new Set<string>();
+    return options
+      .filter(o => o && o.toLowerCase().includes(token) && !already.includes(o.toLowerCase()))
+      .filter(o => { const k = o.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+      .slice(0, 8);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options, token, already.join("|")]);
+
+  const pick = (name: string) => {
+    const prefix = before ? before.replace(/\s*$/, "") + " " : "";
+    onChange(`${prefix}${name}, `);
+    setActive(0);
+    setOpen(true);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!open || suggestions.length === 0) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setActive(a => Math.min(a + 1, suggestions.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActive(a => Math.max(a - 1, 0)); }
+    else if (e.key === "Enter") { e.preventDefault(); pick(suggestions[active]); }
+    else if (e.key === "Escape") { setOpen(false); }
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <input
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); setActive(0); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={onKeyDown}
+        className="input-field"
+        placeholder={placeholder}
+        autoComplete="off"
+      />
+      {open && suggestions.length > 0 && (
+        <div className="absolute z-30 mt-1 w-full bg-zinc-900 border border-white/10 rounded-xl shadow-2xl max-h-56 overflow-y-auto">
+          {suggestions.map((s, i) => (
+            <button
+              type="button"
+              key={s}
+              onMouseDown={(e) => { e.preventDefault(); pick(s); }}
+              onMouseEnter={() => setActive(i)}
+              className={cn("w-full text-left px-3 py-2 text-sm transition-colors", i === active ? "bg-white/10 text-white" : "text-zinc-300 hover:bg-white/5")}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface MediaFormModalProps {
   isOpen: boolean;
@@ -28,7 +107,15 @@ export function MediaFormModal({
   onDelete,
   initialData,
 }: MediaFormModalProps) {
-  const { taxonomies, settings } = useMediaContext();
+  const { taxonomies, settings, media, franchises } = useMediaContext();
+
+  // Known franchises = the franchises table plus any used on existing media.
+  const franchiseOptions = useMemo(() => {
+    const set = new Set<string>();
+    (franchises || []).forEach((f: any) => { if (f?.name) set.add(f.name); });
+    (media || []).forEach((m: any) => (m.franchises || []).forEach((fr: string) => { if (fr) set.add(fr); }));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [franchises, media]);
   const [formData, setFormData] = useState<Partial<MediaItem>>({
     title: "",
     mediaType: "Game",
@@ -1002,11 +1089,10 @@ export function MediaFormModal({
                 <label className="block text-sm font-medium text-zinc-400 mb-1">
                   Franchises (comma separated)
                 </label>
-                <input
-                  name="franchises"
+                <FranchiseInput
                   value={rawInputs.franchises ?? ""}
-                  onChange={handleArrayChange}
-                  className="input-field"
+                  onChange={(v) => handleArrayChange({ target: { name: "franchises", value: v } } as any)}
+                  options={franchiseOptions}
                   placeholder={
                     formData.mediaType === "Visual Novel"
                       ? "Fate, Muv-Luv"
@@ -1158,11 +1244,10 @@ export function MediaFormModal({
                 <label className="block text-sm font-medium text-zinc-400 mb-1">
                   Franchises (comma separated)
                 </label>
-                <input
-                  name="franchises"
+                <FranchiseInput
                   value={rawInputs.franchises ?? ""}
-                  onChange={handleArrayChange}
-                  className="input-field"
+                  onChange={(v) => handleArrayChange({ target: { name: "franchises", value: v } } as any)}
+                  options={franchiseOptions}
                   placeholder="Marvel Cinematic Universe, Harry Potter"
                 />
               </div>
