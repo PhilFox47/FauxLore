@@ -4,7 +4,8 @@ import { DatabaseService } from '../services/db';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
 import { calculateRPGState, QUEST_DEFINITIONS } from '../lib/rpgSystem';
-import { generateText } from '../services/nanoGptService';
+import { generateText, getPersonaDescription } from '../services/nanoGptService';
+import { getRecentMediaContext, buildTitleSystemPrompt, buildMainTitlePrompt } from '../lib/lorekeeperTitles';
 import { UserManagement } from './UserManagement';
 
 interface SettingsModalProps {
@@ -297,8 +298,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       // 1. RPG Title
       const titleKey = `rpg_title_${rpgState.level}`;
       if (!aiTextCache[titleKey] || isForce) {
-        const prompt = `The user is Level ${rpgState.level} with the base title "${rpgState.className}". Generate a creative, punchy, and natural title for them. NO extra comments, just the title. 1-4 words. Avoid fantasy clichés.`;
-        const result = await generateText(apiKey, model, systemPrompt, prompt);
+        const ctx = getRecentMediaContext(media, logs, settings);
+        const titleSystem = buildTitleSystemPrompt(getPersonaDescription(formData.aiPersona));
+        const prompt = buildMainTitlePrompt({ level: rpgState.level, context: ctx.text, dominantTitle: ctx.dominantTitle });
+        const result = await generateText(apiKey, model, titleSystem, prompt, 1.2);
         await saveAiText(titleKey, result);
       }
 

@@ -34,6 +34,7 @@ import {
 } from "../services/nanoGptService";
 import { generateGeminiText } from "../services/geminiService";
 import { DatabaseService } from "../services/db";
+import { buildTitleSystemPrompt, buildBatchTitlePrompt, buildMainTitlePrompt } from "../lib/lorekeeperTitles";
 import { Loader2, Dices } from "lucide-react";
 
 const FAUXLORE_CONTEXT = `\n\nCONTEXT ABOUT FAUXLORE:
@@ -219,69 +220,31 @@ export function Lorekeeper() {
     setIsRegeneratingTitle(true);
     try {
       const personaDesc = getPersonaDescription(settings?.aiPersona);
-      const systemPrompt = `You are FauxLore, a creative AI assistant. ${personaDesc} Your task is to generate fun, punchy titles based on the user's level and their recently consumed media.${FAUXLORE_CONTEXT}
-CRITICAL RULE: DO NOT reference any specific franchise, character, or media title by name. Use general genre or medium terms instead, unless EXPLICITLY PERMITTED below.`;
+      const systemPrompt = buildTitleSystemPrompt(personaDesc);
 
-      let generatedFormatRules = [];
-      let forbiddenTitles: string[] = [];
-
+      const forbiddenTitles: string[] = [];
       if (generateMain) {
-        generatedFormatRules.push(`"main": "The Grand Master"`);
         const currentMain = aiTextCache[`rpg_title_${rpgState.level}`];
         if (currentMain) forbiddenTitles.push(currentMain);
       }
-
       mediaTypesToGenerate.forEach(t => {
-        generatedFormatRules.push(`"${t}": "Title here"`);
         const currentMed = aiTextCache[`rpg_title_${t}_${rpgState.mediaLevels[t].level}`];
         if (currentMed) forbiddenTitles.push(currentMed);
       });
 
-      let forbiddenRule = "";
-      if (forbiddenTitles.length > 0) {
-        forbiddenRule = `\nCRITICAL RULE: DO NOT generate exactly or similarly to these titles: ${forbiddenTitles.map(t => '"' + t + '"').join(', ')}. Create something fresh and entirely different!`;
-      }
+      const mainCtx = generateMain ? getRecentMediaContext() : null;
+      const perMedia = mediaTypesToGenerate.map(t => ({
+        type: t,
+        level: rpgState.mediaLevels[t].level,
+        context: getRecentMediaContext(t).text,
+      }));
 
-      let perMediaContexts = mediaTypesToGenerate.map(t => {
-          const typeContext = getRecentMediaContext(t);
-          const tLevel = rpgState.mediaLevels[t].level;
-          return `=== Per-Media: ${t} ===
-Level: ${tLevel} (${getLevelContext(tLevel)})
-Recent ${t} Media:
-${typeContext.text}`;
-      }).join('\n\n');
-
-      const mainContext = getRecentMediaContext();
-      const levelContext = getLevelContext(rpgState.level);
-
-      let franchiseRule = ``;
-      if (mainContext.dominantMedia && generateMain) {
-        franchiseRule = `\nFRANCHISE EXCEPTION: You MAY reference the specific franchise or title "${mainContext.dominantMedia.title}" by name for the main title, because it accounts for more than 50% of their recent Master Pages.`;
-      }
-
-      const titlePrompt = `The user is Overall Level ${rpgState.level} (${levelContext}).
-      
-=== OVERALL MEDIA CONTEXT (For Main Title) ===
-${mainContext.text}${franchiseRule}
-
-${perMediaContexts}
-
-Generate a truly creative, themed, yet casual and natural title for each requested category. Avoid overly dramatic high-fantasy or pompous terminology; keep it grounded and playful.
-CRITICAL STRATEGY: The consumed media MUST heavily influence the titles! Use the genres, tags, or specific themes of the most dominant recently consumed media to shape the core identity of the title. Note that when genres and tags are listed, they are ordered from most defining (most important) to least defining. Do NOT just use generic RPG terms (like "Warrior", "Mage", "Hero"). For example, if their recent top media is a cyberpunk game, the title should sound like a casual futuristic alias. If it's a cozy slice-of-life anime, it should sound very pastoral and relaxed. Scale the "epicness" with the level so higher levels sound cooler and more impressive, but retain a casual, human touch.
-
-BREAK THE FORMULA: Do NOT simply output "[Theme] [Theme] [Class]". Use wildly varied grammatical structures! Examples: "Neon Walker", "The Cyber-Spook", "Reads In The Dark", "Collector of Cozy", "Sleepless Streamer", "Wandering Around", "Architect of the Cozy Arts", "Pizza Box Hoarder". Be completely unpredictable, loose, and dynamic in how the words are arranged.
-CRITICAL RULE: DO NOT append a meaningless 'class' or 'level descriptor' to the end of the title (e.g., avoid ending with words like 'Enthusiast', 'Hobbyist', 'Player', 'Recruit', 'Master', 'Novice', 'Fan', 'Aficionado'). Instead, incorporate the level of prestige holistically into the tone and overall vibe of the title.
-
-- Main Title: Embed the essence of their OVERALL MEDIA CONTEXT into their prestige level, making sure the structure is unique.
-- Per-Media Titles: Theme this ONLY around the specific media type's context AND their category level. Match the "epicness" to their level (newbie vs. master), but let the media's genres dictate the flavor in a non-formulaic way.
-${forbiddenRule}
-CRITICAL RULE: DO NOT include words like "Level", "Lvl", or the numerical level in the generated title itself. Just output the titular name.
-
-Respond EXCLUSIVELY in valid JSON format like this:
-{
-  ${generatedFormatRules.join(',\n  ')}
-}
-NO other text or markdown, JUST raw JSON.`;
+      const titlePrompt = buildBatchTitlePrompt({
+        level: rpgState.level,
+        main: mainCtx ? { context: mainCtx.text, dominantTitle: mainCtx.dominantMedia?.title || null } : null,
+        perMedia,
+        forbidden: forbiddenTitles,
+      });
 
       let titleRes = "";
       if (settings.nanoGptApiKey) {
@@ -338,49 +301,23 @@ NO other text or markdown, JUST raw JSON.`;
       const personaDesc = getPersonaDescription(settings?.aiPersona);
       const systemPrompt = `You are FauxLore's central AI logic core. ${personaDesc}${FAUXLORE_CONTEXT}`;
 
-      // 1. RPG Title
-      const { text: recentMediaStr, dominantMedia } = getRecentMediaContext();
-      const levelContext = getLevelContext(rpgState.level);
-
-      let franchiseRule = `CRITICAL RULE: DO NOT reference any specific franchise, character, or media title by name. Use general genre or medium terms instead.`;
-      if (dominantMedia) {
-        franchiseRule = `CRITICAL RULE: You MAY reference the specific franchise or title "${dominantMedia.title}" by name, because it accounts for more than 50% of their recent Master Pages. Do NOT reference any other specific franchise by name.`;
-      }
-
+      // 1. RPG Title (overall earned alias)
+      const titleSystemPrompt = buildTitleSystemPrompt(personaDesc);
+      const titleCtx = getRecentMediaContext();
       const currentMain = aiTextCache[`rpg_title_${rpgState.level}`];
-      const forbiddenRule = currentMain ? `\nCRITICAL RULE: DO NOT generate exactly or similarly to this title: "${currentMain}". Create something fresh and entirely different!` : "";
-
-      const titlePrompt = `The user is Level ${rpgState.level} (${levelContext}). 
-Their recently active/completed media are provided below. Give the "Most Recent" items significantly more weight in determining their title. The user's time investment is represented by "Master Pages".
-${franchiseRule}
-
-Media Context (Analyze the Genres, Tags, and Media Types carefully!):
-${recentMediaStr}
-
-Generate a truly creative, themed, yet casual and natural title for them. Avoid overly dramatic high-fantasy or pompous terminology; keep it grounded and playful.
-CRITICAL STRATEGY: The consumed media MUST heavily influence the title! Use the genres, tags, or specific themes of their most dominant/recent media to shape the core identity. Note that when genres and tags are listed, they are ordered from most defining to least. Do NOT just use generic RPG terms (like "Warrior", "Mage"). For example, if their recent top media is a cyberpunk game, the title should sound like a casual futuristic alias. Combine their level prestige with their unique media flavors. Retain a casual, human touch.
-If they consume horror media, evoke a slightly spooky atmosphere. If sci-fi, make it sound futuristic. If cozy slice-of-life, make it pastoral and relaxed. If diverse, blend the concepts creatively.
-
-BREAK THE FORMULA: Do NOT simply output "[Theme] [Theme] [Class]". Use wildly varied grammatical structures! Examples: "Neon Walker", "The Cyber-Spook", "Reads In The Dark", "Collector of Cozy", "Sleepless Streamer", "Wandering Around", "Architect of the Cozy Arts", "Pizza Box Hoarder". Be completely unpredictable, loose, and dynamic in how the words are arranged.
-CRITICAL RULE: DO NOT append a meaningless 'class' or 'level descriptor' to the end of the title (e.g., avoid ending with words like 'Enthusiast', 'Hobbyist', 'Player', 'Recruit', 'Master', 'Novice', 'Fan', 'Aficionado'). Instead, incorporate the level of prestige holistically into the tone and overall vibe of the title.
-
-Embed the essence of their Media Context into the title in a non-formulaic way.
-${forbiddenRule}
-NO extra comments, NO quotes, just the title. 2-6 words.`;
+      const titlePrompt = buildMainTitlePrompt({
+        level: rpgState.level,
+        context: titleCtx.text,
+        dominantTitle: titleCtx.dominantMedia?.title || null,
+        forbidden: currentMain,
+      });
 
       const titleKey = `rpg_title_${rpgState.level}`;
       let titleRes = "";
       if (settings.nanoGptApiKey) {
-        const apiKey = settings.nanoGptApiKey;
-        const model = settings.nanoGptModel || "gpt-4o-mini";
-        titleRes = await generateText(apiKey, model, systemPrompt, titlePrompt, 1.2);
+        titleRes = await generateText(settings.nanoGptApiKey, settings.nanoGptModel || "gpt-4o-mini", titleSystemPrompt, titlePrompt, 1.2);
       } else if (settings.geminiApiKey) {
-        titleRes = await generateGeminiText(
-          settings.geminiApiKey,
-          systemPrompt,
-          titlePrompt,
-          1.2
-        );
+        titleRes = await generateGeminiText(settings.geminiApiKey, titleSystemPrompt, titlePrompt, 1.2);
       }
 
       await saveAiText(titleKey, titleRes);

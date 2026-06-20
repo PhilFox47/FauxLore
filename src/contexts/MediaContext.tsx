@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { MediaItem, ProgressLog, MetricType, MediaType, Settings, Artifact, WorldBoss, OracleMessage, getMetricForType } from '../types/schema';
 import { DatabaseService } from '../services/db';
 import { calculateRPGState } from '../lib/rpgSystem';
-import { generateText } from '../services/nanoGptService';
+import { generateText, getPersonaDescription } from '../services/nanoGptService';
+import { getRecentMediaContext, buildTitleSystemPrompt, buildMainTitlePrompt } from '../lib/lorekeeperTitles';
 import { useAuth } from './AuthContext';
 
 interface MediaContextType {
@@ -122,10 +123,11 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
         
         // Generate if it's an actual level change, OR if it's the initial load and the title is missing
         if ((previousLevel.current !== null && previousLevel.current !== currentLevel) || !aiTextCache[titleKey]) {
-          const systemPrompt = "You are FauxLore, a helpful and natural media tracking assistant. Keep your tone conversational, friendly, and grounded. No epic RPG or fantasy roleplay unless explicitly asked.";
-          const titlePrompt = `The user has just reached Level ${currentLevel} with the base title "${rpgState.className}". Generate a creative, punchy, and natural title for them. NO extra comments, just the title. 1-4 words. Avoid fantasy clichés.`;
-          
-          generateText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', systemPrompt, titlePrompt)
+          const ctx = getRecentMediaContext(media, logs, settings);
+          const systemPrompt = buildTitleSystemPrompt(getPersonaDescription(settings.aiPersona));
+          const titlePrompt = buildMainTitlePrompt({ level: currentLevel, context: ctx.text, dominantTitle: ctx.dominantTitle });
+
+          generateText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', systemPrompt, titlePrompt, 1.2)
             .then(titleRes => {
                DatabaseService.saveAiText(titleKey, titleRes).then(() => refreshData());
             })
