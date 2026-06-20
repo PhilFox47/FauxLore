@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, Settings, X, Presentation, BookOpen, Dice5, Shield, Flame, Gem, Globe, Skull, CalendarClock, LogOut, Gamepad2, Book, Headphones, MessagesSquare, Library, Tv, Clapperboard, BookImage } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Settings, X, Presentation, BookOpen, Dice5, Shield, Flame, Gem, Globe, Skull, CalendarClock, LogOut, Gamepad2, Book, Headphones, MessagesSquare, Library, Tv, Clapperboard, BookImage, Trophy } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,6 +18,7 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
     { name: 'Lorekeeper', path: '/lorekeeper', icon: Shield },
     { name: 'Lorebook', path: '/lorebook', icon: BookOpen },
     { name: 'Armory', path: '/armory', icon: Gem },
+    { name: 'Achievements', path: '/achievements', icon: Trophy },
     { name: 'Roulette', path: '/roulette', icon: Dice5 },
     { name: 'Statistics', path: '/stats', icon: BarChart3 },
     { name: 'Recaps', path: '/recaps', icon: Presentation },

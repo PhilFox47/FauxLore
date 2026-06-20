@@ -12,6 +12,7 @@ import { Lorebook } from './pages/Lorebook';
 import { Lorekeeper } from './pages/Lorekeeper';
 import { Roulette } from './pages/Roulette';
 import { Armory } from './pages/Armory';
+import { Achievements } from './pages/Achievements';
 import { Universes } from './pages/Universes';
 import { Graveyard } from './pages/Graveyard';
 import { ReleaseRadar } from './pages/ReleaseRadar';
@@ -42,6 +43,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="lorekeeper" element={<Lorekeeper />} />
               <Route path="roulette" element={<Roulette />} />
               <Route path="armory" element={<Armory />} />
+              <Route path="achievements" element={<Achievements />} />
               <Route path="universes" element={<Universes />} />
               <Route path="graveyard" element={<Graveyard />} />
               <Route path="radar" element={<ReleaseRadar />} />
