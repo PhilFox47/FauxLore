@@ -5,6 +5,7 @@ import { IntegrationsService, GameMetadata } from "../services/integrations";
 import { cn } from "../lib/utils";
 import { useMediaContext } from "../contexts/MediaContext";
 import { generateAiTagsWithGemini } from "../services/geminiService";
+import { useToast } from "../contexts/ToastContext";
 import { format } from "date-fns";
 
 /**
@@ -108,6 +109,7 @@ export function MediaFormModal({
   initialData,
 }: MediaFormModalProps) {
   const { taxonomies, settings, media, franchises } = useMediaContext();
+  const toast = useToast();
 
   // Known franchises = the franchises table plus any used on existing media.
   const franchiseOptions = useMemo(() => {
@@ -293,10 +295,7 @@ export function MediaFormModal({
       }
     } catch (err: any) {
       console.error(err);
-      alert(
-        err.message ||
-          "Failed to search metadata. Please ensure API keys are configured in Settings > Environment Variables.",
-      );
+      toast.error(err.message || "Failed to search metadata. Please ensure API keys are configured in Settings.");
     } finally {
       setIsSearching(false);
     }
@@ -390,7 +389,7 @@ export function MediaFormModal({
       }));
     } catch (e) {
       console.error(e);
-      alert("Failed to find HLTB data for this title.");
+      toast.error("Failed to find HLTB data for this title.");
     } finally {
       setIsRefetchingHltb(false);
     }
@@ -398,7 +397,7 @@ export function MediaFormModal({
 
   const handleAutoTag = async () => {
     if (!formData.title) {
-      alert("Please enter a title first to auto-tag.");
+      toast.error("Please enter a title first to auto-tag.");
       return;
     }
 
@@ -430,7 +429,7 @@ export function MediaFormModal({
       }
     } catch (error: any) {
       console.error("AutoTag Error:", error);
-      alert("Auto Tag Failed: " + error.message);
+      toast.error("Auto Tag Failed: " + error.message);
     } finally {
       setIsAiTagging(false);
     }

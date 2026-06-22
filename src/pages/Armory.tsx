@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
+import { useToast } from '../contexts/ToastContext';
 import { Gem, Copy, Sword, Shield, Footprints, Sparkles, Hammer, AlertCircle, CheckCircle2, RotateCw, Crown, Shirt, User, ImageIcon, Flame } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { MEDIA_COLORS, Artifact, RARITY_COLORS } from '../types/schema';
@@ -16,6 +17,7 @@ const SLOTS: Slot[] = ['Head', 'Body', 'Legs', 'Primary', 'Secondary', 'Accessor
 
 export function Armory() {
   const { artifacts, media, settings, equipArtifact, unequipArtifact, updateArtifact, saveArtifact, generateArtifactImage, logs } = useMediaContext();
+  const toast = useToast();
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const [selectedMediaForDetails, setSelectedMediaForDetails] = useState<any | null>(null);
   const [editingMedia, setEditingMedia] = useState<any | null>(null);
@@ -133,7 +135,7 @@ export function Armory() {
       }
     } catch(e: any) {
       console.error("Failed to loot: " + e.message);
-      alert("Failed to loot: " + e.message + "\n\nNote: Ensure your Gemini API Key is set in AI Studio Secrets.");
+      toast.error("Failed to loot: " + e.message);
     } finally {
       setIsLootingMediaId(null);
       setPendingLootId(null);

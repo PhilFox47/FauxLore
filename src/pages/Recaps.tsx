@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
+import { useToast } from '../contexts/ToastContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   startOfWeek, endOfWeek, subWeeks, 
@@ -92,6 +93,7 @@ function Reveal({ children, className, delay = 0 }: { children: React.ReactNode;
 
 export function Recaps() {
   const { media, logs, settings, aiRecaps, saveAiRecap, artifacts, worldBosses, isLoading, aiTextCache } = useMediaContext();
+  const toast = useToast();
   const [timeframe, setTimeframe] = useState<Timeframe>('week');
   const [offsetOffset, setOffsetOffset] = useState(1); 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -258,7 +260,7 @@ export function Recaps() {
 
   const handleGenerateAI = async () => {
     if (!settings?.nanoGptApiKey) {
-      alert("Please configure your Nano-GPT API Key in the Settings menu first.");
+      toast.error("Please configure your Nano-GPT API Key in the Settings menu first.");
       return;
     }
     
@@ -483,7 +485,7 @@ ${promptContext}`, settings.aiPersona);
         }
       });
     } catch (e: any) {
-      alert("Failed to generate AI Recap: " + e.message);
+      toast.error("Failed to generate AI Recap: " + e.message);
     } finally {
       setIsGenerating(false);
     }

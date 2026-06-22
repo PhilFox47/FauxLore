@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
 import { useMediaContext } from '../contexts/MediaContext';
+import { useToast } from '../contexts/ToastContext';
 import { X, Edit2, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame, Ghost, Target, Anchor } from 'lucide-react';
 import { calculateScaledDelta } from '../lib/scaling';
 import { cn } from '../lib/utils';
@@ -23,6 +24,7 @@ interface MediaDetailModalProps {
 
 export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaDetailModalProps) {
   const { settings, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem, generateArtifactImage } = useMediaContext();
+  const toast = useToast();
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [deleteConfirmLogId, setDeleteConfirmLogId] = useState<string | null>(null);
   const [isLooting, setIsLooting] = useState(false);
@@ -202,7 +204,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
       }
     } catch(e: any) {
       console.error("Failed to loot: " + e.message);
-      alert("Failed to loot: " + e.message + "\n\nNote: Ensure your Gemini API Key is set in AI Studio Secrets.");
+      toast.error("Failed to loot: " + e.message);
     } finally {
       setIsLooting(false);
       setPendingLootId(null);

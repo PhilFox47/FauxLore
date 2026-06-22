@@ -6,10 +6,12 @@ import { cn } from '../lib/utils';
 import { DatabaseService } from '../services/db';
 import { generateText } from '../services/nanoGptService';
 import { MediaFormModal } from '../components/MediaFormModal';
+import { useToast } from '../contexts/ToastContext';
 
 export function Taxonomy() {
   const { taxonomies, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, media, saveMediaItem, deleteMediaItem, settings } = useMediaContext();
   const { user } = useAuth();
+  const toast = useToast();
   
   const [activeTab, setActiveTab] = useState<'genre' | 'tag'>('genre');
   const [search, setSearch] = useState('');
@@ -75,7 +77,7 @@ export function Taxonomy() {
       setNewName('');
     } catch (error) {
       console.error(error);
-      alert('Failed to add ' + activeTab);
+      toast.error('Failed to add ' + activeTab);
     } finally {
       setIsAdding(false);
     }
@@ -87,7 +89,7 @@ export function Taxonomy() {
       await deleteTaxonomy(id);
     } catch (error) {
       console.error(error);
-      alert('Failed to delete ' + activeTab);
+      toast.error('Failed to delete ' + activeTab);
     }
   };
 
@@ -97,7 +99,7 @@ export function Taxonomy() {
       await moveTaxonomy(id);
     } catch (error: any) {
       console.error(error);
-      alert('Failed to move taxonomy: ' + error.message);
+      toast.error('Failed to move taxonomy: ' + error.message);
     }
   };
 
@@ -110,13 +112,13 @@ export function Taxonomy() {
       await editTaxonomy(id, newName.trim());
     } catch (error: any) {
       console.error(error);
-      alert('Failed to edit taxonomy: ' + error.message);
+      toast.error('Failed to edit taxonomy: ' + error.message);
     }
   };
 
   const handleAutoTagItem = async (mId: string) => {
     if (!settings?.nanoGptApiKey) {
-      alert("NanoGPT API Key is missing in Settings.");
+      toast.error("NanoGPT API Key is missing in Settings.");
       return;
     }
     const itemToTag = media.find(m => m.id === mId);
@@ -160,13 +162,13 @@ Return JSON only.`;
           genres: parsed.genres,
           tags: parsed.tags
         });
-        alert(`Successfully auto-tagged ${itemToTag.title}`);
+        toast.success(`Auto-tagged ${itemToTag.title}`);
       } else {
         throw new Error("AI returned an unexpected format.");
       }
     } catch (error: any) {
       console.error("AutoTag Error:", error);
-      alert("Auto Tag Failed: " + error.message);
+      toast.error("Auto Tag Failed: " + error.message);
     } finally {
       setMigratingId(null);
     }

@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { format, differenceInDays, parseISO, subDays } from 'date-fns';
 import { useMediaContext } from "../contexts/MediaContext";
+import { useToast } from "../contexts/ToastContext";
 import { calculateRPGState } from "../lib/rpgSystem";
 import { MEDIA_HEX, MEDIA_TYPES } from "../types/schema";
 import {
@@ -57,6 +58,7 @@ export function Lorekeeper() {
     generateBossImage,
     spawnBoss,
   } = useMediaContext();
+  const toast = useToast();
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isRegeneratingTitle, setIsRegeneratingTitle] = useState(false);
   const [isSpawningBoss, setIsSpawningBoss] = useState(false);
@@ -211,7 +213,7 @@ export function Lorekeeper() {
 
   const generateMissingTitles = async (generateMain: boolean, mediaTypesToGenerate: string[], manualRes: boolean = false) => {
     if (!settings?.nanoGptApiKey && !settings?.geminiApiKey) {
-      if (manualRes) alert("Please configure an AI API Key in Settings first.");
+      if (manualRes) toast.error("Please configure an AI API Key in Settings first.");
       return;
     }
 
@@ -276,9 +278,9 @@ export function Lorekeeper() {
       }
 
       await refreshData();
-      if (manualRes) alert("Titles successfully regenerated!");
+      if (manualRes) toast.success("Titles successfully regenerated!");
     } catch (e: any) {
-      if (manualRes) alert("Error regenerating format: " + e.message);
+      if (manualRes) toast.error("Error regenerating titles: " + e.message);
       else console.error("Error regenerating bg titles:", e.message);
     } finally {
       setIsRegeneratingTitle(false);
@@ -292,7 +294,7 @@ export function Lorekeeper() {
 
   const handleRegenerate = async () => {
     if (!settings?.nanoGptApiKey && !settings?.geminiApiKey) {
-      alert("Please configure an AI API Key in Settings first.");
+      toast.error("Please configure an AI API Key in Settings first.");
       return;
     }
 
@@ -372,9 +374,9 @@ export function Lorekeeper() {
       }
 
       await refreshData();
-      alert("All Lore and Quests have been regenerated with a natural tone!");
+      toast.success("All Lore and Quests have been regenerated with a natural tone!");
     } catch (e: any) {
-      alert("Error regenerating content: " + e.message);
+      toast.error("Error regenerating content: " + e.message);
     } finally {
       setIsRegenerating(false);
     }
@@ -619,7 +621,7 @@ export function Lorekeeper() {
                 try {
                   await spawnBoss(encoreMediaType);
                 } catch (e: any) {
-                  alert(e.message || "Failed to spawn boss");
+                  toast.error(e.message || "Failed to spawn boss");
                 } finally {
                   setIsSpawningBoss(false);
                 }
