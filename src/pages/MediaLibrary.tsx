@@ -14,7 +14,7 @@ import { Plus, Search, CheckCircle2, TrendingUp, Pickaxe } from 'lucide-react';
 
 export function MediaLibrary() {
   const { mediaType } = useParams<{ mediaType: string }>();
-  const { media, logs, settings, worldBosses, artifacts, aiTextCache, saveMediaItem, addLog, deleteMediaItem } = useMediaContext();
+  const { media, logs, settings, rpgState, worldBosses, artifacts, aiTextCache, saveMediaItem, addLog, deleteMediaItem } = useMediaContext();
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MediaItem | undefined>(undefined);
@@ -32,7 +32,6 @@ export function MediaLibrary() {
 
   const baseMediaItems = media.filter(m => m.mediaType === decodedMediaType);
 
-  const rpgState = useMemo(() => calculateRPGState(media, logs, settings, worldBosses, artifacts), [media, logs, settings, worldBosses, artifacts]);
   const vaultLevel = rpgState.mediaLevels[decodedMediaType] || { level: 1, exp: 0, nextLevelExp: 100, currentLevelExp: 0, expProgress: 0, title: 'Novice' };
   const vaultTitle = aiTextCache[`rpg_title_${decodedMediaType}_${vaultLevel.level}`] || vaultLevel.title;
   const flavorText = useMemo(() => getRandomFlavorText(decodedMediaType), [decodedMediaType]);

@@ -17,7 +17,7 @@ import { format, parseISO } from 'date-fns';
 import { cn } from '../lib/utils';
 
 export function Dashboard() {
-  const { media, logs, settings, saveMediaItem, addLog, deleteMediaItem, aiTextCache, worldBosses, artifacts, oracleMessages, fetchOracleMessage, rerollBoss } = useMediaContext();
+  const { media, logs, settings, rpgState, saveMediaItem, addLog, deleteMediaItem, aiTextCache, worldBosses, artifacts, oracleMessages, fetchOracleMessage, rerollBoss } = useMediaContext();
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MediaItem | undefined>(undefined);
@@ -49,7 +49,6 @@ export function Dashboard() {
 
   const currentStreak = useMemo(() => calculateStreak(logs), [logs]);
 
-  const rpgState = useMemo(() => calculateRPGState(media, logs, settings, worldBosses, artifacts), [media, logs, settings, worldBosses, artifacts]);
   const getDynamicTitle = () => aiTextCache[`rpg_title_${rpgState.level}`] || rpgState.className;
 
   const latestOracle = oracleMessages[0];

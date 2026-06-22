@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode, useRef } from 'react';
 import { MediaItem, ProgressLog, MetricType, MediaType, Settings, Artifact, WorldBoss, OracleMessage, getMetricForType } from '../types/schema';
 import { DatabaseService } from '../services/db';
 import { calculateRPGState } from '../lib/rpgSystem';
@@ -10,6 +10,7 @@ interface MediaContextType {
   media: MediaItem[];
   logs: ProgressLog[];
   settings: Settings | null;
+  rpgState: ReturnType<typeof calculateRPGState>;
   aiRecaps: any[];
   artifacts: Artifact[];
   worldBosses: WorldBoss[];
@@ -58,6 +59,13 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   const [taxonomies, setTaxonomies] = useState<any[]>([]);
   const [franchises, setFranchises] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Single source of truth for the current RPG state; consumers read this
+  // instead of each recomputing the (expensive) calculation.
+  const rpgState = useMemo(
+    () => calculateRPGState(media, logs, settings, worldBosses, artifacts),
+    [media, logs, settings, worldBosses, artifacts],
+  );
 
   const refreshData = useCallback(async () => {
     if (!user) {
@@ -114,7 +122,6 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (isLoading || !settings) return;
 
-    const rpgState = calculateRPGState(media, logs, settings, worldBosses, artifacts);
     const currentLevel = rpgState.level;
 
     if (previousLevel.current === null || previousLevel.current !== currentLevel) {
@@ -137,7 +144,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     }
     
     previousLevel.current = currentLevel;
-  }, [media, logs, settings, aiTextCache, isLoading, refreshData]);
+  }, [rpgState, settings, aiTextCache, isLoading, refreshData, media, logs]);
 
   const saveMediaItem = useCallback(async (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => {
     let oldMetricValue = 0;
@@ -293,7 +300,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [refreshData]);
 
   return (
-    <MediaContext.Provider value={{ media, logs, settings, aiRecaps, artifacts, worldBosses, oracleMessages, taxonomies, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, fetchOracleMessage, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, oracleMessages, taxonomies, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, fetchOracleMessage, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
       {children}
     </MediaContext.Provider>
   );

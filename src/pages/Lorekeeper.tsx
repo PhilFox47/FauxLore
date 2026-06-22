@@ -48,6 +48,7 @@ export function Lorekeeper() {
     media,
     logs,
     settings,
+    rpgState,
     aiTextCache,
     saveAiText,
     clearAiTextCache,
@@ -76,11 +77,6 @@ export function Lorekeeper() {
     const t = new Date(b.expiresAt).getTime();
     return t <= nowTime && t > sevenDaysAgo;
   });
-
-  const rpgState = useMemo(
-    () => calculateRPGState(media, logs, settings, worldBosses, artifacts),
-    [media, logs, settings, worldBosses, artifacts],
-  );
 
   const breakdownState = useMemo(() => {
     if (dateRange === 'all') return rpgState;
