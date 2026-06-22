@@ -36,6 +36,7 @@ import {
 import { generateGeminiText } from "../services/geminiService";
 import { DatabaseService } from "../services/db";
 import { buildTitleSystemPrompt, buildBatchTitlePrompt, buildMainTitlePrompt } from "../lib/lorekeeperTitles";
+import { GeneratedImage } from "../components/GeneratedImage";
 import { Loader2, Dices } from "lucide-react";
 
 const FAUXLORE_CONTEXT = `\n\nCONTEXT ABOUT FAUXLORE:
@@ -77,6 +78,15 @@ export function Lorekeeper() {
     const t = new Date(b.expiresAt).getTime();
     return t <= nowTime && t > sevenDaysAgo;
   });
+
+  // Poll while any boss image is still generating (auto-spawned bosses generate
+  // in the background) so the UI flips from "generating" to the image on its own.
+  const generatingBossCount = worldBosses.filter(b => b.imageStatus === 'generating').length;
+  useEffect(() => {
+    if (generatingBossCount === 0) return;
+    const id = setInterval(() => refreshData(), 5000);
+    return () => clearInterval(id);
+  }, [generatingBossCount, refreshData]);
 
   const breakdownState = useMemo(() => {
     if (dateRange === 'all') return rpgState;
@@ -686,12 +696,13 @@ export function Lorekeeper() {
                         </span>
                       </div>
 
-                      {boss.imageUrl && (
-                        <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 shadow-lg cursor-pointer mb-4 relative group/image" onClick={(e) => { e.stopPropagation(); setExpandedImage(boss.imageUrl || null); }}>
-                          <img src={boss.imageUrl} alt={boss.name} className="w-full h-full object-cover transition-transform duration-700 group-hover/image:scale-105" referrerPolicy="no-referrer" />
-                          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-transparent pointer-events-none"></div>
-                        </div>
-                      )}
+                      <GeneratedImage
+                        url={boss.imageUrl}
+                        status={boss.imageStatus}
+                        alt={boss.name}
+                        onExpand={() => setExpandedImage(boss.imageUrl || null)}
+                        onRegenerate={() => generateBossImage(boss.id)}
+                      />
                       
                       <div className="flex-1 flex flex-col mb-4 relative z-10">
                           <div className="flex items-start justify-between gap-2 mb-2">
@@ -813,12 +824,13 @@ export function Lorekeeper() {
                         </span>
                       </div>
 
-                      {boss.imageUrl && (
-                        <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 shadow-lg cursor-pointer mb-4 relative group/image" onClick={(e) => { e.stopPropagation(); setExpandedImage(boss.imageUrl || null); }}>
-                          <img src={boss.imageUrl} alt={boss.name} className="w-full h-full object-cover transition-transform duration-700 group-hover/image:scale-105" referrerPolicy="no-referrer" />
-                          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-transparent pointer-events-none"></div>
-                        </div>
-                      )}
+                      <GeneratedImage
+                        url={boss.imageUrl}
+                        status={boss.imageStatus}
+                        alt={boss.name}
+                        onExpand={() => setExpandedImage(boss.imageUrl || null)}
+                        onRegenerate={() => generateBossImage(boss.id)}
+                      />
                       
                       <div className="flex-1 flex flex-col mb-4 relative z-10">
                           <div className="flex items-start justify-between gap-2 mb-2">

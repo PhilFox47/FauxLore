@@ -8,6 +8,7 @@ import { generateAiArtifactWithGemini } from '../services/geminiService';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '../services/db';
 import { LootReveal } from '../components/LootReveal';
+import { GeneratedImage } from '../components/GeneratedImage';
 
 import { MediaDetailModal } from '../components/MediaDetailModal';
 import { MediaFormModal } from '../components/MediaFormModal';
@@ -554,15 +555,13 @@ export function Armory() {
         )}
       >
          <div className="flex flex-col h-full relative z-10">
-            {artifact.imageUrl && (
-              <div 
-                className="w-full aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 cursor-pointer mb-4 relative group/image" 
-                onClick={(e) => { e.stopPropagation(); setExpandedImage(artifact.imageUrl || null); }}
-              >
-                <img src={artifact.imageUrl} alt={artifact.name} className="w-full h-full object-cover transition-transform duration-700 group-hover/image:scale-105" referrerPolicy="no-referrer" />
-                <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-transparent pointer-events-none"></div>
-              </div>
-            )}
+            <GeneratedImage
+              url={artifact.imageUrl}
+              status={artifact.imageStatus}
+              alt={artifact.name}
+              onExpand={() => setExpandedImage(artifact.imageUrl || null)}
+              onRegenerate={() => generateArtifactImage(artifact.id)}
+            />
             
             <div className="flex-1 flex flex-col">
                  <div className="flex items-center justify-between mb-3">

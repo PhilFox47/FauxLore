@@ -178,6 +178,7 @@ export function initSchema(db: Db) {
       targetValue TEXT,
       bonusPercent INTEGER,
       imageUrl TEXT,
+      imageStatus TEXT,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
     );
 
@@ -195,6 +196,7 @@ export function initSchema(db: Db) {
       createdAt TEXT NOT NULL,
       updatedAt TEXT,
       imageUrl TEXT,
+      imageStatus TEXT,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
     );
 

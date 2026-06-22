@@ -250,4 +250,6 @@ export function runMigrations(db: Db) {
 
   try { db.prepare("ALTER TABLE artifacts ADD COLUMN imageUrl TEXT").run(); console.log("Migration: Added imageUrl to artifacts"); } catch (e) {}
   try { db.prepare("ALTER TABLE world_bosses ADD COLUMN imageUrl TEXT").run(); console.log("Migration: Added imageUrl to world_bosses"); } catch (e) {}
+  try { db.prepare("ALTER TABLE artifacts ADD COLUMN imageStatus TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE world_bosses ADD COLUMN imageStatus TEXT").run(); } catch (e) {}
 }

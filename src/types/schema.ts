@@ -117,6 +117,7 @@ export interface Artifact {
   targetValue?: string;
   bonusPercent?: number;
   imageUrl?: string;
+  imageStatus?: 'generating' | 'done' | 'failed';
 }
 
 export interface WorldBoss {
@@ -133,6 +134,7 @@ export interface WorldBoss {
   createdAt: string;
   updatedAt?: string;
   imageUrl?: string;
+  imageStatus?: 'generating' | 'done' | 'failed';
 }
 
 export interface OracleMessage {

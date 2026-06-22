@@ -162,6 +162,7 @@ export function createImageService({ db, aiImagesDir }: { db: Db; aiImagesDir: s
       const nanoGptKey = userSettings?.nanoGptApiKey || sysSettings?.nanoGptApiKey;
       if (!geminiKey || !nanoGptKey) return;
 
+      db.prepare("UPDATE world_bosses SET imageStatus = 'generating' WHERE id = ?").run(bossId);
       const tier = enemyTier(bossLevel);
 
       const prompt = `You are an expert art director writing ONE text-to-image prompt for the "Z-Image-Turbo" model (a knowledgeable diffusion model that follows natural language and renders many art styles well, including real text and logos).
@@ -198,9 +199,11 @@ Return ONLY the final image prompt text, nothing else.`;
       if (!imagePrompt) throw new Error("Empty boss prompt");
 
       const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt, BOSS_NEGATIVE_EXTRA);
-      db.prepare("UPDATE world_bosses SET imageUrl = ? WHERE id = ?").run(imageUrl, bossId);
+      db.prepare("UPDATE world_bosses SET imageUrl = ?, imageStatus = 'done' WHERE id = ?").run(imageUrl, bossId);
     } catch (e) {
       console.error("Boss Image Background Gen Error:", e);
+      // No auto-retry — mark as failed so the UI can offer a manual regenerate.
+      try { db.prepare("UPDATE world_bosses SET imageStatus = 'failed' WHERE id = ?").run(bossId); } catch (_) {}
     }
   }
 
@@ -212,6 +215,7 @@ Return ONLY the final image prompt text, nothing else.`;
       const nanoGptKey = userSettings?.nanoGptApiKey || sysSettings?.nanoGptApiKey;
       if (!geminiKey || !nanoGptKey) return;
 
+      db.prepare("UPDATE artifacts SET imageStatus = 'generating' WHERE id = ?").run(artifactId);
       const art = rarityArt(rarity);
 
       const prompt = `You are an expert art director writing ONE text-to-image prompt for the "Z-Image-Turbo" model (a knowledgeable diffusion model that follows natural language and renders many material/art styles well, including real text and logos).
@@ -250,9 +254,11 @@ Return ONLY the final image prompt text, nothing else.`;
       if (!imagePrompt) throw new Error("Empty artifact prompt");
 
       const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt, LOOT_NEGATIVE_EXTRA);
-      db.prepare("UPDATE artifacts SET imageUrl = ? WHERE id = ?").run(imageUrl, artifactId);
+      db.prepare("UPDATE artifacts SET imageUrl = ?, imageStatus = 'done' WHERE id = ?").run(imageUrl, artifactId);
     } catch (e) {
       console.error("Artifact Image Background Gen Error:", e);
+      // No auto-retry — mark as failed so the UI can offer a manual regenerate.
+      try { db.prepare("UPDATE artifacts SET imageStatus = 'failed' WHERE id = ?").run(artifactId); } catch (_) {}
     }
   }
 
