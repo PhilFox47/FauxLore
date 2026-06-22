@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useToast } from '../contexts/ToastContext';
-import { X, Edit2, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame, Ghost, Target, Anchor } from 'lucide-react';
+import { X, Edit2, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame, Ghost, Target, Anchor, Library } from 'lucide-react';
 import { calculateScaledDelta } from '../lib/scaling';
 import { cn } from '../lib/utils';
 import { format, differenceInDays } from 'date-fns';
@@ -23,7 +23,7 @@ interface MediaDetailModalProps {
 }
 
 export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaDetailModalProps) {
-  const { settings, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem, generateArtifactImage } = useMediaContext();
+  const { settings, media, worldBosses, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem, generateArtifactImage } = useMediaContext();
   const toast = useToast();
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [deleteConfirmLogId, setDeleteConfirmLogId] = useState<string | null>(null);
@@ -99,6 +99,16 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   const sortedLogs = [...logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   const itemArtifacts = artifacts?.filter(a => a.mediaId === item.id && a.id !== pendingLootId && a.id !== lootedArtifact?.id) || [];
+
+  // Lore-page data: enemies spawned from this media, franchise siblings, journal notes.
+  const bossesForItem = (worldBosses || []).filter(b => b.mediaId === item.id)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const franchiseSiblings = (item.franchises && item.franchises.length)
+    ? (media || []).filter(m => m.id !== item.id && m.franchises?.some(f => item.franchises!.includes(f))).slice(0, 12)
+    : [];
+  const journalEntries = logs
+    .filter(l => l.note && l.note.trim().length > 0 && l.metricType !== 'statusChange' && !l.timestamp.startsWith('1970-01-01'))
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   const handleClaimLoot = async () => {
     setIsLooting(true);
@@ -282,7 +292,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   return (
     <>
     <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="relative w-full max-w-4xl min-h-[70vh] max-h-[90vh] bg-zinc-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row">
+      <div className="relative w-full max-w-6xl min-h-[70vh] max-h-[92vh] bg-zinc-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row">
         
         {/* Close Button */}
         <button onClick={onClose} className="absolute top-4 right-4 z-50 p-2 bg-black/50 hover:bg-black/80 rounded-full text-white/70 hover:text-white transition">
@@ -460,6 +470,64 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                 {item.franchises && item.franchises.map((f, i) => <span key={`f-${i}`} className="text-xs px-2 py-1 bg-pink-500/10 text-pink-400 rounded border border-pink-500/20">{f}</span>)}
                 {item.genres.map((g, i) => <span key={`g-${i}`} className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">{g}</span>)}
                 {item.tags?.map((t, i) => <span key={`t-${i}`} className="text-xs px-2 py-1 bg-orange-500/10 text-orange-400 rounded border border-orange-500/20">{t}</span>)}
+              </div>
+            </div>
+          )}
+
+          {/* Enemies faced (World Bosses spawned from this media) */}
+          {bossesForItem.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-sm font-bold text-zinc-500 mb-3 tracking-wider uppercase flex items-center gap-2"><Sword className="w-4 h-4" /> Enemies Faced</h3>
+              <div className="flex flex-col gap-2">
+                {bossesForItem.map(b => (
+                  <div key={b.id} className="flex items-center gap-3 bg-black/30 border border-white/5 rounded-xl p-2.5">
+                    <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center shrink-0 border overflow-hidden",
+                      b.status === 'Defeated' ? 'border-emerald-500/30 bg-emerald-500/10' : b.status === 'Failed' ? 'border-red-500/30 bg-red-500/10' : 'border-amber-500/30 bg-amber-500/10')}>
+                      {b.imageUrl ? <img src={b.imageUrl} alt={b.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Ghost className="w-5 h-5 text-zinc-500" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-white truncate">{b.name}</div>
+                      <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-black">Lv {b.level} Boss</div>
+                    </div>
+                    <span className={cn("text-[10px] uppercase tracking-widest font-black px-2 py-1 rounded-full shrink-0",
+                      b.status === 'Defeated' ? 'text-emerald-400 bg-emerald-500/10' : b.status === 'Failed' ? 'text-red-400 bg-red-500/10' : 'text-amber-400 bg-amber-500/10')}>{b.status}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* From the same universe (franchise siblings) */}
+          {franchiseSiblings.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-sm font-bold text-zinc-500 mb-3 tracking-wider uppercase flex items-center gap-2"><Library className="w-4 h-4" /> From the Same Universe</h3>
+              <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+                {franchiseSiblings.map(m => (
+                  <div key={m.id} className="shrink-0 w-20">
+                    <div className="w-20 h-28 rounded-lg overflow-hidden border border-white/10 bg-zinc-800 mb-1.5">
+                      {m.coverImageUrl ? <img src={m.coverImageUrl} alt={m.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><Library className="w-6 h-6" /></div>}
+                    </div>
+                    <div className="text-[10px] font-bold text-zinc-300 truncate text-center" title={m.title}>{m.title}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Journal (your log notes for this title) */}
+          {journalEntries.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-sm font-bold text-zinc-500 mb-3 tracking-wider uppercase flex items-center gap-2"><BookOpen className="w-4 h-4" /> Journal</h3>
+              <div className="flex flex-col gap-3">
+                {journalEntries.map(l => (
+                  <div key={l.id} className="bg-black/30 border-l-2 border-amber-500/40 rounded-r-xl p-3 pl-4">
+                    <p className="text-sm text-zinc-300 italic leading-snug">"{l.note}"</p>
+                    <div className="text-[10px] text-zinc-500 font-bold mt-1.5 flex items-center gap-2">
+                      <span>{format(new Date(l.timestamp), 'MMM d, yyyy')}</span>
+                      {l.location && <><span>•</span><span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {l.location}</span></>}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
