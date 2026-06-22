@@ -4,6 +4,7 @@ import { Outlet } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { SettingsModal } from './SettingsModal';
+import { Celebrations } from './Celebrations';
 
 export function Layout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -59,6 +60,8 @@ export function Layout() {
       {isSettingsOpen && (
         <SettingsModal onClose={() => setIsSettingsOpen(false)} />
       )}
+
+      <Celebrations />
     </div>
   );
 }
