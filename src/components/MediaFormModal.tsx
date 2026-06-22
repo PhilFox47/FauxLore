@@ -156,53 +156,8 @@ export function MediaFormModal({
     setIsConfirmingDelete(false);
   }, [initialData, isOpen]);
 
-  // Auto-complete status logic
-  useEffect(() => {
-    let isComplete = false;
-
-    if (formData.mediaType === "Movie") {
-      if (formData.watched) isComplete = true;
-    } else if (
-      formData.mediaType === "Series" &&
-      formData.totalEpisodes &&
-      (formData.episodesWatched || 0) >= formData.totalEpisodes
-    ) {
-      isComplete = true;
-    } else if (
-      formData.mediaType === "Manga" &&
-      formData.totalChapters &&
-      (formData.chaptersRead || 0) >= formData.totalChapters
-    ) {
-      isComplete = true;
-    } else if (
-      formData.mediaType === "Book" &&
-      formData.totalPages &&
-      (formData.pagesRead || 0) >= formData.totalPages
-    ) {
-      isComplete = true;
-    } else if (
-      formData.mediaType === "Comic" &&
-      formData.totalIssues &&
-      (formData.issuesRead || 0) >= formData.totalIssues
-    ) {
-      isComplete = true;
-    }
-
-    if (isComplete && formData.status !== "Completed" && formData.status !== "Extras") {
-      setFormData((p) => ({ ...p, status: "Completed" }));
-    }
-  }, [
-    formData.watched,
-    formData.mediaType,
-    formData.totalEpisodes,
-    formData.episodesWatched,
-    formData.totalChapters,
-    formData.chaptersRead,
-    formData.totalPages,
-    formData.pagesRead,
-    formData.totalIssues,
-    formData.issuesRead,
-  ]);
+  // (Auto-complete-on-progress was removed: editing progress fields must never
+  // change a media item's status. Status only changes via the manual dropdown.)
 
   if (!isOpen) return null;
 
