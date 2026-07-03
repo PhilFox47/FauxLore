@@ -66,6 +66,7 @@ export function initSchema(db: Db) {
       note TEXT,
       location TEXT,
       isHistoric INTEGER DEFAULT 0,
+      bonusMultiplier REAL DEFAULT 0,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
     );
 

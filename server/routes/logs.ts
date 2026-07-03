@@ -130,7 +130,7 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
           }
 
           // 1. Wear out equipment (Equipped items lose durability based on progress)
-          const equippedItems: any[] = db.prepare("SELECT id, durability, targetType, targetValue FROM artifacts WHERE userId = ? AND isEquipped = 1 AND durability > 0").all(userId);
+          const equippedItems: any[] = db.prepare("SELECT id, durability, maxDurability, bonusPercent, targetType, targetValue FROM artifacts WHERE userId = ? AND isEquipped = 1 AND durability > 0").all(userId);
           if (equippedItems.length > 0) {
             let parsedGenres: string[] = [];
             let parsedFranchises: string[] = [];
@@ -151,6 +151,17 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
             });
 
             if (applicableItems.length > 0) {
+              // Bank the Armory bonus onto THIS log using the durability the items have right now
+              // (before wearing them down). This locks the bonus to the log that used the item, so
+              // it never applies retroactively to the rest of the history.
+              let bonusMultiplier = 0;
+              for (const item of applicableItems) {
+                const durabilityRatio = (item.durability ?? 100) / (item.maxDurability || 100);
+                const bonusPct = (item.bonusPercent ?? 20) / 100;
+                bonusMultiplier += bonusPct * durabilityRatio;
+              }
+              db.prepare("UPDATE logs SET bonusMultiplier = ? WHERE id = ?").run(bonusMultiplier, log.id);
+
               const updateDurability = db.prepare("UPDATE artifacts SET durability = MAX(0, durability - ?) WHERE id = ?");
               for (const item of applicableItems) {
                  updateDurability.run(1, item.id);

@@ -145,8 +145,10 @@ export function calculateLogExpBreakdown(delta: number, item: MediaItem, setting
     }
 
     if (applies) {
-      const durabilityRatio = (a.durability || 100) / (a.maxDurability || 100);
-      const itemBonusPct = (a.bonusPercent || 20) / 100;
+      // Use ?? so a fully-broken item (durability 0) yields a 0 ratio and no bonus,
+      // instead of `|| 100` which treated 0 as full durability.
+      const durabilityRatio = (a.durability ?? 100) / (a.maxDurability || 100);
+      const itemBonusPct = (a.bonusPercent ?? 20) / 100;
       multiplier += itemBonusPct * durabilityRatio;
     }
   });
@@ -178,17 +180,20 @@ export function calculateRPGState(
   const mediaExpTrackers: Record<string, number> = {};
   ALL_MEDIA_TYPES.forEach(t => mediaExpTrackers[t] = 0);
 
-  // First we calculate the base EXP per log, applying artifacts per-log.
+  // Base EXP is recomputed live per log, but the Artifact (Armory) bonus is NOT.
+  // Each log banks the bonus multiplier that was active at the moment it was created
+  // (see POST /api/logs). Items therefore only ever buff the specific logs made while
+  // they were equipped — never the entire history retroactively.
   let baseExp = 0;
   let armoryExp = 0;
-  const equipped = artifacts.filter((a: any) => a.isEquipped);
 
   validLogs.forEach(log => {
     if (log.metricType === 'statusChange') return; // Status changes don't grant EXP
-    
+
     const item = media.find(m => m.id === log.mediaId);
     if (item) {
-      const { base, armory } = calculateLogExpBreakdown(log.delta, item, settings, equipped);
+      const base = calculateScaledDelta(log.delta, item, settings);
+      const armory = base * (log.bonusMultiplier || 0);
       baseExp += base;
       armoryExp += armory;
       mediaExpTrackers[item.mediaType] += (base + armory);

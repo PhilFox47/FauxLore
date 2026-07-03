@@ -162,6 +162,7 @@ export function runMigrations(db: Db) {
   try { db.prepare("ALTER TABLE media ADD COLUMN maturityRating TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE logs ADD COLUMN location TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE logs ADD COLUMN isHistoric INTEGER DEFAULT 0").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE logs ADD COLUMN bonusMultiplier REAL DEFAULT 0").run(); } catch (e) {}
   
   try { db.prepare("UPDATE media SET status = 'Active' WHERE status = 'Playing'").run(); } catch(e) {}
   try { db.prepare("UPDATE media SET status = 'Planning' WHERE status = 'Backlog'").run(); } catch(e) {}

@@ -98,6 +98,7 @@ export interface ProgressLog {
   note?: string;
   location?: string;
   isHistoric?: boolean;
+  bonusMultiplier?: number; // Artifact/Armory EXP bonus banked at log creation (only applies to this log)
 }
 
 export interface Artifact {
