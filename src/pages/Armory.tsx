@@ -29,6 +29,7 @@ export function Armory() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortType, setSortType] = useState<'Recent' | 'Rarity' | 'Durability'>('Recent');
   const [filterSlot, setFilterSlot] = useState<Slot | 'All'>('All');
+  const [showBroken, setShowBroken] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   const handleClaimLoot = async (item: any) => {
@@ -196,9 +197,15 @@ export function Armory() {
   const equipped = artifacts.filter(a => a.isEquipped);
   const inventory = artifacts.filter(a => !a.isEquipped);
 
+  // Broken items (0 durability) are hidden by default so they don't clutter the inventory.
+  const isBroken = (a: Artifact) => (a.durability ?? 100) <= 0;
+  const brokenCount = inventory.filter(isBroken).length;
+  const visibleInventoryCount = showBroken ? inventory.length : inventory.length - brokenCount;
+
   const filteredAndSortedInventory = [...inventory]
     .filter(a => {
       if (a.id === pendingLootId || a.id === lootedArtifact?.id) return false;
+      if (!showBroken && isBroken(a)) return false;
       if (filterSlot !== 'All' && a.slot !== filterSlot) return false;
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
@@ -503,10 +510,25 @@ export function Armory() {
                <h2 className="text-xl font-black text-white flex items-center gap-3">
                   <Copy className="w-6 h-6 text-zinc-700" />
                   Your Inventory
-                  <span className="text-xs font-bold text-zinc-600 bg-zinc-900 px-3 py-1 rounded-full uppercase tracking-widest ml-4">{inventory.length} Items</span>
+                  <span className="text-xs font-bold text-zinc-600 bg-zinc-900 px-3 py-1 rounded-full uppercase tracking-widest ml-4">{visibleInventoryCount} Items</span>
                </h2>
-               
+
                <div className="flex flex-wrap items-center gap-3">
+                 {brokenCount > 0 && (
+                   <button
+                     onClick={() => setShowBroken(v => !v)}
+                     className={cn(
+                       "flex items-center gap-2 border rounded-xl px-4 py-2 text-sm transition-all",
+                       showBroken
+                         ? "bg-red-500/10 border-red-500/30 text-red-300"
+                         : "bg-zinc-900/50 border-white/10 text-zinc-400 hover:text-white"
+                     )}
+                     title={showBroken ? "Hide items with 0 durability" : "Show items with 0 durability"}
+                   >
+                     <Hammer className="w-3.5 h-3.5" />
+                     {showBroken ? "Hide Broken" : `Show Broken (${brokenCount})`}
+                   </button>
+                 )}
                  <input 
                    type="text" 
                    placeholder="Search items or media..." 
