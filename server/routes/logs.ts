@@ -162,9 +162,27 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
               }
               db.prepare("UPDATE logs SET bonusMultiplier = ? WHERE id = ?").run(bonusMultiplier, log.id);
 
-              const updateDurability = db.prepare("UPDATE artifacts SET durability = MAX(0, durability - ?) WHERE id = ?");
-              for (const item of applicableItems) {
-                 updateDurability.run(1, item.id);
+              // Back-to-back logging of the SAME media within 6 hours counts as one continuous
+              // session: the item still buffs each log, but it only spends durability once (on the
+              // first log of the session). This lets you log while watching without extra wear.
+              // We only need to look at the immediately preceding progress log — if it's the same
+              // media and no more than 6 hours old, this is a continuation. If any other media was
+              // logged in between, that log becomes the most recent one and this no longer qualifies.
+              const prevLog: any = db.prepare(
+                "SELECT mediaId, timestamp FROM logs WHERE userId = ? AND id != ? AND metricType != 'statusChange' AND timestamp <= ? ORDER BY timestamp DESC LIMIT 1"
+              ).get(userId, log.id, log.timestamp);
+
+              let isContinuation = false;
+              if (prevLog && prevLog.mediaId === log.mediaId) {
+                const gapMs = new Date(log.timestamp).getTime() - new Date(prevLog.timestamp).getTime();
+                if (gapMs >= 0 && gapMs <= 6 * 60 * 60 * 1000) isContinuation = true;
+              }
+
+              if (!isContinuation) {
+                const updateDurability = db.prepare("UPDATE artifacts SET durability = MAX(0, durability - ?) WHERE id = ?");
+                for (const item of applicableItems) {
+                   updateDurability.run(1, item.id);
+                }
               }
             }
           }

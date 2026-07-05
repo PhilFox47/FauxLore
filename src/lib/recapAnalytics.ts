@@ -1,5 +1,6 @@
 import { MediaItem, ProgressLog, Settings, MEDIA_TYPES } from '../types/schema';
 import { calculateScaledDelta } from './scaling';
+import { groupLogsIntoSessions } from './sessions';
 import { differenceInDays, parseISO, isSameDay, getHours, subHours, format } from 'date-fns';
 import { mulberry32 } from './rpgSystem';
 
@@ -87,45 +88,16 @@ export function analyzeHabits(data: RecapAnalyticsData) {
 
 export function analyzeSessionVelocity(data: RecapAnalyticsData) {
   if (data.logs.length === 0) return null;
-  
-  // Sort logs by timestamp ascending
-  const sortedLogs = [...data.logs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  
-  const sessions: number[] = [];
-  
-  if (sortedLogs.length > 0) {
-    let currentSession = {
-      mediaId: sortedLogs[0].mediaId,
-      totalPages: calculateScaledDelta(sortedLogs[0].delta, data.allMedia.find(x => x.id === sortedLogs[0].mediaId), data.settings),
-      lastTimestamp: new Date(sortedLogs[0].timestamp).getTime()
-    };
 
-    for (let i = 1; i < sortedLogs.length; i++) {
-      const log = sortedLogs[i];
-      const logTimestamp = new Date(log.timestamp).getTime();
-      const m = data.allMedia.find(x => x.id === log.mediaId);
-      const pages = calculateScaledDelta(log.delta, m, data.settings);
-      
-      const hoursDiff = (logTimestamp - currentSession.lastTimestamp) / (1000 * 60 * 60);
-      
-      // If same media AND less than 5 hours since last log of this session
-      if (log.mediaId === currentSession.mediaId && hoursDiff < 5) {
-        currentSession.totalPages += pages;
-        currentSession.lastTimestamp = logTimestamp;
-      } else {
-        // Push finished session and start new one
-        sessions.push(currentSession.totalPages);
-        currentSession = {
-          mediaId: log.mediaId,
-          totalPages: pages,
-          lastTimestamp: logTimestamp
-        };
-      }
-    }
-    // Push the last session
-    sessions.push(currentSession.totalPages);
-  }
-  
+  // Master Pages consumed per session, using the shared session rule
+  // (same media, <=6h apart, nothing else logged in between).
+  const sessions: number[] = groupLogsIntoSessions(data.logs).map(session =>
+    session.logs.reduce((sum, log) =>
+      sum + calculateScaledDelta(log.delta, data.allMedia.find(x => x.id === log.mediaId), data.settings), 0)
+  );
+
+  if (sessions.length === 0) return null;
+
   const avg = sessions.reduce((a,b) => a+b, 0) / (sessions.length || 1);
   const max = sessions.length > 0 ? Math.max(...sessions) : 0;
   

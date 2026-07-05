@@ -5,6 +5,7 @@ import { format, subDays, isAfter, startOfDay } from 'date-fns';
 import { BarChart3, DatabaseZap, Clock, ListChecks, Calendar, Target, Activity, Zap, MapPin } from 'lucide-react';
 import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
 import { calculateNativeUnits, NATIVE_UNIT_LABELS } from '../lib/rpgSystem';
+import { groupLogsIntoSessions } from '../lib/sessions';
 import { ProgressLog, MediaItem } from '../types/schema';
 import { GithubHeatmap } from '../components/Heatmap';
 
@@ -160,9 +161,13 @@ export function Statistics() {
        }
     });
 
+    // Count tracking sessions rather than raw logs: back-to-back progress on the same media
+    // (<6h apart, nothing else in between) is one session, so live-logging doesn't inflate this.
+    const sessionCount = groupLogsIntoSessions(filteredLogs).length;
+
     return {
       totalMasterPages: Math.floor(pages),
-      totalLogs: filteredLogs.length,
+      totalLogs: sessionCount,
       busiestDay: maxDay,
       nativeStats: nativeRollup
     };
@@ -368,7 +373,7 @@ export function Statistics() {
             <ListChecks className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Total Progress Updates</p>
+            <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Tracking Sessions</p>
             <p className="text-2xl font-black text-white">{totalLogs.toLocaleString()}</p>
           </div>
         </div>
