@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { MediaItem, MEDIA_TYPES, STATUSES, MediaType } from "../types/schema";
-import { X, Search, Loader2, RefreshCw, BrainCircuit } from "lucide-react";
+import { X, Search, Loader2, RefreshCw, BrainCircuit, AlertTriangle } from "lucide-react";
 import { IntegrationsService, GameMetadata } from "../services/integrations";
 import { cn } from "../lib/utils";
 import { useMediaContext } from "../contexts/MediaContext";
@@ -159,6 +159,23 @@ export function MediaFormModal({
   // (Auto-complete-on-progress was removed: editing progress fields must never
   // change a media item's status. Status only changes via the manual dropdown.)
 
+  // Duplicate guard: when adding a brand-new item, surface any existing entry of the
+  // same media type whose title matches (case/punctuation-insensitive). Skipped while
+  // editing. Re-runs are the intended path for replaying/rereading something you own.
+  const duplicateMatches = useMemo(() => {
+    if (initialData) return [];
+    const normalize = (s?: string) =>
+      (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const t = normalize(formData.title);
+    if (t.length < 2) return [];
+    return (media || []).filter(
+      (m) =>
+        !m.isReRun &&
+        m.mediaType === formData.mediaType &&
+        normalize(m.title) === t,
+    );
+  }, [formData.title, formData.mediaType, media, initialData]);
+
   if (!isOpen) return null;
 
   const handleChange = (
@@ -189,6 +206,18 @@ export function MediaFormModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.mediaType || !formData.status) return;
+
+    // Safeguard against accidental duplicates. If you truly want a fresh entry
+    // (a different edition, say), you can still confirm and proceed.
+    if (duplicateMatches.length > 0) {
+      const existing = duplicateMatches[0];
+      const proceed = window.confirm(
+        `You already have a ${existing.mediaType} entry for "${existing.title}" (${existing.status}). ` +
+          `If you're replaying or rereading it, use the Re-run option on that entry instead. ` +
+          `Add this as a separate entry anyway?`,
+      );
+      if (!proceed) return;
+    }
 
     let finalData = { ...formData };
 
@@ -650,6 +679,28 @@ export function MediaFormModal({
               </div>
             )}
           </div>
+
+          {duplicateMatches.length > 0 && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-200">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+              <div className="text-sm leading-relaxed">
+                <span className="font-semibold">You already have an entry for this.</span>{" "}
+                {duplicateMatches.length === 1 ? (
+                  <>
+                    "{duplicateMatches[0].title}" ({duplicateMatches[0].status}) is already in
+                    your library.
+                  </>
+                ) : (
+                  <>
+                    {duplicateMatches.length} matching {formData.mediaType} entries are already in
+                    your library.
+                  </>
+                )}{" "}
+                If you're replaying or rereading it, use the Re-run option on that entry instead of
+                adding it again.
+              </div>
+            </div>
+          )}
 
           <div className="block mt-4 relative z-0">
             <label className="block text-sm font-medium text-zinc-400 mb-1">
