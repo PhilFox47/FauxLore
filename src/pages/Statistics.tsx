@@ -2,10 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid, Cell } from 'recharts';
 import { format, subDays, isAfter, startOfDay } from 'date-fns';
-import { BarChart3, DatabaseZap, Clock, ListChecks, Calendar, Target, Activity, Zap, MapPin, Sparkles } from 'lucide-react';
+import { BarChart3, DatabaseZap, Clock, ListChecks, Calendar, Target, Activity, Zap, MapPin, Sparkles, GitBranch, Star, Layers } from 'lucide-react';
 import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
 import { calculateNativeUnits, NATIVE_UNIT_LABELS } from '../lib/rpgSystem';
 import { groupLogsIntoSessions } from '../lib/sessions';
+import { aggregateStatusHistory } from '../lib/history';
 import { ProgressLog, MediaItem } from '../types/schema';
 import { GithubHeatmap } from '../components/Heatmap';
 
@@ -264,6 +265,71 @@ export function Statistics() {
       hasData: tags.length > 0 || genres.length > 0,
     };
   }, [filteredLogs, media, settings]);
+
+  // Pipeline & backlog health (library-wide, uses full status history — not date-filtered)
+  const pipeline = useMemo(() => {
+    const agg = aggregateStatusHistory(media, logs);
+    const planning = media.filter(m => m.status === 'Planning').length;
+    const active = media.filter(m => m.status === 'Active').length;
+    const onHold = media.filter(m => m.status === 'On Hold').length;
+    return { ...agg, planning, active, onHold, library: media.length };
+  }, [media, logs]);
+
+  // Rating analytics (library-wide)
+  const ratingStats = useMemo(() => {
+    const rated = media.filter(m => (m.userRating || 0) > 0);
+    if (rated.length === 0) return null;
+    const dist: Record<string, number> = {};
+    [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1, 0.5].forEach(r => (dist[r] = 0));
+    rated.forEach(m => { const k = String(m.userRating); dist[k] = (dist[k] || 0) + 1; });
+    const avg = rated.reduce((s, m) => s + (m.userRating || 0), 0) / rated.length;
+    // Average by genre
+    const genreSum: Record<string, { sum: number; n: number }> = {};
+    rated.forEach(m => (m.genres || []).forEach(g => {
+      if (!genreSum[g]) genreSum[g] = { sum: 0, n: 0 };
+      genreSum[g].sum += m.userRating || 0; genreSum[g].n += 1;
+    }));
+    const byGenre = Object.entries(genreSum).filter(([, v]) => v.n >= 3)
+      .map(([g, v]) => ({ genre: g, avg: v.sum / v.n, n: v.n }))
+      .sort((a, b) => b.avg - a.avg);
+    const distArr = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1].map(r => ({ rating: r, n: dist[String(r)] || 0 }));
+    return { count: rated.length, avg, distArr, topGenres: byGenre.slice(0, 4), lowGenres: byGenre.slice(-3).reverse() };
+  }, [media]);
+
+  // When you consume: weekday x time-of-band heatmap (respects date/type filters)
+  const whenHeatmap = useMemo(() => {
+    const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const BANDS = ['Night', 'Morning', 'Afternoon', 'Evening'];
+    const grid: number[][] = DAYS.map(() => BANDS.map(() => 0));
+    let max = 0;
+    filteredLogs.forEach(l => {
+      if (l.metricType === 'statusChange') return;
+      const d = new Date(l.timestamp);
+      const dow = (d.getDay() + 6) % 7; // Mon=0
+      const h = d.getHours();
+      const b = h < 6 ? 0 : h < 12 ? 1 : h < 17 ? 2 : h < 22 ? 3 : 0;
+      grid[dow][b] += 1;
+      if (grid[dow][b] > max) max = grid[dow][b];
+    });
+    return { DAYS, BANDS, grid, max };
+  }, [filteredLogs]);
+
+  // Tag chemistry: which tags co-occur most on your items (respects type filter via media set)
+  const tagChemistry = useMemo(() => {
+    const activeMediaIds = new Set(filteredLogs.map(l => l.mediaId));
+    const items = media.filter(m => activeMediaIds.has(m.id));
+    const pool = items.length >= 5 ? items : media; // fall back to full library if the window is thin
+    const pairCounts: Record<string, number> = {};
+    pool.forEach(m => {
+      const tags = Array.from(new Set(m.tags || [])).sort();
+      for (let i = 0; i < tags.length; i++)
+        for (let j = i + 1; j < tags.length; j++)
+          pairCounts[`${tags[i]}||${tags[j]}`] = (pairCounts[`${tags[i]}||${tags[j]}`] || 0) + 1;
+    });
+    const pairs = Object.entries(pairCounts).map(([k, n]) => ({ a: k.split('||')[0], b: k.split('||')[1], n }))
+      .sort((x, y) => y.n - x.n).slice(0, 8).filter(p => p.n >= 2);
+    return pairs;
+  }, [filteredLogs, media]);
 
   const STATUS_COLORS: Record<string, string> = {
     'Active': '#10b981', // Emerald
@@ -571,6 +637,127 @@ export function Statistics() {
               </div>
             </div>
             <p className="text-[11px] text-zinc-600 mt-5">Weighted by Master Pages consumed in the selected timeframe.</p>
+          </div>
+        )}
+
+        {/* Pipeline & backlog health */}
+        <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6">
+          <h4 className="text-sm font-bold text-zinc-400 mb-1 flex items-center gap-2">
+            <GitBranch className="w-4 h-4 text-orange-400" /> Pipeline &amp; Backlog Health
+          </h4>
+          <p className="text-[11px] text-zinc-600 mb-5">Your whole library, all time.</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+            <div><div className="text-2xl font-black text-emerald-400">{Math.round(pipeline.completionRate * 100)}%</div><div className="text-[11px] text-zinc-500 uppercase tracking-wider mt-1">Completion rate</div></div>
+            <div><div className="text-2xl font-black text-red-400">{Math.round(pipeline.dropRate * 100)}%</div><div className="text-[11px] text-zinc-500 uppercase tracking-wider mt-1">Drop rate</div></div>
+            <div><div className="text-2xl font-black text-violet-400">{pipeline.planning}</div><div className="text-[11px] text-zinc-500 uppercase tracking-wider mt-1">In backlog</div></div>
+            <div><div className="text-2xl font-black text-white">{Math.round(pipeline.avgPlanningWait)}<span className="text-sm text-zinc-500">d</span></div><div className="text-[11px] text-zinc-500 uppercase tracking-wider mt-1">Avg wait to start</div></div>
+          </div>
+          {/* Funnel bar: Backlog -> Active/OnHold -> Completed -> Dropped */}
+          <div className="flex w-full h-3 rounded-full overflow-hidden border border-white/10">
+            {[
+              { label: 'Backlog', n: pipeline.planning, c: '#8b5cf6' },
+              { label: 'In progress', n: pipeline.active + pipeline.onHold, c: '#f59e0b' },
+              { label: 'Completed', n: pipeline.completed, c: '#10b981' },
+              { label: 'Dropped', n: pipeline.dropped, c: '#ef4444' },
+            ].map((seg, i) => {
+              const tot = Math.max(1, pipeline.planning + pipeline.active + pipeline.onHold + pipeline.completed + pipeline.dropped);
+              return seg.n > 0 ? <div key={i} title={`${seg.label}: ${seg.n}`} style={{ width: `${(seg.n / tot) * 100}%`, backgroundColor: seg.c }} /> : null;
+            })}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[11px] text-zinc-400">
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-violet-500" />Backlog {pipeline.planning}</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" />In progress {pipeline.active + pipeline.onHold}</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" />Completed {pipeline.completed}</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" />Dropped {pipeline.dropped}</span>
+          </div>
+          {Object.keys(pipeline.avgTimeInStatus).length > 0 && (
+            <div className="mt-6 pt-5 border-t border-white/5">
+              <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-3">Average time spent in each status</div>
+              <div className="flex flex-wrap gap-2">
+                {['Planning', 'Active', 'On Hold'].filter(s => pipeline.avgTimeInStatus[s]).map(s => (
+                  <span key={s} className="text-xs px-3 py-1.5 bg-black/30 border border-white/5 rounded-lg text-zinc-300">{s}: <span className="text-white font-bold">{Math.round(pipeline.avgTimeInStatus[s])}d</span></span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Rating analytics */}
+        {ratingStats && (
+          <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6">
+            <h4 className="text-sm font-bold text-zinc-400 mb-1 flex items-center gap-2"><Star className="w-4 h-4 text-orange-400" /> How You Rate</h4>
+            <p className="text-[11px] text-zinc-600 mb-5">{ratingStats.count} rated · average <span className="text-zinc-400 font-bold">{ratingStats.avg.toFixed(2)}</span> / 5</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-3">Distribution</div>
+                <div className="space-y-1.5">
+                  {ratingStats.distArr.map(d => {
+                    const max = Math.max(...ratingStats.distArr.map(x => x.n)) || 1;
+                    return (
+                      <div key={d.rating} className="flex items-center gap-2">
+                        <div className="w-8 text-right text-xs text-zinc-400 tabular-nums">{d.rating}★</div>
+                        <div className="flex-1 h-2.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-amber-500 rounded-full" style={{ width: `${(d.n / max) * 100}%` }} /></div>
+                        <div className="w-6 text-xs text-zinc-500 tabular-nums">{d.n}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-3">Rated highest by genre <span className="text-zinc-600 normal-case">(3+ items)</span></div>
+                <div className="space-y-2">
+                  {ratingStats.topGenres.map(g => (
+                    <div key={g.genre} className="flex items-center justify-between text-sm">
+                      <span className="text-zinc-300">{g.genre}</span>
+                      <span className="text-white font-bold">{g.avg.toFixed(1)}<span className="text-zinc-600 text-xs font-normal"> · {g.n}</span></span>
+                    </div>
+                  ))}
+                  {ratingStats.topGenres.length === 0 && <div className="text-xs text-zinc-600">Not enough rated items per genre yet.</div>}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* When you consume */}
+        {whenHeatmap.max > 0 && (
+          <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6">
+            <h4 className="text-sm font-bold text-zinc-400 mb-5 flex items-center gap-2"><Clock className="w-4 h-4 text-orange-400" /> When You Log</h4>
+            <div className="overflow-x-auto">
+              <div className="inline-grid gap-1" style={{ gridTemplateColumns: `auto repeat(${whenHeatmap.BANDS.length}, minmax(64px, 1fr))` }}>
+                <div />
+                {whenHeatmap.BANDS.map(b => <div key={b} className="text-[10px] text-zinc-500 uppercase tracking-wider text-center pb-1">{b}</div>)}
+                {whenHeatmap.DAYS.map((day, di) => (
+                  <React.Fragment key={day}>
+                    <div className="text-[11px] text-zinc-500 pr-2 flex items-center justify-end">{day}</div>
+                    {whenHeatmap.grid[di].map((n, bi) => {
+                      const intensity = whenHeatmap.max > 0 ? n / whenHeatmap.max : 0;
+                      return <div key={bi} title={`${n} logs`} className="h-8 rounded" style={{ backgroundColor: n === 0 ? 'rgba(255,255,255,0.03)' : `rgba(249,115,22,${0.15 + intensity * 0.85})` }} />;
+                    })}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tag chemistry */}
+        {tagChemistry.length > 0 && (
+          <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6">
+            <h4 className="text-sm font-bold text-zinc-400 mb-1 flex items-center gap-2"><Layers className="w-4 h-4 text-orange-400" /> Tag Chemistry</h4>
+            <p className="text-[11px] text-zinc-600 mb-5">The tag pairings that define your library.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {tagChemistry.map((p, i) => (
+                <div key={i} className="flex items-center justify-between bg-black/30 border border-white/5 rounded-xl px-4 py-2.5">
+                  <div className="flex items-center gap-2 text-sm min-w-0">
+                    <span className="text-zinc-200 truncate">{p.a}</span>
+                    <span className="text-zinc-600 shrink-0">+</span>
+                    <span className="text-zinc-200 truncate">{p.b}</span>
+                  </div>
+                  <span className="text-xs text-orange-400 font-bold shrink-0 ml-2">{p.n}×</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
