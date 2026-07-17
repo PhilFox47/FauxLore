@@ -4,6 +4,8 @@ import { useMediaContext } from '../contexts/MediaContext';
 import { useToast } from '../contexts/ToastContext';
 import { X, Edit2, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame, Ghost, Target, Anchor, Library } from 'lucide-react';
 import { calculateScaledDelta } from '../lib/scaling';
+import { buildStatusTimeline, getItemPace, STATUS_HEX } from '../lib/history';
+import { groupLogsIntoSessions } from '../lib/sessions';
 import { cn } from '../lib/utils';
 import { format, differenceInDays } from 'date-fns';
 import { generateAiArtifactWithGemini } from '../services/geminiService';
@@ -23,7 +25,7 @@ interface MediaDetailModalProps {
 }
 
 export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaDetailModalProps) {
-  const { settings, media, worldBosses, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem, generateArtifactImage } = useMediaContext();
+  const { settings, media, logs: allLogs, worldBosses, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem, generateArtifactImage } = useMediaContext();
   const toast = useToast();
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [deleteConfirmLogId, setDeleteConfirmLogId] = useState<string | null>(null);
@@ -85,6 +87,57 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
 
     return { currentMediaStreak: currentStreak, maxMediaStreak: max, activeDays: uniqueDates.length, startDate, chartData };
   }, [logs, item, settings]);
+
+  // Deeper Lore-Page analytics: status journey, pace/projection, sessions, where/when, rank.
+  const lore = React.useMemo(() => {
+    if (!item) return null;
+    const progress = logs.filter(l => l.metricType !== 'statusChange' && !l.timestamp.startsWith('1970-01-01'));
+
+    const timeline = buildStatusTimeline(item, logs);
+    const pace = getItemPace(item, logs, settings);
+
+    // Sessions on this item
+    const sessions = groupLogsIntoSessions(progress);
+    const sessionMP = sessions.map(s => s.logs.reduce((sum, l) => sum + calculateScaledDelta(l.delta, item, settings), 0));
+    const longestSession = sessionMP.length ? Math.max(...sessionMP) : 0;
+    const avgSession = sessionMP.length ? sessionMP.reduce((a, b) => a + b, 0) / sessionMP.length : 0;
+
+    // Where & when
+    const located = progress.filter(l => l.location && l.location.trim());
+    const isHome = (loc: string) => /home|bedroom|living room|mancave|garden|pc room/i.test(loc);
+    const placeCounts: Record<string, number> = {};
+    let homeN = 0;
+    located.forEach(l => { const loc = l.location!.trim(); placeCounts[loc] = (placeCounts[loc] || 0) + 1; if (isHome(loc)) homeN++; });
+    const topPlaces = Object.entries(placeCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const hours = new Array(24).fill(0);
+    progress.forEach(l => { hours[new Date(l.timestamp).getHours()]++; });
+    const band = (a: number, b: number) => hours.slice(a, b).reduce((x, y) => x + y, 0);
+    const bands = [
+      { label: 'the early hours', n: band(0, 6) },
+      { label: 'the morning', n: band(6, 12) },
+      { label: 'the afternoon', n: band(12, 17) },
+      { label: 'the evening', n: band(17, 22) },
+      { label: 'late at night', n: band(22, 24) },
+    ];
+    const peakBand = bands.reduce((a, b) => (b.n > a.n ? b : a), bands[0]);
+
+    // Library rank (by master pages, among same media type)
+    const typePeers = (media || []).filter(m => m.mediaType === item.mediaType);
+    const mpByItem = new Map<string, number>();
+    allLogs.forEach(l => {
+      if (l.metricType === 'statusChange' || l.timestamp.startsWith('1970-01-01')) return;
+      const m = (media || []).find(x => x.id === l.mediaId);
+      if (!m || m.mediaType !== item.mediaType) return;
+      mpByItem.set(l.mediaId, (mpByItem.get(l.mediaId) || 0) + calculateScaledDelta(l.delta, m, settings));
+    });
+    const myMP = mpByItem.get(item.id) || 0;
+    const peersWithMP = typePeers.map(m => mpByItem.get(m.id) || 0).sort((a, b) => b - a);
+    const rankPos = peersWithMP.filter(v => v > myMP).length + 1;
+    const rankTotal = typePeers.length;
+    const percentile = rankTotal > 1 ? Math.round((1 - (rankPos - 1) / rankTotal) * 100) : 100;
+
+    return { timeline, pace, sessionCount: sessions.length, longestSession, avgSession, located: located.length, homeN, topPlaces, peakBand, rankPos, rankTotal, percentile, myMP };
+  }, [item, logs, allLogs, media, settings]);
 
   if (!isOpen || !item) return null;
 
@@ -406,6 +459,117 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                    <div className="text-sm font-bold text-white">{activeDays} Days</div>
                 </div>
              </div>
+          )}
+
+          {/* Status journey timeline */}
+          {lore && lore.timeline.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-sm font-bold text-zinc-500 mb-3 tracking-wider uppercase flex items-center gap-2">
+                <Clock className="w-4 h-4" /> Status Journey
+              </h3>
+              <div className="flex w-full h-2.5 rounded-full overflow-hidden border border-white/10">
+                {lore.timeline.map((s, i) => {
+                  const total = lore!.timeline.reduce((a, b) => a + Math.max(b.days, 0.25), 0);
+                  const w = (Math.max(s.days, 0.25) / total) * 100;
+                  return <div key={i} title={`${s.status}: ${Math.round(s.days)}d`} style={{ width: `${w}%`, backgroundColor: STATUS_HEX[s.status] || '#71717a' }} />;
+                })}
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
+                {lore.timeline.map((s, i) => (
+                  <div key={i} className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: STATUS_HEX[s.status] || '#71717a' }} />
+                    <span className="text-white font-medium">{s.status}</span>
+                    <span className="text-zinc-500">{Math.round(s.days)}d{s.end ? '' : ' · now'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Pace & projection */}
+          {lore && lore.pace.activeDays > 0 && (
+            <div className="mb-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-zinc-800/30 p-3 rounded-xl border border-white/5">
+                <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">Pages / active day</div>
+                <div className="text-lg font-black text-white">{Math.round(lore.pace.mpPerActiveDay)}</div>
+              </div>
+              {lore.pace.perActiveDay != null && lore.pace.unit && (
+                <div className="bg-zinc-800/30 p-3 rounded-xl border border-white/5">
+                  <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">{lore.pace.unit} / day</div>
+                  <div className="text-lg font-black text-white">{lore.pace.perActiveDay.toFixed(1)}</div>
+                </div>
+              )}
+              {lore.pace.pctComplete != null && (
+                <div className="bg-zinc-800/30 p-3 rounded-xl border border-white/5">
+                  <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">Complete</div>
+                  <div className="text-lg font-black text-white">{Math.round(lore.pace.pctComplete * 100)}%</div>
+                </div>
+              )}
+              {!lore.pace.finished && lore.pace.projectedDaysLeft != null ? (
+                <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20">
+                  <div className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-wider mb-1">Projected finish</div>
+                  <div className="text-lg font-black text-emerald-400">~{lore.pace.projectedDaysLeft}d</div>
+                </div>
+              ) : lore.pace.finished ? (
+                <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20">
+                  <div className="text-[10px] text-emerald-500/80 font-bold uppercase tracking-wider mb-1">Cleared in</div>
+                  <div className="text-lg font-black text-emerald-400">{lore.pace.activeDays}d active</div>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {/* Sessions + Rank */}
+          {lore && lore.sessionCount > 0 && (
+            <div className="mb-8 grid grid-cols-3 gap-3">
+              <div className="bg-zinc-800/30 p-3 rounded-xl border border-white/5">
+                <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">Sessions</div>
+                <div className="text-lg font-black text-white">{lore.sessionCount}</div>
+              </div>
+              <div className="bg-zinc-800/30 p-3 rounded-xl border border-white/5">
+                <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">Longest sitting</div>
+                <div className="text-lg font-black text-white">{Math.round(lore.longestSession)} <span className="text-xs text-zinc-500">pg</span></div>
+              </div>
+              <div className="bg-zinc-800/30 p-3 rounded-xl border border-white/5">
+                <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">Avg session</div>
+                <div className="text-lg font-black text-white">{Math.round(lore.avgSession)} <span className="text-xs text-zinc-500">pg</span></div>
+              </div>
+            </div>
+          )}
+
+          {/* Where & when you lived in it */}
+          {lore && (lore.located > 0 || lore.pace.activeDays > 0) && (
+            <div className="mb-8 p-4 bg-zinc-800/30 rounded-2xl border border-white/5 space-y-3">
+              <h3 className="text-sm font-bold text-zinc-500 tracking-wider uppercase flex items-center gap-2"><MapPin className="w-4 h-4" /> Where &amp; When</h3>
+              {lore.pace.activeDays > 0 && (
+                <p className="text-sm text-zinc-300">You mostly experienced this in <span className="text-white font-semibold">{lore.peakBand.label}</span>.</p>
+              )}
+              {lore.located > 0 && (
+                <>
+                  <p className="text-sm text-zinc-400">
+                    <span className="text-white font-semibold">{Math.round((lore.homeN / lore.located) * 100)}%</span> at home,{' '}
+                    <span className="text-white font-semibold">{Math.round(((lore.located - lore.homeN) / lore.located) * 100)}%</span> away.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {lore.topPlaces.map(([place, n]) => (
+                      <span key={place} className="text-xs px-2 py-1 bg-black/30 border border-white/5 rounded-lg text-zinc-300">{place} <span className="text-zinc-500">· {n}</span></span>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Library rank */}
+          {lore && lore.myMP > 0 && lore.rankTotal > 1 && (
+            <div className="mb-8 p-4 bg-orange-500/5 border border-orange-500/20 rounded-2xl flex items-center gap-3">
+              <Crown className="w-5 h-5 text-orange-500 shrink-0" />
+              <p className="text-sm text-zinc-300">
+                Among your {lore.rankTotal} {item.mediaType.toLowerCase()}s, this ranks{' '}
+                <span className="text-white font-bold">#{lore.rankPos}</span> by Master Pages
+                {(() => { const top = Math.max(1, Math.round((lore.rankPos / lore.rankTotal) * 100)); return top <= 50 ? <> — top <span className="text-orange-400 font-bold">{top}%</span></> : null; })()}.
+              </p>
+            </div>
           )}
 
           {chartData.length > 1 && (
