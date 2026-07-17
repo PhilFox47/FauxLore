@@ -17,6 +17,7 @@ import { cn } from '../lib/utils';
 import { generateAiRecapText, generateText } from '../services/nanoGptService';
 import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon, Skull } from 'lucide-react';
 import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog, analyzeContrarian, extractJournals, calculateLongestStreak } from '../lib/recapAnalytics';
+import { groupLogsIntoSessions } from '../lib/sessions';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, AreaChart, Area, Legend } from 'recharts';
 
 type Timeframe = 'week' | 'month' | 'year';
@@ -1739,6 +1740,98 @@ ${promptContext}`, settings.aiPersona);
     );
   };
 
+  // Deep Cuts: a signature hero number (with delta vs the previous equivalent interval)
+  // plus a superlatives grid — the period's bests at a glance.
+  const renderDeepCuts = () => {
+    const prevTarget = timeframe === 'week' ? subWeeks(currentInterval.start, 1)
+      : timeframe === 'month' ? subMonths(currentInterval.start, 1)
+      : subYears(currentInterval.start, 1);
+    const prevInterval = timeframe === 'week' ? { start: startOfWeek(prevTarget, { weekStartsOn: 1 }), end: endOfWeek(prevTarget, { weekStartsOn: 1 }) }
+      : timeframe === 'month' ? { start: startOfMonth(prevTarget), end: endOfMonth(prevTarget) }
+      : { start: startOfYear(prevTarget), end: endOfYear(prevTarget) };
+    const prevLogs = validLogs.filter(l => l.metricType !== 'statusChange' && isWithinInterval(subHours(parseISO(l.timestamp), 5), prevInterval));
+    const prevPages = prevLogs.reduce((acc, l) => { const m = media.find(x => x.id === l.mediaId); return m ? acc + calculateScaledDelta(l.delta, m, settings) : acc; }, 0);
+    const deltaPct = prevPages > 0 ? Math.round(((totalMasterPages - prevPages) / prevPages) * 100) : null;
+
+    const ranked = activeMedia.map(m => ({ item: m, pages: activeProgressLogs.filter(l => l.mediaId === m.id).reduce((a, l) => a + calculateScaledDelta(l.delta, m, settings), 0) })).filter(r => r.pages > 0).sort((a, b) => b.pages - a.pages);
+    const mostPlayed = ranked[0];
+
+    const topRated = completedMedia.filter(m => (m.userRating || 0) > 0).sort((a, b) => (b.userRating || 0) - (a.userRating || 0))[0];
+
+    const sessions = groupLogsIntoSessions(activeProgressLogs);
+    let longest = { pages: 0, title: '' };
+    sessions.forEach(s => {
+      const p = s.logs.reduce((a, l) => { const m = media.find(x => x.id === l.mediaId); return m ? a + calculateScaledDelta(l.delta, m, settings) : a; }, 0);
+      if (p > longest.pages) { const m = media.find(x => x.id === s.mediaId); longest = { pages: p, title: m?.title || '' }; }
+    });
+
+    const placeCounts: Record<string, number> = {};
+    activeProgressLogs.forEach(l => { if (l.location && l.location.trim()) placeCounts[l.location.trim()] = (placeCounts[l.location.trim()] || 0) + 1; });
+    const topPlace = Object.entries(placeCounts).sort((a, b) => b[1] - a[1])[0];
+
+    const topBoss = (worldBosses || []).filter(b => b.status === 'Defeated' && b.updatedAt && isWithinInterval(subHours(parseISO(b.updatedAt), 5), currentInterval)).sort((a, b) => b.level - a.level)[0];
+
+    let comeback: { title: string; gap: number } | null = null;
+    activeMedia.forEach(m => {
+      const inPeriod = activeProgressLogs.filter(l => l.mediaId === m.id).sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp));
+      if (!inPeriod.length) return;
+      const firstIn = +new Date(inPeriod[0].timestamp);
+      const priors = validLogs.filter(l => l.mediaId === m.id && +new Date(l.timestamp) < firstIn);
+      if (!priors.length) return;
+      const gap = (firstIn - Math.max(...priors.map(l => +new Date(l.timestamp)))) / 86400000;
+      if (gap > 30 && (!comeback || gap > comeback.gap)) comeback = { title: m.title, gap: Math.round(gap) };
+    });
+
+    if (!mostPlayed && totalMasterPages === 0) return null;
+
+    const cells: any[] = [
+      mostPlayed && { icon: <Flame className="w-4 h-4" />, label: 'Most played', value: mostPlayed.item.title, sub: `${Math.round(mostPlayed.pages).toLocaleString()} pages` },
+      topRated && { icon: <Star className="w-4 h-4" />, label: 'Highest rated', value: topRated.title, sub: `${topRated.userRating}★` },
+      longest.pages > 0 && { icon: <Zap className="w-4 h-4" />, label: 'Longest session', value: longest.title, sub: `${Math.round(longest.pages).toLocaleString()} pages` },
+      topPlace && { icon: <Map className="w-4 h-4" />, label: 'Most-logged place', value: topPlace[0], sub: `${topPlace[1]} logs` },
+      topBoss && { icon: <Skull className="w-4 h-4" />, label: 'Biggest foe felled', value: topBoss.name, sub: `Level ${topBoss.level}` },
+      comeback && { icon: <History className="w-4 h-4" />, label: 'Comeback', value: (comeback as { title: string; gap: number }).title, sub: `after ${(comeback as { title: string; gap: number }).gap}d away` },
+    ].filter(Boolean);
+
+    return (
+      <Reveal className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-gradient-to-b from-zinc-950 to-black p-8 md:p-12">
+        <div className={`absolute top-0 right-0 w-72 h-72 ${theme.glow} blur-[120px] rounded-full -mr-24 -mt-24 pointer-events-none`} />
+        <div className="relative z-10">
+          <div className={`text-[10px] uppercase tracking-[0.4em] ${theme.text} font-black mb-6`}>Deep Cuts</div>
+
+          {/* Signature number */}
+          <div className="mb-10">
+            <div className="flex items-end gap-4 flex-wrap">
+              <div className="text-6xl md:text-7xl font-black text-white tracking-tighter tabular-nums">{Math.round(totalMasterPages).toLocaleString()}</div>
+              <div className="pb-2">
+                <div className="text-sm font-black uppercase tracking-widest text-zinc-500">Master Pages</div>
+                {deltaPct !== null && (
+                  <div className={`text-sm font-bold ${deltaPct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {deltaPct >= 0 ? '▲' : '▼'} {Math.abs(deltaPct)}% vs last {timeframe}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Superlatives grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {cells.map((c, i) => (
+              <div key={i} className="bg-white/[0.03] border border-white/5 rounded-2xl p-4">
+                <div className={`flex items-center gap-2 ${theme.text} mb-2`}>
+                  {c.icon}
+                  <span className="text-[10px] uppercase tracking-[0.2em] font-black text-zinc-500">{c.label}</span>
+                </div>
+                <div className="text-base font-black text-white truncate" title={c.value}>{c.value}</div>
+                <div className="text-xs text-zinc-500 font-bold mt-0.5">{c.sub}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Reveal>
+    );
+  };
+
   // Closing "sealed capsule" summary — the period at a glance, dated now.
   const renderTimeCapsule = () => {
     const cfg = { timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings };
@@ -2079,6 +2172,9 @@ ${promptContext}`, settings.aiPersona);
                           </div>
                       </div>
                    )}
+
+                   {/* Deep cuts: signature number + superlatives */}
+                   {renderDeepCuts()}
 
                    {/* Sealed time capsule (closing) */}
                    {renderTimeCapsule()}
