@@ -201,9 +201,12 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
               }
 
               if (!isContinuation) {
-                const updateDurability = db.prepare("UPDATE artifacts SET durability = MAX(0, durability - ?) WHERE id = ?");
+                // Wear the item down and auto-unequip it the moment it breaks (hits 0 durability).
+                const updateDurability = db.prepare(
+                  "UPDATE artifacts SET isEquipped = CASE WHEN durability - ? <= 0 THEN 0 ELSE isEquipped END, durability = MAX(0, durability - ?) WHERE id = ?"
+                );
                 for (const item of applicableItems) {
-                   updateDurability.run(1, item.id);
+                   updateDurability.run(1, 1, item.id);
                 }
               }
             }

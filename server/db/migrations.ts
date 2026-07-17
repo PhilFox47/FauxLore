@@ -163,6 +163,8 @@ export function runMigrations(db: Db) {
   try { db.prepare("ALTER TABLE logs ADD COLUMN location TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE logs ADD COLUMN isHistoric INTEGER DEFAULT 0").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE logs ADD COLUMN bonusMultiplier REAL DEFAULT 0").run(); } catch (e) {}
+  // Broken items (0 durability) should never remain equipped.
+  try { db.prepare("UPDATE artifacts SET isEquipped = 0 WHERE durability <= 0 AND isEquipped = 1").run(); } catch (e) {}
   
   try { db.prepare("UPDATE media SET status = 'Active' WHERE status = 'Playing'").run(); } catch(e) {}
   try { db.prepare("UPDATE media SET status = 'Planning' WHERE status = 'Backlog'").run(); } catch(e) {}

@@ -7,7 +7,7 @@ import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
 import { calculateNativeUnits, NATIVE_UNIT_LABELS } from '../lib/rpgSystem';
 import { groupLogsIntoSessions } from '../lib/sessions';
 import { aggregateStatusHistory } from '../lib/history';
-import { ProgressLog, MediaItem } from '../types/schema';
+import { ProgressLog, MediaItem, MEDIA_HEX } from '../types/schema';
 import { GithubHeatmap } from '../components/Heatmap';
 
 type DateRange = '7days' | '30days' | '90days' | '1year' | 'all' | 'custom';
@@ -530,7 +530,11 @@ export function Statistics() {
                       cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                       contentStyle={{ backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '1rem', color: '#fff' }}
                     />
-                    <Bar dataKey="value" name="Master Pages" fill="#fb923c" radius={[0, 4, 4, 0]} barSize={20} />
+                    <Bar dataKey="value" name="Master Pages" radius={[0, 4, 4, 0]} barSize={20}>
+                      {typeDistribution.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={MEDIA_HEX[entry.name as keyof typeof MEDIA_HEX]?.base || '#fb923c'} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -589,9 +593,10 @@ export function Statistics() {
             </div>
           )}
         </div>
+      </div>
 
-        {/* Taste Fingerprint */}
-        {tasteProfile.hasData && (
+      {/* Taste Fingerprint */}
+      {tasteProfile.hasData && (
           <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6">
             <h4 className="text-sm font-bold text-zinc-400 mb-2 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-orange-400" />
@@ -761,6 +766,5 @@ export function Statistics() {
           </div>
         )}
       </div>
-    </div>
   );
 }

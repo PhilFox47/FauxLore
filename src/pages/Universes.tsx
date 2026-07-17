@@ -3,7 +3,7 @@ import { useMediaContext } from '../contexts/MediaContext';
 import { MediaCard } from '../components/MediaCard';
 import { Search, Image, Activity, Clock, Edit3, X, Save, Globe, ListFilter } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { MediaItem } from '../types/schema';
+import { MediaItem, MEDIA_HEX } from '../types/schema';
 import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -239,7 +239,7 @@ export function Universes() {
                     dataKey="value"
                   >
                     {typeDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      <Cell key={`cell-${index}`} fill={MEDIA_HEX[entry.name as keyof typeof MEDIA_HEX]?.base || COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip 
