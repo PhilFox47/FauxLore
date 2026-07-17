@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid, Cell } from 'recharts';
 import { format, subDays, isAfter, startOfDay } from 'date-fns';
-import { BarChart3, DatabaseZap, Clock, ListChecks, Calendar, Target, Activity, Zap, MapPin } from 'lucide-react';
+import { BarChart3, DatabaseZap, Clock, ListChecks, Calendar, Target, Activity, Zap, MapPin, Sparkles } from 'lucide-react';
 import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
 import { calculateNativeUnits, NATIVE_UNIT_LABELS } from '../lib/rpgSystem';
 import { groupLogsIntoSessions } from '../lib/sessions';
@@ -237,6 +237,33 @@ export function Statistics() {
       .sort((a, b) => b.value - a.value)
       .slice(0, 5); // top 5
   }, [filteredLogs, media, settings, mediaTypeFilters]);
+
+  // Taste fingerprint: weight each media item's tags & genres by the Master Pages
+  // consumed in the selected timeframe, so your "identity" reflects time invested.
+  const tasteProfile = useMemo(() => {
+    const tagW: Record<string, number> = {};
+    const genreW: Record<string, number> = {};
+    filteredLogs.forEach(log => {
+      if (log.metricType === 'statusChange') return;
+      const item = media.find(m => m.id === log.mediaId);
+      if (!item) return;
+      const w = calculateScaledDelta(log.delta || 1, item, settings);
+      if (w <= 0) return;
+      (item.tags || []).forEach(t => { if (t) tagW[t] = (tagW[t] || 0) + w; });
+      (item.genres || []).forEach(g => { if (g) genreW[g] = (genreW[g] || 0) + w; });
+    });
+    const rank = (o: Record<string, number>) => Object.entries(o).sort((a, b) => b[1] - a[1]);
+    const tags = rank(tagW);
+    const genres = rank(genreW);
+    const maxTag = tags[0]?.[1] || 1;
+    const maxGenre = genres[0]?.[1] || 1;
+    return {
+      headline: tags.slice(0, 3).map(t => t[0]),
+      tags: tags.slice(0, 10).map(([name, value]) => ({ name, pct: value / maxTag })),
+      genres: genres.slice(0, 8).map(([name, value]) => ({ name, pct: value / maxGenre })),
+      hasData: tags.length > 0 || genres.length > 0,
+    };
+  }, [filteredLogs, media, settings]);
 
   const STATUS_COLORS: Record<string, string> = {
     'Active': '#10b981', // Emerald
@@ -496,6 +523,56 @@ export function Statistics() {
             </div>
           )}
         </div>
+
+        {/* Taste Fingerprint */}
+        {tasteProfile.hasData && (
+          <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6">
+            <h4 className="text-sm font-bold text-zinc-400 mb-2 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-orange-400" />
+              Your Taste Fingerprint
+            </h4>
+            {tasteProfile.headline.length > 0 && (
+              <p className="text-lg text-zinc-300 mb-6">
+                You are:{" "}
+                {tasteProfile.headline.map((h, i) => (
+                  <React.Fragment key={h}>
+                    {i > 0 && <span className="text-zinc-600"> · </span>}
+                    <span className="font-bold text-white">{h}</span>
+                  </React.Fragment>
+                ))}
+              </p>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-3">Defining Tags</div>
+                <div className="space-y-2">
+                  {tasteProfile.tags.map(t => (
+                    <div key={t.name} className="flex items-center gap-3">
+                      <div className="w-32 shrink-0 text-xs text-zinc-300 truncate text-right">{t.name}</div>
+                      <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                        <div className="h-full bg-orange-500 rounded-full" style={{ width: `${Math.max(4, t.pct * 100)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-3">Top Genres</div>
+                <div className="space-y-2">
+                  {tasteProfile.genres.map(g => (
+                    <div key={g.name} className="flex items-center gap-3">
+                      <div className="w-32 shrink-0 text-xs text-zinc-300 truncate text-right">{g.name}</div>
+                      <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${Math.max(4, g.pct * 100)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <p className="text-[11px] text-zinc-600 mt-5">Weighted by Master Pages consumed in the selected timeframe.</p>
+          </div>
+        )}
       </div>
     </div>
   );

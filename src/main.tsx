@@ -14,6 +14,7 @@ const named = <T extends Record<string, any>>(p: Promise<T>, key: keyof T) => p.
 const Dashboard = lazy(() => named(import('./pages/Dashboard'), 'Dashboard'));
 const MediaLibrary = lazy(() => named(import('./pages/MediaLibrary'), 'MediaLibrary'));
 const Statistics = lazy(() => named(import('./pages/Statistics'), 'Statistics'));
+const Atlas = lazy(() => named(import('./pages/Atlas'), 'Atlas'));
 const Recaps = lazy(() => named(import('./pages/Recaps'), 'Recaps'));
 const Lorebook = lazy(() => named(import('./pages/Lorebook'), 'Lorebook'));
 const Lorekeeper = lazy(() => named(import('./pages/Lorekeeper'), 'Lorekeeper'));
@@ -52,6 +53,7 @@ createRoot(document.getElementById('root')!).render(
                   <Route index element={<Dashboard />} />
                   <Route path="library/:mediaType" element={<MediaLibrary />} />
                   <Route path="stats" element={<Statistics />} />
+                  <Route path="atlas" element={<Atlas />} />
                   <Route path="recaps" element={<Recaps />} />
                   <Route path="lorebook" element={<Lorebook />} />
                   <Route path="lorekeeper" element={<Lorekeeper />} />

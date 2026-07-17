@@ -16,6 +16,28 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // Merge/rename locations: repoint every log carrying one of `from` to the single `to`
+  // name. This powers the Atlas "merge locations" tool (a single-item `from` is a rename).
+  app.post("/api/logs/merge-locations", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const { from, to } = req.body || {};
+      const target = typeof to === "string" ? to.trim() : "";
+      const sources: string[] = Array.isArray(from)
+        ? from.map((s: any) => (typeof s === "string" ? s.trim() : "")).filter(Boolean)
+        : [];
+      if (!target || sources.length === 0) {
+        return res.status(400).json({ error: "Provide `from` (non-empty array) and a non-empty `to`." });
+      }
+      const placeholders = sources.map(() => "?").join(", ");
+      const result = db
+        .prepare(`UPDATE logs SET location = ? WHERE userId = ? AND location IN (${placeholders})`)
+        .run(target, userId, ...sources);
+      res.json({ success: true, updated: result.changes, to: target });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
 
 
   app.post("/api/logs", (req, res) => {

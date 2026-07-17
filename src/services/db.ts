@@ -110,6 +110,16 @@ export const DatabaseService = {
     if (!res.ok) throw new Error('Failed to delete log');
   },
 
+  async mergeLocations(from: string[], to: string): Promise<{ updated: number }> {
+    const res = await apiFetch('/api/logs/merge-locations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to })
+    });
+    if (!res.ok) throw new Error('Failed to merge locations');
+    return res.json();
+  },
+
   async getSettings(): Promise<any> {
     try {
       const authRes = await apiFetch('/api/auth/me');

@@ -23,6 +23,7 @@ interface MediaContextType {
   addLog: (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string, location?: string, isHistoric?: boolean, extraUpdates?: any) => Promise<void>;
   updateLog: (id: string, updates: Partial<ProgressLog>) => Promise<void>;
   deleteLog: (id: string) => Promise<void>;
+  mergeLocations: (from: string[], to: string) => Promise<number>;
   saveAiRecap: (recap: any) => Promise<void>;
   saveArtifact: (artifact: Artifact) => Promise<void>;
   updateArtifact: (id: string, artifact: Partial<Artifact>) => Promise<void>;
@@ -214,6 +215,12 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     await refreshData();
   }, [refreshData]);
 
+  const mergeLocations = useCallback(async (from: string[], to: string) => {
+    const { updated } = await DatabaseService.mergeLocations(from, to);
+    await refreshData();
+    return updated;
+  }, [refreshData]);
+
   const saveAiRecap = useCallback(async (recap: any) => {
     await DatabaseService.saveAiRecap(recap);
     await refreshData();
@@ -300,7 +307,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [refreshData]);
 
   return (
-    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, oracleMessages, taxonomies, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, fetchOracleMessage, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, oracleMessages, taxonomies, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, fetchOracleMessage, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
       {children}
     </MediaContext.Provider>
   );
