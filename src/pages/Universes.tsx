@@ -1,6 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { MediaCard } from '../components/MediaCard';
+import { MediaDetailModal } from '../components/MediaDetailModal';
+import { MediaFormModal } from '../components/MediaFormModal';
+import { ProgressModal } from '../components/ProgressModal';
 import { Search, Image, Activity, Clock, Edit3, X, Save, Globe, ListFilter } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { MediaItem, MEDIA_HEX } from '../types/schema';
@@ -10,11 +13,23 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 type SortOption = 'Alphabetical' | 'Last Activity' | 'Total Master Pages' | 'Total Entry Count';
 
 export function Universes() {
-  const { media, logs, settings, franchises: savedFranchises, saveFranchise } = useMediaContext();
+  const { media, logs, settings, franchises: savedFranchises, saveFranchise, saveMediaItem, addLog, deleteMediaItem } = useMediaContext();
   const [selectedUniverse, setSelectedUniverse] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({ coverImageUrl: '', description: '' });
   const [sortBy, setSortBy] = useState<SortOption>('Total Master Pages');
+
+  // Media card interactions (parity with Dashboard / Media Library)
+  const [detailItem, setDetailItem] = useState<MediaItem | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<MediaItem | undefined>(undefined);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [progressItem, setProgressItem] = useState<MediaItem | null>(null);
+  const [isProgressOpen, setIsProgressOpen] = useState(false);
+
+  const handleViewDetails = (item: MediaItem) => { setDetailItem(item); setIsDetailOpen(true); };
+  const handleEdit = (item: MediaItem) => { setEditingItem(item); setIsFormOpen(true); };
+  const handleLogProgress = (item: MediaItem) => { setProgressItem(item); setIsProgressOpen(true); };
 
   const COLORS = ['#f97316', '#3b82f6', '#8b5cf6', '#10b981', '#ef4444', '#eab308'];
 
@@ -260,12 +275,37 @@ export function Universes() {
                 <div className="absolute top-2 left-2 w-6 h-6 bg-black/80 backdrop-blur-md rounded-full z-10 flex items-center justify-center border border-white/10 text-[10px] font-bold text-white shadow-2xl">
                   {idx + 1}
                 </div>
-                <MediaCard item={item} />
+                <MediaCard
+                  item={item}
+                  onViewDetails={handleViewDetails}
+                  onEdit={handleEdit}
+                  onLogProgress={handleLogProgress}
+                />
               </div>
             ))}
           </div>
         </div>
 
+        <MediaDetailModal
+          isOpen={isDetailOpen}
+          onClose={() => setIsDetailOpen(false)}
+          item={detailItem}
+          logs={logs.filter(l => l.mediaId === detailItem?.id)}
+          onEdit={(item) => { setIsDetailOpen(false); handleEdit(item); }}
+        />
+        <MediaFormModal
+          isOpen={isFormOpen}
+          initialData={editingItem}
+          onClose={() => setIsFormOpen(false)}
+          onSave={saveMediaItem}
+          onDelete={deleteMediaItem}
+        />
+        <ProgressModal
+          isOpen={isProgressOpen}
+          item={progressItem}
+          onClose={() => setIsProgressOpen(false)}
+          onLog={addLog}
+        />
       </div>
     );
   }
