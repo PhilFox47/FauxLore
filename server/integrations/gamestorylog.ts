@@ -92,8 +92,13 @@ async function getBrowser() {
   if (!browserPromise) {
     browserPromise = (async () => {
       const puppeteer: any = (await import("puppeteer")).default;
+      // In Docker we run the apt-installed Chromium (PUPPETEER_EXECUTABLE_PATH), whose
+      // shared libraries the package manager guarantees. Elsewhere fall back to
+      // whatever Puppeteer bundled, so local development needs no configuration.
+      const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
       return puppeteer.launch({
         headless: true,
+        ...(executablePath ? { executablePath } : {}),
         args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
       });
     })().catch((e) => {
