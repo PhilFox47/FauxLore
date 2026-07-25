@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
-import { searchGames, getGameDetails } from "../integrations/gamestorylog";
+import { searchGames, getGameDetails, diagnose as gslDiagnose } from "../integrations/gamestorylog";
 
 export function registerSearchRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, hltbSearch, getIgdbToken } = ctx;
@@ -321,8 +321,12 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
         try {
           detailed.push(await getGameDetails(m.slug));
         } catch (e) {
-          // Fall back to the slug-derived stub if a page fetch fails
-          detailed.push({ id: m.slug, slug: m.slug, title: m.title, url: m.url, platforms: [], genres: [], tags: [] });
+          // A guessed slug that doesn't resolve isn't a real game — drop it rather
+          // than offering a bogus result. Sitemap-derived slugs are known to exist,
+          // so keep those as stubs even if the page fetch hiccups.
+          if (m.verified) {
+            detailed.push({ id: m.slug, slug: m.slug, title: m.title, url: m.url, platforms: [], genres: [], tags: [] });
+          }
         }
       }
 
@@ -351,6 +355,18 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
     } catch (error: any) {
       console.error("Error searching GameStoryLog:", error);
       res.status(500).json({ error: error.message || "Failed to fetch metadata from GameStoryLog." });
+    }
+  });
+
+  // Diagnostics: reports what the GSL integration can actually see upstream
+  // (sitemap shape, slug count, and whether a game page renders server-side).
+  app.get("/api/gsl/diagnose", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      res.json(await gslDiagnose((req.query.q as string) || "Being a DIK"));
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
     }
   });
 

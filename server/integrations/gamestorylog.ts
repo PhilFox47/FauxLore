@@ -45,7 +45,7 @@ export interface GslGame {
 /* ------------------------------------------------------------------ fetching */
 
 let lastRequestAt = 0;
-async function politeFetch(url: string): Promise<string> {
+async function politeFetchRaw(url: string): Promise<{ ok: boolean; status: number; body: string }> {
   const wait = Math.max(0, lastRequestAt + MIN_REQUEST_GAP_MS - Date.now());
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastRequestAt = Date.now();
@@ -57,8 +57,14 @@ async function politeFetch(url: string): Promise<string> {
       "Accept-Language": "en-US,en;q=0.9",
     },
   });
-  if (!res.ok) throw new Error(`GSL request failed (${res.status}) for ${url}`);
-  return res.text();
+  const body = await res.text();
+  return { ok: res.ok, status: res.status, body };
+}
+
+async function politeFetch(url: string): Promise<string> {
+  const { ok, status, body } = await politeFetchRaw(url);
+  if (!ok) throw new Error(`GSL request failed (${status}) for ${url}`);
+  return body;
 }
 
 /* -------------------------------------------------------------------- parsing */
@@ -244,40 +250,79 @@ let sitemapCache: { fetchedAt: number; entries: SitemapEntry[] } | null = null;
  * The slug index, from the sitemap robots.txt advertises. Cached for a day so that
  * searching costs nothing upstream.
  */
-export async function getSitemapIndex(force = false): Promise<SitemapEntry[]> {
-  if (!force && sitemapCache && Date.now() - sitemapCache.fetchedAt < SITEMAP_TTL_MS) {
-    return sitemapCache.entries;
-  }
-  const xml = await politeFetch(`${BASE}/sitemap.xml`);
-  const entries: SitemapEntry[] = [];
-  const seen = new Set<string>();
+/** Pulls every /games/<slug> out of one sitemap document. */
+function extractGameEntries(xml: string, into: Map<string, SitemapEntry>) {
   const urlRe = /<url>([\s\S]*?)<\/url>/gi;
   let block: RegExpExecArray | null;
   while ((block = urlRe.exec(xml)) !== null) {
     const loc = block[1].match(/<loc>\s*([^<]+?)\s*<\/loc>/i)?.[1];
-    if (!loc) continue;
-    const slug = loc.match(/\/games\/([a-z0-9-]+)\/?$/i)?.[1];
-    if (!slug || seen.has(slug)) continue;
-    seen.add(slug);
-    entries.push({
-      slug,
-      lastmod: block[1].match(/<lastmod>\s*([^<]+?)\s*<\/lastmod>/i)?.[1],
-    });
+    const slug = loc?.match(/\/games\/([^/?#"'<>\s]+)\/?$/i)?.[1];
+    if (slug && !into.has(slug)) {
+      into.set(slug, { slug, lastmod: block[1].match(/<lastmod>\s*([^<]+?)\s*<\/lastmod>/i)?.[1] });
+    }
   }
   // Some sitemaps omit <url> wrappers; fall back to a flat <loc> scan.
-  if (entries.length === 0) {
-    const locRe = /<loc>\s*([^<]+?)\s*<\/loc>/gi;
-    let m: RegExpExecArray | null;
-    while ((m = locRe.exec(xml)) !== null) {
-      const slug = m[1].match(/\/games\/([a-z0-9-]+)\/?$/i)?.[1];
-      if (slug && !seen.has(slug)) {
-        seen.add(slug);
-        entries.push({ slug });
+  const locRe = /<loc>\s*([^<]+?)\s*<\/loc>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = locRe.exec(xml)) !== null) {
+    const slug = m[1].match(/\/games\/([^/?#"'<>\s]+)\/?$/i)?.[1];
+    if (slug && !into.has(slug)) into.set(slug, { slug });
+  }
+}
+
+/**
+ * The slug index, from the sitemap robots.txt advertises. Cached for a day so that
+ * searching costs nothing upstream.
+ *
+ * Handles sitemap *indexes* (a sitemap listing other sitemaps), which is how sites
+ * with many pages usually organise this — otherwise the top level contains no game
+ * URLs at all and the index comes back empty.
+ */
+export async function getSitemapIndex(force = false): Promise<SitemapEntry[]> {
+  if (!force && sitemapCache && Date.now() - sitemapCache.fetchedAt < SITEMAP_TTL_MS) {
+    return sitemapCache.entries;
+  }
+  const found = new Map<string, SitemapEntry>();
+  const root = await politeFetch(`${BASE}/sitemap.xml`);
+  extractGameEntries(root, found);
+
+  // If this is an index (or simply yielded nothing), walk the child sitemaps.
+  if (found.size === 0 || /<sitemapindex/i.test(root)) {
+    const children: string[] = [];
+    const childRe = /<sitemap>([\s\S]*?)<\/sitemap>/gi;
+    let c: RegExpExecArray | null;
+    while ((c = childRe.exec(root)) !== null) {
+      const loc = c[1].match(/<loc>\s*([^<]+?)\s*<\/loc>/i)?.[1];
+      if (loc) children.push(loc);
+    }
+    // Fall back to any .xml <loc> if the <sitemap> wrappers are absent
+    if (children.length === 0) {
+      const locRe = /<loc>\s*([^<]+?\.xml[^<]*?)\s*<\/loc>/gi;
+      let m: RegExpExecArray | null;
+      while ((m = locRe.exec(root)) !== null) children.push(m[1]);
+    }
+    for (const child of children.slice(0, 25)) {
+      try {
+        extractGameEntries(await politeFetch(child), found);
+      } catch (e) {
+        console.error(`[gsl] Failed to read child sitemap ${child}`, e);
       }
     }
   }
+
+  const entries = Array.from(found.values());
   sitemapCache = { fetchedAt: Date.now(), entries };
   return entries;
+}
+
+/** Best-effort slug for a title, matching GSL's own slug style ("Being a DIK" -> "being-a-dik"). */
+export function titleToSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[’'`]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 /** Turns a slug back into a human-readable title for search display. */
@@ -310,20 +355,92 @@ function score(query: string, slug: string): number {
  * Searches GSL by matching against the locally cached slug index — no upstream
  * request per keystroke. Returns lightweight results; details are fetched on demand.
  */
-export async function searchGames(query: string, limit = 20) {
-  const entries = await getSitemapIndex();
-  return entries
+export interface GslCandidate {
+  id: string;
+  slug: string;
+  title: string;
+  url: string;
+  lastmod?: string;
+  /** false when the slug was guessed from the title and must be confirmed by fetching it. */
+  verified: boolean;
+}
+
+export async function searchGames(query: string, limit = 20): Promise<GslCandidate[]> {
+  const out: GslCandidate[] = [];
+  const seen = new Set<string>();
+
+  const push = (slug: string, verified: boolean, lastmod?: string) => {
+    if (!slug || seen.has(slug)) return;
+    seen.add(slug);
+    out.push({ id: slug, slug, title: slugToTitle(slug), url: `${BASE}/games/${slug}`, lastmod, verified });
+  };
+
+  // The sitemap index is the cheap path, but it can be unavailable or incomplete.
+  // Never let that failure swallow the whole search.
+  let entries: SitemapEntry[] = [];
+  try {
+    entries = await getSitemapIndex();
+  } catch (e) {
+    console.error("[gsl] Sitemap unavailable, falling back to direct slug lookup", e);
+  }
+
+  entries
     .map((e) => ({ entry: e, s: score(query, e.slug) }))
     .filter((r) => r.s > 0)
     .sort((a, b) => b.s - a.s || a.entry.slug.length - b.entry.slug.length)
     .slice(0, limit)
-    .map((r) => ({
-      id: r.entry.slug,
-      slug: r.entry.slug,
-      title: slugToTitle(r.entry.slug),
-      url: `${BASE}/games/${r.entry.slug}`,
-      lastmod: r.entry.lastmod,
-    }));
+    .forEach((r) => push(r.entry.slug, true, r.entry.lastmod));
+
+  // GSL slugs are a direct transliteration of the title, so a guessed slug resolves
+  // most exact searches even when the sitemap gives us nothing. Unverified until fetched.
+  push(titleToSlug(query), false);
+
+  return out.slice(0, limit);
+}
+
+/**
+ * Reports what the integration can actually see upstream. Used by /api/gsl/diagnose
+ * to distinguish "sitemap has no game URLs" from "pages don't render server-side".
+ */
+export async function diagnose(sampleQuery = "Being a DIK") {
+  const report: Record<string, any> = { base: BASE };
+  try {
+    const r = await politeFetchRaw(`${BASE}/sitemap.xml`);
+    report.sitemap = {
+      status: r.status,
+      bytes: r.body.length,
+      isIndex: /<sitemapindex/i.test(r.body),
+      urlCount: (r.body.match(/<loc>/gi) || []).length,
+      firstLocs: (r.body.match(/<loc>\s*([^<]+?)\s*<\/loc>/gi) || []).slice(0, 5),
+    };
+  } catch (e: any) {
+    report.sitemap = { error: String(e?.message || e) };
+  }
+  try {
+    const entries = await getSitemapIndex(true);
+    report.slugsFound = entries.length;
+    report.sampleSlugs = entries.slice(0, 5).map((e) => e.slug);
+  } catch (e: any) {
+    report.slugsFound = { error: String(e?.message || e) };
+  }
+  const slug = titleToSlug(sampleQuery);
+  try {
+    const r = await politeFetchRaw(`${BASE}/games/${slug}`);
+    const parsed = r.ok ? parseGamePage(r.body, slug) : null;
+    report.directPage = {
+      slug,
+      status: r.status,
+      bytes: r.body.length,
+      // If the page is a client-rendered shell these will be missing even on a 200.
+      serverRendered: !!(parsed?.version || parsed?.developer || parsed?.platforms.length),
+      parsedTitle: parsed?.title,
+      parsedVersion: parsed?.version,
+      parsedDeveloper: parsed?.developer,
+    };
+  } catch (e: any) {
+    report.directPage = { slug, error: String(e?.message || e) };
+  }
+  return report;
 }
 
 /* --------------------------------------------------------------- game details */
