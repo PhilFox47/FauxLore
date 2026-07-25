@@ -70,7 +70,8 @@ export interface MediaItem {
   metadataSource?: MetadataSource;
   metadataSourceId?: string;   // stable id/slug at that source (e.g. a GSL slug, a VNDB "v123")
   sourceUrl?: string;          // canonical public page for this item at its source
-  sourceVersion?: string;      // e.g. "Season 1: v1.06"
+  sourceVersion?: string;      // latest version reported upstream, e.g. "Season 1: v1.06"
+  installedVersion?: string;   // the version you actually have / played
   sourceUpdatedAt?: string;    // last-updated date reported by the source
   updateAvailable?: boolean;   // set when a refresh detects a newer version
   updateSeenAt?: string;       // when the user acknowledged the update

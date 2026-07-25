@@ -14,7 +14,7 @@ const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100, 150, 200, 365, 500, 1000];
  * nothing fires during the initial data load (only real, in-session changes).
  */
 export function Celebrations() {
-  const { rpgState, worldBosses, logs, aiTextCache, isLoading } = useMediaContext();
+  const { rpgState, worldBosses, logs, media, aiTextCache, isLoading } = useMediaContext();
   const toast = useToast();
 
   const [levelUp, setLevelUp] = useState<{ level: number; title: string } | null>(null);
@@ -26,6 +26,7 @@ export function Celebrations() {
   const prevLevel = useRef<number | null>(null);
   const prevStreak = useRef<number | null>(null);
   const seenDefeated = useRef<Set<string> | null>(null);
+  const seenUpdates = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     const onResize = () => setSize({ width: window.innerWidth, height: window.innerHeight });
@@ -64,6 +65,33 @@ export function Celebrations() {
     defeated.filter((b) => !(seenDefeated.current as Set<string>).has(b.id)).forEach((b) => toast.success(`⚔️ ${b.name} defeated!`));
     seenDefeated.current = new Set(defeated.map((b) => b.id));
   }, [isLoading, worldBosses, toast]);
+
+  // New upstream versions for things you're actively playing or have shelved.
+  // Fires once per item, when the flag first appears in this session.
+  useEffect(() => {
+    if (isLoading) return;
+    const pending = media.filter(
+      (m) => m.updateAvailable && (m.status === 'Active' || m.status === 'On Hold'),
+    );
+    if (seenUpdates.current === null) {
+      // Announce whatever was waiting when the app opened, then track it.
+      pending.forEach((m) =>
+        toast.info(
+          `\u2b06\ufe0f Update available for ${m.title}${m.sourceVersion ? ` (${m.sourceVersion})` : ''}`,
+        ),
+      );
+      seenUpdates.current = new Set(pending.map((m) => m.id));
+      return;
+    }
+    pending
+      .filter((m) => !(seenUpdates.current as Set<string>).has(m.id))
+      .forEach((m) =>
+        toast.info(
+          `\u2b06\ufe0f Update available for ${m.title}${m.sourceVersion ? ` (${m.sourceVersion})` : ''}`,
+        ),
+      );
+    seenUpdates.current = new Set(pending.map((m) => m.id));
+  }, [isLoading, media, toast]);
 
   return (
     <AnimatePresence>

@@ -172,11 +172,16 @@ async function startServer() {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
-      db.prepare("UPDATE media SET updateAvailable = 0, updateSeenAt = ? WHERE id = ? AND userId = ?").run(
-        new Date().toISOString(),
-        req.params.id,
-        userId,
-      );
+      // Acknowledging an update means "I now have this version": record it as the
+      // installed one so future checks compare against what the user actually holds.
+      const body = req.body || {};
+      db.prepare(
+        `UPDATE media
+            SET updateAvailable = 0,
+                updateSeenAt = ?,
+                installedVersion = COALESCE(?, sourceVersion, installedVersion)
+          WHERE id = ? AND userId = ?`,
+      ).run(new Date().toISOString(), body.installedVersion ?? null, req.params.id, userId);
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: String(e?.message || e) });

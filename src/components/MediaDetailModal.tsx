@@ -26,7 +26,7 @@ interface MediaDetailModalProps {
 }
 
 export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaDetailModalProps) {
-  const { settings, media, logs: allLogs, worldBosses, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem, generateArtifactImage } = useMediaContext();
+  const { settings, media, logs: allLogs, worldBosses, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem, generateArtifactImage, acknowledgeUpdate } = useMediaContext();
   const toast = useToast();
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [deleteConfirmLogId, setDeleteConfirmLogId] = useState<string | null>(null);
@@ -400,6 +400,42 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                  <Edit2 className="w-4 h-4" />
                  Edit Media Details
                </button>
+
+               {/* Version tracking: what you have vs what's live upstream */}
+               {(item.sourceVersion || item.installedVersion) && (
+                 <div className={cn(
+                   "w-full rounded-xl border p-3 space-y-2",
+                   item.updateAvailable ? "border-emerald-500/30 bg-emerald-500/10" : "border-white/10 bg-white/[0.03]"
+                 )}>
+                   <div className="flex items-center justify-between gap-3 text-xs">
+                     <span className="text-zinc-400">Installed</span>
+                     <span className="font-bold text-white truncate">{item.installedVersion || '—'}</span>
+                   </div>
+                   {item.sourceVersion && (
+                     <div className="flex items-center justify-between gap-3 text-xs">
+                       <span className="text-zinc-400">Latest</span>
+                       <span className={cn("font-bold truncate", item.updateAvailable ? "text-emerald-400" : "text-white")}>
+                         {item.sourceVersion}
+                       </span>
+                     </div>
+                   )}
+                   {item.updateAvailable && (
+                     <button
+                       onClick={async () => {
+                         try {
+                           await acknowledgeUpdate(item.id);
+                           toast.success(`Marked ${item.sourceVersion || 'latest'} as installed.`);
+                         } catch (e: any) {
+                           toast.error(e.message || 'Failed to update.');
+                         }
+                       }}
+                       className="w-full mt-1 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 rounded-lg text-xs font-bold transition"
+                     >
+                       Mark {item.sourceVersion || 'latest'} as installed
+                     </button>
+                   )}
+                 </div>
+               )}
 
                {/* Link back to wherever this item's metadata came from */}
                {sourceUrl && (

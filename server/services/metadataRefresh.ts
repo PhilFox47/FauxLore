@@ -49,7 +49,7 @@ export function createMetadataRefresh(db: Db) {
       const placeholders = TRACKED_STATUSES.map(() => "?").join(", ");
       const rows: any[] = db
         .prepare(
-          `SELECT id, title, status, metadataSource, metadataSourceId, sourceVersion, sourceUpdatedAt, lastSyncAt
+          `SELECT id, title, status, metadataSource, metadataSourceId, sourceVersion, installedVersion, sourceUpdatedAt, lastSyncAt
              FROM media
             WHERE userId = ?
               AND metadataSource IS NOT NULL
@@ -70,18 +70,27 @@ export function createMetadataRefresh(db: Db) {
         try {
           const upstream = await refresher(row.metadataSourceId);
 
-          // A change in either the version string or the upstream update date counts.
-          const versionChanged =
-            !!upstream.version && !!row.sourceVersion && upstream.version !== row.sourceVersion;
-          const dateChanged =
-            !!upstream.updatedAt &&
-            (!row.sourceUpdatedAt ||
-              new Date(upstream.updatedAt).getTime() > new Date(row.sourceUpdatedAt).getTime());
-          const isUpdate = versionChanged || dateChanged;
+          // When the user has recorded which version they actually have, that is the
+          // authoritative comparison: anything different upstream is an update they
+          // haven't played. Otherwise fall back to "did it move since we last looked".
+          let isUpdate: boolean;
+          let hasBaseline: boolean;
 
-          // First sight of an item with no stored version: record a baseline rather
-          // than claiming an update the user has probably already played.
-          const hasBaseline = !!row.sourceVersion || !!row.sourceUpdatedAt;
+          if (row.installedVersion && upstream.version) {
+            isUpdate = upstream.version !== row.installedVersion;
+            hasBaseline = true;
+          } else {
+            const versionChanged =
+              !!upstream.version && !!row.sourceVersion && upstream.version !== row.sourceVersion;
+            const dateChanged =
+              !!upstream.updatedAt &&
+              (!row.sourceUpdatedAt ||
+                new Date(upstream.updatedAt).getTime() > new Date(row.sourceUpdatedAt).getTime());
+            isUpdate = versionChanged || dateChanged;
+            // First sight of an item with no stored version: record a baseline rather
+            // than claiming an update the user has probably already played.
+            hasBaseline = !!row.sourceVersion || !!row.sourceUpdatedAt;
+          }
 
           db.prepare(
             `UPDATE media

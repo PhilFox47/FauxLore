@@ -334,6 +334,9 @@ export function MediaFormModal({
             metadataSourceId: match.metadataSourceId,
             sourceUrl: match.sourceUrl,
             sourceVersion: match.sourceVersion,
+            // Adding something now almost always means grabbing the current build,
+            // so seed the installed version to match. Editable afterwards.
+            installedVersion: prev.installedVersion || match.sourceVersion,
             sourceUpdatedAt: match.sourceUpdatedAt,
             releaseStatus: match.releaseStatus ?? undefined,
             updateAvailable: false,
@@ -748,6 +751,26 @@ export function MediaFormModal({
                 If you're replaying or rereading it, use the Re-run option on that entry instead of
                 adding it again.
               </div>
+            </div>
+          )}
+
+          {["Visual Novel", "Game"].includes(formData.mediaType) && (
+            <div className="block mt-4 relative z-0">
+              <label className="block text-sm font-medium text-zinc-400 mb-1">
+                Installed Version
+              </label>
+              <input
+                name="installedVersion"
+                value={formData.installedVersion || ""}
+                onChange={handleChange}
+                className="input-field"
+                placeholder="E.g., v1.06 — the build you actually have"
+              />
+              {formData.sourceVersion && formData.sourceVersion !== formData.installedVersion && (
+                <p className="text-[11px] text-emerald-400/80 mt-1">
+                  Latest upstream: {formData.sourceVersion}
+                </p>
+              )}
             </div>
           )}
 

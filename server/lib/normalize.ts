@@ -34,6 +34,7 @@
       metadataSourceId: row.metadataSourceId || null,
       sourceUrl: row.sourceUrl || null,
       sourceVersion: row.sourceVersion || null,
+      installedVersion: row.installedVersion || null,
       sourceUpdatedAt: row.sourceUpdatedAt || null,
       updateAvailable: row.updateAvailable === 1,
       updateSeenAt: row.updateSeenAt || null
