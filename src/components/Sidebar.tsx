@@ -6,6 +6,7 @@ import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
 import { MEDIA_COLORS } from '../types/schema';
 import { calculateStreak } from '../lib/streak';
+import { NotificationBell } from './NotificationBell';
 
 export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () => void, onOpenSettings?: () => void }) {
   const { media, logs } = useMediaContext();
@@ -143,6 +144,7 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
       </nav>
 
       <div className="mt-auto space-y-3 pt-6 border-t border-white/5">
+        <div className="flex justify-start"><NotificationBell /></div>
         <button onClick={onOpenSettings} className="flex items-center justify-center gap-2 w-full py-3 bg-zinc-900 border border-white/5 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-xl text-xs uppercase font-black tracking-widest transition-colors font-display shadow-inner">
           <Settings className="w-4 h-4 text-zinc-500" />
           Settings

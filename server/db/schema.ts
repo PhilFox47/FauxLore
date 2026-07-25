@@ -208,5 +208,23 @@ export function initSchema(db: Db) {
       type TEXT, -- 'morning', 'evening'
       timestamp TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      type TEXT NOT NULL,        -- media_update | media_released | recap_ready | boss_expiring
+      title TEXT NOT NULL,
+      body TEXT,
+      mediaId TEXT,              -- optional subject, for deep-linking
+      link TEXT,                 -- optional in-app route
+      -- Stable per-event identity. Producers run on a schedule, so this is what
+      -- stops a daily sweep from re-announcing the same thing every morning.
+      dedupeKey TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      readAt TEXT,
+      UNIQUE(userId, dedupeKey)
+    );
+    CREATE INDEX IF NOT EXISTS idx_notifications_user
+      ON notifications(userId, readAt, createdAt DESC);
   `);
 }

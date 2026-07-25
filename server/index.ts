@@ -16,6 +16,7 @@ import { recalcTaxonomyUsageCounts } from "./lib/taxonomyCounts";
 import { createGetAuthUser } from "./services/auth";
 import { createMediaSync } from "./services/mediaSync";
 import { createMetadataRefresh } from "./services/metadataRefresh";
+import { createNotifications } from "./services/notifications";
 import { reportBrowserStatus } from "./integrations/gamestorylog";
 import { createBackupManager } from "./services/backup";
 import { createImageService } from "./services/images";
@@ -89,11 +90,18 @@ async function startServer() {
 
   // Daily metadata refresh: re-check tracked media (Active / On Hold) against their
   // source for new versions. Runs early, off-peak, before the morning Oracle.
-  const { refreshTrackedMedia, refreshAllUsers } = createMetadataRefresh(db);
+  const { notify, runAllChecks, runForAllUsers } = createNotifications(db);
+  const { refreshTrackedMedia, refreshAllUsers } = createMetadataRefresh(db, notify);
   cron.schedule("30 4 * * *", () => {
     console.log("Running daily metadata refresh...");
     refreshAllUsers().catch((e) => console.error("Metadata refresh failed", e));
   });
+
+  // Notification producers (releases, finished recap periods, expiring bosses).
+  // Runs each morning, and once shortly after boot so a restart surfaces anything
+  // that came due while the server was down.
+  cron.schedule("0 6 * * *", () => runForAllUsers());
+  setTimeout(() => runForAllUsers(), 10_000);
 
   // Cron schedule for Oracle messages (09:00 and 21:00)
   cron.schedule("0 9 * * *", () => {
@@ -158,6 +166,68 @@ async function startServer() {
   registerSystemRoutes(app, ctx);
   registerTaxonomyRoutes(app, ctx);
   registerSearchRoutes(app, ctx);
+
+  // Notifications
+  app.get("/api/notifications", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const rows = db
+        .prepare(
+          `SELECT * FROM notifications WHERE userId = ?
+            ORDER BY (readAt IS NOT NULL), createdAt DESC LIMIT 100`,
+        )
+        .all(userId);
+      res.json(rows);
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
+
+  app.post("/api/notifications/check", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      res.json({ success: true, created: runAllChecks(userId as string) });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
+
+  app.post("/api/notifications/:id/read", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      db.prepare("UPDATE notifications SET readAt = ? WHERE id = ? AND userId = ? AND readAt IS NULL")
+        .run(new Date().toISOString(), req.params.id, userId);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
+
+  app.post("/api/notifications/read-all", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      db.prepare("UPDATE notifications SET readAt = ? WHERE userId = ? AND readAt IS NULL")
+        .run(new Date().toISOString(), userId);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
+
+  app.delete("/api/notifications/:id", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      db.prepare("DELETE FROM notifications WHERE id = ? AND userId = ?").run(req.params.id, userId);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
 
   // Metadata refresh: manual trigger + acknowledging a detected update.
   app.post("/api/metadata/refresh", async (req, res) => {

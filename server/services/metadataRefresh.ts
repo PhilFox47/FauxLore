@@ -1,5 +1,6 @@
 import type { Db } from "../context";
 import { getGameDetails } from "../integrations/gamestorylog";
+import type { NewNotification } from "./notifications";
 
 /**
  * Source-aware metadata refresh.
@@ -36,7 +37,11 @@ const REFRESHERS: Record<string, Refresher> = {
 /** Statuses worth polling — things the user is still engaged with. */
 const TRACKED_STATUSES = ["Active", "On Hold"];
 
-export function createMetadataRefresh(db: Db) {
+export function createMetadataRefresh(
+  db: Db,
+  /** Optional sink so a detected update also becomes a persistent notification. */
+  notify?: (userId: string, n: NewNotification) => boolean,
+) {
   /**
    * Re-checks tracked media for one user. Returns how many items were found to have
    * a new version upstream.
@@ -49,7 +54,7 @@ export function createMetadataRefresh(db: Db) {
       const placeholders = TRACKED_STATUSES.map(() => "?").join(", ");
       const rows: any[] = db
         .prepare(
-          `SELECT id, title, status, metadataSource, metadataSourceId, sourceVersion, installedVersion, sourceUpdatedAt, lastSyncAt
+          `SELECT id, title, mediaType, status, metadataSource, metadataSourceId, sourceVersion, installedVersion, sourceUpdatedAt, lastSyncAt
              FROM media
             WHERE userId = ?
               AND metadataSource IS NOT NULL
@@ -111,6 +116,17 @@ export function createMetadataRefresh(db: Db) {
 
           if (isUpdate && hasBaseline) {
             updatesFound++;
+            // Keyed by the new version so each release notifies exactly once.
+            notify?.(userId, {
+              type: "media_update",
+              title: `Update available: ${row.title}`,
+              body: upstream.version
+                ? `${row.installedVersion || row.sourceVersion || "your copy"} \u2192 ${upstream.version}`
+                : "A new version was published.",
+              mediaId: row.id,
+              link: `/library/${encodeURIComponent(row.mediaType || "Visual Novel")}`,
+              dedupeKey: `media_update:${row.id}:${upstream.version || upstream.updatedAt || "new"}`,
+            });
             console.log(
               `[metadataRefresh] Update for "${row.title}": ${row.sourceVersion || "?"} -> ${upstream.version || "(new date)"}`,
             );

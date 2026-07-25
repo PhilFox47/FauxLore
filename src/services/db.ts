@@ -110,6 +110,32 @@ export const DatabaseService = {
     if (!res.ok) throw new Error('Failed to delete log');
   },
 
+  async getNotifications(): Promise<any[]> {
+    try {
+      const res = await apiFetch('/api/notifications');
+      if (!res.ok) return [];
+      return res.json();
+    } catch { return []; }
+  },
+
+  async checkNotifications(): Promise<{ created: number }> {
+    const res = await apiFetch('/api/notifications/check', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to check notifications');
+    return res.json();
+  },
+
+  async markNotificationRead(id: string): Promise<void> {
+    await apiFetch(`/api/notifications/${id}/read`, { method: 'POST' });
+  },
+
+  async markAllNotificationsRead(): Promise<void> {
+    await apiFetch('/api/notifications/read-all', { method: 'POST' });
+  },
+
+  async deleteNotification(id: string): Promise<void> {
+    await apiFetch(`/api/notifications/${id}`, { method: 'DELETE' });
+  },
+
   async refreshMetadata(force = false): Promise<{ updates: number }> {
     const res = await apiFetch(`/api/metadata/refresh${force ? '?force=1' : ''}`, { method: 'POST' });
     if (!res.ok) throw new Error('Failed to refresh metadata');

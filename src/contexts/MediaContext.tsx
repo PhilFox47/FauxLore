@@ -25,6 +25,11 @@ interface MediaContextType {
   deleteLog: (id: string) => Promise<void>;
   mergeLocations: (from: string[], to: string) => Promise<number>;
   refreshMetadata: (force?: boolean) => Promise<number>;
+  notifications: any[];
+  unreadNotifications: number;
+  markNotificationRead: (id: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
   acknowledgeUpdate: (mediaId: string) => Promise<void>;
   saveAiRecap: (recap: any) => Promise<void>;
   saveArtifact: (artifact: Artifact) => Promise<void>;
@@ -53,6 +58,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [logs, setLogs] = useState<ProgressLog[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [aiRecaps, setAiRecaps] = useState<any[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
@@ -70,6 +76,8 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     [media, logs, settings, worldBosses, artifacts],
   );
 
+  const unreadNotifications = useMemo(() => notifications.filter(n => !n.readAt).length, [notifications]);
+
   const refreshData = useCallback(async () => {
     if (!user) {
       setMedia([]);
@@ -82,6 +90,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       setAiTextCache({});
       setTaxonomies([]);
       setFranchises([]);
+      setNotifications([]);
       setIsLoading(false);
       return;
     }
@@ -109,6 +118,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       setAiTextCache(textCacheData);
       setTaxonomies(taxData);
       setFranchises(franchisesData);
+      loadNotifications();
     } catch (error) {
       console.error("Failed to load data from server:", error);
     } finally {
@@ -217,6 +227,25 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     await refreshData();
   }, [refreshData]);
 
+  const loadNotifications = useCallback(async () => {
+    setNotifications(await DatabaseService.getNotifications());
+  }, []);
+
+  const markNotificationRead = useCallback(async (id: string) => {
+    await DatabaseService.markNotificationRead(id);
+    await loadNotifications();
+  }, [loadNotifications]);
+
+  const markAllNotificationsRead = useCallback(async () => {
+    await DatabaseService.markAllNotificationsRead();
+    await loadNotifications();
+  }, [loadNotifications]);
+
+  const deleteNotification = useCallback(async (id: string) => {
+    await DatabaseService.deleteNotification(id);
+    await loadNotifications();
+  }, [loadNotifications]);
+
   const refreshMetadata = useCallback(async (force = false) => {
     const { updates } = await DatabaseService.refreshMetadata(force);
     await refreshData();
@@ -320,7 +349,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [refreshData]);
 
   return (
-    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, oracleMessages, taxonomies, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, refreshMetadata, acknowledgeUpdate, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, fetchOracleMessage, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, oracleMessages, taxonomies, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, refreshMetadata, acknowledgeUpdate, notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, fetchOracleMessage, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
       {children}
     </MediaContext.Provider>
   );
