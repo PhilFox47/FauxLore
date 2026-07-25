@@ -187,6 +187,26 @@ export const IntegrationsService = {
   },
 
   /**
+   * Search GameStoryLog for western / adult Visual Novels.
+   * Complements VNDB, which covers these poorly.
+   */
+  async searchGSLMetadata(query: string): Promise<any[]> {
+    try {
+      const response = await fetch(`/api/gsl/search?q=${encodeURIComponent(query)}`, { headers: { Authorization: `Bearer ${localStorage.getItem('fauxlore_token')}` } });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || 'Failed to search metadata');
+      }
+
+      return await response.json();
+    } catch (e) {
+      console.error("Error searching GameStoryLog metadata:", e);
+      throw e;
+    }
+  },
+
+  /**
    * Search MangaDex for Manga
    */
   async searchMangaMetadata(query: string) {

@@ -135,6 +135,9 @@ export function MediaFormModal({
   >(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isRefetchingHltb, setIsRefetchingHltb] = useState(false);
+  // Which provider to auto-fill Visual Novels from. VNDB is the default (Japanese VNs);
+  // GameStoryLog covers western / adult VNs and supports update tracking.
+  const [vnSource, setVnSource] = useState<"vndb" | "gsl">("vndb");
 
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
 
@@ -252,9 +255,11 @@ export function MediaFormModal({
         );
         setSearchResults(results);
       } else if (formData.mediaType === "Visual Novel") {
-        const results = await IntegrationsService.searchVNDBMetadata(
-          formData.title,
-        );
+        // VNDB covers Japanese VNs well; GameStoryLog covers western/adult VNs.
+        const results =
+          vnSource === "gsl"
+            ? await IntegrationsService.searchGSLMetadata(formData.title)
+            : await IntegrationsService.searchVNDBMetadata(formData.title);
         setSearchResults(results);
       } else if (formData.mediaType === "Book" || formData.mediaType === "Audiobook") {
         const results = await IntegrationsService.searchBookMetadata(
@@ -322,6 +327,17 @@ export function MediaFormModal({
       runtimeMinutes: match.runtimeMinutes,
       coverImageUrl: match.coverImageUrl,
       originalMediaId: match.id,
+      // Remember where this came from so it can be re-checked for updates later.
+      ...(match.metadataSource
+        ? {
+            metadataSource: match.metadataSource,
+            metadataSourceId: match.metadataSourceId,
+            sourceVersion: match.sourceVersion,
+            sourceUpdatedAt: match.sourceUpdatedAt,
+            releaseStatus: match.releaseStatus ?? undefined,
+            updateAvailable: false,
+          }
+        : {}),
     }));
     setAvailablePlatforms(match.platforms || []);
     setSearchResults(null);
@@ -476,9 +492,33 @@ export function MediaFormModal({
           </div>
 
           <div className="relative z-10 block">
-            <label className="block text-sm font-medium text-zinc-400 mb-1">
-              Title *
-            </label>
+            <div className="flex items-center justify-between mb-1 gap-3">
+              <label className="block text-sm font-medium text-zinc-400">
+                Title *
+              </label>
+              {formData.mediaType === "Visual Novel" && (
+                <div className="flex items-center gap-1 bg-black/30 border border-white/10 rounded-lg p-0.5">
+                  {([
+                    { key: "vndb", label: "VNDB", hint: "Best for Japanese visual novels" },
+                    { key: "gsl", label: "GameStoryLog", hint: "Best for western / adult VNs, supports update tracking" },
+                  ] as const).map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      title={s.hint}
+                      onClick={() => { setVnSource(s.key); setSearchResults(null); }}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors ${
+                        vnSource === s.key
+                          ? "bg-orange-500/20 text-orange-300"
+                          : "text-zinc-500 hover:text-zinc-300"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="flex gap-2">
               <input
                 required

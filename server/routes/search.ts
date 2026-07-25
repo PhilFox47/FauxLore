@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
+import { searchGames, getGameDetails } from "../integrations/gamestorylog";
 
 export function registerSearchRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, hltbSearch, getIgdbToken } = ctx;
@@ -286,7 +287,9 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           year: vn.released ? new Date(vn.released).getFullYear() : undefined,
           reviewScore: vn.rating ? Math.round(vn.rating / 10) / 2 : undefined, // Convert 1-100 to 0-5
           averagePlaytime: vn.length_minutes ? Math.round(vn.length_minutes / 60) : undefined,
-          genres: []
+          genres: [],
+          metadataSource: "vndb",
+          metadataSourceId: vn.id
         };
       });
 
@@ -294,6 +297,52 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
     } catch (error: any) {
       console.error("Error searching VNDB:", error);
       res.status(500).json({ error: error.message || "Failed to fetch metadata from VNDB." });
+    }
+  });
+
+  // GameStoryLog (western / adult visual novels — complements VNDB)
+  app.get("/api/gsl/search", async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query || query.trim().length < 2) return res.json([]);
+
+      // Matches against the locally cached sitemap index (no upstream call per keystroke),
+      // then hydrates only the top few results with real metadata.
+      const matches = await searchGames(query, 8);
+      const detailed = [];
+      for (const m of matches.slice(0, 5)) {
+        try {
+          detailed.push(await getGameDetails(m.slug));
+        } catch (e) {
+          // Fall back to the slug-derived stub if a page fetch fails
+          detailed.push({ id: m.slug, slug: m.slug, title: m.title, url: m.url, platforms: [], genres: [], tags: [] });
+        }
+      }
+
+      res.json(
+        detailed.map((g: any) => ({
+          id: g.slug,
+          title: g.title,
+          description: g.description,
+          coverImageUrl: g.coverImageUrl,
+          creator: g.developer,
+          developer: g.developer,
+          genres: g.genres || [],
+          tags: g.tags || [],
+          platforms: g.platforms || [],
+          reviewScore: g.reviewScore,
+          averagePlaytime: g.averagePlaytime,
+          releaseStatus: g.status,
+          // provenance so the item can be re-checked for updates later
+          metadataSource: "gsl",
+          metadataSourceId: g.slug,
+          sourceVersion: g.version,
+          sourceUpdatedAt: g.updatedAt,
+        })),
+      );
+    } catch (error: any) {
+      console.error("Error searching GameStoryLog:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch metadata from GameStoryLog." });
     }
   });
 
