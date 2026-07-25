@@ -67,6 +67,82 @@ async function politeFetch(url: string): Promise<string> {
   return body;
 }
 
+/**
+ * GSL is a client-rendered SPA: every path returns the same index.html shell, whose
+ * static <title>/og: tags describe the site rather than the game. Parsing that shell
+ * yields "GameStoryLog | Visual Novel Tracking & Discovery" as the title, so we must
+ * be able to tell a real, rendered game page from the shell.
+ */
+export function looksRendered(html: string): boolean {
+  // Must be a marker unique to a *game* page. A developer link is not enough: the
+  // homepage carries those too, so a rendered home/404 view would pass and its site
+  // meta tags would be parsed as if they were a game.
+  return /<dt[^>]*>\s*(Version|Engine|Platforms)\s*<\/dt>/i.test(html);
+}
+
+/**
+ * Renders a page in headless Chromium so the SPA can populate the DOM.
+ * Puppeteer is imported lazily and the browser is reused, so installs without a
+ * working Chromium simply fail this call rather than breaking the whole server.
+ */
+let browserPromise: Promise<any> | null = null;
+async function getBrowser() {
+  if (!browserPromise) {
+    browserPromise = (async () => {
+      const puppeteer: any = (await import("puppeteer")).default;
+      return puppeteer.launch({
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+      });
+    })().catch((e) => {
+      browserPromise = null; // allow a later retry
+      throw e;
+    });
+  }
+  return browserPromise;
+}
+
+async function renderPage(url: string): Promise<string> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setUserAgent(UA);
+    // Images/fonts/media are irrelevant to metadata and dominate load time.
+    await page.setRequestInterception(true);
+    page.on("request", (req: any) => {
+      const type = req.resourceType();
+      if (type === "image" || type === "font" || type === "media") req.abort();
+      else req.continue();
+    });
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+    // Wait for the metadata block the parser depends on, but don't hard-fail:
+    // a missing selector is reported by looksRendered on the returned HTML.
+    await page.waitForSelector("dt", { timeout: 10000 }).catch(() => {});
+    return await page.content();
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
+/**
+ * Returns fully-rendered HTML for a game page: a plain fetch first (cheap, and
+ * correct the moment GSL ever server-renders), falling back to headless rendering.
+ */
+async function fetchGameHtml(slug: string): Promise<string> {
+  const url = `${BASE}/games/${slug}`;
+  const direct = await politeFetchRaw(url);
+  if (direct.ok && looksRendered(direct.body)) return direct.body;
+  if (!direct.ok && direct.status === 404) throw new Error(`GSL: no game at /games/${slug} (404)`);
+  return renderPage(url);
+}
+
+/** Frees the shared browser (used on shutdown). */
+export async function closeBrowser() {
+  if (!browserPromise) return;
+  try { (await browserPromise).close(); } catch { /* already gone */ }
+  browserPromise = null;
+}
+
 /* -------------------------------------------------------------------- parsing */
 
 /** Decodes the HTML entities that actually show up in this markup. */
@@ -365,6 +441,15 @@ export interface GslCandidate {
   verified: boolean;
 }
 
+/**
+ * Resolves a query to candidate games.
+ *
+ * GSL slugs are a direct transliteration of the title ("Being a DIK" ->
+ * /games/being-a-dik), and western AVN titles rarely contain anything exotic, so
+ * the derived slug is the primary lookup: exact, one request, no index needed.
+ * Sitemap matches (when the sitemap is usable) are added afterwards as extra
+ * suggestions for partial queries.
+ */
 export async function searchGames(query: string, limit = 20): Promise<GslCandidate[]> {
   const out: GslCandidate[] = [];
   const seen = new Set<string>();
@@ -375,25 +460,21 @@ export async function searchGames(query: string, limit = 20): Promise<GslCandida
     out.push({ id: slug, slug, title: slugToTitle(slug), url: `${BASE}/games/${slug}`, lastmod, verified });
   };
 
-  // The sitemap index is the cheap path, but it can be unavailable or incomplete.
-  // Never let that failure swallow the whole search.
-  let entries: SitemapEntry[] = [];
-  try {
-    entries = await getSitemapIndex();
-  } catch (e) {
-    console.error("[gsl] Sitemap unavailable, falling back to direct slug lookup", e);
-  }
-
-  entries
-    .map((e) => ({ entry: e, s: score(query, e.slug) }))
-    .filter((r) => r.s > 0)
-    .sort((a, b) => b.s - a.s || a.entry.slug.length - b.entry.slug.length)
-    .slice(0, limit)
-    .forEach((r) => push(r.entry.slug, true, r.entry.lastmod));
-
-  // GSL slugs are a direct transliteration of the title, so a guessed slug resolves
-  // most exact searches even when the sitemap gives us nothing. Unverified until fetched.
+  // 1. The direct slug — the reliable path.
   push(titleToSlug(query), false);
+
+  // 2. Sitemap suggestions, best-effort only. Never let this break the lookup.
+  try {
+    const entries = await getSitemapIndex();
+    entries
+      .map((e) => ({ entry: e, s: score(query, e.slug) }))
+      .filter((r) => r.s > 0)
+      .sort((a, b) => b.s - a.s || a.entry.slug.length - b.entry.slug.length)
+      .slice(0, limit)
+      .forEach((r) => push(r.entry.slug, true, r.entry.lastmod));
+  } catch (e) {
+    console.error("[gsl] Sitemap unavailable; using direct slug lookup only", e);
+  }
 
   return out.slice(0, limit);
 }
@@ -426,19 +507,28 @@ export async function diagnose(sampleQuery = "Being a DIK") {
   const slug = titleToSlug(sampleQuery);
   try {
     const r = await politeFetchRaw(`${BASE}/games/${slug}`);
-    const parsed = r.ok ? parseGamePage(r.body, slug) : null;
     report.directPage = {
       slug,
       status: r.status,
       bytes: r.body.length,
-      // If the page is a client-rendered shell these will be missing even on a 200.
-      serverRendered: !!(parsed?.version || parsed?.developer || parsed?.platforms.length),
-      parsedTitle: parsed?.title,
-      parsedVersion: parsed?.version,
-      parsedDeveloper: parsed?.developer,
+      // False means the response is the SPA shell, so headless rendering is required.
+      serverRendered: r.ok && looksRendered(r.body),
     };
   } catch (e: any) {
     report.directPage = { slug, error: String(e?.message || e) };
+  }
+  // Whether headless rendering works in this deployment (Chromium present + usable).
+  try {
+    const game = await getGameDetails(slug, true);
+    report.rendered = {
+      ok: true,
+      title: game.title,
+      version: game.version,
+      developer: game.developer,
+      status: game.status,
+    };
+  } catch (e: any) {
+    report.rendered = { ok: false, error: String(e?.message || e) };
   }
   return report;
 }
@@ -453,7 +543,12 @@ export async function getGameDetails(slug: string, force = false): Promise<GslGa
   if (!force && cached && Date.now() - cached.fetchedAt < PAGE_TTL_MS) {
     return cached.game;
   }
-  const html = await politeFetch(`${BASE}/games/${slug}`);
+  const html = await fetchGameHtml(slug);
+  // Refuse to parse an un-rendered shell: its meta tags describe the site, which
+  // would surface the GameStoryLog homepage as if it were a search result.
+  if (!looksRendered(html)) {
+    throw new Error(`GSL: /games/${slug} did not render (no game data in page)`);
+  }
   const game = parseGamePage(html, slug);
   pageCache.set(slug, { fetchedAt: Date.now(), game });
   return game;
