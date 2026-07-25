@@ -260,11 +260,13 @@ export function parseGamePage(html: string, slug: string): GslGame {
     developer = text.split(/\s{2,}|Studio|Developer/i)[0].trim() || undefined;
   }
 
-  // Cover image: predictable CDN path, fall back to og:image
+  // Cover image: predictable CDN path, fall back to og:image.
+  // Filenames legitimately contain parentheses ("being-a-dik-cover-1(1).webp"), so
+  // the match runs up to a real image extension rather than stopping at ")".
   const coverMatch = html.match(
-    /https:\/\/images\.gamestorylog\.com\/game-assets\/covers\/[^"' )]+/i,
+    /https:\/\/images\.gamestorylog\.com\/game-assets\/covers\/[^"'\s<>]+?\.(?:webp|avif|png|jpe?g|gif)(?:\?[^"'\s<>]*)?/i,
   );
-  const coverImageUrl = coverMatch ? coverMatch[0] : meta(html, "og:image");
+  const coverImageUrl = coverMatch ? decode(coverMatch[0]) : meta(html, "og:image");
 
   // Overall rating renders as: <span ...>4.0</span><span ...>/ 5</span>
   let reviewScore: number | undefined;
