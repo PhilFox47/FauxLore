@@ -24,6 +24,8 @@ interface MediaContextType {
   updateLog: (id: string, updates: Partial<ProgressLog>) => Promise<void>;
   deleteLog: (id: string) => Promise<void>;
   mergeLocations: (from: string[], to: string) => Promise<number>;
+  refreshMetadata: (force?: boolean) => Promise<number>;
+  acknowledgeUpdate: (mediaId: string) => Promise<void>;
   saveAiRecap: (recap: any) => Promise<void>;
   saveArtifact: (artifact: Artifact) => Promise<void>;
   updateArtifact: (id: string, artifact: Partial<Artifact>) => Promise<void>;
@@ -215,6 +217,17 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     await refreshData();
   }, [refreshData]);
 
+  const refreshMetadata = useCallback(async (force = false) => {
+    const { updates } = await DatabaseService.refreshMetadata(force);
+    await refreshData();
+    return updates;
+  }, [refreshData]);
+
+  const acknowledgeUpdate = useCallback(async (mediaId: string) => {
+    await DatabaseService.acknowledgeUpdate(mediaId);
+    await refreshData();
+  }, [refreshData]);
+
   const mergeLocations = useCallback(async (from: string[], to: string) => {
     const { updated } = await DatabaseService.mergeLocations(from, to);
     await refreshData();
@@ -307,7 +320,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [refreshData]);
 
   return (
-    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, oracleMessages, taxonomies, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, fetchOracleMessage, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, oracleMessages, taxonomies, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, refreshMetadata, acknowledgeUpdate, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, fetchOracleMessage, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
       {children}
     </MediaContext.Provider>
   );

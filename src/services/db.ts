@@ -110,6 +110,17 @@ export const DatabaseService = {
     if (!res.ok) throw new Error('Failed to delete log');
   },
 
+  async refreshMetadata(force = false): Promise<{ updates: number }> {
+    const res = await apiFetch(`/api/metadata/refresh${force ? '?force=1' : ''}`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to refresh metadata');
+    return res.json();
+  },
+
+  async acknowledgeUpdate(mediaId: string): Promise<void> {
+    const res = await apiFetch(`/api/media/${mediaId}/acknowledge-update`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to acknowledge update');
+  },
+
   async mergeLocations(from: string[], to: string): Promise<{ updated: number }> {
     const res = await apiFetch('/api/logs/merge-locations', {
       method: 'POST',

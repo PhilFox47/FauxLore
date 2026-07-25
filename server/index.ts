@@ -15,6 +15,7 @@ import { safeJsonParse, normalizeMedia } from "./lib/normalize";
 import { recalcTaxonomyUsageCounts } from "./lib/taxonomyCounts";
 import { createGetAuthUser } from "./services/auth";
 import { createMediaSync } from "./services/mediaSync";
+import { createMetadataRefresh } from "./services/metadataRefresh";
 import { createBackupManager } from "./services/backup";
 import { createImageService } from "./services/images";
 import { createOracleService } from "./services/oracle";
@@ -82,6 +83,14 @@ async function startServer() {
   const { generateOracleMessage, checkMissedOracleMessages } = createOracleService({ db });
   const { spawnWorldBoss } = createWorldBossService({ db, generateBossImageBackground });
 
+  // Daily metadata refresh: re-check tracked media (Active / On Hold) against their
+  // source for new versions. Runs early, off-peak, before the morning Oracle.
+  const { refreshTrackedMedia, refreshAllUsers } = createMetadataRefresh(db);
+  cron.schedule("30 4 * * *", () => {
+    console.log("Running daily metadata refresh...");
+    refreshAllUsers().catch((e) => console.error("Metadata refresh failed", e));
+  });
+
   // Cron schedule for Oracle messages (09:00 and 21:00)
   cron.schedule("0 9 * * *", () => {
     const users = db.prepare("SELECT id FROM users").all() as { id: string }[];
@@ -145,6 +154,34 @@ async function startServer() {
   registerSystemRoutes(app, ctx);
   registerTaxonomyRoutes(app, ctx);
   registerSearchRoutes(app, ctx);
+
+  // Metadata refresh: manual trigger + acknowledging a detected update.
+  app.post("/api/metadata/refresh", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      // force = ignore the per-item throttle (used by the "check now" button)
+      const updates = await refreshTrackedMedia(userId, req.query.force ? { minAgeMs: 0 } : {});
+      res.json({ success: true, updates });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
+
+  app.post("/api/media/:id/acknowledge-update", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      db.prepare("UPDATE media SET updateAvailable = 0, updateSeenAt = ? WHERE id = ? AND userId = ?").run(
+        new Date().toISOString(),
+        req.params.id,
+        userId,
+      );
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
 
   app.use("/uploads", express.static(uploadsDir));
 

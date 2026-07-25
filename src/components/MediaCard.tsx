@@ -224,6 +224,15 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
                  <RotateCcw className="w-4 h-4 text-orange-400" />
               </div>
             )}
+            {item.updateAvailable && (
+              <div
+                className="bg-emerald-500/90 backdrop-blur-md rounded-full px-2 h-7 flex items-center gap-1 border border-emerald-300/30 shadow-lg animate-pulse"
+                title={`New version available${item.sourceVersion ? `: ${item.sourceVersion}` : ''}`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-black" />
+                <span className="text-[10px] font-black uppercase tracking-wider text-black">Update</span>
+              </div>
+            )}
          </div>
 
          {/* Top Right: Rating */}
