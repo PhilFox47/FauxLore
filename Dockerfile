@@ -34,9 +34,18 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies first for caching 
+# Keep Chromium inside the image at a predictable path (the default cache lives in
+# $HOME, which varies by runtime user). Puppeteer reads this at install and launch.
+ENV PUPPETEER_CACHE_DIR=/app/.cache/puppeteer
+
+# Install dependencies first for caching
 COPY package*.json ./
 RUN npm install
+
+# Puppeteer's postinstall normally fetches Chromium; do it explicitly so a failure
+# surfaces here at build time rather than as a broken lookup at runtime.
+RUN npx puppeteer browsers install chrome \
+    && node -e "const p=require('puppeteer');console.log('Chromium at:',p.executablePath())"
 
 # Copy application files
 COPY . .
