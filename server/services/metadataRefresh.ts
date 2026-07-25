@@ -20,6 +20,7 @@ import type { NewNotification } from "./notifications";
 /** What a source reports back about an item's current state upstream. */
 interface UpstreamState {
   version?: string;
+  versions?: string[];
   updatedAt?: string;
   releaseStatus?: string;
 }
@@ -29,7 +30,7 @@ type Refresher = (sourceId: string) => Promise<UpstreamState>;
 const REFRESHERS: Record<string, Refresher> = {
   gsl: async (slug: string) => {
     const game = await getGameDetails(slug, true); // bypass cache: we want the live state
-    return { version: game.version, updatedAt: game.updatedAt, releaseStatus: game.status };
+    return { version: game.version, versions: game.versions, updatedAt: game.updatedAt, releaseStatus: game.status };
   },
   // vndb / mangadex / igdb can be added here as they gain update semantics.
 };
@@ -100,6 +101,7 @@ export function createMetadataRefresh(
           db.prepare(
             `UPDATE media
                 SET sourceVersion = COALESCE(?, sourceVersion),
+                    sourceVersions = COALESCE(?, sourceVersions),
                     sourceUpdatedAt = COALESCE(?, sourceUpdatedAt),
                     releaseStatus = COALESCE(?, releaseStatus),
                     updateAvailable = CASE WHEN ? = 1 THEN 1 ELSE updateAvailable END,
@@ -107,6 +109,7 @@ export function createMetadataRefresh(
               WHERE id = ?`,
           ).run(
             upstream.version ?? null,
+            upstream.versions && upstream.versions.length ? JSON.stringify(upstream.versions) : null,
             upstream.updatedAt ?? null,
             upstream.releaseStatus ?? null,
             isUpdate && hasBaseline ? 1 : 0,

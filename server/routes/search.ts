@@ -370,6 +370,7 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           metadataSourceId: g.slug,
           sourceUrl: g.url || `https://gamestorylog.com/games/${g.slug}`,
           sourceVersion: g.version,
+          sourceVersions: g.versions || [],
           sourceUpdatedAt: g.updatedAt,
         })),
       );

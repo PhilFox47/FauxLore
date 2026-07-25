@@ -139,6 +139,20 @@ export function MediaFormModal({
   // GameStoryLog covers western / adult VNs and supports update tracking.
   const [vnSource, setVnSource] = useState<"vndb" | "gsl">("vndb");
 
+  // Versions offered in the picker: whatever the source listed, plus the current
+  // upstream version and anything already stored, so an existing value is never lost.
+  const versionOptions = useMemo(() => {
+    const out: string[] = [];
+    const add = (v?: string) => {
+      const value = (v || "").trim();
+      if (value && !out.some((x) => x.toLowerCase() === value.toLowerCase())) out.push(value);
+    };
+    add(formData.sourceVersion);
+    (formData.sourceVersions || []).forEach(add);
+    add(formData.installedVersion);
+    return out;
+  }, [formData.sourceVersion, formData.sourceVersions, formData.installedVersion]);
+
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -334,6 +348,7 @@ export function MediaFormModal({
             metadataSourceId: match.metadataSourceId,
             sourceUrl: match.sourceUrl,
             sourceVersion: match.sourceVersion,
+            sourceVersions: match.sourceVersions || [],
             // Adding something now almost always means grabbing the current build,
             // so seed the installed version to match. Editable afterwards.
             installedVersion: prev.installedVersion || match.sourceVersion,
@@ -759,15 +774,46 @@ export function MediaFormModal({
               <label className="block text-sm font-medium text-zinc-400 mb-1">
                 Installed Version
               </label>
+              {/* A datalist gives a dropdown of known versions while still accepting
+                  anything typed, since a source rarely lists every build. */}
               <input
                 name="installedVersion"
+                list="installed-version-options"
                 value={formData.installedVersion || ""}
                 onChange={handleChange}
                 className="input-field"
                 placeholder="E.g., v1.06 — the build you actually have"
+                autoComplete="off"
               />
+              <datalist id="installed-version-options">
+                {versionOptions.map((v) => (
+                  <option key={v} value={v} />
+                ))}
+              </datalist>
+
+              {versionOptions.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {versionOptions.slice(0, 6).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, installedVersion: v }))}
+                      className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+                        formData.installedVersion === v
+                          ? "bg-orange-500/20 border-orange-500/40 text-orange-200"
+                          : "bg-black/30 border-white/10 text-zinc-400 hover:text-white hover:border-white/20"
+                      }`}
+                      title={v === formData.sourceVersion ? "Latest upstream version" : "Known version"}
+                    >
+                      {v}
+                      {v === formData.sourceVersion && <span className="ml-1 text-emerald-400">latest</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {formData.sourceVersion && formData.sourceVersion !== formData.installedVersion && (
-                <p className="text-[11px] text-emerald-400/80 mt-1">
+                <p className="text-[11px] text-emerald-400/80 mt-2">
                   Latest upstream: {formData.sourceVersion}
                 </p>
               )}

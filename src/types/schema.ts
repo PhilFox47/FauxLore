@@ -72,6 +72,7 @@ export interface MediaItem {
   sourceUrl?: string;          // canonical public page for this item at its source
   sourceVersion?: string;      // latest version reported upstream, e.g. "Season 1: v1.06"
   installedVersion?: string;   // the version you actually have / played
+  sourceVersions?: string[];   // versions the source knows about, for the pick-list
   sourceUpdatedAt?: string;    // last-updated date reported by the source
   updateAvailable?: boolean;   // set when a refresh detects a newer version
   updateSeenAt?: string;       // when the user acknowledged the update

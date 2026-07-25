@@ -35,6 +35,7 @@
       sourceUrl: row.sourceUrl || null,
       sourceVersion: row.sourceVersion || null,
       installedVersion: row.installedVersion || null,
+      sourceVersions: safeJsonParse(row.sourceVersions),
       sourceUpdatedAt: row.sourceUpdatedAt || null,
       updateAvailable: row.updateAvailable === 1,
       updateSeenAt: row.updateSeenAt || null

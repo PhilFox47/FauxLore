@@ -37,6 +37,8 @@ export interface GslGame {
   reviewScore?: number; // 0-5
   averagePlaytime?: number; // hours
   version?: string; // "Season 1: v1.06"
+  /** Every version we can see on the page (current first), for pick-lists. */
+  versions: string[];
   status?: string; // "Active", "Completed", "Abandoned", ...
   updatedAt?: string; // ISO date of the last upstream update
   year?: number;
@@ -125,6 +127,16 @@ async function renderPage(url: string): Promise<string> {
     // Wait for the metadata block the parser depends on, but don't hard-fail:
     // a missing selector is reported by looksRendered on the returned HTML.
     await page.waitForSelector("dt", { timeout: 10000 }).catch(() => {});
+    // Reveal the changelog tab so past versions can be collected too. Entirely
+    // best-effort: if the tab is absent or the markup shifts, the metadata we
+    // already have is unaffected.
+    try {
+      const tab = await page.$('[data-tab="changelog"]');
+      if (tab) {
+        await tab.click();
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    } catch { /* keep whatever is already rendered */ }
     return await page.content();
   } finally {
     await page.close().catch(() => {});
@@ -287,6 +299,7 @@ export function parseGamePage(html: string, slug: string): GslGame {
   const updatedAt = parseDate(updatedRaw);
 
   return {
+    versions: collectVersions(html, version),
     id: slug,
     slug,
     url: `${BASE}/games/${slug}`,
@@ -309,6 +322,46 @@ export function parseGamePage(html: string, slug: string): GslGame {
     // release year from that would be wrong for long-running AVNs, so leave it unset.
     year: undefined,
   };
+}
+
+/**
+ * Every version visible on the page, current first.
+ *
+ * Besides the headline version, GSL exposes a distinct "last content update"
+ * version (a title attribute such as: Last content update: March 7, 2025 (v0.11.0)),
+ * and the changelog tab — when it has been opened — lists past releases. Scripts and
+ * style blocks are stripped first, otherwise bundled library versions leak in.
+ */
+function collectVersions(html: string, current?: string): string[] {
+  const out: string[] = [];
+  const add = (v?: string) => {
+    let value = (v || "").trim();
+    // GSL prefixes "v" onto the raw version, which yields "vSeason 1: v1.06" for
+    // titles that are not bare numbers. A leading v only means anything before a
+    // digit, so drop it otherwise and let the value dedupe against the real one.
+    if (/^v(?!\d)/i.test(value)) value = value.slice(1).trim();
+    if (!value || value.length > 60 || !/\d/.test(value)) return; // must look like a version
+    if (!out.some((existing) => existing.toLowerCase() === value.toLowerCase())) out.push(value);
+  };
+
+  add(current);
+
+  const body = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ");
+
+  // "Last content update: March 7, 2025 (v0.11.0)"
+  const contentUpdate = body.match(/Last content update:[^"()]*\(([^)]+)\)/i);
+  if (contentUpdate) add(decode(contentUpdate[1]));
+
+  // Changelog entries, when that tab has been rendered.
+  const changelog = body.match(/data-tab="changelog"[\s\S]{0,40000}/i)?.[0] || "";
+  for (const m of changelog.matchAll(/>\s*(v\d+[\w.]*)\s*</gi)) add(decode(m[1]));
+
+  // Any remaining version-shaped chips elsewhere in the page body.
+  for (const m of body.matchAll(/rounded-full[^>]*>\s*(v\d+\.\d+[\w.]*)\s*</gi)) add(decode(m[1]));
+
+  return out;
 }
 
 /** Pulls the tag cloud, splitting the "Genre" group out into genres. */
