@@ -6,9 +6,10 @@ import { MediaFormModal } from '../components/MediaFormModal';
 import { ProgressModal } from '../components/ProgressModal';
 import { Search, Image, Activity, Clock, Edit3, X, Save, Globe, ListFilter } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { format } from 'date-fns';
 import { MediaItem, MEDIA_HEX } from '../types/schema';
 import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, XAxis, YAxis } from 'recharts';
 
 type SortOption = 'Alphabetical' | 'Last Activity' | 'Total Master Pages' | 'Total Entry Count';
 
@@ -121,6 +122,36 @@ export function Universes() {
     });
     setIsEditing(false);
   };
+
+  // Cumulative Master Pages across every item in the universe, mirroring the
+  // per-media progression chart but summed over the whole franchise. Each log is
+  // scaled against its own media item, since scaling is media-type dependent.
+  const universeProgress = useMemo(() => {
+    if (!currentFranchise) return [];
+    const ids = new Set(currentFranchise.items.map((i: MediaItem) => i.id));
+    const byId = new Map(currentFranchise.items.map((i: MediaItem) => [i.id, i]));
+
+    const relevant = logs
+      .filter(
+        (l) =>
+          ids.has(l.mediaId) &&
+          l.metricType !== 'statusChange' &&
+          !l.isHistoric &&
+          !l.timestamp.startsWith('1970-01-01'),
+      )
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    let cumulative = 0;
+    return relevant.map((l) => {
+      const item = byId.get(l.mediaId);
+      cumulative += item ? calculateScaledDelta(l.delta, item, settings) : 0;
+      return {
+        timestamp: new Date(l.timestamp).getTime(),
+        pages: Math.floor(cumulative),
+        title: item?.title || '',
+      };
+    });
+  }, [currentFranchise, logs, settings]);
 
   const typeDistribution = useMemo(() => {
     if (!currentFranchise) return [];
@@ -266,6 +297,52 @@ export function Universes() {
             <div className="text-xs text-zinc-500 font-medium uppercase tracking-widest mt-1">Media Types</div>
           </div>
         </div>
+
+        {universeProgress.length > 1 && (
+          <div className="bg-[#111113] border border-white/5 rounded-2xl p-6">
+            <h2 className="text-xl font-bold text-white mb-1">Progression</h2>
+            <p className="text-xs text-zinc-500 mb-6">
+              Master Pages accumulated across all {currentFranchise.items.length} entries in this universe.
+            </p>
+            <div className="h-[220px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={universeProgress} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorUniversePages" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis
+                    dataKey="timestamp"
+                    type="number"
+                    scale="time"
+                    domain={['dataMin', 'dataMax']}
+                    tickFormatter={(tick) => format(new Date(tick), 'MMM d')}
+                    stroke="#52525b"
+                    fontSize={10}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    labelFormatter={(label) =>
+                      typeof label === 'number' ? format(new Date(label), 'MMM d, yyyy HH:mm') : String(label)
+                    }
+                    formatter={(value: any, _name: any, entry: any) => [
+                      `${Number(value).toLocaleString()} MP`,
+                      entry?.payload?.title || 'Master Pages',
+                    ]}
+                    contentStyle={{ backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                    itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                    labelStyle={{ color: '#a1a1aa', fontSize: '10px', marginBottom: '4px' }}
+                  />
+                  <Area type="stepAfter" dataKey="pages" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorUniversePages)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
 
         <div className="bg-[#111113] border border-white/5 rounded-2xl p-6">
           <h2 className="text-xl font-bold text-white mb-6">Timeline</h2>
