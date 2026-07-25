@@ -342,8 +342,10 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
             /Could not find|libnss3|error while loading shared libraries|Failed to launch|browser|chrome/i.test(f),
           );
           return res.status(502).json({
+            // Always include the underlying error: a paraphrase alone hides whether
+            // this is a missing binary, a missing shared library, or something else.
             error: browserIssue
-              ? "GameStoryLog pages need a headless browser to read. Chromium is unavailable — rebuild the Docker image so its system libraries are installed."
+              ? `GameStoryLog needs a headless browser. Chromium could not start: ${failures[0]}`
               : `Could not read the GameStoryLog page: ${failures[0]}`,
           });
         }

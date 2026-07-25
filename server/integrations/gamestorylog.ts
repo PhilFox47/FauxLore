@@ -138,6 +138,27 @@ async function fetchGameHtml(slug: string): Promise<string> {
   return renderPage(url);
 }
 
+/**
+ * Reports whether headless Chromium is usable in this deployment. Logged at startup
+ * so a missing browser is visible in `docker logs` instead of only surfacing when
+ * someone happens to search GameStoryLog.
+ */
+export async function reportBrowserStatus() {
+  try {
+    const puppeteer: any = (await import("puppeteer")).default;
+    let execPath = "(unknown)";
+    try { execPath = puppeteer.executablePath(); } catch { /* not resolvable */ }
+    const browser = await getBrowser();
+    const version = await browser.version();
+    console.log(`[gsl] Headless browser ready: ${version} (${execPath})`);
+  } catch (e: any) {
+    console.warn(
+      "[gsl] Headless browser unavailable — GameStoryLog lookups will fail. " +
+        `Cause: ${String(e?.message || e).split("\n")[0]}`,
+    );
+  }
+}
+
 /** Frees the shared browser (used on shutdown). */
 export async function closeBrowser() {
   if (!browserPromise) return;

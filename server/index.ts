@@ -16,6 +16,7 @@ import { recalcTaxonomyUsageCounts } from "./lib/taxonomyCounts";
 import { createGetAuthUser } from "./services/auth";
 import { createMediaSync } from "./services/mediaSync";
 import { createMetadataRefresh } from "./services/metadataRefresh";
+import { reportBrowserStatus } from "./integrations/gamestorylog";
 import { createBackupManager } from "./services/backup";
 import { createImageService } from "./services/images";
 import { createOracleService } from "./services/oracle";
@@ -82,6 +83,9 @@ async function startServer() {
   const { generateBossImageBackground, generateArtifactImageBackground } = createImageService({ db, aiImagesDir });
   const { generateOracleMessage, checkMissedOracleMessages } = createOracleService({ db });
   const { spawnWorldBoss } = createWorldBossService({ db, generateBossImageBackground });
+
+  // Log headless-browser availability once at boot (GameStoryLog needs it).
+  reportBrowserStatus();
 
   // Daily metadata refresh: re-check tracked media (Active / On Hold) against their
   // source for new versions. Runs early, off-peak, before the morning Oracle.
