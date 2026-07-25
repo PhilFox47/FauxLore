@@ -25,7 +25,7 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
       // We grab standard fields + involved companies (for developers/publishers) + genres
       const body = `
         search "${query}";
-        fields name, summary, cover.image_id, first_release_date, total_rating, total_rating_count, category, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, genres.name, themes.name, platforms.name, franchises.name;
+        fields name, summary, url, cover.image_id, first_release_date, total_rating, total_rating_count, category, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, genres.name, themes.name, platforms.name, franchises.name;
         limit 50;
       `;
 
@@ -116,7 +116,10 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           platforms: game.platforms ? game.platforms.map((p: any) => p.name) : [],
           franchises: game.franchises ? game.franchises.map((f: any) => f.name) : [],
           developer,
-          publisher
+          publisher,
+          metadataSource: "igdb",
+          metadataSourceId: game.id.toString(),
+          sourceUrl: game.url || null
         };
       }));
 
@@ -242,7 +245,10 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           creator: creator,
           totalEpisodes: type === 'tv' ? detail.number_of_episodes : undefined,
           runtimeMinutes: runtimeMinutes,
-          seasons: type === 'tv' ? seasons : undefined
+          seasons: type === 'tv' ? seasons : undefined,
+          metadataSource: "tmdb",
+          metadataSourceId: detail.id.toString(),
+          sourceUrl: `https://www.themoviedb.org/${type}/${detail.id}`
         };
       });
 
@@ -289,7 +295,8 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           averagePlaytime: vn.length_minutes ? Math.round(vn.length_minutes / 60) : undefined,
           genres: [],
           metadataSource: "vndb",
-          metadataSourceId: vn.id
+          metadataSourceId: vn.id,
+          sourceUrl: `https://vndb.org/${vn.id}`
         };
       });
 
@@ -336,6 +343,7 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           // provenance so the item can be re-checked for updates later
           metadataSource: "gsl",
           metadataSourceId: g.slug,
+          sourceUrl: g.url || `https://gamestorylog.com/games/${g.slug}`,
           sourceVersion: g.version,
           sourceUpdatedAt: g.updatedAt,
         })),
@@ -467,6 +475,9 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
             const year = volumeInfo.publishedDate ? parseInt(volumeInfo.publishedDate.substring(0, 4)) : undefined;
 
             return {
+              metadataSource: "googlebooks",
+              metadataSourceId: item.id,
+              sourceUrl: volumeInfo.infoLink || volumeInfo.canonicalVolumeLink || `https://books.google.com/books?id=${encodeURIComponent(item.id)}`,
               id: `gb_${item.id}`,
               title: volumeInfo.title || "Unknown Title",
               subtitle: volumeInfo.subtitle || "",
@@ -550,6 +561,9 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
         }
 
         return {
+          metadataSource: "mangadex",
+          metadataSourceId: m.id,
+          sourceUrl: `https://mangadex.org/title/${m.id}`,
           id: m.id,
           title,
           description: description.replace(/\[\/?\w+\]/g, ""), // Simple BBCode removal

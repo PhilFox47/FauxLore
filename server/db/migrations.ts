@@ -171,6 +171,7 @@ export function runMigrations(db: Db) {
   try { db.prepare("ALTER TABLE media ADD COLUMN sourceUpdatedAt TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN updateAvailable INTEGER DEFAULT 0").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN updateSeenAt TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN sourceUrl TEXT").run(); } catch (e) {}
   // Broken items (0 durability) should never remain equipped.
   try { db.prepare("UPDATE artifacts SET isEquipped = 0 WHERE durability <= 0 AND isEquipped = 1").run(); } catch (e) {}
   

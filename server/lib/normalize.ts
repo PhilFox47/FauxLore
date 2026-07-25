@@ -32,6 +32,7 @@
       lastSyncAt: row.lastSyncAt || null,
       metadataSource: row.metadataSource || null,
       metadataSourceId: row.metadataSourceId || null,
+      sourceUrl: row.sourceUrl || null,
       sourceVersion: row.sourceVersion || null,
       sourceUpdatedAt: row.sourceUpdatedAt || null,
       updateAvailable: row.updateAvailable === 1,

@@ -332,6 +332,7 @@ export function MediaFormModal({
         ? {
             metadataSource: match.metadataSource,
             metadataSourceId: match.metadataSourceId,
+            sourceUrl: match.sourceUrl,
             sourceVersion: match.sourceVersion,
             sourceUpdatedAt: match.sourceUpdatedAt,
             releaseStatus: match.releaseStatus ?? undefined,
@@ -362,6 +363,14 @@ export function MediaFormModal({
       runtimeMinutes: series.runtimeMinutes,
       coverImageUrl: season.posterPath || series.coverImageUrl,
       season: season.seasonNumber,
+      // A season inherits its parent series' provenance so it links back correctly.
+      ...(series.metadataSource
+        ? {
+            metadataSource: series.metadataSource,
+            metadataSourceId: series.metadataSourceId,
+            sourceUrl: series.sourceUrl,
+          }
+        : {}),
     }));
     setSelectedSeriesForSeasons(null);
   };

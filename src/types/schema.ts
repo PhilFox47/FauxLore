@@ -69,6 +69,7 @@ export interface MediaItem {
   // re-fetched later for auto-updates. Source-agnostic by design.
   metadataSource?: MetadataSource;
   metadataSourceId?: string;   // stable id/slug at that source (e.g. a GSL slug, a VNDB "v123")
+  sourceUrl?: string;          // canonical public page for this item at its source
   sourceVersion?: string;      // e.g. "Season 1: v1.06"
   sourceUpdatedAt?: string;    // last-updated date reported by the source
   updateAvailable?: boolean;   // set when a refresh detects a newer version

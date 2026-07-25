@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useToast } from '../contexts/ToastContext';
-import { X, Edit2, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame, Ghost, Target, Anchor, Library } from 'lucide-react';
+import { X, Edit2, ExternalLink, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame, Ghost, Target, Anchor, Library } from 'lucide-react';
 import { calculateScaledDelta } from '../lib/scaling';
 import { buildStatusTimeline, getItemPace, STATUS_HEX } from '../lib/history';
+import { getSourceUrl, getSourceLabel } from '../lib/sourceLinks';
 import { groupLogsIntoSessions } from '../lib/sessions';
 import { cn } from '../lib/utils';
 import { format, differenceInDays } from 'date-fns';
@@ -138,6 +139,8 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
 
     return { timeline, pace, sessionCount: sessions.length, longestSession, avgSession, located: located.length, homeN, topPlaces, peakBand, rankPos, rankTotal, percentile, myMP };
   }, [item, logs, allLogs, media, settings]);
+
+  const sourceUrl = item ? getSourceUrl(item) : null;
 
   if (!isOpen || !item) return null;
 
@@ -390,13 +393,27 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
             </div>
 
             <div className="flex flex-col gap-3 w-full">
-               <button 
+               <button
                  onClick={() => { onClose(); onEdit(item); }}
                  className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium flex justify-center items-center gap-2 transition"
                >
                  <Edit2 className="w-4 h-4" />
                  Edit Media Details
                </button>
+
+               {/* Link back to wherever this item's metadata came from */}
+               {sourceUrl && (
+                 <a
+                   href={sourceUrl}
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   className="w-full py-3 border border-white/10 hover:bg-white/5 text-white rounded-xl font-medium flex justify-center items-center gap-2 transition"
+                   title={`Open on ${getSourceLabel(item.metadataSource)}`}
+                 >
+                   <ExternalLink className="w-4 h-4" />
+                   Open on {getSourceLabel(item.metadataSource)}
+                 </a>
+               )}
 
                <button 
                  onClick={handleReRun}

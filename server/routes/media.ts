@@ -71,7 +71,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
           issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, language, isOngoing, noEnemies, isHighPriority, noAutoDrop, storyHeavyModifier, releaseStatus, lastSyncAt, createdAt, updatedAt,
           subtitle, maturityRating,
-          metadataSource, metadataSourceId, sourceVersion, sourceUpdatedAt, updateAvailable, updateSeenAt
+          metadataSource, metadataSourceId, sourceUrl, sourceVersion, sourceUpdatedAt, updateAvailable, updateSeenAt
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
           @reviewScore, @averagePlaytime, @hltbMain, @hltbMainExtra, @hltbCompletionist, @selectedHltbType,
@@ -80,7 +80,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
           @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @language, @isOngoing, @noEnemies, @isHighPriority, @noAutoDrop, @storyHeavyModifier, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
           @subtitle, @maturityRating,
-          @metadataSource, @metadataSourceId, @sourceVersion, @sourceUpdatedAt, @updateAvailable, @updateSeenAt
+          @metadataSource, @metadataSourceId, @sourceUrl, @sourceVersion, @sourceUpdatedAt, @updateAvailable, @updateSeenAt
         )
         ON CONFLICT(id) DO UPDATE SET
           userId=excluded.userId, title=excluded.title, mediaType=excluded.mediaType, coverImageUrl=excluded.coverImageUrl,
@@ -102,6 +102,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           -- can never wipe it. Passing an explicit 0/'' still overwrites.
           metadataSource=COALESCE(excluded.metadataSource, media.metadataSource),
           metadataSourceId=COALESCE(excluded.metadataSourceId, media.metadataSourceId),
+          sourceUrl=COALESCE(excluded.sourceUrl, media.sourceUrl),
           sourceVersion=COALESCE(excluded.sourceVersion, media.sourceVersion),
           sourceUpdatedAt=COALESCE(excluded.sourceUpdatedAt, media.sourceUpdatedAt),
           updateAvailable=COALESCE(excluded.updateAvailable, media.updateAvailable),
@@ -161,6 +162,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
         lastSyncAt: item.lastSyncAt || null,
         metadataSource: item.metadataSource || null,
         metadataSourceId: item.metadataSourceId || null,
+        sourceUrl: item.sourceUrl || null,
         sourceVersion: item.sourceVersion || null,
         sourceUpdatedAt: item.sourceUpdatedAt || null,
         updateAvailable: item.updateAvailable === undefined ? null : (item.updateAvailable ? 1 : 0),
