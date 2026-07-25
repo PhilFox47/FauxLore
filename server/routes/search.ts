@@ -317,16 +317,35 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
       // then hydrates only the top few results with real metadata.
       const matches = await searchGames(query, 8);
       const detailed = [];
+      const failures: string[] = [];
       for (const m of matches.slice(0, 5)) {
         try {
           detailed.push(await getGameDetails(m.slug));
-        } catch (e) {
+        } catch (e: any) {
           // A guessed slug that doesn't resolve isn't a real game — drop it rather
           // than offering a bogus result. Sitemap-derived slugs are known to exist,
           // so keep those as stubs even if the page fetch hiccups.
+          failures.push(String(e?.message || e));
           if (m.verified) {
             detailed.push({ id: m.slug, slug: m.slug, title: m.title, url: m.url, platforms: [], genres: [], tags: [] });
           }
+        }
+      }
+
+      // Distinguish "no such game" from "we couldn't read the page". Returning an
+      // empty list for an infrastructure failure looks identical to a genuine miss
+      // and leaves the user with no idea what went wrong.
+      if (detailed.length === 0 && failures.length > 0) {
+        const notFound = failures.every((f) => /\(404\)/.test(f));
+        if (!notFound) {
+          const browserIssue = failures.some((f) =>
+            /Could not find|libnss3|error while loading shared libraries|Failed to launch|browser|chrome/i.test(f),
+          );
+          return res.status(502).json({
+            error: browserIssue
+              ? "GameStoryLog pages need a headless browser to read. Chromium is unavailable — rebuild the Docker image so its system libraries are installed."
+              : `Could not read the GameStoryLog page: ${failures[0]}`,
+          });
         }
       }
 

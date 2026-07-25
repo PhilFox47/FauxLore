@@ -77,7 +77,9 @@ export function looksRendered(html: string): boolean {
   // Must be a marker unique to a *game* page. A developer link is not enough: the
   // homepage carries those too, so a rendered home/404 view would pass and its site
   // meta tags would be parsed as if they were a game.
-  return /<dt[^>]*>\s*(Version|Engine|Platforms)\s*<\/dt>/i.test(html);
+  // Scripts are stripped first so markup inside a JS bundle can't fake a match.
+  const withoutScripts = html.replace(/<script[\s\S]*?<\/script>/gi, " ");
+  return /<dt[^>]*>\s*(Version|Engine|Platforms)\s*<\/dt>/i.test(withoutScripts);
 }
 
 /**
