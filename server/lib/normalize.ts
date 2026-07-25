@@ -29,7 +29,13 @@
       noAutoDrop: row.noAutoDrop === 1,
       expectedReleaseDate: row.expectedReleaseDate || null,
       releaseStatus: row.releaseStatus || null,
-      lastSyncAt: row.lastSyncAt || null
+      lastSyncAt: row.lastSyncAt || null,
+      metadataSource: row.metadataSource || null,
+      metadataSourceId: row.metadataSourceId || null,
+      sourceVersion: row.sourceVersion || null,
+      sourceUpdatedAt: row.sourceUpdatedAt || null,
+      updateAvailable: row.updateAvailable === 1,
+      updateSeenAt: row.updateSeenAt || null
     };
   }
 

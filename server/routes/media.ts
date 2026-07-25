@@ -70,7 +70,8 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
           issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, language, isOngoing, noEnemies, isHighPriority, noAutoDrop, storyHeavyModifier, releaseStatus, lastSyncAt, createdAt, updatedAt,
-          subtitle, maturityRating
+          subtitle, maturityRating,
+          metadataSource, metadataSourceId, sourceVersion, sourceUpdatedAt, updateAvailable, updateSeenAt
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
           @reviewScore, @averagePlaytime, @hltbMain, @hltbMainExtra, @hltbCompletionist, @selectedHltbType,
@@ -78,7 +79,8 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
           @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @language, @isOngoing, @noEnemies, @isHighPriority, @noAutoDrop, @storyHeavyModifier, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
-          @subtitle, @maturityRating
+          @subtitle, @maturityRating,
+          @metadataSource, @metadataSourceId, @sourceVersion, @sourceUpdatedAt, @updateAvailable, @updateSeenAt
         )
         ON CONFLICT(id) DO UPDATE SET
           userId=excluded.userId, title=excluded.title, mediaType=excluded.mediaType, coverImageUrl=excluded.coverImageUrl,
@@ -95,7 +97,15 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           isReRun=excluded.isReRun, originalMediaId=excluded.originalMediaId, expectedReleaseDate=excluded.expectedReleaseDate,
           language=excluded.language, isOngoing=excluded.isOngoing, noEnemies=excluded.noEnemies, isHighPriority=excluded.isHighPriority, noAutoDrop=excluded.noAutoDrop, storyHeavyModifier=excluded.storyHeavyModifier,
           releaseStatus=excluded.releaseStatus, lastSyncAt=excluded.lastSyncAt,
-          subtitle=excluded.subtitle, maturityRating=excluded.maturityRating
+          subtitle=excluded.subtitle, maturityRating=excluded.maturityRating,
+          -- COALESCE so a client that doesn't send provenance (older UI, partial save)
+          -- can never wipe it. Passing an explicit 0/'' still overwrites.
+          metadataSource=COALESCE(excluded.metadataSource, media.metadataSource),
+          metadataSourceId=COALESCE(excluded.metadataSourceId, media.metadataSourceId),
+          sourceVersion=COALESCE(excluded.sourceVersion, media.sourceVersion),
+          sourceUpdatedAt=COALESCE(excluded.sourceUpdatedAt, media.sourceUpdatedAt),
+          updateAvailable=COALESCE(excluded.updateAvailable, media.updateAvailable),
+          updateSeenAt=COALESCE(excluded.updateSeenAt, media.updateSeenAt)
       `);
 
       stmt.run({
@@ -149,6 +159,12 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
         storyHeavyModifier: item.storyHeavyModifier ?? null,
         releaseStatus: item.releaseStatus || null,
         lastSyncAt: item.lastSyncAt || null,
+        metadataSource: item.metadataSource || null,
+        metadataSourceId: item.metadataSourceId || null,
+        sourceVersion: item.sourceVersion || null,
+        sourceUpdatedAt: item.sourceUpdatedAt || null,
+        updateAvailable: item.updateAvailable === undefined ? null : (item.updateAvailable ? 1 : 0),
+        updateSeenAt: item.updateSeenAt || null,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt
       });

@@ -8,6 +8,20 @@ export type MediaType = typeof MEDIA_TYPES[number];
 export const STATUSES = ['Planning', 'Active', 'Extras', 'On Hold', 'Completed', 'Dropped', 'Unreleased'] as const;
 export type Status = typeof STATUSES[number];
 
+// Metadata providers an item's data can originate from. Items remember their source
+// so they can be re-looked-up for automatic update checks.
+export const METADATA_SOURCES = ['vndb', 'gsl', 'igdb', 'tmdb', 'mangadex', 'googlebooks'] as const;
+export type MetadataSource = typeof METADATA_SOURCES[number];
+
+export const METADATA_SOURCE_LABELS: Record<MetadataSource, string> = {
+  vndb: 'VNDB',
+  gsl: 'GameStoryLog',
+  igdb: 'IGDB',
+  tmdb: 'TMDB',
+  mangadex: 'MangaDex',
+  googlebooks: 'Google Books',
+};
+
 export interface MediaItem {
   id: string;
   isReRun?: boolean;
@@ -50,6 +64,15 @@ export interface MediaItem {
   storyHeavyModifier?: number; // 0.5x to 1.5x
   releaseStatus?: string;
   lastSyncAt?: string;
+
+  // Metadata provenance — where this item's metadata came from, so it can be
+  // re-fetched later for auto-updates. Source-agnostic by design.
+  metadataSource?: MetadataSource;
+  metadataSourceId?: string;   // stable id/slug at that source (e.g. a GSL slug, a VNDB "v123")
+  sourceVersion?: string;      // e.g. "Season 1: v1.06"
+  sourceUpdatedAt?: string;    // last-updated date reported by the source
+  updateAvailable?: boolean;   // set when a refresh detects a newer version
+  updateSeenAt?: string;       // when the user acknowledged the update
   
   // Book
   pagesRead?: number;

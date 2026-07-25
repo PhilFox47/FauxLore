@@ -163,6 +163,14 @@ export function runMigrations(db: Db) {
   try { db.prepare("ALTER TABLE logs ADD COLUMN location TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE logs ADD COLUMN isHistoric INTEGER DEFAULT 0").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE logs ADD COLUMN bonusMultiplier REAL DEFAULT 0").run(); } catch (e) {}
+  // Generic metadata-provenance tracking. Lets any media item be re-looked-up at its
+  // origin so it can be auto-refreshed (see services/metadataRefresh.ts).
+  try { db.prepare("ALTER TABLE media ADD COLUMN metadataSource TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN metadataSourceId TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN sourceVersion TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN sourceUpdatedAt TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN updateAvailable INTEGER DEFAULT 0").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN updateSeenAt TEXT").run(); } catch (e) {}
   // Broken items (0 durability) should never remain equipped.
   try { db.prepare("UPDATE artifacts SET isEquipped = 0 WHERE durability <= 0 AND isEquipped = 1").run(); } catch (e) {}
   
