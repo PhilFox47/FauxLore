@@ -9,7 +9,7 @@ import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { MediaItem, MEDIA_HEX } from '../types/schema';
 import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, XAxis, YAxis } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, BarChart, Bar, XAxis, YAxis } from 'recharts';
 
 type SortOption = 'Alphabetical' | 'Last Activity' | 'Total Master Pages' | 'Total Entry Count';
 
@@ -19,6 +19,7 @@ export function Universes() {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({ coverImageUrl: '', description: '' });
   const [sortBy, setSortBy] = useState<SortOption>('Total Master Pages');
+  const [uniChartMode, setUniChartMode] = useState<'cumulative' | 'daily'>('cumulative');
 
   // Media card interactions (parity with Dashboard / Media Library)
   const [detailItem, setDetailItem] = useState<MediaItem | null>(null);
@@ -127,7 +128,7 @@ export function Universes() {
   // per-media progression chart but summed over the whole franchise. Each log is
   // scaled against its own media item, since scaling is media-type dependent.
   const universeProgress = useMemo(() => {
-    if (!currentFranchise) return [];
+    if (!currentFranchise) return { cumulative: [], daily: [] };
     const ids = new Set(currentFranchise.items.map((i: MediaItem) => i.id));
     const byId = new Map(currentFranchise.items.map((i: MediaItem) => [i.id, i]));
 
@@ -142,7 +143,7 @@ export function Universes() {
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
     let cumulative = 0;
-    return relevant.map((l) => {
+    const cumulativeSeries = relevant.map((l) => {
       const item = byId.get(l.mediaId);
       cumulative += item ? calculateScaledDelta(l.delta, item, settings) : 0;
       return {
@@ -151,6 +152,19 @@ export function Universes() {
         title: item?.title || '',
       };
     });
+
+    // Same logs bucketed by calendar day, not accumulated.
+    const perDay = new Map<string, number>();
+    relevant.forEach((l) => {
+      const item = byId.get(l.mediaId);
+      const key = format(new Date(l.timestamp), 'yyyy-MM-dd');
+      perDay.set(key, (perDay.get(key) || 0) + (item ? calculateScaledDelta(l.delta, item, settings) : 0));
+    });
+    const dailySeries = Array.from(perDay.entries())
+      .map(([day, pages]) => ({ timestamp: new Date(day + 'T00:00:00').getTime(), pages: Math.floor(pages), title: '' }))
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    return { cumulative: cumulativeSeries, daily: dailySeries };
   }, [currentFranchise, logs, settings]);
 
   const typeDistribution = useMemo(() => {
@@ -298,15 +312,58 @@ export function Universes() {
           </div>
         </div>
 
-        {universeProgress.length > 1 && (
+        {universeProgress.cumulative.length > 1 && (
           <div className="bg-[#111113] border border-white/5 rounded-2xl p-6">
-            <h2 className="text-xl font-bold text-white mb-1">Progression</h2>
-            <p className="text-xs text-zinc-500 mb-6">
-              Master Pages accumulated across all {currentFranchise.items.length} entries in this universe.
-            </p>
+            <div className="flex items-start justify-between gap-3 mb-6 flex-wrap">
+              <div>
+                <h2 className="text-xl font-bold text-white mb-1">Progression</h2>
+                <p className="text-xs text-zinc-500">
+                  {uniChartMode === 'cumulative'
+                    ? `Master Pages accumulated across all ${currentFranchise.items.length} entries in this universe.`
+                    : `Master Pages earned per day across all ${currentFranchise.items.length} entries.`}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 bg-black/30 border border-white/10 rounded-lg p-0.5 shrink-0">
+                {([
+                  { key: 'cumulative', label: 'Total' },
+                  { key: 'daily', label: 'Per day' },
+                ] as const).map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => setUniChartMode(m.key)}
+                    className={cn(
+                      'px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors',
+                      uniChartMode === m.key ? 'bg-purple-500/20 text-purple-200' : 'text-zinc-500 hover:text-zinc-300',
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="h-[220px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={universeProgress} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                {uniChartMode === 'daily' ? (
+                <BarChart data={universeProgress.daily} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                  <XAxis
+                    dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']}
+                    tickFormatter={(tick) => format(new Date(tick), 'MMM d')}
+                    stroke="#52525b" fontSize={10} tickLine={false} axisLine={false}
+                  />
+                  <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                    labelFormatter={(label) => typeof label === 'number' ? format(new Date(label), 'MMM d, yyyy') : String(label)}
+                    formatter={(v: any) => [`${Number(v).toLocaleString()} MP`, 'That day']}
+                    contentStyle={{ backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                    itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                    labelStyle={{ color: '#a1a1aa', fontSize: '10px', marginBottom: '4px' }}
+                  />
+                  <Bar dataKey="pages" fill="#a855f7" radius={[3, 3, 0, 0]} maxBarSize={28} />
+                </BarChart>
+                ) : (
+                <AreaChart data={universeProgress.cumulative} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorUniversePages" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
@@ -339,6 +396,7 @@ export function Universes() {
                   />
                   <Area type="stepAfter" dataKey="pages" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorUniversePages)" />
                 </AreaChart>
+                )}
               </ResponsiveContainer>
             </div>
           </div>

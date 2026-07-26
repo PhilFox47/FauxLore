@@ -15,7 +15,7 @@ import { DatabaseService } from '../services/db';
 import { Artifact, RARITY_COLORS } from '../types/schema';
 import { LootReveal } from './LootReveal';
 import { ForgingButton } from './ForgingButton';
-import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer, YAxis } from 'recharts';
+import { AreaChart, Area, BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, YAxis } from 'recharts';
 
 interface MediaDetailModalProps {
   isOpen: boolean;
@@ -34,6 +34,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   const [pendingLootId, setPendingLootId] = useState<string | null>(null);
   const [lootedArtifact, setLootedArtifact] = useState<Artifact | null>(null);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+  const [chartMode, setChartMode] = useState<'cumulative' | 'daily'>('cumulative');
   const [editLogData, setEditLogData] = useState<{
     delta: number;
     note: string;
@@ -42,9 +43,9 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
     logTime: string;
   }>({ delta: 0, note: '', location: '', logDate: '', logTime: '' });
 
-  const { currentMediaStreak, maxMediaStreak, activeDays, startDate, chartData } = React.useMemo(() => {
+  const { currentMediaStreak, maxMediaStreak, activeDays, startDate, chartData, dailyData } = React.useMemo(() => {
     const historicalLogs = logs.filter(l => !l.timestamp.startsWith('1970-01-01'));
-    if (historicalLogs.length === 0 || !item) return { currentMediaStreak: 0, maxMediaStreak: 0, activeDays: 0, startDate: null, chartData: [] };
+    if (historicalLogs.length === 0 || !item) return { currentMediaStreak: 0, maxMediaStreak: 0, activeDays: 0, startDate: null, chartData: [], dailyData: [] };
 
     const uniqueDates = Array.from(new Set(historicalLogs.map(l => format(new Date(l.timestamp), 'yyyy-MM-dd')))).sort();
     const startDate = uniqueDates[0];
@@ -86,7 +87,17 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
        };
     });
 
-    return { currentMediaStreak: currentStreak, maxMediaStreak: max, activeDays: uniqueDates.length, startDate, chartData };
+    // Per-day totals: the same logs bucketed by calendar day, not accumulated.
+    const perDay = new Map<string, number>();
+    sortedLogs.forEach((l) => {
+      const key = format(new Date(l.timestamp), 'yyyy-MM-dd');
+      perDay.set(key, (perDay.get(key) || 0) + calculateScaledDelta(l.delta, item, settings));
+    });
+    const dailyData = Array.from(perDay.entries())
+      .map(([day, pages]) => ({ timestamp: new Date(day + 'T00:00:00').getTime(), pages: Math.floor(pages) }))
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    return { currentMediaStreak: currentStreak, maxMediaStreak: max, activeDays: uniqueDates.length, startDate, chartData, dailyData };
   }, [logs, item, settings]);
 
   // Deeper Lore-Page analytics: status journey, pace/projection, sessions, where/when, rank.
@@ -627,11 +638,53 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
 
           {chartData.length > 1 && (
             <div className="mb-8 p-6 bg-zinc-800/30 rounded-2xl border border-white/5">
-              <h3 className="text-sm font-bold text-zinc-500 mb-6 tracking-wider uppercase flex items-center gap-2">
-                <BookOpen className="w-4 h-4" /> Progression (Master Pages)
-              </h3>
+              <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
+                <h3 className="text-sm font-bold text-zinc-500 tracking-wider uppercase flex items-center gap-2">
+                  <BookOpen className="w-4 h-4" /> Progression (Master Pages)
+                </h3>
+                <div className="flex items-center gap-1 bg-black/30 border border-white/10 rounded-lg p-0.5">
+                  {([
+                    { key: 'cumulative', label: 'Total' },
+                    { key: 'daily', label: 'Per day' },
+                  ] as const).map((m) => (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => setChartMode(m.key)}
+                      className={cn(
+                        'px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors',
+                        chartMode === m.key ? 'bg-purple-500/20 text-purple-200' : 'text-zinc-500 hover:text-zinc-300',
+                      )}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="h-[200px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
+                  {chartMode === 'daily' ? (
+                  <BarChart data={dailyData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                    <XAxis
+                      dataKey="timestamp"
+                      type="number"
+                      scale="time"
+                      domain={['dataMin', 'dataMax']}
+                      tickFormatter={(tick) => format(new Date(tick), 'MMM d')}
+                      stroke="#52525b" fontSize={10} tickLine={false} axisLine={false}
+                    />
+                    <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                      labelFormatter={(label) => typeof label === 'number' ? format(new Date(label), 'MMM d, yyyy') : label}
+                      formatter={(v: any) => [`${Number(v).toLocaleString()} MP`, 'That day']}
+                      contentStyle={{ backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                      itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                      labelStyle={{ color: '#a1a1aa', fontSize: '10px', marginBottom: '4px' }}
+                    />
+                    <Bar dataKey="pages" fill="#a855f7" radius={[3, 3, 0, 0]} maxBarSize={28} />
+                  </BarChart>
+                  ) : (
                   <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorPages" x1="0" y1="0" x2="0" y2="1">
@@ -659,6 +712,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                     />
                     <Area type="stepAfter" dataKey="pages" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorPages)" />
                   </AreaChart>
+                  )}
                 </ResponsiveContainer>
               </div>
             </div>
