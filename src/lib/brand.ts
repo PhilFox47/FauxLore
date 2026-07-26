@@ -7,7 +7,7 @@
  */
 
 /** Full wordmark: icon plus "FAUXLORE". Used in the sidebar, mobile header and login. */
-export const BRAND_LOGO_URL = 'https://i.imgur.com/ATAU8u4.png';
+export const BRAND_LOGO_URL = 'https://i.imgur.com/cXqiWx6.png';
 
 /** Square icon on its own, for tight spaces and the favicon. */
 export const BRAND_ICON_URL = 'https://i.imgur.com/0MMNszX.png';
