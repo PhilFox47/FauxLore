@@ -8,12 +8,21 @@ interface User {
   bio?: string;
 }
 
+interface Impersonation {
+  byUserId: string;
+  byUsername: string;
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (token: string, user: User) => void;
   logout: () => void;
   isLoading: boolean;
+  /** Set while an admin is viewing another account. */
+  impersonating: Impersonation | null;
+  impersonate: (userId: string) => Promise<void>;
+  stopImpersonating: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -22,7 +31,14 @@ const AuthContext = createContext<AuthContextType>({
   login: () => {},
   logout: () => {},
   isLoading: true,
+  impersonating: null,
+  impersonate: async () => {},
+  stopImpersonating: async () => {},
 });
+
+// Where the admin's own session is parked while they view another account.
+const ADMIN_TOKEN_KEY = 'fauxlore_admin_token';
+const ADMIN_USER_KEY = 'fauxlore_admin_user';
 
 export const useAuth = () => useContext(AuthContext);
 
@@ -30,6 +46,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [impersonating, setImpersonating] = useState<Impersonation | null>(null);
 
   useEffect(() => {
     const storedToken = localStorage.getItem('fauxlore_token');
@@ -53,6 +70,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (data) {
           setToken(storedToken);
           setUser(data.user);
+          setImpersonating(data.impersonating || null);
           localStorage.setItem('fauxlore_user', JSON.stringify(data.user));
         }
       })
@@ -74,6 +92,59 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(newUser);
   };
 
+  /** Admin: open a session as another user, parking the admin session for later. */
+  const impersonate = async (userId: string) => {
+    const res = await fetch(`/api/users/${userId}/impersonate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      throw new Error(data?.error || 'Failed to view as user');
+    }
+    const data = await res.json();
+    // Keep the admin's own credentials so returning doesn't require a re-login.
+    if (token) localStorage.setItem(ADMIN_TOKEN_KEY, token);
+    if (user) localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(user));
+
+    localStorage.setItem('fauxlore_token', data.token);
+    localStorage.setItem('fauxlore_user', JSON.stringify(data.user));
+    setToken(data.token);
+    setUser(data.user);
+    setImpersonating(data.impersonating || null);
+  };
+
+  /** Return to the admin account, ending the impersonated session. */
+  const stopImpersonating = async () => {
+    const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY);
+    const adminUser = localStorage.getItem(ADMIN_USER_KEY);
+
+    // Drop the impersonated session server-side so it can't linger.
+    if (token) {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
+
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    localStorage.removeItem(ADMIN_USER_KEY);
+    setImpersonating(null);
+
+    if (adminToken && adminUser) {
+      localStorage.setItem('fauxlore_token', adminToken);
+      localStorage.setItem('fauxlore_user', adminUser);
+      setToken(adminToken);
+      setUser(JSON.parse(adminUser));
+    } else {
+      // No parked session (e.g. storage cleared): fall back to signing out.
+      localStorage.removeItem('fauxlore_token');
+      localStorage.removeItem('fauxlore_user');
+      setToken(null);
+      setUser(null);
+    }
+  };
+
   const logout = async () => {
     if (token) {
        await fetch('/api/auth/logout', { 
@@ -83,12 +154,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     localStorage.removeItem('fauxlore_token');
     localStorage.removeItem('fauxlore_user');
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    localStorage.removeItem(ADMIN_USER_KEY);
     setToken(null);
     setUser(null);
+    setImpersonating(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, isLoading, impersonating, impersonate, stopImpersonating }}>
       {children}
     </AuthContext.Provider>
   );

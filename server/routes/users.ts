@@ -12,7 +12,7 @@ export function registerUserRoutes(app: Express, ctx: ServerContext) {
       if (!actingUserId) return;
        if (!actingUserId) return res.status(401).json({ error: 'Unauthorized' });
        
-       const rows = db.prepare('SELECT id, username, role, profilePic, bio, createdAt, updatedAt FROM users').all();
+       const rows = db.prepare('SELECT id, username, role, profilePic, bio, createdAt, updatedAt, lastActiveAt FROM users').all();
        res.json(rows);
      } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -35,6 +35,40 @@ export function registerUserRoutes(app: Express, ctx: ServerContext) {
        `).run(id, username, hash, role || 'User', new Date().toISOString(), new Date().toISOString());
        res.json({ id, username, role });
      } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  /**
+   * Admin "view as": mints a session for another account so an admin can see
+   * exactly what that user sees, without knowing their password.
+   *
+   * The session records who opened it (impersonatedBy) so the UI can show a
+   * banner, and it is deliberately short-lived: this is a debugging tool, not a
+   * second way to stay logged in.
+   */
+  app.post("/api/users/:id/impersonate", (req, res) => {
+    try {
+      const actingUserId = getAuthUser(req, res);
+      if (!actingUserId) return;
+      const actingUser: any = db.prepare('SELECT id, role, username FROM users WHERE id = ?').get(actingUserId);
+      if (actingUser?.role !== 'Admin') {
+        return res.status(403).json({ error: 'Only admins can view as another user' });
+      }
+
+      const target: any = db.prepare('SELECT id, username, role, profilePic, bio FROM users WHERE id = ?').get(req.params.id);
+      if (!target) return res.status(404).json({ error: 'User not found' });
+      if (target.id === actingUserId) {
+        return res.status(400).json({ error: 'You are already signed in as this account' });
+      }
+
+      const token = uuidv4();
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 1);
+      db.prepare('INSERT INTO sessions (token, userId, expiresAt, impersonatedBy) VALUES (?, ?, ?, ?)')
+        .run(token, target.id, expiresAt.toISOString(), actingUserId);
+
+      console.log(`[auth] ${actingUser.username} started viewing as ${target.username}`);
+      res.json({ token, user: target, impersonating: { byUserId: actingUserId, byUsername: actingUser.username } });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
   app.put("/api/users/:id", (req, res) => {

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Save, Trash, UserCircle, KeyRound, Shield } from 'lucide-react';
+import { UserPlus, Save, Trash, UserCircle, KeyRound, Shield, Eye } from 'lucide-react';
 import { apiFetch } from '../services/db';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 
 interface User {
   id: string;
@@ -9,6 +11,7 @@ interface User {
   profilePic?: string;
   bio?: string;
   createdAt: string;
+  lastActiveAt?: string | null;
 }
 
 export function UserManagement() {
@@ -17,6 +20,35 @@ export function UserManagement() {
   const [error, setError] = useState<string | null>(null);
 
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'User' });
+  const { user: currentUser, impersonate } = useAuth();
+  const toast = useToast();
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  /** "3m ago" / "yesterday" — precise enough for an activity column. */
+  const lastActiveLabel = (iso?: string | null) => {
+    if (!iso) return 'Never signed in';
+    const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+    if (mins < 2) return 'Active now';
+    if (mins < 60) return `Active ${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `Active ${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days === 1) return 'Active yesterday';
+    if (days < 30) return `Active ${days}d ago`;
+    return `Last active ${new Date(iso).toLocaleDateString()}`;
+  };
+
+  const handleImpersonate = async (u: User) => {
+    if (!window.confirm(`View FauxLore as ${u.username}? You'll see their library and can return at any time.`)) return;
+    setBusyId(u.id);
+    try {
+      await impersonate(u.id);
+      window.location.href = '/';
+    } catch (e: any) {
+      toast.error(e.message || 'Could not view as this user');
+      setBusyId(null);
+    }
+  };
   const [isCreating, setIsCreating] = useState(false);
 
   const loadUsers = async () => {
@@ -132,13 +164,31 @@ export function UserManagement() {
                          {u.role}
                        </span>
                      </div>
-                     <p className="text-xs text-zinc-500">Joined {new Date(u.createdAt).toLocaleDateString()}</p>
+                     <p className="text-xs text-zinc-500">
+                       Joined {new Date(u.createdAt).toLocaleDateString()}
+                       <span className="mx-1.5 text-zinc-700">|</span>
+                       <span className={u.lastActiveAt && Date.now() - new Date(u.lastActiveAt).getTime() < 5 * 60 * 1000 ? 'text-emerald-400' : ''}>
+                         {lastActiveLabel(u.lastActiveAt)}
+                       </span>
+                     </p>
                    </div>
                  </div>
                  
-                 {/* For now, just a display. Editing existing users from Admin UI could be added in the future */}
-                 <div className="text-xs text-zinc-500 flex items-center gap-2 cursor-help" title="To edit, user must sign into their profile.">
-                   <KeyRound className="w-3.5 h-3.5" /> Managed
+                 <div className="flex items-center gap-3 shrink-0">
+                   {currentUser?.role === 'Admin' && u.id !== currentUser?.id && (
+                     <button
+                       onClick={() => handleImpersonate(u)}
+                       disabled={busyId === u.id}
+                       className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-white/10 text-zinc-300 hover:text-white hover:bg-white/5 hover:border-white/20 transition-colors disabled:opacity-50"
+                       title={`View FauxLore as ${u.username}`}
+                     >
+                       <Eye className="w-3.5 h-3.5" />
+                       {busyId === u.id ? 'Switching...' : 'View as'}
+                     </button>
+                   )}
+                   <div className="text-xs text-zinc-500 flex items-center gap-2 cursor-help" title="To edit, user must sign into their profile.">
+                     <KeyRound className="w-3.5 h-3.5" /> Managed
+                   </div>
                  </div>
                </div>
             ))}

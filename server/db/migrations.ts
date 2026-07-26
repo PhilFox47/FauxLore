@@ -174,6 +174,9 @@ export function runMigrations(db: Db) {
   try { db.prepare("ALTER TABLE media ADD COLUMN sourceUrl TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN installedVersion TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE media ADD COLUMN sourceVersions TEXT").run(); } catch (e) {}
+  // Multi-user: activity tracking and admin impersonation ("view as").
+  try { db.prepare("ALTER TABLE users ADD COLUMN lastActiveAt TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE sessions ADD COLUMN impersonatedBy TEXT").run(); } catch (e) {}
   // Broken items (0 durability) should never remain equipped.
   try { db.prepare("UPDATE artifacts SET isEquipped = 0 WHERE durability <= 0 AND isEquipped = 1").run(); } catch (e) {}
   

@@ -9,6 +9,9 @@ export function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [stayLoggedIn, setStayLoggedIn] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [covers, setCovers] = useState<string[]>([]);
 
@@ -25,22 +28,44 @@ export function Login() {
       .catch(console.error);
   }, []);
 
+  const switchMode = (next: 'login' | 'register') => {
+    setMode(next);
+    setError('');
+    setPassword('');
+    setConfirmPassword('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+
+    // Caught here rather than server-side so the user isn't told their password
+    // is wrong when they simply mistyped the confirmation.
+    if (mode === 'register' && password !== confirmPassword) {
+      setError("Those passwords don't match.");
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      const res = await fetch('/api/auth/login', {
+      const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, stayLoggedIn })
+        body: JSON.stringify(
+          mode === 'register' ? { username, password } : { username, password, stayLoggedIn },
+        ),
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Login failed');
+        throw new Error(data.error || (mode === 'register' ? 'Registration failed' : 'Login failed'));
       }
       login(data.token, data.user);
       navigate('/');
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -98,6 +123,20 @@ export function Login() {
             />
           </div>
 
+          {mode === 'register' && (
+            <div>
+              <label className="block text-sm font-medium text-zinc-400 mb-2">Confirm Password</label>
+              <input
+                type="password"
+                required
+                className="w-full bg-zinc-900/80 border border-white/10 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+          )}
+
+          {mode === 'login' && (
           <div className="flex items-center">
             <input
               type="checkbox"
@@ -110,14 +149,41 @@ export function Login() {
               Stay logged in (14 days)
             </label>
           </div>
+          )}
+
+          {mode === 'register' && (
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              Pick any username (3-32 characters) and a password of at least 6. There's no email
+              involved, so keep your password somewhere safe: it can only be reset by an admin.
+            </p>
+          )}
 
           <button
             type="submit"
-            className="w-full bg-orange-600 hover:bg-orange-500 text-white font-semibold py-3 rounded-xl transition-colors shadow-lg shadow-orange-900/20"
+            disabled={isSubmitting}
+            className="w-full bg-orange-600 hover:bg-orange-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-colors shadow-lg shadow-orange-900/20"
           >
-            Sign In
+            {isSubmitting ? 'Please wait...' : mode === 'register' ? 'Create Account' : 'Sign In'}
           </button>
         </form>
+
+        <div className="mt-6 pt-6 border-t border-white/10 text-center">
+          {mode === 'login' ? (
+            <p className="text-sm text-zinc-500">
+              New here?{' '}
+              <button type="button" onClick={() => switchMode('register')} className="text-orange-400 hover:text-orange-300 font-medium transition-colors">
+                Create an account
+              </button>
+            </p>
+          ) : (
+            <p className="text-sm text-zinc-500">
+              Already have an account?{' '}
+              <button type="button" onClick={() => switchMode('login')} className="text-orange-400 hover:text-orange-300 font-medium transition-colors">
+                Sign in
+              </button>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

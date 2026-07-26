@@ -1,15 +1,22 @@
 import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Outlet } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Eye } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { BRAND_LOGO_URL } from '../lib/brand';
 import { SettingsModal } from './SettingsModal';
 import { Celebrations } from './Celebrations';
+import { useAuth } from '../contexts/AuthContext';
 
 export function Layout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const { user, impersonating, stopImpersonating } = useAuth();
+
+  const handleReturn = async () => {
+    await stopImpersonating();
+    window.location.href = '/';
+  };
 
   return (
     <div className="flex bg-[#09090B] text-[#FAFAFA] min-h-screen font-sans overflow-hidden">
@@ -47,6 +54,25 @@ export function Layout() {
             <Menu className="w-6 h-6" />
           </button>
         </div>
+
+        {/* Viewing another account: keep this unmissable so admin actions are never
+            taken in someone else's library by accident. */}
+        {impersonating && (
+          <div className="flex items-center justify-between gap-3 px-4 py-2 bg-amber-500/15 border-b border-amber-500/30 text-amber-100 z-30 flex-wrap">
+            <div className="flex items-center gap-2 text-sm min-w-0">
+              <Eye className="w-4 h-4 shrink-0" />
+              <span className="truncate">
+                Viewing as <strong>{user?.username}</strong> (signed in as {impersonating.byUsername})
+              </span>
+            </div>
+            <button
+              onClick={handleReturn}
+              className="text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 transition-colors shrink-0"
+            >
+              Return to my account
+            </button>
+          </div>
+        )}
 
         <div className="flex-1 p-4 md:p-8 bg-gradient-to-br from-[#09090B] to-[#121214] overflow-y-auto relative">
           <div className="fixed top-0 right-0 bottom-0 left-0 md:left-60 pointer-events-none z-0">
