@@ -128,7 +128,7 @@ export function Universes() {
   // per-media progression chart but summed over the whole franchise. Each log is
   // scaled against its own media item, since scaling is media-type dependent.
   const universeProgress = useMemo(() => {
-    if (!currentFranchise) return { cumulative: [], daily: [] };
+    if (!currentFranchise) return { cumulative: [], daily: [], dailyTypes: [] as string[] };
     const ids = new Set(currentFranchise.items.map((i: MediaItem) => i.id));
     const byId = new Map(currentFranchise.items.map((i: MediaItem) => [i.id, i]));
 
@@ -153,18 +153,39 @@ export function Universes() {
       };
     });
 
-    // Same logs bucketed by calendar day, not accumulated.
-    const perDay = new Map<string, number>();
+    // Same logs bucketed by calendar day and split by media type, so a day's bar
+    // shows what the time actually went into rather than a single opaque total.
+    const perDay = new Map<string, Record<string, number>>();
+    const typesSeen = new Set<string>();
     relevant.forEach((l) => {
       const item = byId.get(l.mediaId);
+      if (!item) return;
       const key = format(new Date(l.timestamp), 'yyyy-MM-dd');
-      perDay.set(key, (perDay.get(key) || 0) + (item ? calculateScaledDelta(l.delta, item, settings) : 0));
+      const bucket = perDay.get(key) || {};
+      bucket[item.mediaType] = (bucket[item.mediaType] || 0) + calculateScaledDelta(l.delta, item, settings);
+      perDay.set(key, bucket);
+      typesSeen.add(item.mediaType);
     });
+
     const dailySeries = Array.from(perDay.entries())
-      .map(([day, pages]) => ({ timestamp: new Date(day + 'T00:00:00').getTime(), pages: Math.floor(pages), title: '' }))
+      .map(([day, bucket]) => {
+        const row: Record<string, number> = { timestamp: new Date(day + 'T00:00:00').getTime() };
+        let total = 0;
+        Object.entries(bucket).forEach(([type, pages]) => {
+          const v = Math.round(pages);
+          if (v > 0) { row[type] = v; total += v; }
+        });
+        row.total = total;
+        return row;
+      })
       .sort((a, b) => a.timestamp - b.timestamp);
 
-    return { cumulative: cumulativeSeries, daily: dailySeries };
+    // Keep the stack order stable and meaningful: biggest contributor first.
+    const totals: Record<string, number> = {};
+    perDay.forEach((bucket) => Object.entries(bucket).forEach(([t, v]) => { totals[t] = (totals[t] || 0) + v; }));
+    const dailyTypes = Array.from(typesSeen).sort((a, b) => (totals[b] || 0) - (totals[a] || 0));
+
+    return { cumulative: cumulativeSeries, daily: dailySeries, dailyTypes };
   }, [currentFranchise, logs, settings]);
 
   const typeDistribution = useMemo(() => {
@@ -355,12 +376,24 @@ export function Universes() {
                   <Tooltip
                     cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                     labelFormatter={(label) => typeof label === 'number' ? format(new Date(label), 'MMM d, yyyy') : String(label)}
-                    formatter={(v: any) => [`${Number(v).toLocaleString()} MP`, 'That day']}
+                    formatter={(v: any, name: any) => [`${Number(v).toLocaleString()} MP`, name]}
                     contentStyle={{ backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                    itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                    itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
                     labelStyle={{ color: '#a1a1aa', fontSize: '10px', marginBottom: '4px' }}
                   />
-                  <Bar dataKey="pages" fill="#a855f7" radius={[3, 3, 0, 0]} maxBarSize={28} />
+                  {/* One stacked segment per media type, in the site-wide colours.
+                      Only the last segment gets rounded corners so the stack reads
+                      as a single bar rather than separate blocks. */}
+                  {universeProgress.dailyTypes.map((type, i) => (
+                    <Bar
+                      key={type}
+                      dataKey={type}
+                      stackId="mp"
+                      fill={MEDIA_HEX[type as keyof typeof MEDIA_HEX]?.base || '#a855f7'}
+                      radius={i === universeProgress.dailyTypes.length - 1 ? [3, 3, 0, 0] : undefined}
+                      maxBarSize={28}
+                    />
+                  ))}
                 </BarChart>
                 ) : (
                 <AreaChart data={universeProgress.cumulative} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
@@ -399,6 +432,19 @@ export function Universes() {
                 )}
               </ResponsiveContainer>
             </div>
+            {uniChartMode === 'daily' && universeProgress.dailyTypes.length > 1 && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-4">
+                {universeProgress.dailyTypes.map((type) => (
+                  <span key={type} className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+                    <span
+                      className="w-2.5 h-2.5 rounded-sm"
+                      style={{ backgroundColor: MEDIA_HEX[type as keyof typeof MEDIA_HEX]?.base || '#a855f7' }}
+                    />
+                    {type}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
