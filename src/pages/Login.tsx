@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { BRAND_LOGO_URL } from '../lib/brand';
 
 export function Login() {
   const { login } = useAuth();
@@ -65,7 +66,7 @@ export function Login() {
       {/* Login Card */}
       <div className="max-w-md w-full bg-black/60 backdrop-blur-md rounded-2xl p-8 border border-white/10 shadow-2xl relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
         <div className="flex justify-center mb-8 pb-6 border-b border-white/10">
-          <img src="https://i.imgur.com/ZgTImal.png" alt="FauxLore" className="h-[48px] object-contain" />
+          <img src={BRAND_LOGO_URL} alt="FauxLore" className="h-[48px] object-contain" />
         </div>
         
         {error && (

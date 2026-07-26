@@ -6,6 +6,7 @@ import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
 import { MEDIA_COLORS } from '../types/schema';
 import { calculateStreak } from '../lib/streak';
+import { BRAND_LOGO_URL } from '../lib/brand';
 import { NotificationBell } from './NotificationBell';
 
 export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () => void, onOpenSettings?: () => void }) {
@@ -51,7 +52,7 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
     <aside className="w-60 border-r border-white/10 flex flex-col p-6 h-full bg-[#09090B] text-zinc-400">
       <div className="flex items-center justify-between mb-10">
         <div className="flex items-center gap-3">
-           <img src="https://i.imgur.com/ZgTImal.png" alt="FauxLore" className="h-8 w-auto object-contain cursor-pointer transition-opacity hover:opacity-80" />
+           <img src={BRAND_LOGO_URL} alt="FauxLore" className="h-8 w-auto object-contain cursor-pointer transition-opacity hover:opacity-80" />
            {isActiveStreak && currentStreak > 0 && (
               <div className="flex items-center gap-1 bg-orange-500/10 border border-orange-500/20 px-2 py-1 rounded-lg" title={`Current Streak: ${currentStreak} days`}>
                  <Flame className="w-4 h-4 text-orange-500 animate-pulse" />

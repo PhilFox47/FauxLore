@@ -3,6 +3,7 @@ import { Sidebar } from './Sidebar';
 import { Outlet } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { BRAND_LOGO_URL } from '../lib/brand';
 import { SettingsModal } from './SettingsModal';
 import { Celebrations } from './Celebrations';
 
@@ -37,7 +38,7 @@ export function Layout() {
         {/* Mobile Header */}
         <div className="md:hidden flex items-center justify-between p-4 border-b border-white/5 bg-[#09090B] z-30">
           <div className="flex items-center">
-            <img src="https://i.imgur.com/ZgTImal.png" alt="FauxLore" className="h-8 w-auto object-contain" />
+            <img src={BRAND_LOGO_URL} alt="FauxLore" className="h-8 w-auto object-contain" />
           </div>
           <button 
             onClick={() => setIsMobileMenuOpen(true)}
