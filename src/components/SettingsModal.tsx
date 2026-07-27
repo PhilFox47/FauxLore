@@ -4,7 +4,8 @@ import { DatabaseService } from '../services/db';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
 import { calculateRPGState, QUEST_DEFINITIONS } from '../lib/rpgSystem';
-import { generateText, getPersonaDescription } from '../services/nanoGptService';
+import { generateText } from '../services/nanoGptService';
+import { AI_PERSONAS, getPersona, getPersonaDescription } from '../lib/personas';
 import { getRecentMediaContext, buildTitleSystemPrompt, buildMainTitlePrompt } from '../lib/lorekeeperTitles';
 import { UserManagement } from './UserManagement';
 
@@ -534,17 +535,17 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                           onChange={handleChange}
                           className="input-field appearance-none w-full bg-[#121214] text-white outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer pr-10"
                         >
-                          <option value="witty">Witty & Casual (Default)</option>
-                          <option value="mystic">Mystic & Fantasy-like</option>
-                          <option value="archivist">Scholarly Archivist</option>
-                          <option value="noir">Cynical Noir Detective</option>
-                          <option value="cyberpunk">Cyberpunk Netrunner</option>
+                          {AI_PERSONAS.map(p => (
+                            <option key={p.id} value={p.id}>{p.label}</option>
+                          ))}
                         </select>
                         <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                           <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"></path></svg>
                         </div>
                       </div>
-                      <p className="text-[10px] text-zinc-500 mt-1">Change the personality of the Oracle and Weekly Recaps.</p>
+                      <p className="text-[10px] text-zinc-500 mt-1">
+                        {getPersona(formData.aiPersona).hint} Sets the voice of the Oracle, your recaps and quest titles.
+                      </p>
                     </div>
                   </div>
                 )}

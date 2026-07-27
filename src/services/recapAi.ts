@@ -1,5 +1,5 @@
 import { apiFetch } from './db';
-import { getPersonaDescription } from './nanoGptService';
+import { getPersonaDescription } from '../lib/personas';
 
 /**
  * The written half of a recap.

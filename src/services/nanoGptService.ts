@@ -1,20 +1,8 @@
 import { apiFetch } from './db';
 
-export function getPersonaDescription(personaStr?: string): string {
-  switch (personaStr) {
-    case 'mystic':
-      return "You are mystical, poetic, and write like an ancient fantasy oracle or dungeon master. Use metaphors of magic, quests, and cosmic destiny.";
-    case 'archivist':
-      return "You are a scholarly archivist. You write with the dry, intellectual, yet deeply fascinated tone of a historian examining sacred texts, keeping things slightly formal but full of wonder.";
-    case 'noir':
-      return "You are a cynical, hardboiled noir detective. You narrate the user's actions like you're piecing together a gritty case file in a rain-slicked city. Very dry and dramatic.";
-    case 'cyberpunk':
-      return "You are a slick cyberpunk netrunner AI. You use tech slang, talk about 'jacking in', 'data streams', 'corpos', and write in a fast, hyper-digital, edgy street tone.";
-    case 'witty':
-    default:
-      return "You are witty, charismatic, naturally sarcastic, and modern. You act as an entertaining, hyper-aware geek podcaster analyzing the user's media habits.";
-  }
-}
+// Personas live in lib/personas, which the Oracle on the server reads too.
+import { getPersonaDescription } from '../lib/personas';
+export { getPersonaDescription };
 
 export async function generateAiRecapText(apiKey: string, model: string, prompt: string, persona?: string) {
   if (!apiKey) throw new Error("Nano-GPT API Key is missing. Please configure it in Settings.");
