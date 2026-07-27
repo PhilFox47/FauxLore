@@ -123,28 +123,39 @@ export function mulberry32(a: number) {
 }
 
 
+/**
+ * Whether an artifact's affinity covers a given media entry.
+ *
+ * The single source of truth for "does this item pay out here?", shared by EXP
+ * calculation and the gear advisor — a recommendation that used different rules
+ * to the scoreboard would be worse than no recommendation at all.
+ */
+export function artifactAppliesTo(a: any, item: MediaItem): boolean {
+  // No affinity recorded: legacy/generic artifacts pay out on everything.
+  if (!a?.targetType) return true;
+
+  switch (a.targetType) {
+    case 'Genre':
+      return !!item.genres?.includes(a.targetValue);
+    case 'Tag':
+      return !!item.tags?.includes(a.targetValue);
+    case 'MediaType':
+      return item.mediaType === a.targetValue;
+    case 'Franchise':
+      return (
+        !!item.franchises?.includes(a.targetValue || '') ||
+        item.title.toLowerCase().includes((a.targetValue || '').toLowerCase())
+      );
+    default:
+      return false;
+  }
+}
+
 export function calculateLogExpBreakdown(delta: number, item: MediaItem, settings: any, equippedArtifacts: any[]): { base: number, armory: number } {
   let logExp = calculateScaledDelta(delta, item, settings);
   let multiplier = 1.0;
   equippedArtifacts.forEach((a: any) => {
-    let applies = false;
-    
-    // If targetType is set, it's a specific bonus
-    if (a.targetType) {
-      if (a.targetType === 'Genre' && item.genres?.includes(a.targetValue)) applies = true;
-      else if (a.targetType === 'MediaType' && item.mediaType === a.targetValue) applies = true;
-      else if (a.targetType === 'Franchise') {
-        applies = true;
-        if (!item.franchises?.includes(a.targetValue || '') && !item.title.toLowerCase().includes(a.targetValue?.toLowerCase() || '')) {
-           applies = false;
-        }
-      }
-    } else {
-      // Backward compatibility or generic artifacts apply a flat baseline
-      applies = true;
-    }
-
-    if (applies) {
+    if (artifactAppliesTo(a, item)) {
       // Use ?? so a fully-broken item (durability 0) yields a 0 ratio and no bonus,
       // instead of `|| 100` which treated 0 as full durability.
       const durabilityRatio = (a.durability ?? 100) / (a.maxDurability || 100);

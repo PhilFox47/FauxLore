@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useToast } from '../contexts/ToastContext';
-import { Gem, Copy, Sword, Shield, Footprints, Sparkles, Hammer, AlertCircle, CheckCircle2, RotateCw, Crown, Shirt, User, ImageIcon, Flame } from 'lucide-react';
+import { Gem, Copy, Sword, Shield, Footprints, Sparkles, Hammer, AlertCircle, CheckCircle2, RotateCw, Crown, Shirt, User, ImageIcon, Flame, X, Check, Filter, Repeat } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { MEDIA_COLORS, Artifact, RARITY_COLORS } from '../types/schema';
 import { generateAiArtifact } from '../services/aiService';
+import { recommendGear, isMeaningfulUpgrade } from '../lib/gearAdvisor';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '../services/db';
 import { LootReveal } from '../components/LootReveal';
@@ -31,6 +32,9 @@ export function Armory() {
   const [filterSlot, setFilterSlot] = useState<Slot | 'All'>('All');
   const [showBroken, setShowBroken] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  // Per-item spinner, so equipping from a card gives feedback where you clicked.
+  const [equippingId, setEquippingId] = useState<string | null>(null);
+  const inventoryRef = useRef<HTMLDivElement | null>(null);
 
   const handleClaimLoot = async (item: any) => {
     setIsLootingMediaId(item.id);
@@ -233,6 +237,52 @@ export function Armory() {
 
   const getEquippedInSlot = (slot: Slot) => equipped.find(a => a.slot === slot);
 
+  /**
+   * What your unequipped gear would have earned you over your recent logs.
+   * Recomputed from the same rules the EXP engine uses, so a suggestion is
+   * always a claim about master pages you actually left on the table.
+   */
+  const advice = React.useMemo(
+    () => recommendGear({ artifacts, media, logs, settings, sampleSize: 20 }),
+    [artifacts, media, logs, settings],
+  );
+
+  // The empty slots that have a candidate worth wearing, and what leaving them
+  // empty has cost over the sampled logs.
+  const emptySlotPicks = SLOTS
+    .filter(slot => !getEquippedInSlot(slot))
+    .map(slot => advice.bySlot[slot]?.[0])
+    .filter(Boolean) as { artifact: Artifact; bonusMP: number; matchedLogs: number; coverage: number }[];
+  const missedMP = emptySlotPicks.reduce((sum, s) => sum + s.bonusMP, 0);
+
+  /** Fills every empty slot with its best candidate, in one pass and one toast. */
+  const equipAllSuggested = async () => {
+    if (emptySlotPicks.length === 0) return;
+    setEquippingId('bulk');
+    try {
+      for (const pick of emptySlotPicks) {
+        await equipArtifact(pick.artifact.id, (pick.artifact.slot as Slot) || 'Accessory');
+      }
+      toast.success(`Filled ${emptySlotPicks.length} empty slot${emptySlotPicks.length > 1 ? 's' : ''} with your best gear.`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not equip everything.');
+    } finally {
+      setEquippingId(null);
+    }
+  };
+
+  /**
+   * Clicking a slot narrows the inventory to it and brings that inventory into
+   * view — the whole point is never having to hunt up and down the page.
+   * Clicking the same slot again clears the filter.
+   */
+  const focusSlot = (slot: Slot) => {
+    setFilterSlot(prev => (prev === slot ? 'All' : slot));
+    requestAnimationFrame(() => {
+      inventoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   const renderSlotIcon = (slot: string, className: string) => {
     switch(slot) {
       case 'Head': return <Crown className={className} />;
@@ -244,20 +294,40 @@ export function Armory() {
     }
   };
 
-  const handleEquip = async (artifact: Artifact, slot: Slot) => {
+  const handleEquip = async (artifact: Artifact) => {
+    const slot = (artifact.slot as Slot) || 'Accessory';
+    if ((artifact.durability ?? 100) <= 0) {
+      toast.error(`${artifact.name} is broken — it would grant nothing.`);
+      return;
+    }
+    setEquippingId(artifact.id);
     try {
+      const replaced = getEquippedInSlot(slot);
       await equipArtifact(artifact.id, slot);
       setSelectedArtifact(null);
-    } catch (e) {
+      toast.success(
+        replaced && replaced.id !== artifact.id
+          ? `${artifact.name} equipped, replacing ${replaced.name}.`
+          : `${artifact.name} equipped to ${slot}.`,
+      );
+    } catch (e: any) {
       console.error(e);
+      toast.error(e?.message || 'Could not equip that item.');
+    } finally {
+      setEquippingId(null);
     }
   };
 
   const handleUnequip = async (artifact: Artifact) => {
+    setEquippingId(artifact.id);
     try {
       await unequipArtifact(artifact.id);
-    } catch (e) {
+      toast.success(`${artifact.name} unequipped.`);
+    } catch (e: any) {
       console.error(e);
+      toast.error(e?.message || 'Could not unequip that item.');
+    } finally {
+      setEquippingId(null);
     }
   };
 
@@ -311,31 +381,75 @@ export function Armory() {
                   <User className="w-96 h-96 text-white translate-x-1/4 -translate-y-1/4" />
                </div>
                
-               <h2 className="text-xl sm:text-2xl font-black text-white mb-8 flex items-center gap-3 font-display uppercase tracking-widest drop-shadow-md">
-                 <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500" />
-                 Active Loadout
-               </h2>
+               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                 <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3 font-display uppercase tracking-widest drop-shadow-md">
+                   <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500" />
+                   Active Loadout
+                 </h2>
+                 {emptySlotPicks.length > 0 && (
+                   <button
+                     onClick={equipAllSuggested}
+                     disabled={equippingId === 'bulk'}
+                     title={`Equip the best candidate for each of your ${emptySlotPicks.length} empty slots`}
+                     className="shrink-0 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 disabled:opacity-50"
+                   >
+                     {equippingId === 'bulk'
+                       ? <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                       : <Sparkles className="w-3.5 h-3.5" />}
+                     Fill {emptySlotPicks.length} slot{emptySlotPicks.length > 1 ? 's' : ''} · +{Math.round(missedMP)} MP
+                   </button>
+                 )}
+               </div>
+               {emptySlotPicks.length > 0 && (
+                 <p className="text-[10px] text-zinc-500 font-bold leading-relaxed -mt-4 mb-6 max-w-md">
+                   Scored against your last {advice.sampleSize} logs: gear sitting in your inventory would have added
+                   about {Math.round(missedMP)} master pages.
+                 </p>
+               )}
 
                <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 relative z-10">
                  {SLOTS.map(slot => {
                    const item = getEquippedInSlot(slot);
+                   const suggestion = advice.bySlot[slot]?.[0];
+                   // Only nag about a swap when the gain is real (see gearAdvisor).
+                   const upgrade = item && suggestion && isMeaningfulUpgrade(suggestion.bonusMP, advice.equippedScore[slot] || 0)
+                     ? suggestion
+                     : null;
+                   const isFiltered = filterSlot === slot;
                    return (
                      <div key={slot} className="space-y-2 group/slot">
-                        <div className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] px-2 font-display">{slot}</div>
-                        <div 
-                          className={cn(
-                            "aspect-square rounded-2xl border flex flex-col items-center justify-center p-3 sm:p-4 transition-all group/item relative cursor-pointer shadow-inner",
-                            item 
-                              ? "bg-gradient-to-t from-zinc-900 to-zinc-800/80 border-white/10 hover:border-white/20 hover:scale-105 duration-300" 
-                              : "bg-black/50 border-white/5 border-dashed"
+                        <div className="flex items-center justify-between gap-2 px-2">
+                          <div className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] font-display">{slot}</div>
+                          {isFiltered && (
+                            <span className="text-[8px] font-black uppercase tracking-widest text-purple-300 bg-purple-500/15 border border-purple-500/30 rounded px-1.5 py-0.5 flex items-center gap-1">
+                              <Filter className="w-2.5 h-2.5" /> Filtered
+                            </span>
                           )}
-                          onClick={() => item && handleUnequip(item)}
+                        </div>
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => focusSlot(slot)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); focusSlot(slot); } }}
+                          title={isFiltered ? `Stop filtering by ${slot}` : `Show only your ${slot} items`}
+                          className={cn(
+                            "aspect-square rounded-2xl border flex flex-col items-center justify-center p-3 sm:p-4 transition-all group/item relative cursor-pointer shadow-inner focus:outline-none focus:ring-2 focus:ring-purple-500/50",
+                            item
+                              ? "bg-gradient-to-t from-zinc-900 to-zinc-800/80 border-white/10 hover:border-white/20 hover:scale-105 duration-300"
+                              : "bg-black/50 border-white/5 border-dashed hover:border-purple-500/40 hover:bg-purple-500/[0.04]",
+                            isFiltered && "ring-2 ring-purple-500/40 border-purple-500/40",
+                          )}
                         >
                            {item ? (
                              <>
-                               <div className="absolute top-2 right-2 text-[8px] opacity-0 group-hover/item:opacity-100 transition-opacity text-red-400 font-bold uppercase tracking-widest bg-red-500/10 px-2 py-1 rounded shadow-sm border border-red-500/20 backdrop-blur-sm z-20">
-                                  Remove
-                               </div>
+                               <button
+                                 onClick={(e) => { e.stopPropagation(); handleUnequip(item); }}
+                                 disabled={equippingId === item.id}
+                                 title={`Unequip ${item.name}`}
+                                 className="absolute top-1.5 right-1.5 z-30 opacity-0 group-hover/item:opacity-100 focus:opacity-100 transition-opacity text-red-300 bg-red-500/15 hover:bg-red-500/30 border border-red-500/30 rounded-lg p-1 backdrop-blur-sm disabled:opacity-50"
+                               >
+                                 {equippingId === item.id ? <RotateCw className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                               </button>
                                <div className="mb-2 relative">
                                  {/* Glow effect */}
                                  <div className={cn("absolute inset-0 blur-xl opacity-40", RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text)}></div>
@@ -352,22 +466,66 @@ export function Armory() {
                                  <span className={cn(RARITY_COLORS[item.rarity]?.text || RARITY_COLORS['Common'].text)}>{item.rarity}</span>
                                </div>
                                <div className="text-[8px] sm:text-[9px] text-emerald-400/80 font-black text-center uppercase tracking-widest mt-1 w-full px-1">+{item.bonusPercent}% {item.targetValue} EXP</div>
-                               
+
                                {/* Durability Bar */}
                                <div className="w-full mt-3 h-1.5 bg-black rounded-full overflow-hidden border border-white/5 shadow-inner p-[1px]">
-                                  <div 
+                                  <div
                                     className={cn(
                                       "h-full rounded-full transition-all shadow-inner",
                                       (item.durability / item.maxDurability) < 0.2 ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"
-                                    )} 
+                                    )}
                                     style={{ width: `${(item.durability / item.maxDurability) * 100}%` }}
                                   />
                                </div>
                                <div className="text-[8px] text-zinc-500 font-black mt-1.5 uppercase font-mono">{item.durability}/{item.maxDurability}</div>
+
+                               {upgrade && (
+                                 <button
+                                   onClick={(e) => { e.stopPropagation(); handleEquip(upgrade.artifact); }}
+                                   disabled={equippingId === upgrade.artifact.id}
+                                   title={`Swap in ${upgrade.artifact.name} — worth about ${Math.round(upgrade.bonusMP)} MP over your last ${advice.sampleSize} logs, against ${Math.round(advice.equippedScore[slot] || 0)} MP from ${item.name}`}
+                                   className="absolute top-1.5 left-1.5 z-30 bg-amber-400 hover:bg-amber-300 text-black text-[7px] font-black uppercase tracking-widest px-1.5 py-1 rounded-lg shadow-lg flex items-center gap-1 disabled:opacity-50"
+                                 >
+                                   {equippingId === upgrade.artifact.id
+                                     ? <RotateCw className="w-2.5 h-2.5 animate-spin" />
+                                     : <Repeat className="w-2.5 h-2.5" />}
+                                   Swap
+                                 </button>
+                               )}
                              </>
+                           ) : suggestion ? (
+                             /* An empty slot is a missed bonus — name the item that would have paid. */
+                             <div className="w-full flex flex-col items-center gap-1 relative z-10">
+                                <div className="text-[7px] font-black uppercase tracking-[0.15em] text-emerald-400/80 flex items-center gap-1">
+                                  <Sparkles className="w-2.5 h-2.5" /> Suggested
+                                </div>
+                                {suggestion.artifact.imageUrl ? (
+                                  <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl overflow-hidden border border-white/10 bg-zinc-900 shadow-lg">
+                                    <img src={suggestion.artifact.imageUrl} alt={suggestion.artifact.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  </div>
+                                ) : (
+                                  renderSlotIcon(slot, cn("w-7 h-7 sm:w-9 sm:h-9", RARITY_COLORS[suggestion.artifact.rarity]?.text || RARITY_COLORS['Common'].text))
+                                )}
+                                <div className="text-[9px] font-black text-white text-center leading-tight truncate w-full px-1 font-display">{suggestion.artifact.name}</div>
+                                <div className="text-[8px] text-emerald-400 font-black text-center leading-tight">
+                                  +{Math.round(suggestion.bonusMP)} MP missed
+                                </div>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleEquip(suggestion.artifact); }}
+                                  disabled={equippingId === suggestion.artifact.id}
+                                  title={`Equip ${suggestion.artifact.name} — it would have paid out on ${suggestion.matchedLogs} of your last ${advice.sampleSize} logs`}
+                                  className="mt-1 bg-emerald-500 hover:bg-emerald-400 text-black text-[8px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1 disabled:opacity-50 transition-colors"
+                                >
+                                  {equippingId === suggestion.artifact.id
+                                    ? <RotateCw className="w-2.5 h-2.5 animate-spin" />
+                                    : <Check className="w-2.5 h-2.5" />}
+                                  Equip
+                                </button>
+                             </div>
                            ) : (
-                             <div className="text-zinc-800">
+                             <div className="text-zinc-800 flex flex-col items-center gap-2">
                                {renderSlotIcon(slot, "w-8 h-8 sm:w-10 sm:h-10 opacity-[0.15] drop-shadow-sm")}
+                               <span className="text-[7px] font-black uppercase tracking-widest text-zinc-700 opacity-0 group-hover/item:opacity-100 transition-opacity">Browse {slot}</span>
                              </div>
                            )}
                         </div>
@@ -377,9 +535,9 @@ export function Armory() {
                </div>
             </div>
 
-            {/* Unlooted Treasures & selected artifact details */}
+            {/* Unlooted Treasures */}
             <div className="space-y-6">
-               <div className={cn("transition-all duration-500", selectedArtifact ? "opacity-30 pointer-events-none scale-95" : "opacity-100 scale-100")}>
+               <div>
                  {unlootedMedia.length > 0 ? (
                    <div className="bg-gradient-to-br from-indigo-950/20 to-black border border-indigo-500/20 shadow-[0_0_40px_rgba(99,102,241,0.1)] rounded-[2.5rem] p-8 sm:p-10 relative overflow-hidden">
                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03] mix-blend-overlay"></div>
@@ -428,86 +586,11 @@ export function Armory() {
                  )}
                </div>
                
-               {/* Selection Viewer (if artifact selected) */}
-               {selectedArtifact && (
-                 <div className="bg-gradient-to-br from-zinc-900 to-[#121214] shadow-2xl shadow-black border border-white/10 rounded-[2.5rem] p-8 sm:p-10 animate-in fade-in slide-in-from-bottom-8 duration-500 ease-out relative overflow-hidden">
-                    <div className={cn("absolute inset-0 opacity-[0.05] mix-blend-screen pointer-events-none", RARITY_COLORS[selectedArtifact.rarity]?.bg || RARITY_COLORS['Common'].bg)}></div>
-                    <div className="flex items-start justify-between mb-6 relative z-10 w-full gap-4">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className={cn(
-                              "text-[10px] uppercase tracking-[0.2em] font-black px-3 py-1 rounded border shadow-sm backdrop-blur-md font-display",
-                              RARITY_COLORS[selectedArtifact.rarity]?.bg || RARITY_COLORS['Common'].bg,
-                              RARITY_COLORS[selectedArtifact.rarity]?.text || RARITY_COLORS['Common'].text,
-                              (RARITY_COLORS[selectedArtifact.rarity]?.border || RARITY_COLORS['Common'].border).replace('500', '500/30')
-                          )}>
-                              {selectedArtifact.rarity}
-                          </span>
-                        </div>
-                        <h3 className="text-2xl sm:text-3xl font-black text-white italic truncate tracking-tight py-1">{selectedArtifact.name}</h3>
-                      </div>
-                      <div className="text-zinc-600 shrink-0 p-4 bg-black/40 rounded-2xl border border-white/5 shadow-inner" title={selectedArtifact.slot}>
-                        {renderSlotIcon(selectedArtifact.slot || 'Accessory', "w-8 h-8")}
-                      </div>
-                    </div>
-                    
-                    <div className="relative z-10 backdrop-blur-sm bg-black/30 border border-white/5 rounded-2xl p-5 mb-6">
-                       <p className="text-sm text-zinc-300 font-medium leading-relaxed italic border-l-2 border-white/10 pl-4 py-1">"{selectedArtifact.description}"</p>
-                    </div>
-                    
-                    <div className="mb-6 flex items-center gap-3 w-full bg-black/50 p-4 rounded-2xl border border-white/5 relative z-10" title="Durability">
-                      <Hammer className="w-5 h-5 text-zinc-500 flex-shrink-0" />
-                      <div className="flex-1 h-3 bg-zinc-950 rounded-full overflow-hidden border border-white/5 shadow-inner p-[1px]">
-                          <div 
-                            className={cn(
-                              "h-full rounded-full transition-all shadow-[inset_0_2px_4px_rgba(255,255,255,0.2)]",
-                              (selectedArtifact.durability / selectedArtifact.maxDurability) < 0.2 ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" : "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
-                            )} 
-                            style={{ width: `${(selectedArtifact.durability / selectedArtifact.maxDurability) * 100}%` }}
-                          />
-                      </div>
-                      <span className="text-xs font-black text-zinc-400 flex-shrink-0 w-12 text-right font-mono">{selectedArtifact.durability}/{selectedArtifact.maxDurability}</span>
-                    </div>
-
-                    <div className="relative z-10 space-y-4 mb-8">
-                       {selectedArtifact.targetType ? (
-                         <div className="bg-gradient-to-r from-purple-900/40 to-transparent border-l-4 border-purple-500 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-inner">
-                            <span className="text-[10px] text-purple-300 font-bold uppercase tracking-[0.2em] font-display">Target Affinity: <span className="text-white">{selectedArtifact.targetType}</span></span>
-                            <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-3 py-1 rounded shadow-sm border border-emerald-500/20">+{selectedArtifact.bonusPercent}% {selectedArtifact.targetValue} EXP</span>
-                         </div>
-                       ) : (
-                         <div className="bg-gradient-to-r from-purple-900/40 to-transparent border-l-4 border-purple-500 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-inner">
-                            <span className="text-[10px] text-purple-300 font-bold uppercase tracking-[0.2em] font-display">Global Affinity</span>
-                            <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-3 py-1 rounded shadow-sm border border-emerald-500/20">+20% Base EXP</span>
-                         </div>
-                       )}
-                    </div>
-                    
-                    <div className="flex gap-4 relative z-10 w-full">
-                       <button 
-                         onClick={() => setSelectedArtifact(null)}
-                         className="px-6 py-4 rounded-xl border border-white/10 font-black text-zinc-400 uppercase tracking-widest text-[10px] hover:text-white hover:bg-white/5 transition-all font-display shrink-0"
-                       >
-                         Dismiss
-                       </button>
-                       <button
-                         onClick={() => handleEquip(selectedArtifact, selectedArtifact.slot as Slot || 'Accessory')}
-                         className={cn(
-                           "flex-1 bg-white hover:bg-zinc-200 text-black py-4 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] transition-all font-display shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-[0_0_30px_rgba(255,255,255,0.4)] hover:-translate-y-1",
-                           RARITY_COLORS[selectedArtifact.rarity]?.text || RARITY_COLORS['Common'].text
-                         )}
-                         style={{ color: `var(--color-${RARITY_COLORS[selectedArtifact.rarity]?.text.split('-')[1] || 'zinc'}-500, #000)` }}
-                       >
-                         Equip to {selectedArtifact.slot || 'Accessory'}
-                       </button>
-                    </div>
-                 </div>
-               )}
             </div>
           </div>
 
           {/* Inventory Grid */}
-          <div className="space-y-6">
+          <div className="space-y-6 scroll-mt-6" ref={inventoryRef}>
              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                <h2 className="text-xl font-black text-white flex items-center gap-3">
                   <Copy className="w-6 h-6 text-zinc-700" />
@@ -539,16 +622,6 @@ export function Armory() {
                    className="bg-zinc-900/50 border border-white/10 text-white rounded-xl px-4 py-2 text-sm w-full sm:max-w-[200px] focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
                  />
                  <select 
-                   value={filterSlot} 
-                   onChange={(e) => setFilterSlot(e.target.value as any)}
-                   className="bg-zinc-900/50 border border-white/10 text-white rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
-                 >
-                   <option value="All">All Slots</option>
-                   {SLOTS.map(s => (
-                     <option key={s} value={s}>{s}</option>
-                   ))}
-                 </select>
-                 <select 
                    value={sortType} 
                    onChange={(e) => setSortType(e.target.value as any)}
                    className="bg-zinc-900/50 border border-white/10 text-white rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
@@ -560,6 +633,45 @@ export function Armory() {
                </div>
              </div>
 
+             {/* Slot filter, mirrored by clicking a slot on the loadout above. */}
+             <div className="flex flex-wrap items-center gap-2">
+               <button
+                 onClick={() => setFilterSlot('All')}
+                 className={cn(
+                   "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all",
+                   filterSlot === 'All'
+                     ? "bg-white text-black border-white"
+                     : "bg-zinc-900/50 border-white/10 text-zinc-400 hover:text-white hover:border-white/20",
+                 )}
+               >
+                 All ({inventory.filter(a => showBroken || !isBroken(a)).length})
+               </button>
+               {SLOTS.map(slot => {
+                 const count = inventory.filter(a => (a.slot || 'Accessory') === slot && (showBroken || !isBroken(a))).length;
+                 const suggested = advice.bySlot[slot]?.[0];
+                 const isEmptySlot = !getEquippedInSlot(slot);
+                 return (
+                   <button
+                     key={slot}
+                     onClick={() => setFilterSlot(prev => (prev === slot ? 'All' : slot))}
+                     className={cn(
+                       "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all flex items-center gap-1.5",
+                       filterSlot === slot
+                         ? "bg-purple-500 text-white border-purple-400"
+                         : "bg-zinc-900/50 border-white/10 text-zinc-400 hover:text-white hover:border-white/20",
+                     )}
+                     title={isEmptySlot && suggested ? `${slot} is empty — ${suggested.artifact.name} would have earned you ${Math.round(suggested.bonusMP)} MP` : `Show ${slot} items`}
+                   >
+                     {renderSlotIcon(slot, "w-3 h-3")}
+                     {slot} ({count})
+                     {isEmptySlot && suggested && (
+                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+                     )}
+                   </button>
+                 );
+               })}
+             </div>
+
              {filteredAndSortedInventory.length === 0 ? (
                 <div className="bg-zinc-900/20 border border-white/5 rounded-[2rem] p-12 text-center">
                    <p className="text-zinc-600 font-bold uppercase tracking-widest text-xs">No items found</p>
@@ -568,6 +680,13 @@ export function Armory() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {filteredAndSortedInventory.map(artifact => {
                     const m = media.find(x => x.id === artifact.mediaId);
+                    const slot = (artifact.slot || 'Accessory') as Slot;
+                    const occupant = getEquippedInSlot(slot);
+                    const broken = isBroken(artifact);
+                    // Its rank among the candidates the advisor scored for this slot.
+                    const suggestionRank = advice.bySlot[slot]?.findIndex(s2 => s2.artifact.id === artifact.id) ?? -1;
+                    const suggestion = suggestionRank >= 0 ? advice.bySlot[slot][suggestionRank] : null;
+                    const isTopPick = suggestionRank === 0 && !occupant;
 
     return (
       <div 
@@ -575,9 +694,15 @@ export function Armory() {
         onClick={() => setSelectedArtifact(artifact)}
         className={cn(
           "bg-zinc-900/50 border border-white/5 rounded-3xl p-6 relative overflow-hidden group hover:border-purple-500/30 transition-all cursor-pointer",
-          selectedArtifact?.id === artifact.id && "border-purple-500 ring-4 ring-purple-500/20"
+          selectedArtifact?.id === artifact.id && "border-purple-500 ring-4 ring-purple-500/20",
+          isTopPick && "border-emerald-500/40 ring-1 ring-emerald-500/20"
         )}
       >
+         {isTopPick && (
+           <div className="absolute top-0 right-0 z-20 bg-emerald-500 text-black text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-2xl flex items-center gap-1">
+             <Sparkles className="w-2.5 h-2.5" /> Best for {slot}
+           </div>
+         )}
          <div className="flex flex-col h-full relative z-10">
             <GeneratedImage
               url={artifact.imageUrl}
@@ -664,6 +789,41 @@ export function Armory() {
                                    <div className="text-[10px] font-bold text-zinc-400 truncate">{m.title}</div>
                                 </div>
                               )}
+
+                              {suggestion && suggestion.bonusMP > 0 && (
+                                <div className="text-[9px] font-black uppercase tracking-widest text-emerald-400/80 leading-tight">
+                                  +{Math.round(suggestion.bonusMP)} MP over your last {advice.sampleSize} logs
+                                  <span className="text-zinc-600"> · matched {suggestion.matchedLogs}</span>
+                                </div>
+                              )}
+
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleEquip(artifact); }}
+                                disabled={broken || equippingId === artifact.id}
+                                title={
+                                  broken
+                                    ? 'Broken items grant no bonus'
+                                    : occupant
+                                      ? `Equip to ${slot}, replacing ${occupant.name}`
+                                      : `Equip to your empty ${slot} slot`
+                                }
+                                className={cn(
+                                  "w-full py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed",
+                                  occupant
+                                    ? "bg-white/5 hover:bg-white/10 text-zinc-200 border border-white/10"
+                                    : "bg-white hover:bg-zinc-200 text-black"
+                                )}
+                              >
+                                {equippingId === artifact.id ? (
+                                  <><RotateCw className="w-3 h-3 animate-spin" /> Equipping</>
+                                ) : broken ? (
+                                  <><Hammer className="w-3 h-3" /> Broken</>
+                                ) : occupant ? (
+                                  <><Repeat className="w-3 h-3" /> Swap into {slot}</>
+                                ) : (
+                                  <><Check className="w-3 h-3" /> Equip to {slot}</>
+                                )}
+                              </button>
                             </div>
                          </div>
                       </div>
@@ -690,6 +850,91 @@ export function Armory() {
         initialData={editingMedia}
         onSave={() => setEditingMedia(null)}
       />
+
+
+      {/* Item inspector. A dialog rather than a panel at the top of the page:
+          the equip action has to be where you clicked, not a scroll away. */}
+      {selectedArtifact && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          onClick={() => setSelectedArtifact(null)}
+        >
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto no-scrollbar" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-zinc-900 to-[#121214] shadow-2xl shadow-black border border-white/10 rounded-[2.5rem] p-8 sm:p-10 animate-in fade-in slide-in-from-bottom-8 duration-500 ease-out relative overflow-hidden">
+                    <div className={cn("absolute inset-0 opacity-[0.05] mix-blend-screen pointer-events-none", RARITY_COLORS[selectedArtifact.rarity]?.bg || RARITY_COLORS['Common'].bg)}></div>
+                    <div className="flex items-start justify-between mb-6 relative z-10 w-full gap-4">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className={cn(
+                              "text-[10px] uppercase tracking-[0.2em] font-black px-3 py-1 rounded border shadow-sm backdrop-blur-md font-display",
+                              RARITY_COLORS[selectedArtifact.rarity]?.bg || RARITY_COLORS['Common'].bg,
+                              RARITY_COLORS[selectedArtifact.rarity]?.text || RARITY_COLORS['Common'].text,
+                              (RARITY_COLORS[selectedArtifact.rarity]?.border || RARITY_COLORS['Common'].border).replace('500', '500/30')
+                          )}>
+                              {selectedArtifact.rarity}
+                          </span>
+                        </div>
+                        <h3 className="text-2xl sm:text-3xl font-black text-white italic truncate tracking-tight py-1">{selectedArtifact.name}</h3>
+                      </div>
+                      <div className="text-zinc-600 shrink-0 p-4 bg-black/40 rounded-2xl border border-white/5 shadow-inner" title={selectedArtifact.slot}>
+                        {renderSlotIcon(selectedArtifact.slot || 'Accessory', "w-8 h-8")}
+                      </div>
+                    </div>
+                    
+                    <div className="relative z-10 backdrop-blur-sm bg-black/30 border border-white/5 rounded-2xl p-5 mb-6">
+                       <p className="text-sm text-zinc-300 font-medium leading-relaxed italic border-l-2 border-white/10 pl-4 py-1">"{selectedArtifact.description}"</p>
+                    </div>
+                    
+                    <div className="mb-6 flex items-center gap-3 w-full bg-black/50 p-4 rounded-2xl border border-white/5 relative z-10" title="Durability">
+                      <Hammer className="w-5 h-5 text-zinc-500 flex-shrink-0" />
+                      <div className="flex-1 h-3 bg-zinc-950 rounded-full overflow-hidden border border-white/5 shadow-inner p-[1px]">
+                          <div 
+                            className={cn(
+                              "h-full rounded-full transition-all shadow-[inset_0_2px_4px_rgba(255,255,255,0.2)]",
+                              (selectedArtifact.durability / selectedArtifact.maxDurability) < 0.2 ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" : "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                            )} 
+                            style={{ width: `${(selectedArtifact.durability / selectedArtifact.maxDurability) * 100}%` }}
+                          />
+                      </div>
+                      <span className="text-xs font-black text-zinc-400 flex-shrink-0 w-12 text-right font-mono">{selectedArtifact.durability}/{selectedArtifact.maxDurability}</span>
+                    </div>
+
+                    <div className="relative z-10 space-y-4 mb-8">
+                       {selectedArtifact.targetType ? (
+                         <div className="bg-gradient-to-r from-purple-900/40 to-transparent border-l-4 border-purple-500 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-inner">
+                            <span className="text-[10px] text-purple-300 font-bold uppercase tracking-[0.2em] font-display">Target Affinity: <span className="text-white">{selectedArtifact.targetType}</span></span>
+                            <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-3 py-1 rounded shadow-sm border border-emerald-500/20">+{selectedArtifact.bonusPercent}% {selectedArtifact.targetValue} EXP</span>
+                         </div>
+                       ) : (
+                         <div className="bg-gradient-to-r from-purple-900/40 to-transparent border-l-4 border-purple-500 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-inner">
+                            <span className="text-[10px] text-purple-300 font-bold uppercase tracking-[0.2em] font-display">Global Affinity</span>
+                            <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 px-3 py-1 rounded shadow-sm border border-emerald-500/20">+20% Base EXP</span>
+                         </div>
+                       )}
+                    </div>
+                    
+                    <div className="flex gap-4 relative z-10 w-full">
+                       <button 
+                         onClick={() => setSelectedArtifact(null)}
+                         className="px-6 py-4 rounded-xl border border-white/10 font-black text-zinc-400 uppercase tracking-widest text-[10px] hover:text-white hover:bg-white/5 transition-all font-display shrink-0"
+                       >
+                         Dismiss
+                       </button>
+                       <button
+                         onClick={() => handleEquip(selectedArtifact)}
+                         className={cn(
+                           "flex-1 bg-white hover:bg-zinc-200 text-black py-4 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] transition-all font-display shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-[0_0_30px_rgba(255,255,255,0.4)] hover:-translate-y-1",
+                           RARITY_COLORS[selectedArtifact.rarity]?.text || RARITY_COLORS['Common'].text
+                         )}
+                         style={{ color: `var(--color-${RARITY_COLORS[selectedArtifact.rarity]?.text.split('-')[1] || 'zinc'}-500, #000)` }}
+                       >
+                         Equip to {selectedArtifact.slot || 'Accessory'}
+                       </button>
+                    </div>
+                 </div>
+          </div>
+        </div>
+      )}
 
       <LootReveal 
         artifact={lootedArtifact} 

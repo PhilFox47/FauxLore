@@ -52,7 +52,9 @@ export function registerArtifactRoutes(app: Express, ctx: ServerContext) {
         rarity: artifact.rarity,
         type: artifact.type,
         earnedAt: artifact.earnedAt,
-        durability: artifact.durability || 100,
+        // ?? not ||: a broken item arrives with durability 0, which `||` would
+        // silently repair back to full.
+        durability: artifact.durability ?? 100,
         maxDurability: artifact.maxDurability || 100,
         slot: artifact.slot || null,
         isEquipped: artifact.isEquipped ? 1 : 0,
