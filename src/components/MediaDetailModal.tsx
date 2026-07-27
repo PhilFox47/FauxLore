@@ -37,6 +37,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   const [lootedArtifact, setLootedArtifact] = useState<Artifact | null>(null);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [chartMode, setChartMode] = useState<'cumulative' | 'daily'>('cumulative');
+  const [journalOnly, setJournalOnly] = useState(false);
   const [isEditingRoute, setIsEditingRoute] = useState(false);
   const [routeDraft, setRouteDraft] = useState('');
   const [editLogData, setEditLogData] = useState<{
@@ -209,9 +210,15 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   const franchiseSiblings = (item.franchises && item.franchises.length)
     ? (media || []).filter(m => m.id !== item.id && m.franchises?.some(f => item.franchises!.includes(f))).slice(0, 12)
     : [];
+  // Logs carrying a written note. The journal used to be its own section above,
+  // which just repeated what the log list already showed; it is now a filter on
+  // that one list.
+  const hasJournalEntry = (l: ProgressLog) =>
+    !!l.note && l.note.trim().length > 0 && l.metricType !== 'statusChange' && !l.timestamp.startsWith('1970-01-01');
   const journalEntries = logs
-    .filter(l => l.note && l.note.trim().length > 0 && l.metricType !== 'statusChange' && !l.timestamp.startsWith('1970-01-01'))
+    .filter(hasJournalEntry)
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  const visibleLogs = journalOnly ? sortedLogs.filter(hasJournalEntry) : sortedLogs;
 
   const handleClaimLoot = async () => {
     setIsLooting(true);
@@ -949,24 +956,6 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
             </div>
           )}
 
-          {/* Journal (your log notes for this title) */}
-          {journalEntries.length > 0 && (
-            <div className="mb-8">
-              <h3 className="text-sm font-bold text-zinc-500 mb-3 tracking-wider uppercase flex items-center gap-2"><BookOpen className="w-4 h-4" /> Journal</h3>
-              <div className="flex flex-col gap-3">
-                {journalEntries.map(l => (
-                  <div key={l.id} className="bg-black/30 border-l-2 border-amber-500/40 rounded-r-xl p-3 pl-4">
-                    <p className="text-sm text-zinc-300 italic leading-snug">"{l.note}"</p>
-                    <div className="text-[10px] text-zinc-500 font-bold mt-1.5 flex items-center gap-2">
-                      <span>{format(new Date(l.timestamp), 'MMM d, yyyy')}</span>
-                      {l.location && <><span>•</span><span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {l.location}</span></>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {(() => {
             const isOngoingPlaytimeMedia = (item.mediaType === 'Game' || item.mediaType === 'Visual Novel' || item.mediaType === 'Audiobook') && item.isOngoing;
             let allowedArtifactsCount = 0;
@@ -1047,12 +1036,32 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
           })()}
 
           <div>
-            <h3 className="text-lg font-bold text-white mb-4 tracking-wide">Journal Entries & Progress</h3>
-            {sortedLogs.length === 0 ? (
-              <p className="text-zinc-500 italic text-sm">No progress logged yet.</p>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <h3 className="text-lg font-bold text-white tracking-wide">Journal Entries &amp; Progress</h3>
+              {journalEntries.length > 0 && (
+                <button
+                  onClick={() => setJournalOnly(v => !v)}
+                  title={journalOnly ? 'Show every log again' : 'Hide logs that have no journal entry'}
+                  className={cn(
+                    "flex items-center gap-2 border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all",
+                    journalOnly
+                      ? "bg-amber-500/15 border-amber-500/40 text-amber-300"
+                      : "bg-white/5 border-white/10 text-zinc-400 hover:text-white hover:border-white/20"
+                  )}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  Only show journal entries
+                  <span className={cn("font-mono", journalOnly ? "text-amber-200/70" : "text-zinc-600")}>{journalEntries.length}</span>
+                </button>
+              )}
+            </div>
+            {visibleLogs.length === 0 ? (
+              <p className="text-zinc-500 italic text-sm">
+                {journalOnly ? 'No logs with a journal entry yet.' : 'No progress logged yet.'}
+              </p>
             ) : (
               <div className="space-y-4">
-                {sortedLogs.map(log => (
+                {visibleLogs.map(log => (
                   <div key={log.id} className="p-4 bg-zinc-800/30 rounded-xl border border-white/5 relative group">
                     {/* Timestamp indicator line */}
                     <div className="absolute top-0 bottom-0 left-4 w-px bg-zinc-700/50" />

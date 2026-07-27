@@ -61,8 +61,11 @@ THE IMAGE PROMPT MUST:
 - Be 2-4 natural sentences that stand entirely on their own, written for the "Z-Image-Turbo" diffusion model (it follows natural language and renders any art style, including real text and logos).
 - Render the subject in the ACTUAL art style, medium and palette of "${mediaItem.title}"${codexRow?.data?.artStyle?.summary ? ` — the Codex records it as: ${codexRow.data.artStyle.summary}` : ""}. Name that style explicitly and reference the franchise to anchor the look. Never default to generic 2D cartoon or flat vector art unless the source really is that.
 - ${AUTHENTICITY(mediaItem.title)}
-- Show ONE subject only: a striking character portrait or full-body hero shot, centered, against ${tier.scene}. Never a crowd or a collage.
-- Describe its anatomy, armour, weapons, materials, aura, posture and expression, all pitched at Level ${level}.
+- Show ONE subject only, against ${tier.scene}. Never a crowd or a collage.
+- Capture a MOMENT, not a pose. This one should be ${tier.action}. Pick the specific action that suits THIS enemy — what it would actually be doing — rather than the first one on that list, and describe the follow-through: what is moving, what is being flung or trailing behind it, where its weight is.
+- Frame it with ${tier.camera}. Vary the framing to suit the enemy: full body, three-quarter, or a tight close-up on the part of it that matters.
+- Never a neutral figure standing straight and facing the lens. No mugshots, no character-select line-ups, no arms hanging at its sides, no posing for a photograph — it should not be aware of the camera at all.
+- Describe its anatomy, armour, weapons, materials, aura and expression, all pitched at Level ${level}.
 - ${SHARPNESS}
 - Contain no watermarks, no signatures, no lettering and no duplicate characters.
 

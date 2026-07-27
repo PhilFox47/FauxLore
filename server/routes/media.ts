@@ -6,7 +6,10 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
 
   app.get("/api/public/covers", (req, res) => {
     try {
-      const rows = db.prepare('SELECT DISTINCT coverImageUrl FROM media WHERE coverImageUrl IS NOT NULL AND coverImageUrl != \'\' ORDER BY RANDOM() LIMIT 40').all() as {coverImageUrl: string}[];
+      // The login page tiles these behind the form. A 4K display needs a few
+      // hundred to fill without repeating, so send plenty and let the client
+      // take what it can actually show.
+      const rows = db.prepare('SELECT DISTINCT coverImageUrl FROM media WHERE coverImageUrl IS NOT NULL AND coverImageUrl != \'\' ORDER BY RANDOM() LIMIT 400').all() as {coverImageUrl: string}[];
       res.json(rows.map(r => r.coverImageUrl));
     } catch (e) {
       res.status(500).json({ error: String(e) });

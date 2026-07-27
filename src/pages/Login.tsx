@@ -14,19 +14,59 @@ export function Login() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [covers, setCovers] = useState<string[]>([]);
+  const [viewport, setViewport] = useState(() => ({
+    w: typeof window === 'undefined' ? 1920 : window.innerWidth,
+    h: typeof window === 'undefined' ? 1080 : window.innerHeight,
+  }));
 
   useEffect(() => {
     fetch('/api/public/covers')
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          // Multiply covers to ensure grid is completely filled
-          const multiplied = Array(10).fill(data).flat().sort(() => Math.random() - 0.5);
-          setCovers(multiplied);
-        }
+        if (Array.isArray(data) && data.length > 0) setCovers(data);
       })
       .catch(console.error);
   }, []);
+
+  useEffect(() => {
+    const onResize = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  /**
+   * How many covers the backdrop can actually show, derived from the real
+   * viewport: the grid is 150vw x 150vh of fixed-ratio tiles whose width is a
+   * breakpoint-dependent share of the viewport. Guessing high and repeating the
+   * list — which is what this used to do — put the same cover on screen ten
+   * times over.
+   */
+  const tileCount = React.useMemo(() => {
+    const { w, h } = viewport;
+    const tileVw = w >= 1024 ? 0.08 : w >= 768 ? 0.10 : w >= 640 ? 0.14 : 0.20;
+    const gap = 16;
+    const tileW = w * tileVw + gap;
+    const tileH = w * tileVw * 1.5 + gap; // covers are 2:3
+    const cols = Math.ceil((w * 1.5) / tileW);
+    const rows = Math.ceil((h * 1.5) / tileH);
+    return Math.max(12, cols * rows);
+  }, [viewport]);
+
+  /**
+   * Unique covers first, in a stable shuffle. Only a library with fewer covers
+   * than the grid has tiles falls back to repeating, and then it cycles rather
+   * than randomising, so the copies end up as far apart as possible.
+   */
+  const tiles = React.useMemo(() => {
+    if (covers.length === 0) return [];
+    const shuffled = [...covers];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    if (shuffled.length >= tileCount) return shuffled.slice(0, tileCount);
+    return Array.from({ length: tileCount }, (_, i) => shuffled[i % shuffled.length]);
+  }, [covers, tileCount]);
 
   const switchMode = (next: 'login' | 'register') => {
     setMode(next);
@@ -73,8 +113,8 @@ export function Login() {
     <div className="min-h-screen bg-[#09090B] flex items-center justify-center p-4 relative overflow-hidden">
       
       {/* Background Covers Grid */}
-      <div className="absolute top-1/2 left-1/2 w-[150vw] h-[150vh] -translate-x-1/2 -translate-y-1/2 -rotate-6 pointer-events-none opacity-[0.15] flex flex-wrap gap-4 justify-center items-center content-center overflow-hidden">
-        {covers.map((url, i) => (
+      <div className="absolute top-1/2 left-1/2 w-[150vw] h-[150vh] -translate-x-1/2 -translate-y-1/2 -rotate-6 pointer-events-none opacity-[0.18] flex flex-wrap gap-4 justify-center items-center content-center overflow-hidden">
+        {tiles.map((url, i) => (
           <img 
             key={i} 
             src={url} 
@@ -85,8 +125,11 @@ export function Login() {
         ))}
       </div>
       
-      {/* Black Fade Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none" />
+      {/* Legibility wash. A vignette centred on the card, plus a light fade at
+          the very top and bottom — the old bottom-up gradient went solid black
+          across the whole lower half and swallowed the artwork. */}
+      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_65%_65%_at_50%_50%,rgba(0,0,0,0.80)_0%,rgba(0,0,0,0.55)_45%,rgba(0,0,0,0.30)_100%)]" />
+      <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/50 via-transparent to-black/50" />
 
       {/* Login Card */}
       <div className="max-w-md w-full bg-black/60 backdrop-blur-md rounded-2xl p-8 border border-white/10 shadow-2xl relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">

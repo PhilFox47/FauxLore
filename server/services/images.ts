@@ -24,7 +24,7 @@ const IMAGE_DEFAULTS = {
 };
 
 // Subject-specific negatives appended to the (configurable) base negative.
-const BOSS_NEGATIVE_EXTRA = "multiple characters, duplicate, collage, cluttered scene";
+const BOSS_NEGATIVE_EXTRA = "multiple characters, duplicate, collage, cluttered scene, static standing pose, T-pose, arms at sides, mugshot, passport photo, character select screen, posing for the camera";
 const LOOT_NEGATIVE_EXTRA = "hands, fingers, person, multiple items, cluttered scene, environment, landscape";
 
 /** AI image generation (NanoGPT art-direction prompt -> NanoGPT Z-Image-Turbo) and local storage. */
@@ -136,7 +136,7 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
 
     const prompt = `You are an expert art director writing ONE text-to-image prompt for the "Z-Image-Turbo" model (a knowledgeable diffusion model that follows natural language and renders many art styles well, including real text and logos).
 
-SUBJECT: a single RPG enemy named "${fullName}", from the media "${mediaTitle}" (a ${mediaType}). It is ${tier.word}, and should look ${tier.look}, set against ${tier.scene}.${boss.description ? `\nIts flavour text reads: "${boss.description}"` : ""}
+SUBJECT: a single RPG enemy named "${fullName}", from the media "${mediaTitle}" (a ${mediaType}). It is ${tier.word}, and should look ${tier.look}, set against ${tier.scene}, caught ${tier.action}.${boss.description ? `\nIts flavour text reads: "${boss.description}"` : ""}
 
 ${codexBlock || `(No Codex is on record. Use web search to identify what "${boss.name}" is within "${mediaTitle}", and the authentic visual art style, medium and colour palette of "${mediaTitle}" itself.)`}
 
@@ -145,8 +145,9 @@ YOUR TASK: write ONE vivid prompt of 2-4 natural sentences describing this singl
 THE PROMPT MUST:
 - Render the entity in the ACTUAL art style and medium of "${mediaTitle}"${codexRow?.data?.artStyle?.summary ? ` (the Codex records it as: ${codexRow.data.artStyle.summary})` : ""}. Explicitly name that style/medium, and reference the franchise by name to anchor the look. Do NOT default to generic 2D cartoon or flat vector art unless that truly matches the source.
 - ${AUTHENTICITY(mediaTitle)}
-- Depict ONE subject only: a striking character portrait or full-body hero shot, centered, with a setting/background appropriate to its tier — never a busy crowd scene.
-- Faithfully describe its anatomy, armor/weapons, materials, aura, posture and expression, and let the tier drive everything: a Level 1 must look genuinely silly and harmless; a Level 5 must look like a monumental, epic final boss.
+- Depict ONE subject only, with a setting/background appropriate to its tier — never a busy crowd scene.
+- Show it mid-action rather than posed: ${tier.action}. Frame it with ${tier.camera}. Never a neutral standing figure facing the lens — no mugshots, no line-ups, no posing for a photograph.
+- Faithfully describe its anatomy, armor/weapons, materials, aura and expression, and let the tier drive everything: a Level 1 must look genuinely silly and harmless; a Level 5 must look like a monumental, epic final boss.
 - ${SHARPNESS}
 - Contain no watermarks, signatures or extra/duplicate characters.
 

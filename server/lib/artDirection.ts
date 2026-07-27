@@ -24,24 +24,59 @@ export const LEVEL_DESCRIPTIONS: Record<number, string> = {
   5: "World Boss (EPIC, realm-ending, the final form, a supreme being)",
 };
 
-/** Per-level art direction for enemies: silly weakling (1) up to epic final boss (5). */
-export function enemyTier(level: number): { word: string; look: string; scene: string } {
+/**
+ * Per-level art direction for enemies: silly weakling (1) up to epic final boss (5).
+ *
+ * `action` and `camera` exist because a prompt that only asks for a portrait
+ * gets a portrait — one figure, standing straight, staring down the lens, every
+ * single time. Naming a moment and an angle instead is what makes a level 5 read
+ * as dangerous and a level 1 read as a joke.
+ */
+export function enemyTier(level: number): { word: string; look: string; scene: string; action: string; camera: string } {
   if (level >= 5)
     return {
       word: "an epic, realm-ending FINAL BOSS — colossal, terrifying and awe-inspiring",
       look: "monumental scale, intricate detail, overwhelming menace and grandeur",
       scene: "an epic, dramatic, cinematic setting with grand scale and intense lighting",
+      action:
+        "at the peak of an attack and fully committed to it — mid-roar, a weapon crashing down, wings snapping open, power erupting outward, the ground splitting or debris flung into the air around it",
+      camera:
+        "a dramatic low angle looking steeply up at it, wide and cinematic, so it towers over the viewer",
     };
   if (level === 4)
-    return { word: "a dangerous, menacing major boss", look: "powerful, well-equipped and intimidating", scene: "a dramatic, moody dark setting" };
+    return {
+      word: "a dangerous, menacing major boss",
+      look: "powerful, well-equipped and intimidating",
+      scene: "a dramatic, moody dark setting",
+      action:
+        "advancing mid-stride with intent — weapon raised or being drawn, coat and dust moving with it, closing the distance on whoever is watching",
+      camera: "a low three-quarter angle, framed tight enough that the threat feels close",
+    };
   if (level === 3)
-    return { word: "a serious, formidable elite mini-boss", look: "capable and battle-hardened", scene: "a moody atmospheric setting" };
+    return {
+      word: "a serious, formidable elite mini-boss",
+      look: "capable and battle-hardened",
+      scene: "a moody atmospheric setting",
+      action:
+        "caught mid-motion — wheeling round to face a threat, weapon coming up, bracing itself, already halfway into the fight",
+      camera: "a dynamic three-quarter angle just below eye level, with a sense of movement",
+    };
   if (level === 2)
-    return { word: "a common, unremarkable foot soldier or minor enemy", look: "ordinary and unthreatening", scene: "a plain, ordinary setting" };
+    return {
+      word: "a common, unremarkable foot soldier or minor enemy",
+      look: "ordinary and unthreatening",
+      scene: "a plain, ordinary setting",
+      action:
+        "in the middle of something mundane and slightly off guard — on patrol, mid-shout, adjusting its gear, only just noticing it is being watched",
+      camera: "a candid three-quarter angle at eye level, as if caught mid-shift",
+    };
   return {
     word: "a laughable, almost comical weakling — silly, pathetic and utterly harmless",
     look: "goofy, absurd and a bit cute, clearly the weakest possible enemy and not intimidating in the slightest",
     scene: "a mundane, unimpressive everyday setting",
+    action:
+      "mid-failure at whatever it was attempting — tripping over its own feet, dropping its weapon, mid-sneeze, tangled in its own equipment, being knocked over by a light breeze",
+    camera: "a plain, unflattering angle that makes it look small and faintly ridiculous",
   };
 }
 
