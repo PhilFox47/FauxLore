@@ -208,18 +208,21 @@ export function Recaps() {
   // Every infographic and every number the narrative quotes comes from here, so
   // the charts and the prose can never disagree about what happened.
 
-  const previousInterval = useMemo(() => {
+  /** The interval `n` periods before the one being viewed. */
+  const intervalBefore = React.useCallback((n: number) => {
     if (timeframe === 'week') {
-      const t = subWeeks(currentInterval.start, 1);
+      const t = subWeeks(currentInterval.start, n);
       return { start: startOfISOWeek(t), end: endOfISOWeek(t) };
     }
     if (timeframe === 'month') {
-      const t = subMonths(currentInterval.start, 1);
+      const t = subMonths(currentInterval.start, n);
       return { start: startOfMonth(t), end: endOfMonth(t) };
     }
-    const t = subYears(currentInterval.start, 1);
+    const t = subYears(currentInterval.start, n);
     return { start: startOfYear(t), end: endOfYear(t) };
   }, [timeframe, currentInterval]);
+
+  const previousInterval = useMemo(() => intervalBefore(1), [intervalBefore]);
 
   const previousProgressLogs = useMemo(
     () => logsInInterval(validLogs, previousInterval).filter((l) => l.metricType !== 'statusChange'),
@@ -311,6 +314,53 @@ export function Recaps() {
     );
     return buildRecords(currentMetrics, history, timeId);
   }, [validLogs, media, settings, timeframe, currentMetrics, timeId]);
+
+  /**
+   * "This period, you were ___". Computed once and shared by the headline, the
+   * archetype gallery and the closing summary. The previous period's picks are
+   * passed in so the headline doesn't repeat itself week after week.
+   */
+  // What the last two periods called them. One period of memory only lets a
+  // consistent user alternate between two headlines; two gives the rotation
+  // somewhere to go.
+  const previousArchetypeIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const back of [1, 2]) {
+      const interval = intervalBefore(back);
+      const logsThen = logsInInterval(validLogs, interval).filter((l) => l.metricType !== 'statusChange');
+      if (logsThen.length === 0) continue;
+      const touched = new Set(logsThen.map((l) => l.mediaId));
+      const metrics = buildIntervalMetrics(logsThen, media, settings, interval);
+      determineArchetypes(
+        {
+          timeScale: timeframe,
+          logs: logsThen,
+          media: media.filter((m) => touched.has(m.id)),
+          allMedia: media,
+          settings,
+          periodDays: metrics.totalDays,
+        },
+        { limit: 3, seed: format(interval.start, 'yyyy-MM-dd') },
+      ).forEach((a) => ids.push(a.id));
+    }
+    return ids;
+  }, [intervalBefore, validLogs, media, settings, timeframe]);
+
+  const archetypes = useMemo(
+    () => determineArchetypes(
+      {
+        timeScale: timeframe,
+        logs: activeProgressLogs,
+        media: activeMedia,
+        allMedia: media,
+        settings,
+        previousLogs: previousProgressLogs,
+        periodDays: currentMetrics.totalDays,
+      },
+      { avoidIds: previousArchetypeIds, limit: 6, seed: timeId },
+    ),
+    [timeframe, activeProgressLogs, activeMedia, media, settings, previousProgressLogs, previousArchetypeIds, currentMetrics.totalDays, timeId],
+  );
 
   const currentRecap = useMemo(() => {
     if (isLoading) return undefined; // Return undefined while loading to avoid false "missing" states
@@ -1215,7 +1265,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
   };
 
   const renderArchetypesSection = () => {
-    const earned = determineArchetypes({ timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings });
+    const earned = archetypes;
     if (earned.length === 0) return null;
 
     return (
@@ -1488,7 +1538,6 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
 
   // "This {period}, you were {archetype}" identity banner + theme chip (Wrapped-style).
   const renderIdentity = () => {
-    const archetypes = determineArchetypes({ timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings });
     const topArch = archetypes[0];
     const themeText = currentRecap?.data?.aiTheme;
     if (!topArch && !themeText) return null;
@@ -1918,7 +1967,6 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
   // Closing "sealed capsule" summary — the period at a glance, dated now.
   const renderTimeCapsule = () => {
     const cfg = { timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings };
-    const archetypes = determineArchetypes(cfg);
     const streak = calculateLongestStreak(cfg);
     const ranked = activeMedia.map(m => {
       const pages = activeProgressLogs.filter(l => l.mediaId === m.id).reduce((acc, l) => acc + calculateScaledDelta(l.delta, m, settings), 0);
