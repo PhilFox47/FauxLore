@@ -183,7 +183,18 @@ export interface CodexEntity {
   tier?: string;
 }
 
+export interface CodexIdentification {
+  title?: string;
+  year?: number | string;
+  type?: string;
+  creator?: string;
+  why?: string;
+  alternatives?: string[];
+}
+
 export interface CodexData {
+  /** Which work the research settled on, so a wrong match can be spotted. */
+  identifiedAs?: CodexIdentification;
   overview?: string;
   setting?: string;
   tone?: string;

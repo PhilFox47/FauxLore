@@ -28,7 +28,18 @@ export interface CodexEntity {
   tier?: string;
 }
 
+/** What the research actually landed on, so a wrong match can be spotted. */
+export interface CodexIdentification {
+  title?: string;
+  year?: number | string;
+  type?: string;
+  creator?: string;
+  why?: string;
+  alternatives?: string[];
+}
+
 export interface CodexData {
+  identifiedAs?: CodexIdentification;
   overview?: string;
   setting?: string;
   tone?: string;
@@ -69,9 +80,16 @@ export interface CodexRow {
   updatedAt: string;
 }
 
-/** Identity of a Codex: the title and type it describes, not the row it hangs off. */
-export function codexTitleKey(title: string, mediaType: string): string {
-  return `${(title || "").trim().toLowerCase().replace(/\s+/g, " ")}::${(mediaType || "").trim().toLowerCase()}`;
+/**
+ * Identity of a Codex: the work it describes, not the row it hangs off.
+ *
+ * The year is part of that identity. "Avatar: The Last Airbender" is a 2005
+ * series and a 2024 series; without the year they would share one dossier and
+ * whichever was researched first would win.
+ */
+export function codexTitleKey(title: string, mediaType: string, year?: number | null): string {
+  const base = `${(title || "").trim().toLowerCase().replace(/\s+/g, " ")}::${(mediaType || "").trim().toLowerCase()}`;
+  return year ? `${base}::${year}` : base;
 }
 
 function hydrate(row: any): CodexRow | null {
@@ -85,12 +103,31 @@ function hydrate(row: any): CodexRow | null {
 
 const list = (v: any): any[] => (Array.isArray(v) ? v : []);
 
+/** Media rows store arrays as JSON text; the Codex subject wants real arrays. */
+function safeList(value: any): string[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string" || !value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 /** Renders a Codex as the context block that gets embedded in other prompts. */
 export function codexPromptBlock(codex: CodexRow | null): string {
   const d = codex?.data;
   if (!d) return "";
 
-  const lines: string[] = [`=== CODEX: "${codex!.title}" (${codex!.mediaType}) ===`];
+  const identified = d.identifiedAs;
+  const heading = identified?.title
+    ? `=== CODEX: "${identified.title}"${identified.year ? ` (${identified.year}` : " ("}${identified.type ? `${identified.year ? ", " : ""}${identified.type}` : ""}) ===`
+    : `=== CODEX: "${codex!.title}" (${codex!.mediaType}) ===`;
+  const lines: string[] = [heading];
+  if (identified?.title) {
+    lines.push(`This dossier describes that exact work — not a same-named adaptation, remake or original.`);
+  }
   const push = (label: string, value?: string) => {
     if (value && value.trim()) lines.push(`${label}: ${value.trim()}`);
   };
@@ -136,33 +173,111 @@ export function codexPromptBlock(codex: CodexRow | null): string {
   return lines.join("\n");
 }
 
-function buildCodexPrompt(media: { title: string; mediaType: string; creator?: string; publisher?: string; year?: number; description?: string }) {
+/**
+ * What each of the app's media types means as a *work*, so the search does not
+ * wander into an adaptation. The most common failure is grabbing the famous
+ * version of a name: the 2010 live-action film when asked for the 2026 animated
+ * one, or the original cartoon when asked for the film.
+ */
+const TYPE_BRIEF: Record<string, string> = {
+  Game: "a video game. NOT a film, series, book or comic adaptation of it",
+  "Visual Novel": "a visual novel / interactive fiction game. NOT its anime, manga or film adaptation",
+  Book: "a written book or novel. NOT a film, series or game adaptation of it",
+  Audiobook: "the audiobook edition of a written work — describe the book's own content. NOT a film or series adaptation",
+  Manga: "a manga (Japanese comic). NOT its anime, film or live-action adaptation",
+  Comic: "a comic book or graphic novel. NOT its film or series adaptation",
+  Series: "an episodic television or streaming series. NOT a feature film, book or game of the same name",
+  Movie: "a single feature film. NOT a television series, book or game of the same name",
+};
+
+export interface CodexSubject {
+  title: string;
+  mediaType: string;
+  subtitle?: string;
+  creator?: string;
+  publisher?: string;
+  year?: number | null;
+  expectedReleaseDate?: string | null;
+  releaseStatus?: string | null;
+  description?: string;
+  franchises?: string[];
+  platforms?: string[];
+  language?: string | null;
+}
+
+/** The release year we can hold the research to, from whichever field has one. */
+export function subjectYear(subject: CodexSubject): number | null {
+  if (subject.year) return Number(subject.year);
+  const expected = subject.expectedReleaseDate ? new Date(subject.expectedReleaseDate) : null;
+  if (expected && !Number.isNaN(expected.getTime())) return expected.getFullYear();
+  return null;
+}
+
+function buildCodexPrompt(subject: CodexSubject, correction?: string) {
+  const year = subjectYear(subject);
+  const typeBrief = TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`;
+
   const known = [
-    media.creator ? `Creator/author/studio (from the user's library): ${media.creator}` : "",
-    media.publisher ? `Publisher: ${media.publisher}` : "",
-    media.year ? `Year: ${media.year}` : "",
-    media.description ? `Existing synopsis: ${String(media.description).slice(0, 600)}` : "",
+    subject.subtitle ? `Subtitle: ${subject.subtitle}` : "",
+    subject.creator ? `Creator / author / studio / director: ${subject.creator}` : "",
+    subject.publisher ? `Publisher: ${subject.publisher}` : "",
+    year ? `Release year: ${year}${subject.year ? "" : " (expected)"}` : "",
+    subject.releaseStatus ? `Release status: ${subject.releaseStatus}` : "",
+    subject.franchises?.length ? `Franchise: ${subject.franchises.join(", ")}` : "",
+    subject.platforms?.length ? `Platforms: ${subject.platforms.join(", ")}` : "",
+    subject.language ? `Language: ${subject.language}` : "",
+    subject.description ? `Synopsis on record: ${String(subject.description).slice(0, 700)}` : "",
   ].filter(Boolean).join("\n");
+
+  // Every constraint the search must satisfy, stated as a rule rather than a hint.
+  const constraints = [
+    `- FORMAT: it must be ${typeBrief}.`,
+    year
+      ? `- YEAR: it was released in ${year}. A work of the same name from a different year is a DIFFERENT work — a remake, a reboot, a sequel or an adaptation. Do not describe the ${year < 2015 ? "newer" : "older"} one.`
+      : `- YEAR: unknown. If several works share this name, say so in "notes" and pick the one that best matches the other details.`,
+    subject.creator ? `- CREATOR: it is by ${subject.creator}. A same-named work by someone else is a different work.` : "",
+    subject.franchises?.length ? `- FRANCHISE: it belongs to ${subject.franchises.join(", ")}.` : "",
+    subject.description ? `- SYNOPSIS: it must match the synopsis on record above. If your candidate's plot contradicts it, you have the wrong work.` : "",
+  ].filter(Boolean).join("\n");
+
+  const correctionBlock = correction
+    ? `\n\nPREVIOUS ATTEMPT WAS WRONG. ${correction}\nStart the identification again from scratch and satisfy every constraint above before writing anything else.\n`
+    : "";
 
   return `You are the Codex Archivist of FauxLore, a media tracker with an RPG layer. You are compiling the permanent reference dossier for ONE piece of media. Everything the app later invents about it — its enemies, its loot, its classification — will be built from this dossier, so it must be accurate, specific and rich.
 
-SUBJECT: "${media.title}" (${media.mediaType})
+SUBJECT: "${subject.title}" (${subject.mediaType})
 ${known || "(No further details on record.)"}
 
-YOUR TASK:
-1. USE WEB SEARCH to identify this exact title and gather real, verifiable information about it. Beware of same-named works: match the type${media.creator ? ", creator" : ""} and any details given above.
-2. Fill in the dossier below with concrete, named specifics from the work itself. Never write filler like "various characters" or "a rich world" — name them.
+STEP 1 — IDENTIFY THE RIGHT WORK. This matters more than anything else in the dossier.
+Popular names are reused constantly: a cartoon and its live-action remake, a film and the series it was based on, a game and the show adapted from it. Describing the wrong one makes every later fact wrong too. Your candidate must satisfy ALL of these:
+${constraints}
+
+If more than one work carries this name, list the ones you rejected in "identifiedAs.alternatives" and say in "identifiedAs.why" what made you choose yours.
+If NOTHING matches the format and year, do not substitute the famous one. Say so in "notes", set "confidence" to "low", and fill in only what you can actually verify about the work that was asked for.${correctionBlock}
+
+STEP 2 — RESEARCH IT.
+1. USE WEB SEARCH against the work you identified. Search with the year and format included, not the bare title.
+2. Fill in the dossier below with concrete, named specifics from that work. Never write filler like "various characters" or "a rich world" — name them.
 3. Prefer widely known material: the premise, the main cast, the marketed antagonists, the signature equipment. Avoid late-story twists and ending spoilers; the user may still be partway through.
 4. If you genuinely cannot verify something, leave that field empty or the array short rather than inventing it, and say so in "notes" with a lowered "confidence".
 
 Return ONLY a pure JSON object, no markdown fence, no commentary, in exactly this shape:
 {
+  "identifiedAs": {
+    "title": "the work's own full title as published",
+    "year": ${year || 0},
+    "type": "film | television series | video game | novel | manga | comic | visual novel | audiobook",
+    "creator": "studio, author, director or developer",
+    "why": "one sentence on how you know this is the right one and not a same-named work",
+    "alternatives": ["same-named works you rejected, with their year and format"]
+  },
   "overview": "2-4 sentences: what this work is, its premise and what makes it distinctive",
   "setting": "the world/era/place it takes place in",
   "tone": "one line on mood and register (e.g. bleak military sci-fi with black comedy)",
   "themes": ["up to 6 recurring themes or motifs"],
   "artStyle": {
-    "summary": "the actual visual style of this work, named precisely (e.g. cel-shaded anime key-art, gritty photoreal 3D, 16-bit pixel art, ligne claire ink, watercolour picture-book)",
+    "summary": "the actual visual style of THIS work, named precisely (e.g. cel-shaded anime key-art, gritty photoreal 3D, 16-bit pixel art, ligne claire ink, watercolour picture-book). An adaptation does not look like its source — describe what this version looks like",
     "medium": "the medium/technique it is rendered in",
     "palette": "its characteristic colours and lighting",
     "iconography": "recurring visual motifs, emblems, logos, insignia, costume or architecture cues"
@@ -176,7 +291,7 @@ Return ONLY a pure JSON object, no markdown fence, no commentary, in exactly thi
   "genres": ["up to 5 genre terms that describe this work, most defining first"],
   "tags": ["up to 15 descriptive tags: subject matter, mechanics, structure, mood, audience"],
   "creators": "the studio, developer, author or director actually responsible",
-  "releaseYear": 0,
+  "releaseYear": ${year || 0},
   "confidence": "high | medium | low",
   "notes": "anything uncertain, ambiguous or worth flagging (empty string if all clear)",
   "sources": ["up to 4 URLs you actually consulted"]
@@ -185,19 +300,79 @@ Return ONLY a pure JSON object, no markdown fence, no commentary, in exactly thi
 Aim for up to 8 characters, 8 enemies, 5 factions, 5 locations, 8 items and 8 terminology entries — as many as the work genuinely supports. If the work has no combat at all, still fill "enemies" with its obstacles, rivals, antagonistic forces or thematic adversaries, because the app must be able to build an opponent out of it.`;
 }
 
+/**
+ * Loose family a free-text format name belongs to, for checking the research
+ * against what the entry says it is.
+ */
+function typeFamily(value: string): string | null {
+  const v = (value || "").toLowerCase();
+  if (/visual novel|renpy|ren'py/.test(v)) return "visualnovel";
+  if (/manga|manhwa|manhua/.test(v)) return "manga";
+  if (/comic|graphic novel/.test(v)) return "comic";
+  if (/audiobook|audio drama/.test(v)) return "audiobook";
+  if (/series|show|tv|television|streaming|anime series|season/.test(v)) return "series";
+  if (/film|movie|feature/.test(v)) return "movie";
+  if (/game|videogame/.test(v)) return "game";
+  if (/book|novel|light novel|memoir|non-fiction/.test(v)) return "book";
+  return null;
+}
+
+const OUR_FAMILY: Record<string, string> = {
+  Game: "game",
+  "Visual Novel": "visualnovel",
+  Book: "book",
+  Audiobook: "audiobook",
+  Manga: "manga",
+  Comic: "comic",
+  Series: "series",
+  Movie: "movie",
+};
+
+/**
+ * Checks the work the model says it researched against what the entry claims.
+ * Returns a correction to feed back into a second attempt, or null when it lines
+ * up. This is the guard that catches "asked for the 2026 film, got the 2010 one".
+ */
+export function identificationProblem(data: CodexData, subject: CodexSubject): string | null {
+  const identified = data?.identifiedAs || {};
+  const wantYear = subjectYear(subject);
+  const gotYear = Number(identified.year || data?.releaseYear || 0);
+
+  if (wantYear && gotYear && Math.abs(gotYear - wantYear) > 1) {
+    return `You described "${identified.title || subject.title}" from ${gotYear}, but the entry is the ${wantYear} ${subject.mediaType}. Those are different works.`;
+  }
+
+  const wantFamily = OUR_FAMILY[subject.mediaType];
+  const gotFamily = typeFamily(String(identified.type || ""));
+  // Only complain when the model named a format we recognise and it is a
+  // different one — an unrecognised label is not evidence of anything.
+  if (wantFamily && gotFamily && gotFamily !== wantFamily) {
+    // A book and its audiobook are the same work; so is a game and its VN.
+    const sameWork = [
+      ["book", "audiobook"],
+      ["game", "visualnovel"],
+    ].some(([a, b]) => (wantFamily === a && gotFamily === b) || (wantFamily === b && gotFamily === a));
+    if (!sameWork) {
+      return `You described a ${identified.type}, but the entry is a ${subject.mediaType}. Find the ${subject.mediaType}${wantYear ? ` released in ${wantYear}` : ""} of that name.`;
+    }
+  }
+
+  return null;
+}
+
 /** Codex storage plus the on-demand generation the AI features call into. */
 export function createCodexService({ db }: { db: Db }) {
   // De-dupes concurrent generation of the same Codex: the Monday boss spawn and a
   // user hitting "Auto Tag" can land on the same title at the same moment.
   const inFlight = new Map<string, Promise<CodexRow | null>>();
 
-  function getCodexRow(userId: string, opts: { mediaId?: string | null; title?: string; mediaType?: string }): CodexRow | null {
+  function getCodexRow(userId: string, opts: { mediaId?: string | null; title?: string; mediaType?: string; year?: number | null }): CodexRow | null {
     if (opts.mediaId) {
       const byMedia = db.prepare("SELECT * FROM media_codex WHERE userId = ? AND mediaId = ?").get(userId, opts.mediaId);
       if (byMedia) return hydrate(byMedia);
     }
     if (opts.title && opts.mediaType) {
-      const key = codexTitleKey(opts.title, opts.mediaType);
+      const key = codexTitleKey(opts.title, opts.mediaType, opts.year);
       const byTitle: any = db.prepare("SELECT * FROM media_codex WHERE userId = ? AND titleKey = ?").get(userId, key);
       if (byTitle) {
         // A Codex built before the entry was saved (or for a sibling re-run) gets
@@ -221,12 +396,13 @@ export function createCodexService({ db }: { db: Db }) {
 
   async function generate(
     userId: string,
-    subject: { mediaId?: string | null; title: string; mediaType: string; creator?: string; publisher?: string; year?: number; description?: string },
+    subject: CodexSubject & { mediaId?: string | null },
   ): Promise<CodexRow | null> {
     const aiConfig = getAiConfig(db, userId);
     if (!aiConfig) return null;
 
-    const key = codexTitleKey(subject.title, subject.mediaType);
+    const year = subjectYear(subject);
+    const key = codexTitleKey(subject.title, subject.mediaType, year);
     const now = new Date().toISOString();
 
     // Upsert on the title key, so two requests that slip past the in-flight guard
@@ -245,11 +421,49 @@ export function createCodexService({ db }: { db: Db }) {
     const id = (db.prepare("SELECT id FROM media_codex WHERE userId = ? AND titleKey = ?").get(userId, key) as any).id;
 
     try {
-      // The one web-search pass. Low temperature: this is research, not flavour.
-      const raw = await nanoGenerateText(aiConfig, buildCodexPrompt(subject), { temperature: 0.2, webSearch: true });
-      if (!raw) throw new Error("The model returned an empty Codex.");
-      const data = parseJsonLoose<CodexData>(raw);
-      if (!data || typeof data !== "object") throw new Error("The Codex was not a JSON object.");
+      const research = async (correction?: string) => {
+        // The one web-search pass. Low temperature: this is research, not flavour.
+        const raw = await nanoGenerateText(aiConfig, buildCodexPrompt(subject, correction), {
+          temperature: 0.2,
+          webSearch: true,
+        });
+        if (!raw) throw new Error("The model returned an empty Codex.");
+        const parsed = parseJsonLoose<CodexData>(raw);
+        if (!parsed || typeof parsed !== "object") throw new Error("The Codex was not a JSON object.");
+        return parsed;
+      };
+
+      let data = await research();
+
+      // Check the work it says it found against what the entry claims, and give
+      // it exactly one chance to correct itself. Without this a same-named film
+      // from another decade sails through and poisons every later generation.
+      let problem = identificationProblem(data, subject);
+      if (problem) {
+        console.warn(`Codex identified the wrong work for "${subject.title}": ${problem} Retrying.`);
+        try {
+          const retry = await research(problem);
+          const stillWrong = identificationProblem(retry, subject);
+          if (!stillWrong) {
+            data = retry;
+            problem = null;
+          } else {
+            // Keep the better-informed second attempt but flag it clearly.
+            data = retry;
+            problem = stillWrong;
+          }
+        } catch (e) {
+          console.error("Codex retry failed; keeping the first attempt", e);
+        }
+      }
+
+      if (problem) {
+        data = {
+          ...data,
+          confidence: "low",
+          notes: [`Could not confirm this is the right work: ${problem}`, data.notes].filter(Boolean).join(" "),
+        };
+      }
 
       db.prepare(
         `UPDATE media_codex SET data = ?, status = 'ready', error = NULL, model = ?, mediaId = COALESCE(mediaId, ?), updatedAt = ? WHERE id = ?`,
@@ -270,29 +484,41 @@ export function createCodexService({ db }: { db: Db }) {
    */
   async function ensureCodex(
     userId: string,
-    subject: { mediaId?: string | null; title?: string; mediaType?: string; force?: boolean },
+    subject: { mediaId?: string | null; title?: string; mediaType?: string; year?: number | null; force?: boolean },
   ): Promise<CodexRow | null> {
     const mediaRow = resolveMedia(userId, subject.mediaId);
     const title = (subject.title || mediaRow?.title || "").trim();
     const mediaType = (subject.mediaType || mediaRow?.mediaType || "").trim();
     if (!title || !mediaType) return null;
 
-    const existing = getCodexRow(userId, { mediaId: subject.mediaId, title, mediaType });
-    if (existing && existing.status === "ready" && existing.data && !subject.force) return existing;
-
-    const key = `${userId}:${codexTitleKey(title, mediaType)}`;
-    const pending = inFlight.get(key);
-    if (pending && !subject.force) return pending;
-
-    const run = generate(userId, {
+    // Everything the entry knows goes to the research, because identifying the
+    // right work is the part that goes wrong: year and format separate a remake
+    // from its original, and the synopsis catches the rest.
+    const full: CodexSubject & { mediaId?: string | null } = {
       mediaId: subject.mediaId,
       title,
       mediaType,
-      creator: mediaRow?.creator,
-      publisher: mediaRow?.publisher,
-      year: mediaRow?.year,
-      description: mediaRow?.description,
-    }).finally(() => {
+      subtitle: mediaRow?.subtitle || undefined,
+      creator: mediaRow?.creator || undefined,
+      publisher: mediaRow?.publisher || undefined,
+      year: subject.year ?? mediaRow?.year ?? null,
+      expectedReleaseDate: mediaRow?.expectedReleaseDate || null,
+      releaseStatus: mediaRow?.releaseStatus || null,
+      description: mediaRow?.description || undefined,
+      franchises: safeList(mediaRow?.franchises),
+      platforms: safeList(mediaRow?.platforms),
+      language: mediaRow?.language || null,
+    };
+    const year = subjectYear(full);
+
+    const existing = getCodexRow(userId, { mediaId: subject.mediaId, title, mediaType, year });
+    if (existing && existing.status === "ready" && existing.data && !subject.force) return existing;
+
+    const key = `${userId}:${codexTitleKey(title, mediaType, year)}`;
+    const pending = inFlight.get(key);
+    if (pending && !subject.force) return pending;
+
+    const run = generate(userId, full).finally(() => {
       if (inFlight.get(key) === run) inFlight.delete(key);
     });
     inFlight.set(key, run);

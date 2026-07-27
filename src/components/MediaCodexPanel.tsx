@@ -4,8 +4,9 @@ import {
   Loader2, RefreshCw, AlertTriangle, ExternalLink,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { CodexEntity, MediaCodex } from '../types/schema';
+import { CodexData, CodexEntity, MediaCodex } from '../types/schema';
 import { DatabaseService } from '../services/db';
+import { cn } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
 
 /**
@@ -58,7 +59,54 @@ function Chips({ values, className }: { values?: string[]; className?: string })
   );
 }
 
-export function MediaCodexPanel({ mediaId, title, mediaType }: { mediaId: string; title: string; mediaType: string }) {
+/**
+ * What the research actually identified, and whether that matches the entry.
+ * Same-named works are the failure mode here — a 2010 film standing in for a
+ * 2026 one — so the answer is shown rather than assumed.
+ */
+function IdentifiedAs({ data, mediaType, year }: { data: CodexData; mediaType: string; year?: number }) {
+  const id = data.identifiedAs;
+  if (!id?.title) return null;
+
+  const gotYear = Number(id.year || data.releaseYear || 0);
+  const yearOff = !!year && !!gotYear && Math.abs(gotYear - year) > 1;
+
+  return (
+    <div className={cn(
+      'rounded-xl border px-3 py-2.5',
+      yearOff ? 'border-amber-500/40 bg-amber-500/[0.08]' : 'border-white/10 bg-black/30',
+    )}>
+      <div className="flex items-start gap-2">
+        {yearOff && <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />}
+        <div className="min-w-0">
+          <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1">Researched</div>
+          <div className="text-sm font-bold text-white leading-snug">
+            {id.title}
+            {(id.year || id.type) && (
+              <span className="text-zinc-400 font-medium">
+                {' '}({[id.year, id.type].filter(Boolean).join(', ')})
+              </span>
+            )}
+          </div>
+          {id.creator && <div className="text-[11px] text-zinc-500 font-bold mt-0.5">{id.creator}</div>}
+          {yearOff && (
+            <div className="text-[11px] text-amber-200/80 mt-1.5 leading-snug">
+              Your entry says {year} ({mediaType}). If this is the wrong work, re-research it.
+            </div>
+          )}
+          {id.why && !yearOff && <p className="text-[11px] text-zinc-500 italic mt-1 leading-snug">{id.why}</p>}
+          {(id.alternatives?.length || 0) > 0 && (
+            <div className="text-[10px] text-zinc-600 mt-1.5 leading-snug">
+              Not: {id.alternatives!.slice(0, 3).join(' · ')}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function MediaCodexPanel({ mediaId, title, mediaType, year }: { mediaId: string; title: string; mediaType: string; year?: number }) {
   const toast = useToast();
   const [codex, setCodex] = useState<MediaCodex | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -169,6 +217,7 @@ export function MediaCodexPanel({ mediaId, title, mediaType }: { mediaId: string
 
       {codex?.status === 'ready' && data && (
         <div className="rounded-2xl border border-white/10 bg-black/20 p-5 space-y-5">
+          <IdentifiedAs data={data} mediaType={mediaType} year={year} />
           {data.overview && <p className="text-sm text-zinc-300 leading-relaxed">{data.overview}</p>}
 
           {(data.setting || data.tone) && (
