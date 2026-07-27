@@ -25,7 +25,8 @@ import {
   Headphones,
   AlertTriangle,
   Target,
-  Anchor
+  Anchor,
+  GitBranch
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
@@ -163,182 +164,174 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
 
   const coverFallback = "https://images.unsplash.com/photo-1618519764611-bd0823006228?auto=format&fit=crop&q=80&w=400";
 
+  // Status is shown as a labelled dot rather than an icon over the art.
+  const STATUS_STYLE: Record<string, { dot: string; text: string }> = {
+    'Active':     { dot: 'bg-amber-400',   text: 'text-amber-300' },
+    'On Hold':    { dot: 'bg-blue-400',    text: 'text-blue-300' },
+    'Completed':  { dot: 'bg-emerald-400', text: 'text-emerald-300' },
+    'Extras':     { dot: 'bg-orange-400',  text: 'text-orange-300' },
+    'Planning':   { dot: 'bg-violet-400',  text: 'text-violet-300' },
+    'Dropped':    { dot: 'bg-red-500',     text: 'text-red-300' },
+    'Unreleased': { dot: 'bg-zinc-500',    text: 'text-zinc-400' },
+  };
+  const statusStyle = STATUS_STYLE[item.status] || STATUS_STYLE['Unreleased'];
+
+  // Everything that used to float over the cover now lives here, so the art is
+  // never obscured. Each badge renders only when it applies, which keeps cards
+  // short for plain entries and detailed for interesting ones.
+  const badges: { key: string; node: React.ReactNode; title: string }[] = [];
+  if (item.userRating != null) badges.push({
+    key: 'rating', title: `Your rating: ${item.userRating}/5`,
+    node: <><Star className="w-3 h-3 fill-amber-400 text-amber-400" /><span className="text-amber-300">{item.userRating}</span></>,
+  });
+  if (item.reviewScore != null) badges.push({
+    key: 'critic', title: `Community score: ${item.reviewScore}/5`,
+    node: <><Star className="w-3 h-3 text-zinc-500" /><span className="text-zinc-400">{item.reviewScore}</span></>,
+  });
+  if (currentStreak > 0) badges.push({
+    key: 'streak', title: `${currentStreak} day streak`,
+    node: <><Flame className="w-3 h-3 text-orange-400" /><span className="text-orange-300">{currentStreak}</span></>,
+  });
+  if (item.updateAvailable) badges.push({
+    key: 'update', title: `New version available${item.sourceVersion ? `: ${item.sourceVersion}` : ''}`,
+    node: <><Sparkles className="w-3 h-3 text-emerald-400" /><span className="text-emerald-300">Update</span></>,
+  });
+  if (item.isReRun) badges.push({
+    key: 'rerun', title: item.route ? `Re-run - ${item.route}` : 'Re-run',
+    node: <><RotateCcw className="w-3 h-3 text-orange-400" /><span className="text-orange-300">{item.route || 'Re-run'}</span></>,
+  });
+  if (item.route && !item.isReRun) badges.push({
+    key: 'route', title: `Route: ${item.route}`,
+    node: <><GitBranch className="w-3 h-3 text-zinc-400" /><span className="text-zinc-300">{item.route}</span></>,
+  });
+  if (item.noEnemies) badges.push({ key: 'noEnemies', title: 'Enemy generation disabled', node: <Ghost className="w-3 h-3 text-zinc-400" /> });
+  if (item.isHighPriority) badges.push({ key: 'priority', title: 'High priority target', node: <Target className="w-3 h-3 text-rose-400" /> });
+  if (item.noAutoDrop) badges.push({ key: 'noDrop', title: 'Never auto-drops', node: <Anchor className="w-3 h-3 text-sky-400" /> });
+
   return (
-    <div className="flex flex-col bg-[#0c0c0e] border border-white/5 rounded-[1.5rem] overflow-hidden group hover:border-white/10 transition-all shadow-md relative h-full">
-       
-       {/* Top Section: Full Bleed Cover */}
-       <div 
-         className="w-full aspect-[2/3] bg-zinc-900 relative shrink-0 cursor-pointer overflow-hidden border-b border-white/5"
-         onClick={() => onViewDetails?.(item)}
-       >
-         <img 
-            src={item.coverImageUrl || coverFallback} 
-            className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
-            style={{ filter: `grayscale(${grayscale}%)` }}
-            referrerPolicy="no-referrer"
-         />
-         
-         {cobwebOpacity > 0 && (
-           <svg 
-             className="absolute inset-0 w-full h-full pointer-events-none mix-blend-screen"
-             style={{ opacity: cobwebOpacity }}
-             viewBox="0 0 100 100" 
-             preserveAspectRatio="none"
-           >
-             <g stroke="rgba(255, 255, 255, 0.4)" strokeWidth="0.5" fill="none">
-               <path d="M0,0 L100,100 M100,0 L0,100 M50,0 L50,100 M0,50 L100,50" />
-               <path d="M10,50 Q20,20 50,10 Q80,20 90,50 Q80,80 50,90 Q20,80 10,50" opacity="0.8"/>
-               <path d="M25,50 Q30,30 50,25 Q70,30 75,50 Q70,70 50,75 Q30,70 25,50" opacity="0.6"/>
-               <path d="M38,50 Q42,40 50,38 Q58,40 62,50 Q58,60 50,62 Q42,60 38,50" opacity="0.4"/>
-               <path d="M0,0 Q10,20 0,30 M100,0 Q90,20 100,30 M0,100 Q10,80 0,70 M100,100 Q90,80 100,70" />
-             </g>
-           </svg>
-         )}
+    <div className="flex flex-col bg-[#0c0c0e] border border-white/5 rounded-2xl overflow-hidden group hover:border-white/15 transition-colors relative h-full">
 
-         {showRedWarning && (
-           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm z-30 pointer-events-none animation-pulse">
-             <AlertTriangle className="w-12 h-12 text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)] mb-2" />
-             <div className="flex flex-col items-center gap-1">
-               <span className="text-red-500 font-black uppercase tracking-[0.2em] text-[10px] bg-red-500/20 px-3 py-1 rounded-full border border-red-500/30">Neglected</span>
-               <span className="text-red-300 font-bold text-xs bg-red-900/40 px-2 py-0.5 rounded backdrop-blur-sm">Drop in {daysUntilDrop}d</span>
-             </div>
-           </div>
-         )}
+      {/* Cover: art only. Nothing is layered on top of it except the decay
+          treatment (desaturation and cobwebs), which is deliberate storytelling
+          rather than UI chrome. */}
+      <div
+        className="w-full aspect-[2/3] bg-zinc-900 relative shrink-0 cursor-pointer overflow-hidden"
+        onClick={() => onViewDetails?.(item)}
+        title={item.title}
+      >
+        <img
+          src={item.coverImageUrl || coverFallback}
+          alt=""
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+          style={{ filter: `grayscale(${grayscale}%)` }}
+          referrerPolicy="no-referrer"
+        />
 
-         {/* Floating Elements on Cover */}
-         {/* Top Left: Status & Re-run */}
-         <div className="absolute top-3 left-3 flex flex-col gap-2 z-20">
-            <div className="flex items-center gap-1.5">
-              <div className="bg-black/80 backdrop-blur-md rounded-full w-8 h-8 flex items-center justify-center border border-white/10 shadow-lg" title={item.status}>
-                {getStatusIcon(item.status)}
-              </div>
-              {currentStreak > 0 && (
-                <div className="bg-orange-500/10 backdrop-blur-md border border-orange-500/20 px-2 py-1 rounded-lg flex items-center gap-1 shadow-lg" title={`${currentStreak} Day Streak`}>
-                  <Flame className="w-3.5 h-3.5 text-orange-400 fill-orange-500/20" />
-                  <span className="text-orange-500 font-black text-xs">{currentStreak}</span>
-                </div>
-              )}
-            </div>
-            {item.isReRun && (
-              <div className="bg-black/80 backdrop-blur-md rounded-full w-8 h-8 flex items-center justify-center border border-white/10 shadow-lg" title="Re-Run">
-                 <RotateCcw className="w-4 h-4 text-orange-400" />
-              </div>
+        {cobwebOpacity > 0 && (
+          <svg className="absolute inset-0 w-full h-full pointer-events-none mix-blend-screen"
+               style={{ opacity: cobwebOpacity * 0.7 }} viewBox="0 0 100 100" preserveAspectRatio="none">
+            <g stroke="rgba(255,255,255,0.35)" strokeWidth="0.5" fill="none">
+              <path d="M0,0 L100,100 M100,0 L0,100 M50,0 L50,100 M0,50 L100,50" />
+              <path d="M10,50 Q20,20 50,10 Q80,20 90,50 Q80,80 50,90 Q20,80 10,50" opacity="0.8"/>
+              <path d="M25,50 Q30,30 50,25 Q70,30 75,50 Q70,70 50,75 Q30,70 25,50" opacity="0.6"/>
+              <path d="M0,0 Q10,20 0,30 M100,0 Q90,20 100,30 M0,100 Q10,80 0,70 M100,100 Q90,80 100,70" />
+            </g>
+          </svg>
+        )}
+      </div>
+
+      {/* Neglect warning: a strip under the art rather than a panel across it, so
+          it stays impossible to miss without hiding the cover. */}
+      {showRedWarning && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/15 border-y border-red-500/25 text-red-300">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          <span className="text-[10px] font-bold uppercase tracking-wider">Neglected</span>
+          <span className="text-[10px] text-red-400/80 ml-auto">Drops in {daysUntilDrop}d</span>
+        </div>
+      )}
+
+      <div className="p-3 flex flex-col flex-1 gap-2">
+
+        {/* Meta line: status, type, and when */}
+        <div className="flex items-center gap-2 text-[10px]">
+          <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', statusStyle.dot)} />
+          <span className={cn('font-bold uppercase tracking-wider shrink-0', statusStyle.text)}>{item.status}</span>
+          <span className={cn('flex items-center gap-1 shrink-0', colors.text)} title={item.mediaType}>
+            {getMediaTypeIcon(item.mediaType, 'w-3 h-3')}
+          </span>
+          <span className="ml-auto text-zinc-500 font-mono shrink-0">
+            {item.season ? `S${item.season} ` : ''}{item.year || ''}
+          </span>
+        </div>
+
+        {/* Title + creator */}
+        <div>
+          <h3
+            className="text-sm font-bold text-white line-clamp-2 leading-snug cursor-pointer hover:text-orange-400 transition-colors"
+            title={item.title}
+            onClick={() => onViewDetails?.(item)}
+          >
+            {item.title}
+          </h3>
+          <p className="text-[11px] text-zinc-500 line-clamp-1 mt-0.5">{item.creator || 'Unknown'}</p>
+        </div>
+
+        {/* Progress */}
+        <div className="mt-auto pt-1">
+          <div className="flex items-baseline justify-between gap-2 mb-1">
+            <span className="text-[10px] font-mono text-zinc-400 truncate">{progressText}</span>
+            {item.isOngoing && (
+              <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-600 shrink-0">Ongoing</span>
             )}
-            {item.updateAvailable && (
+          </div>
+          <div className="h-1 bg-white/[0.07] rounded-full overflow-hidden">
+            {progressPercent > 0 && (
               <div
-                className="bg-emerald-500/90 backdrop-blur-md rounded-full px-2 h-7 flex items-center gap-1 border border-emerald-300/30 shadow-lg animate-pulse"
-                title={`New version available${item.sourceVersion ? `: ${item.sourceVersion}` : ''}`}
+                className={cn('h-full rounded-full transition-all duration-500', colors.progress)}
+                style={{ width: `${Math.min(progressPercent, 100)}%` }}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Badges: only what applies to this item */}
+        {badges.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            {badges.map(b => (
+              <span
+                key={b.key}
+                title={b.title}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white/[0.06] text-[10px] font-bold leading-none max-w-full"
               >
-                <Sparkles className="w-3.5 h-3.5 text-black" />
-                <span className="text-[10px] font-black uppercase tracking-wider text-black">Update</span>
-              </div>
-            )}
-         </div>
-
-         {/* Top Right: Rating */}
-         <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5 z-20">
-            {item.userRating != null && (
-              <div className="bg-amber-500 text-black px-2 py-1 rounded-lg shadow-[0_0_15px_rgba(245,158,11,0.5)] flex items-center gap-1 font-black text-xs font-mono tracking-tight leading-none">
-                <Star className="w-3 h-3 fill-black text-black" />
-                {item.userRating}
-              </div>
-            )}
-            {item.reviewScore != null && (
-              <div className="bg-black/80 backdrop-blur-md text-white border border-white/10 px-2 py-1 rounded-lg shadow-lg flex items-center gap-1 font-bold text-[10px] font-mono tracking-tight leading-none opacity-80">
-                <Star className={cn("w-2.5 h-2.5", colors.text, "fill-current opacity-70")} />
-                {item.reviewScore}
-              </div>
-            )}
-         </div>
-
-         {/* Bottom Overlay: Type */}
-         <div className="absolute bottom-3 left-3 right-3 flex justify-between items-end z-20">
-            <div className={cn("bg-black/80 backdrop-blur-md border border-white/10 px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-lg", colors.text)}>
-              {getMediaTypeIcon(item.mediaType, "w-3.5 h-3.5")}
-              <span className="text-[9px] font-black uppercase tracking-[0.2em] leading-none font-display">
-                {item.mediaType}
+                <span className="inline-flex items-center gap-1 truncate">{b.node}</span>
               </span>
-            </div>
-            
-            {item.noEnemies && (
-              <div className="flex items-center justify-center bg-orange-500/20 text-orange-400 backdrop-blur-md w-7 h-7 rounded-full border border-orange-500/20 shadow-lg" title="Enemy Generation Disabled">
-                <Ghost className="w-3.5 h-3.5 opacity-80" />
-              </div>
-            )}
-            {item.isHighPriority && (
-              <div className="flex items-center justify-center bg-rose-500/20 text-rose-400 backdrop-blur-md w-7 h-7 rounded-full border border-rose-500/20 shadow-lg" title="High Priority Target">
-                <Target className="w-3.5 h-3.5 opacity-80" />
-              </div>
-            )}
-            {item.noAutoDrop && (
-              <div className="flex items-center justify-center bg-sky-500/20 text-sky-400 backdrop-blur-md w-7 h-7 rounded-full border border-sky-500/20 shadow-lg" title="No Automatic Drop">
-                <Anchor className="w-3.5 h-3.5 opacity-80" />
-              </div>
-            )}
-         </div>
-       </div>
+            ))}
+          </div>
+        )}
 
-       {/* Bottom Section: Info & Progress Bar */}
-       <div className="p-3 sm:p-4 flex flex-col flex-1">
-         <div className="flex justify-between items-start gap-2 mb-1">
-           <h3 
-             className="text-sm sm:text-base font-bold text-white line-clamp-2 min-h-[2.5rem] sm:min-h-[3rem] font-display tracking-tight cursor-pointer hover:text-orange-400 transition-colors flex-1"
-             title={item.title}
-             onClick={() => onViewDetails?.(item)}
-           >
-             {item.title}
-           </h3>
-           <span className="text-[9px] font-bold text-zinc-500 shrink-0 mt-1 uppercase tracking-widest">{item.season ? `S${item.season} ` : ''}{item.year}</span>
-         </div>
-         
-         {/* Subtitle / Progress Text */}
-         <div className="flex justify-between items-center mb-3">
-            <span className="text-zinc-500 text-[10px] sm:text-xs italic line-clamp-1 flex-1 pr-2 font-serif">by {item.creator || 'Unknown'}</span>
-            <span className="text-[10px] font-mono text-zinc-400 shrink-0 tracking-tight">{progressText}</span>
-         </div>
-
-         {/* Progress Bar */}
-         <div className="mt-auto">
-            {item.isOngoing ? (
-               <div className="text-[10px] sm:text-xs font-black text-zinc-500/80 uppercase tracking-widest text-center w-full font-display">Ongoing</div>
-            ) : (
-               <div className="h-1.5 bg-black rounded-full overflow-hidden shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)] border border-white/5 relative">
-                 {progressPercent > 0 ? (
-                   <div 
-                     className={cn("absolute top-0 left-0 h-full rounded-full transition-all duration-500", colors.progress, `shadow-[0_0_10px_var(--color-${colors.progress.split('-')[1]}-500)]`)} 
-                     style={{ width: `${Math.min(progressPercent, 100)}%` }} 
-                   />
-                 ) : item.mediaType === 'Game' || item.mediaType === 'Visual Novel' ? (
-                   <div className={cn("h-full w-full animate-pulse rounded-full opacity-30", colors.glow)} />
-                 ) : null}
-               </div>
-            )}
-         </div>
-
-         {/* Bottom Action Bar */}
-         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/5">
+        {/* Actions */}
+        {(onLogProgress || onEdit) && (
+          <div className="flex items-center gap-2 pt-2 mt-1 border-t border-white/5">
             {onLogProgress && (
-              <button 
+              <button
                 onClick={(e) => { e.stopPropagation(); onLogProgress(item); }}
-                className={cn(
-                  "flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex justify-center items-center gap-1.5 shadow-inner border font-display", 
-                  "bg-[#121214] border-white/10 text-white hover:bg-white/5 hover:border-white/20 active:scale-95"
-                )}
+                className="flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors flex justify-center items-center gap-1.5 bg-white/[0.06] text-zinc-200 hover:bg-white/10"
               >
-                <Plus className="w-3.5 h-3.5 text-zinc-400" /> Log
+                <Plus className="w-3.5 h-3.5" /> Log
               </button>
             )}
             {onEdit && (
-              <button 
+              <button
                 onClick={(e) => { e.stopPropagation(); onEdit(item); }}
-                className="w-10 h-10 bg-[#121214] border border-white/10 hover:bg-white/5 hover:border-white/20 text-zinc-400 hover:text-white rounded-xl transition-all flex justify-center items-center active:scale-95 shadow-inner"
+                className="w-8 h-8 shrink-0 bg-white/[0.06] hover:bg-white/10 text-zinc-400 hover:text-white rounded-lg transition-colors flex justify-center items-center"
                 title="Edit"
               >
                 <Edit2 className="w-3.5 h-3.5" />
               </button>
             )}
-         </div>
-       </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
