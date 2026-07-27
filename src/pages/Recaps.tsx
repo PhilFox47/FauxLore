@@ -22,7 +22,7 @@ import {
 } from '../lib/recapInsights';
 import {
   ActivityClock, ConsistencyRing, HeroStat, MomentumChart, PipelineFunnel, RankRace,
-  RecordsBoard, TasteScatter,
+  RecordsBoard, TasteScatter, typeHex,
 } from '../components/RecapCharts';
 import { AwardsShelf, LookAhead, RecapDek, RecapNarrative, readRecap } from '../components/RecapStory';
 import { generateStructuredRecap } from '../services/recapAi';
@@ -50,19 +50,6 @@ function CountUp({ value, duration = 1300, className }: { value: number; duratio
   }, [value, duration]);
   return <span className={className}>{Math.round(display).toLocaleString()}</span>;
 }
-
-/** Hex colors per media type, for charts (recharts needs hex, not Tailwind classes). */
-const TYPE_HEX: Record<string, string> = {
-  Game: '#f97316',
-  Book: '#3b82f6',
-  Audiobook: '#06b6d4',
-  'Visual Novel': '#ec4899',
-  Manga: '#a855f7',
-  Series: '#10b981',
-  Movie: '#ef4444',
-  Comic: '#eab308',
-};
-const typeHex = (t: string) => TYPE_HEX[t] || '#71717a';
 
 /** Consistent chapter header used across every recap section for visual rhythm. */
 function SectionHeader({ icon, title, eyebrow, accent }: { icon?: React.ReactNode; title: string; eyebrow?: string; accent?: string }) {

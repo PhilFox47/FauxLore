@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import { Sparkles } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { MEDIA_HEX, MediaType } from '../types/schema';
 import type { Delta, IntervalMetrics, RecordEntry } from '../lib/recapInsights';
 
 /**
@@ -17,18 +18,13 @@ import type { Delta, IntervalMetrics, RecordEntry } from '../lib/recapInsights';
  * AI caption so the chart is read aloud rather than left to be decoded.
  */
 
-/** Hex colors per media type; recharts needs hex, not Tailwind classes. */
-export const TYPE_HEX: Record<string, string> = {
-  Game: '#f97316',
-  Book: '#3b82f6',
-  Audiobook: '#06b6d4',
-  'Visual Novel': '#ec4899',
-  Manga: '#a855f7',
-  Series: '#10b981',
-  Movie: '#ef4444',
-  Comic: '#eab308',
-};
-export const typeHex = (t: string) => TYPE_HEX[t] || '#71717a';
+/**
+ * Media-type colour for charts, straight from the library's own palette.
+ * recharts needs a hex rather than a Tailwind class, which is what MEDIA_HEX
+ * is for — these must never be a second, hand-picked set, or a Manga is blue in
+ * the sidebar and purple in a recap.
+ */
+export const typeHex = (t: string) => MEDIA_HEX[t as MediaType]?.base || '#71717a';
 
 const TOOLTIP_STYLE = {
   backgroundColor: '#09090b',
