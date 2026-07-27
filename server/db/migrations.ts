@@ -285,4 +285,10 @@ export function runMigrations(db: Db) {
   try { db.prepare("ALTER TABLE world_bosses ADD COLUMN description TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE world_bosses ADD COLUMN imagePrompt TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE artifacts ADD COLUMN imagePrompt TEXT").run(); } catch (e) {}
+
+  // Auto-tagging runs server-side after a new entry is saved, so the row has to
+  // carry its own progress: pending | done | failed (NULL = never queued).
+  try { db.prepare("ALTER TABLE media ADD COLUMN autoTagStatus TEXT").run(); } catch (e) {}
+  // Nothing can still be running across a restart.
+  try { db.prepare("UPDATE media SET autoTagStatus = 'failed' WHERE autoTagStatus = 'pending'").run(); } catch (e) {}
 }

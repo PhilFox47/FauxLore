@@ -39,7 +39,8 @@
       sourceVersions: safeJsonParse(row.sourceVersions),
       sourceUpdatedAt: row.sourceUpdatedAt || null,
       updateAvailable: row.updateAvailable === 1,
-      updateSeenAt: row.updateSeenAt || null
+      updateSeenAt: row.updateSeenAt || null,
+      autoTagStatus: row.autoTagStatus || null
     };
   }
 

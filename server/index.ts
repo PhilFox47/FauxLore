@@ -24,6 +24,7 @@ import { createOracleService } from "./services/oracle";
 import { createWorldBossService } from "./services/worldBoss";
 import { createCodexService } from "./services/codex";
 import { createLootService } from "./services/loot";
+import { createAutoTagService } from "./services/autoTag";
 
 import { registerAuthRoutes } from "./routes/auth";
 import { registerUserRoutes } from "./routes/users";
@@ -90,6 +91,7 @@ async function startServer() {
   const { generateOracleMessage, checkMissedOracleMessages } = createOracleService({ db });
   const { spawnWorldBoss, generateEnemy } = createWorldBossService({ db, generateBossImageBackground, codex });
   const { generateLoot } = createLootService({ db, codex });
+  const autoTag = createAutoTagService({ db, codex });
 
   // Log headless-browser availability once at boot (GameStoryLog needs it).
   reportBrowserStatus();
@@ -154,6 +156,7 @@ async function startServer() {
     generateBossImageBackground,
     generateArtifactImageBackground,
     codex,
+    autoTag,
     hltbSearch,
     getIgdbToken,
   };

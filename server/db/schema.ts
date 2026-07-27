@@ -50,6 +50,7 @@ export function initSchema(db: Db) {
       isOngoing INTEGER,
       noEnemies INTEGER DEFAULT 0,
       noAutoDrop INTEGER DEFAULT 0,
+      autoTagStatus TEXT,
       releaseStatus TEXT,
       lastSyncAt TEXT,
       createdAt TEXT,

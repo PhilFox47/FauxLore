@@ -261,6 +261,20 @@ export const DatabaseService = {
     if (!res.ok) throw new Error('Failed to clear AI text');
   },
 
+  /**
+   * Re-runs auto-tagging for an existing entry and returns the terms written.
+   * New entries are tagged by the server automatically on creation; this is the
+   * manual retry from the Edit view.
+   */
+  async autoTagMedia(mediaId: string): Promise<{ genres: string[]; tags: string[] }> {
+    const res = await apiFetch(`/api/media/${mediaId}/auto-tag`, { method: 'POST' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Auto-tagging failed');
+    }
+    return res.json();
+  },
+
   /** The Codex on record for a media entry, or null if it has never been researched. */
   async getCodex(mediaId: string): Promise<MediaCodex | null> {
     try {

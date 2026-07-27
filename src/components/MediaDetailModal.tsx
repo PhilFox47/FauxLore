@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useToast } from '../contexts/ToastContext';
-import { X, Edit2, ExternalLink, GitBranch, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame, Ghost, Target, Anchor, Library } from 'lucide-react';
+import { X, Edit2, ExternalLink, GitBranch, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame, Ghost, Target, Anchor, Library, BrainCircuit } from 'lucide-react';
 import { calculateScaledDelta } from '../lib/scaling';
 import { buildStatusTimeline, getItemPace, STATUS_HEX } from '../lib/history';
 import { getSourceUrl, getSourceLabel } from '../lib/sourceLinks';
@@ -897,6 +897,25 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
               <Star className="w-16 h-16 text-amber-500/10 absolute -top-4 -right-2 pointer-events-none" />
               <h3 className="text-sm font-bold text-amber-500 mb-2 tracking-wide uppercase">Your Review</h3>
               <p className="text-sm leading-relaxed relative z-10 italic">"{item.userReview}"</p>
+            </div>
+          )}
+
+          {/* Auto-tagging runs server-side after a new entry is saved, so say so
+              rather than showing an empty taxonomy and letting the user wonder. */}
+          {item.autoTagStatus === 'pending' && (!item.genres || item.genres.length === 0) && (
+            <div className="mb-8 flex items-center gap-3 rounded-2xl border border-purple-500/20 bg-purple-500/[0.07] p-4">
+              <Loader2 className="w-4 h-4 text-purple-300 animate-spin shrink-0" />
+              <p className="text-sm text-zinc-300">
+                Tagging this entry and compiling its Codex — the genres and tags will appear here shortly.
+              </p>
+            </div>
+          )}
+          {item.autoTagStatus === 'failed' && (!item.genres || item.genres.length === 0) && (
+            <div className="mb-8 flex items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/[0.07] p-4">
+              <BrainCircuit className="w-4 h-4 text-amber-300 shrink-0" />
+              <p className="text-sm text-zinc-300">
+                Auto-tagging didn't get through. Open <span className="font-bold text-white">Edit Media Details</span> and hit Auto-Tag to try again.
+              </p>
             </div>
           )}
 

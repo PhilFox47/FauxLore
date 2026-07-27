@@ -2,7 +2,7 @@ import type { Express } from "express";
 import type { ServerContext } from "../context";
 
 export function registerMediaRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser, normalizeMedia, safeJsonParse, syncOngoingMediaInBackground } = ctx;
+  const { db, getAuthUser, normalizeMedia, safeJsonParse, syncOngoingMediaInBackground, autoTag } = ctx;
 
   app.get("/api/public/covers", (req, res) => {
     try {
@@ -14,6 +14,26 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }
+  });
+
+  /**
+   * Re-tags one entry on demand. Awaited, because this is the Edit view's
+   * "Auto Tag" button and the user is watching it.
+   */
+  app.post("/api/media/:id/auto-tag", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const media = db.prepare('SELECT id FROM media WHERE id = ? AND userId = ?').get(req.params.id, userId);
+      if (!media) return res.status(404).json({ error: 'Media not found' });
+
+      const result = await autoTag.autoTagMedia(userId as string, req.params.id);
+      if (!result) {
+        return res.status(502).json({ error: 'Auto-tagging failed. Check that a Nano-GPT key is configured.' });
+      }
+      const saved = db.prepare('SELECT * FROM media WHERE id = ?').get(req.params.id);
+      res.json({ ...result, media: normalizeMedia(saved) });
+    } catch (e: any) { res.status(500).json({ error: String(e?.message || e) }); }
   });
 
   app.get("/api/media", (req, res) => {
@@ -43,6 +63,11 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
       const item = req.body;
       const userId = getAuthUser(req, res);
       if (!userId) return;
+
+      // Whether this is a brand-new entry decides if tagging gets queued below;
+      // it has to be read before the upsert makes the row exist either way.
+      const existing = db.prepare('SELECT id FROM media WHERE id = ? AND userId = ?').get(item.id, userId) as any;
+      const isNewEntry = !existing;
 
       // Handle Taxonomy Usage Counts
       try {
@@ -195,6 +220,14 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
             WHERE userId = ? AND mediaId = ? AND status = 'Active'
           `).run(userId, item.id);
         } catch (e) { console.error("Could not fail boss on media drop", e); }
+      }
+
+      // A new entry tags itself. The form no longer asks for genres and tags, so
+      // this is where they come from — in the background, on the server, so it
+      // survives the user closing the tab. It also compiles the Codex, which the
+      // enemy and loot generators will want later anyway.
+      if (isNewEntry && (item.genres || []).length === 0 && (item.tags || []).length === 0) {
+        autoTag.queueAutoTag(userId as string, item.id);
       }
 
       const saved = db.prepare('SELECT * FROM media WHERE id = ?').get(item.id);

@@ -59,6 +59,8 @@ export interface MediaItem {
   playtimeHours?: number;
   isOngoing?: boolean;
   noEnemies?: boolean;
+  /** Server-side auto-tagging progress for this entry. */
+  autoTagStatus?: 'pending' | 'done' | 'failed' | null;
   isHighPriority?: boolean;
   noAutoDrop?: boolean;
   storyHeavyModifier?: number; // 0.5x to 1.5x

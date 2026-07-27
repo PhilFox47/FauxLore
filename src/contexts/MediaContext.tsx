@@ -130,6 +130,14 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     refreshData();
   }, [refreshData, user?.id]);
 
+  // Auto-tagging runs on the server after a new entry is saved. Poll while any
+  // entry is still pending so its genres and tags appear on their own.
+  useEffect(() => {
+    if (!media.some((m) => m.autoTagStatus === 'pending')) return;
+    const timer = setInterval(() => { refreshData(); }, 8000);
+    return () => clearInterval(timer);
+  }, [media, refreshData]);
+
   const previousLevel = useRef<number | null>(null);
 
   useEffect(() => {

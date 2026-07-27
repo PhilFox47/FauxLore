@@ -1,5 +1,6 @@
 import type DatabaseConstructor from "better-sqlite3";
 import type { CodexService } from "./services/codex";
+import type { AutoTagService } from "./services/autoTag";
 import type { GeneratedEnemy } from "./services/worldBoss";
 import type { GeneratedLoot } from "./services/loot";
 
@@ -30,6 +31,7 @@ export interface ServerContext {
   generateBossImageBackground: (userId: string, bossId: string) => Promise<void>;
   generateArtifactImageBackground: (userId: string, artifactId: string) => Promise<void>;
   codex: CodexService;
+  autoTag: AutoTagService;
   hltbSearch: (query: string) => Promise<any[]>;
   getIgdbToken: (clientId: string, clientSecret: string) => Promise<string>;
 }

@@ -4,9 +4,23 @@ import { X, Search, Loader2, RefreshCw, BrainCircuit, AlertTriangle } from "luci
 import { IntegrationsService, GameMetadata } from "../services/integrations";
 import { cn } from "../lib/utils";
 import { useMediaContext } from "../contexts/MediaContext";
-import { generateAiTags } from "../services/aiService";
+import { DatabaseService } from "../services/db";
 import { useToast } from "../contexts/ToastContext";
 import { format } from "date-fns";
+
+/** Tells the user where the genres and tags went when adding a new entry. */
+function AutoTagNotice() {
+  return (
+    <div className="col-span-1 sm:col-span-2 flex items-start gap-3 rounded-xl border border-purple-500/20 bg-purple-500/[0.07] p-3 mt-2">
+      <BrainCircuit className="w-4 h-4 text-purple-300 shrink-0 mt-0.5" />
+      <p className="text-xs text-zinc-400 leading-snug">
+        <span className="text-purple-200 font-bold">Genres and tags are added automatically.</span>{' '}
+        Saving this queues auto-tagging on the server — it keeps running if you close the page, and the
+        entry picks up its tags shortly after. You can edit them here once it exists.
+      </p>
+    </div>
+  );
+}
 
 /**
  * Franchise input: free-text (comma-separated) with a dropdown of already-known
@@ -108,8 +122,13 @@ export function MediaFormModal({
   onDelete,
   initialData,
 }: MediaFormModalProps) {
-  const { taxonomies, settings, media, franchises } = useMediaContext();
+  const { taxonomies, settings, media, franchises, refreshData } = useMediaContext();
   const toast = useToast();
+
+  // Adding an entry no longer asks for genres and tags: the server tags it (and
+  // compiles its Codex) in the background once it exists. Editing still offers
+  // the fields, so anything the AI got wrong can be corrected by hand.
+  const isEditing = !!initialData?.id;
 
   // Known franchises = the franchises table plus any used on existing media.
   const franchiseOptions = useMemo(() => {
@@ -440,37 +459,20 @@ export function MediaFormModal({
   };
 
   const handleAutoTag = async () => {
-    if (!formData.title) {
-      toast.error("Please enter a title first to auto-tag.");
-      return;
-    }
+    if (!initialData?.id) return;
 
     setIsAiTagging(true);
     try {
-      const parsed = await generateAiTags(
-        settings,
-        formData,
-        taxonomies,
-      );
-
-      if (
-        parsed &&
-        Array.isArray(parsed.genres) &&
-        Array.isArray(parsed.tags)
-      ) {
-        setFormData((prev) => ({
-          ...prev,
-          genres: parsed.genres,
-          tags: parsed.tags,
-        }));
-        setRawInputs((prev) => ({
-          ...prev,
-          genres: parsed.genres.join(", "),
-          tags: parsed.tags.join(", "),
-        }));
-      } else {
-        throw new Error("AI returned an unexpected format.");
-      }
+      // Same tagger the server runs after a new entry is saved, so both paths
+      // produce the same result and there is only one prompt to maintain.
+      const parsed = await DatabaseService.autoTagMedia(initialData.id);
+      setFormData((prev) => ({ ...prev, genres: parsed.genres, tags: parsed.tags }));
+      setRawInputs((prev) => ({
+        ...prev,
+        genres: parsed.genres.join(", "),
+        tags: parsed.tags.join(", "),
+      }));
+      refreshData();
     } catch (error: any) {
       console.error("AutoTag Error:", error);
       toast.error("Auto Tag Failed: " + error.message);
@@ -484,7 +486,7 @@ export function MediaFormModal({
       <div className="bg-zinc-900 border border-white/10 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl relative">
         <div className="flex justify-between items-center p-6 border-b border-white/5">
           <h2 className="text-xl font-bold text-white">
-            {initialData ? "Edit Media" : "Add Media"}
+            {isEditing ? "Edit Media" : "Add Media"}
           </h2>
           <button
             onClick={onClose}
@@ -1093,49 +1095,55 @@ export function MediaFormModal({
                   placeholder="Leave unrated"
                 />
               </div>
+              {isEditing ? (
+                <>
               <div className="col-span-1 sm:col-span-2 flex items-center justify-between mt-2">
-                <label className="block text-sm font-medium text-zinc-400">
-                  Genres & Tags
-                </label>
-                <button
-                  type="button"
-                  onClick={handleAutoTag}
-                  disabled={isAiTagging || !formData.title}
-                  className="flex items-center gap-2 text-xs bg-purple-500/20 text-purple-300 px-3 py-1.5 rounded hover:bg-purple-500/30 transition shadow border border-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Uses AI to assign genres and tags based on title"
-                >
-                  {isAiTagging ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <BrainCircuit className="w-3 h-3" />
-                  )}
-                  Auto-Tag
-                </button>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">
-                  Genres (comma separated)
-                </label>
-                <input
-                  name="genres"
-                  value={rawInputs.genres ?? ""}
-                  onChange={handleArrayChange}
-                  className="input-field"
-                  placeholder="RPG, Open World"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1">
-                  Tags (comma separated)
-                </label>
-                <input
-                  name="tags"
-                  value={rawInputs.tags ?? ""}
-                  onChange={handleArrayChange}
-                  className="input-field"
-                  placeholder="Fantasy, Story Rich"
-                />
-              </div>
+                  <label className="block text-sm font-medium text-zinc-400">
+                    Genres &amp; Tags
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAutoTag}
+                    disabled={isAiTagging || !formData.title}
+                    className="flex items-center gap-2 text-xs bg-purple-500/20 text-purple-300 px-3 py-1.5 rounded hover:bg-purple-500/30 transition shadow border border-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Re-run auto-tagging for this entry"
+                  >
+                    {isAiTagging ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <BrainCircuit className="w-3 h-3" />
+                    )}
+                    {isAiTagging ? "Tagging…" : "Auto-Tag"}
+                  </button>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Genres (comma separated)
+                  </label>
+                  <input
+                    name="genres"
+                    value={rawInputs.genres ?? ""}
+                    onChange={handleArrayChange}
+                    className="input-field"
+                    placeholder="RPG, Open World"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Tags (comma separated)
+                  </label>
+                  <input
+                    name="tags"
+                    value={rawInputs.tags ?? ""}
+                    onChange={handleArrayChange}
+                    className="input-field"
+                    placeholder="Fantasy, Story Rich"
+                  />
+                </div>
+                </>
+              ) : (
+                <AutoTagNotice />
+              )}
               {formData.mediaType === "Game" && (
                 <div className="relative">
                   <label className="block text-sm font-medium text-zinc-400 mb-1">
@@ -1360,49 +1368,55 @@ export function MediaFormModal({
                   placeholder="Leave unrated"
                 />
               </div>
+              {isEditing ? (
+                <>
               <div className="col-span-1 sm:col-span-2 flex items-center justify-between mt-2">
-                <label className="block text-sm font-medium text-zinc-400">
-                  Genres & Tags
-                </label>
-                <button
-                  type="button"
-                  onClick={handleAutoTag}
-                  disabled={isAiTagging || !formData.title}
-                  className="flex items-center gap-2 text-xs bg-purple-500/20 text-purple-300 px-3 py-1.5 rounded hover:bg-purple-500/30 transition shadow border border-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Uses AI to assign genres and tags based on title"
-                >
-                  {isAiTagging ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <BrainCircuit className="w-3 h-3" />
-                  )}
-                  Auto-Tag
-                </button>
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-zinc-400 mb-1">
-                  Genres (comma separated)
-                </label>
-                <input
-                  name="genres"
-                  value={rawInputs.genres ?? ""}
-                  onChange={handleArrayChange}
-                  className="input-field"
-                  placeholder="Fantasy, Sci-Fi"
-                />
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-zinc-400 mb-1">
-                  Tags (comma separated)
-                </label>
-                <input
-                  name="tags"
-                  value={rawInputs.tags ?? ""}
-                  onChange={handleArrayChange}
-                  className="input-field"
-                  placeholder="Space, Magic"
-                />
-              </div>
+                  <label className="block text-sm font-medium text-zinc-400">
+                    Genres &amp; Tags
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAutoTag}
+                    disabled={isAiTagging || !formData.title}
+                    className="flex items-center gap-2 text-xs bg-purple-500/20 text-purple-300 px-3 py-1.5 rounded hover:bg-purple-500/30 transition shadow border border-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Re-run auto-tagging for this entry"
+                  >
+                    {isAiTagging ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <BrainCircuit className="w-3 h-3" />
+                    )}
+                    {isAiTagging ? "Tagging…" : "Auto-Tag"}
+                  </button>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Genres (comma separated)
+                  </label>
+                  <input
+                    name="genres"
+                    value={rawInputs.genres ?? ""}
+                    onChange={handleArrayChange}
+                    className="input-field"
+                    placeholder="Fantasy, Sci-Fi"
+                  />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">
+                    Tags (comma separated)
+                  </label>
+                  <input
+                    name="tags"
+                    value={rawInputs.tags ?? ""}
+                    onChange={handleArrayChange}
+                    className="input-field"
+                    placeholder="Space, Magic"
+                  />
+                </div>
+                </>
+              ) : (
+                <AutoTagNotice />
+              )}
               <div className="col-span-2">
                 <label className="block text-sm font-medium text-zinc-400 mb-1">
                   Franchises (comma separated)
@@ -1834,7 +1848,7 @@ export function MediaFormModal({
 
         <div className="p-6 border-t border-white/5 flex justify-between items-center bg-[#09090B] relative z-20">
           <div>
-            {initialData &&
+            {isEditing &&
               onDelete &&
               (isConfirmingDelete ? (
                 <div className="flex gap-2">
