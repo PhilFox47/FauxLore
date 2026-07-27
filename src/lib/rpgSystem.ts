@@ -1,5 +1,6 @@
 import { MediaItem, ProgressLog, getMetricForType, MediaType, WorldBoss } from '../types/schema';
 import { calculateScaledDelta } from './scaling';
+import { groupLogsIntoSessions } from './sessions';
 import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, differenceInDays, subHours } from 'date-fns';
 
 export function getQTarget(title: string, timeframe: 'monthly' | 'weekly', def: number, settings: any, rng?: () => number) {
@@ -50,7 +51,6 @@ export const QUEST_DEFINITIONS = [
   { id: '25', title: 'The Initiator', desc: "Move X item's status from 'Planning' to 'Active'", timeframes: ['weekly'], defaultWeekly: 1 },
   { id: '26', title: 'Weekly Sprinter', desc: 'Complete X media item', timeframes: ['weekly'], defaultWeekly: 1 },
   { id: '27', title: "Reviewer's Strike", desc: 'Complete X item and rate/review it', timeframes: ['weekly'], defaultWeekly: 1 },
-  { id: '28', title: 'Fresh Blood', desc: 'Add X new item to your library and log progress on it', timeframes: ['weekly'], defaultWeekly: 1 },
   { id: '29', title: 'Dust It Off', desc: 'Log progress on X item that has been sitting without updates', timeframes: ['weekly'], defaultWeekly: 1 },
   { id: '30', title: 'Marathon Session', desc: 'Have a single progress entry that yields X+ Master Pages in one sitting', timeframes: ['weekly'], defaultWeekly: 50 },
   { id: '31', title: 'Journalist', desc: 'Write X progress notes', timeframes: ['weekly'], defaultWeekly: 2 },
@@ -515,6 +515,40 @@ function generateYearlyQuests(quests: Quest[], logs: ProgressLog[], media: Media
   }
 }
 
+/**
+ * Every quest belongs to a theme. The picker allows at most one quest per theme per
+ * interval, which is what stops near-duplicates landing together (two weekend
+ * quests, or "log on 3 days" beside "log on 5 days").
+ */
+const QUEST_CATEGORY: Record<string, string> = {
+  // volume: raw Master Pages
+  'Endurance Trial': 'volume', 'Level Grinder': 'volume', 'Format Focus': 'volume',
+  'Binge Trance': 'volume', 'Marathon Session': 'volume', 'Momentum': 'volume',
+  // rhythm: when and how often you show up
+  'Consistent Chronicler': 'rhythm', 'Weekend Warrior': 'rhythm', 'Consecutive Commitment': 'rhythm',
+  'Night Shift': 'rhythm', 'First Light': 'rhythm',
+  // breadth: spreading across different things
+  'The Wanderer': 'breadth', 'Genre Hopper': 'breadth', 'The Polymath': 'breadth',
+  'Format Sampler': 'breadth', 'Balanced Diet': 'breadth',
+  // depth: going deep on one thing
+  'Deep Focus': 'depth', 'The Long Haul': 'depth', 'Deep Diver': 'depth',
+  // completion: finishing things
+  'The Finisher': 'completion', 'The Specialist': 'completion', 'Weekly Sprinter': 'completion',
+  'The Sprinter': 'completion', 'The Leviathan': 'completion', 'Home Stretch': 'completion',
+  // revival: returning to neglected things
+  'Dust It Off': 'revival', 'The Backlog Slayer': 'revival', 'Off the Shelf': 'revival',
+  'The Understudy': 'revival',
+  // reflection: notes, ratings, reviews
+  "Scribe's Duty": 'reflection', 'Journalist': 'reflection', "The Critic's Eye": 'reflection',
+  "Reviewer's Strike": 'reflection',
+  // curiosity: taxonomy and provenance oddities
+  "Time Traveler's Archive": 'curiosity', "Vanguard's Report": 'curiosity',
+  'Franchise Loyalist': 'curiosity', 'Scholar of the Arcane': 'curiosity',
+  'Road Trip': 'curiosity', 'Creator Study': 'curiosity', 'Franchise Focus': 'curiosity',
+  // rpg: bosses and loot
+  'Boss Hunter': 'rpg', 'Relic Appraiser': 'rpg',
+};
+
 function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: MediaItem[], settings: any, timeframe: 'monthly' | 'weekly', timeId: string, count: number, rng: () => number, worldBosses: WorldBoss[] = [], artifacts: any[] = [], allLogs: ProgressLog[] = []) {
   const goals = getYearlyGoals(settings);
   let totalMasterPagesGoal = 0;
@@ -868,24 +902,6 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       const current = new Set(validLogs.map(l => l.mediaId)).size;
       return { title: "Reviewer's Strike", desc: `Share your thoughts. Complete and rate/review ${target} item(s)`, target, current, type: 'entries' as const, reward: baseReward * 3 };
     },
-    () => { // 28. Fresh Blood
-      if (timeframe !== 'weekly') return null;
-      const target = getQTarget("Fresh Blood", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
-      
-      const validLogs = logs.filter(l => {
-         const m = media.find(x => x.id === l.mediaId);
-         if (m && l.metricType !== 'statusChange') {
-             const lDate = subHours(parseISO(l.timestamp), 5);
-             const cDate = subHours(parseISO(m.createdAt), 5);
-             const lWeek = format(startOfWeek(lDate, { weekStartsOn: 1 }), "RRRR-II");
-             const cWeek = format(startOfWeek(cDate, { weekStartsOn: 1 }), "RRRR-II");
-             return lWeek === cWeek;
-         }
-         return false;
-      });
-      const current = new Set(validLogs.map(l => l.mediaId)).size;
-      return { title: "Fresh Blood", desc: `Try something brand new. Add ${target} new item(s) to your library and log progress on it in the same week`, target, current, type: 'entries' as const, reward: baseReward * 2 };
-    },
     () => { // 29. Dust It Off
       if (timeframe !== 'weekly') return null;
       const target = getQTarget("Dust It Off", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
@@ -942,7 +958,195 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       const target = getQTarget("Journalist", timeframe, 2, settings, typeof rng !== 'undefined' ? rng : undefined);
       const current = logs.filter(l => l.note && l.note.trim().length >= 10).length;
       return { title: "Journalist", desc: `Embody the Lorekeeper. Write ${target} progress notes (10+ characters) attaching them to your progress logs`, target, current, type: 'entries' as const, reward: baseReward * 2 };
-    }
+    },
+
+    // ---- Engagement challenges ------------------------------------------------
+    // These all work with media already in the library. None asks for anything new
+    // to be added: the point is to find a different angle on what is already there.
+
+    () => { // 32. Off the Shelf - revive something paused
+      const onHold = media.filter(m => m.status === 'On Hold');
+      if (onHold.length === 0) return null;
+      const target = getQTarget("Off the Shelf", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
+      const onHoldIds = new Set(onHold.map(m => m.id));
+      const current = new Set(logs.filter(l => l.metricType !== 'statusChange' && onHoldIds.has(l.mediaId)).map(l => l.mediaId)).size;
+      return { title: "Off the Shelf", desc: `Wake something up. Log progress on ${target} item currently On Hold`, target, current, type: 'entries' as const, reward: baseReward * 3 };
+    },
+
+    () => { // 33. The Understudy - the active item you have neglected most
+      const actives = media.filter(m => m.status === 'Active');
+      if (actives.length < 3) return null;
+      const target = getQTarget("The Understudy", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
+      // Rank active items by how long since their last log; the quest names the coldest.
+      const lastLog: Record<string, number> = {};
+      allLogs.forEach(l => {
+        if (l.metricType === 'statusChange') return;
+        const t = new Date(l.timestamp).getTime();
+        if (!lastLog[l.mediaId] || t > lastLog[l.mediaId]) lastLog[l.mediaId] = t;
+      });
+      const coldest = [...actives].sort((a, b) => (lastLog[a.id] || 0) - (lastLog[b.id] || 0))[0];
+      if (!coldest) return null;
+      const current = logs.some(l => l.mediaId === coldest.id && l.metricType !== 'statusChange') ? 1 : 0;
+      return { title: "The Understudy", desc: `Your most neglected active journey: give "${coldest.title}" some attention`, target, current, type: 'entries' as const, reward: baseReward * 3 };
+    },
+
+    () => { // 34. Home Stretch - finish something nearly done
+      const target = getQTarget("Home Stretch", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
+      // Items at 75%+ of a known total
+      const nearlyDone = media.filter(m => {
+        if (m.status !== 'Active') return false;
+        const totals: Record<string, number | undefined> = {
+          'Book': m.totalPages, 'Manga': m.totalChapters, 'Series': m.totalEpisodes, 'Comic': m.totalIssues,
+        };
+        const total = totals[m.mediaType];
+        if (!total || total <= 0) return false;
+        const done = (m.pagesRead || m.chaptersRead || m.episodesWatched || m.issuesRead || 0);
+        const pct = done / total;
+        return pct >= 0.75 && pct < 1;
+      });
+      if (nearlyDone.length === 0) return null;
+      const ids = new Set(nearlyDone.map(m => m.id));
+      const current = new Set(logs.filter(l => l.metricType === 'statusChange' && (l.note?.includes('to Completed') || l.note?.includes('to Extras')) && ids.has(l.mediaId)).map(l => l.mediaId)).size;
+      return { title: "Home Stretch", desc: `${nearlyDone.length === 1 ? `"${nearlyDone[0].title}" is` : `${nearlyDone.length} items are`} past three quarters. Finish ${target}`, target, current, type: 'entries' as const, reward: baseReward * 4 };
+    },
+
+    () => { // 35. Night Shift
+      if (timeframe !== 'weekly') return null;
+      const target = getQTarget("Night Shift", timeframe, 2, settings, typeof rng !== 'undefined' ? rng : undefined);
+      const current = new Set(logs.filter(l => {
+        if (l.metricType === 'statusChange') return false;
+        const h = subHours(parseISO(l.timestamp), 5).getHours();
+        return h >= 22 || h < 4;
+      }).map(l => format(subHours(parseISO(l.timestamp), 5), 'yyyy-MM-dd'))).size;
+      return { title: "Night Shift", desc: `Burn the midnight oil. Log progress after 22:00 on ${target} different nights`, target, current, type: 'entries' as const, reward: baseReward * 2 };
+    },
+
+    () => { // 36. First Light
+      if (timeframe !== 'weekly') return null;
+      const target = getQTarget("First Light", timeframe, 2, settings, typeof rng !== 'undefined' ? rng : undefined);
+      const current = new Set(logs.filter(l => {
+        if (l.metricType === 'statusChange') return false;
+        const h = subHours(parseISO(l.timestamp), 5).getHours();
+        return h >= 4 && h < 10;
+      }).map(l => format(subHours(parseISO(l.timestamp), 5), 'yyyy-MM-dd'))).size;
+      return { title: "First Light", desc: `Start before the world does. Log progress before 10:00 on ${target} mornings`, target, current, type: 'entries' as const, reward: baseReward * 2 };
+    },
+
+    () => { // 37. Road Trip - log from more than one place
+      if (timeframe !== 'weekly') return null;
+      const knownLocations = new Set(allLogs.map(l => (l.location || '').trim()).filter(Boolean));
+      if (knownLocations.size < 2) return null; // only meaningful if locations get used
+      const target = getQTarget("Road Trip", timeframe, 2, settings, typeof rng !== 'undefined' ? rng : undefined);
+      const current = new Set(logs.map(l => (l.location || '').trim()).filter(Boolean)).size;
+      return { title: "Road Trip", desc: `Change of scenery. Log progress from ${target} different locations`, target, current, type: 'entries' as const, reward: baseReward * 2 };
+    },
+
+    () => { // 38. Format Sampler
+      if (timeframe !== 'weekly') return null;
+      const target = getQTarget("Format Sampler", timeframe, 3, settings, typeof rng !== 'undefined' ? rng : undefined);
+      const types = new Set<string>();
+      logs.forEach(l => { const m = media.find(x => x.id === l.mediaId); if (m && l.metricType !== 'statusChange') types.add(m.mediaType); });
+      return { title: "Format Sampler", desc: `Refuse to specialise. Log progress in ${target} different media types`, target, current: types.size, type: 'entries' as const, reward: baseReward * 3 };
+    },
+
+    () => { // 39. Balanced Diet - pair a long form with a short form
+      if (timeframe !== 'weekly') return null;
+      const LONG = ['Game', 'Book', 'Visual Novel', 'Audiobook'];
+      const SHORT = ['Movie', 'Comic', 'Manga', 'Series'];
+      let long = 0, short = 0;
+      new Set(logs.filter(l => l.metricType !== 'statusChange').map(l => l.mediaId)).forEach(id => {
+        const m = media.find(x => x.id === id);
+        if (!m) return;
+        if (LONG.includes(m.mediaType)) long++;
+        if (SHORT.includes(m.mediaType)) short++;
+      });
+      return { title: "Balanced Diet", desc: `One long haul, one quick bite. Log both a Game/Book/VN and a Movie/Comic/Manga/Series`, target: 2, current: (long > 0 ? 1 : 0) + (short > 0 ? 1 : 0), type: 'entries' as const, reward: baseReward * 2 };
+    },
+
+    () => { // 40. The Long Haul - same item, consecutive days
+      if (timeframe !== 'weekly') return null;
+      const target = getQTarget("The Long Haul", timeframe, 3, settings, typeof rng !== 'undefined' ? rng : undefined);
+      const byItem: Record<string, string[]> = {};
+      logs.forEach(l => {
+        if (l.metricType === 'statusChange') return;
+        const d = format(subHours(parseISO(l.timestamp), 5), 'yyyy-MM-dd');
+        (byItem[l.mediaId] = byItem[l.mediaId] || []).push(d);
+      });
+      let best = 0;
+      Object.values(byItem).forEach(days => {
+        const uniq = Array.from(new Set(days)).sort();
+        let run = uniq.length ? 1 : 0, longest = run;
+        for (let i = 1; i < uniq.length; i++) {
+          const diff = (new Date(uniq[i] + 'T00:00:00').getTime() - new Date(uniq[i-1] + 'T00:00:00').getTime()) / 86400000;
+          run = diff === 1 ? run + 1 : 1;
+          if (run > longest) longest = run;
+        }
+        if (longest > best) best = longest;
+      });
+      return { title: "The Long Haul", desc: `Build a habit. Log the same item on ${target} consecutive days`, target, current: best, type: 'entries' as const, reward: baseReward * 3 };
+    },
+
+    () => { // 41. Deep Diver - several sittings on one item
+      if (timeframe !== 'weekly') return null;
+      const target = getQTarget("Deep Diver", timeframe, 3, settings, typeof rng !== 'undefined' ? rng : undefined);
+      const sessions = groupLogsIntoSessions(logs.filter(l => l.metricType !== 'statusChange'));
+      const perItem: Record<string, number> = {};
+      sessions.forEach(s => { perItem[s.mediaId] = (perItem[s.mediaId] || 0) + 1; });
+      const best = Object.values(perItem).length ? Math.max(...Object.values(perItem)) : 0;
+      return { title: "Deep Diver", desc: `Return again and again. Have ${target} separate sessions on a single item`, target, current: best, type: 'entries' as const, reward: baseReward * 3 };
+    },
+
+    () => { // 42. Creator Study - two works by the same creator
+      if (timeframe !== 'weekly') return null;
+      const target = getQTarget("Creator Study", timeframe, 2, settings, typeof rng !== 'undefined' ? rng : undefined);
+      // Only offer when the library actually has a creator with multiple works
+      const byCreator: Record<string, Set<string>> = {};
+      media.forEach(m => { if (m.creator) (byCreator[m.creator] = byCreator[m.creator] || new Set()).add(m.id); });
+      if (!Object.values(byCreator).some(set => set.size >= 2)) return null;
+      const loggedByCreator: Record<string, Set<string>> = {};
+      logs.forEach(l => {
+        if (l.metricType === 'statusChange') return;
+        const m = media.find(x => x.id === l.mediaId);
+        if (m?.creator) (loggedByCreator[m.creator] = loggedByCreator[m.creator] || new Set()).add(m.id);
+      });
+      const best = Object.values(loggedByCreator).reduce((mx, set) => Math.max(mx, set.size), 0);
+      return { title: "Creator Study", desc: `Follow one voice. Log ${target} different works by the same creator`, target, current: best, type: 'entries' as const, reward: baseReward * 3 };
+    },
+
+    () => { // 43. Franchise Focus - two entries from one universe
+      if (timeframe !== 'weekly') return null;
+      const withFranchise = media.filter(m => m.franchises && m.franchises.length > 0);
+      if (withFranchise.length < 2) return null;
+      const target = getQTarget("Franchise Focus", timeframe, 2, settings, typeof rng !== 'undefined' ? rng : undefined);
+      const byFranchise: Record<string, Set<string>> = {};
+      logs.forEach(l => {
+        if (l.metricType === 'statusChange') return;
+        const m = media.find(x => x.id === l.mediaId);
+        (m?.franchises || []).forEach(f => (byFranchise[f] = byFranchise[f] || new Set()).add(m!.id));
+      });
+      const best = Object.values(byFranchise).reduce((mx, set) => Math.max(mx, set.size), 0);
+      return { title: "Franchise Focus", desc: `Stay in one universe. Log ${target} entries from the same franchise`, target, current: best, type: 'entries' as const, reward: baseReward * 3 };
+    },
+
+    () => { // 44. Momentum - beat the previous interval
+      const target = getQTarget("Momentum", timeframe, 0, settings, typeof rng !== 'undefined' ? rng : undefined);
+      // Compare against the same-length window immediately before this one
+      const times = logs.map(l => parseISO(l.timestamp).getTime());
+      if (!times.length) return null;
+      const spanDays = timeframe === 'weekly' ? 7 : 30;
+      const windowStart = Math.min(...times);
+      const prevFrom = windowStart - spanDays * 86400000;
+      const prevPages = allLogs.reduce((acc, l) => {
+        const t = parseISO(l.timestamp).getTime();
+        if (t < prevFrom || t >= windowStart || l.metricType === 'statusChange') return acc;
+        const m = media.find(x => x.id === l.mediaId);
+        return m ? acc + calculateScaledDelta(l.delta, m, settings) : acc;
+      }, 0);
+      if (prevPages <= 0) return null; // nothing to beat
+      const goal = target > 0 ? target : Math.ceil(prevPages);
+      const current = calculateMasterPages(logs, media, settings);
+      return { title: "Momentum", desc: `Outdo your past self. Beat the ${Math.round(prevPages)} Master Pages of the previous ${timeframe.replace('ly', '')}`, target: goal, current: Math.floor(current), type: 'pages' as const, reward: baseReward * 3 };
+    },
   ];
 
   // Filter out nulls and apply overrides
@@ -990,6 +1194,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
   }
 
   const usedTitles = new Set<string>();
+  const usedCategories = new Set<string>();
 
   for (let i = iOffset; i < count; i++) {
     const qId = `${timeId}-${i}`;
@@ -997,23 +1202,30 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     if (settings?.questOffsets && settings.questOffsets[qId]) {
       userOffset = settings.questOffsets[qId];
     }
-    
+
     let data;
-    let attempts = 0;
-    let currentIndex = (i * 3 + userOffset) % shuffled.length;
-    
-    while(attempts < shuffled.length) {
-      const candidate = shuffled[currentIndex];
-      if (!usedTitles.has(candidate.title)) {
+    const startIndex = (i * 3 + userOffset) % shuffled.length;
+
+    // Two passes. The first only accepts a quest whose theme is not represented
+    // yet, which is what keeps near-duplicates ("log on 3 days" beside "log on a
+    // weekend day") out of the same interval. If every remaining theme is taken,
+    // the second pass falls back to any unused quest so the slate still fills.
+    for (const enforceCategory of [true, false]) {
+      for (let attempts = 0; attempts < shuffled.length; attempts++) {
+        const candidate = shuffled[(startIndex + attempts) % shuffled.length];
+        if (usedTitles.has(candidate.title)) continue;
+        const cat = QUEST_CATEGORY[candidate.title];
+        if (enforceCategory && cat && usedCategories.has(cat)) continue;
         data = candidate;
         break;
       }
-      currentIndex = (currentIndex + 1) % shuffled.length;
-      attempts++;
+      if (data) break;
     }
-    
+
     if (!data) data = shuffled[0];
     usedTitles.add(data.title);
+    const chosenCat = QUEST_CATEGORY[data.title];
+    if (chosenCat) usedCategories.add(chosenCat);
 
     quests.push({
       id: qId,
