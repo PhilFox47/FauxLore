@@ -85,7 +85,7 @@ export function createWorldBossService(
       // busy week, while asking for more is opting in to harder ones.
       //
       //   no enemies yet -> always level 3 (the Monday spawn)
-      //   one enemy live  -> the first Encore: level 5 (75%) or level 4 (25%)
+      //   one enemy live  -> the first Encore: level 4 (75%) or level 5 (25%)
       //   beyond that     -> any level, subject to the caps below
       //
       // Levels 4 and 5 are mutually exclusive and capped: at most two level 4s, at
@@ -110,8 +110,9 @@ export function createWorldBossService(
       } else if (activeCount === 0) {
         level = 3;
       } else if (activeCount === 1) {
-        // First Encore: weighted toward the big one, but only among what the caps allow.
-        const wanted = Math.random() < 0.75 ? [5, 4] : [4, 5];
+        // First Encore: usually a level 4, occasionally a level 5, which keeps the
+        // top tier rare. Preference order is filtered by what the caps allow.
+        const wanted = Math.random() < 0.25 ? [5, 4] : [4, 5];
         level = wanted.find(allows) ?? 3;
       } else {
         const open = [1, 2, 3, 4, 5].filter(allows);
