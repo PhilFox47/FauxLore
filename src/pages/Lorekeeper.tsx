@@ -593,7 +593,7 @@ export function Lorekeeper() {
           </div>
           <div className="flex gap-4">
             <select
-              title="Spawn Enemy associated with this specific Media Type"
+              title="Limit the new enemy to one media type"
               value={encoreMediaType}
               onChange={(e) => setEncoreMediaType(e.target.value)}
               className="bg-black/40 hover:bg-zinc-800 border border-white/5 px-4 py-3 rounded-2xl flex items-center justify-center gap-2 transition-all font-bold text-zinc-400 outline-none focus:border-red-500/30"
@@ -622,7 +622,7 @@ export function Lorekeeper() {
               ) : (
                 <Swords className="w-5 h-5 text-red-500 group-hover:scale-110 transition-transform" />
               )}
-              Encore
+              Spawn Enemy
             </button>
             <div className="bg-zinc-950 px-6 py-3 rounded-2xl border border-white/5 text-center">
               <div className="text-[10px] text-zinc-600 font-black uppercase tracking-widest mb-1">

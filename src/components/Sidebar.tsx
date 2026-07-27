@@ -116,7 +116,7 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
           </NavLink>
         ))}
 
-        <div className="pt-8 text-[10px] uppercase tracking-[0.2em] font-black text-zinc-600 mb-4 font-display">Vaults</div>
+        <div className="pt-8 text-[10px] uppercase tracking-[0.2em] font-black text-zinc-600 mb-4 font-display">Libraries</div>
         <div className="space-y-1">
           {libraryItems.map((item) => (
             <NavLink
@@ -152,7 +152,7 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
         </button>
         <button onClick={logout} className="flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-red-950/40 to-transparent border border-red-900/30 hover:border-red-500/50 hover:bg-red-900/40 text-red-500 hover:text-red-400 rounded-xl text-xs uppercase font-black tracking-widest transition-colors font-display">
           <LogOut className="w-4 h-4 opacity-70" />
-          Disconnect
+          Log Out
         </button>
       </div>
     </aside>

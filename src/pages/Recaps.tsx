@@ -795,7 +795,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
 
     return (
       <div className="bg-zinc-900/50 border border-white/5 p-8 rounded-[2.5rem] flex flex-col items-center">
-        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-8 self-start">Genre Fusion Map</h4>
+        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-8 self-start">Genre Mix</h4>
         <div className="w-full h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data}>
@@ -836,7 +836,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
 
     return (
       <div className="bg-zinc-900/50 border border-white/5 p-8 rounded-[2.5rem]">
-        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-6">Focus Shift Analysis</h4>
+        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-6">Genre Shift vs Last Period</h4>
         <div className="space-y-4">
           {shifts.map(s => (
             <div key={s.genre} className="flex items-center justify-between">
@@ -912,7 +912,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
      return (
         <div className={`${theme.bg} ${theme.border} p-6 rounded-3xl relative overflow-hidden group`}>
            <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 blur-3xl -mr-12 -mt-12 rounded-full" />
-           <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-2">Prime Architect</h4>
+           <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-2">Most-Logged Creator</h4>
            <div className="text-xl font-black text-white truncate mb-1">{name}</div>
            <div className={`text-xs font-bold ${theme.text}`}>{Math.round(amount)} Master Pages Logged</div>
         </div>
@@ -1067,7 +1067,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
       <div className="bg-black/40 border border-white/5 p-8 rounded-3xl flex flex-col h-fit">
         <h3 className="text-lg font-black text-white mb-8 flex items-center gap-3">
           <Activity className={`w-5 h-5 ${theme.text}`} />
-          Chronological Intensity
+          Logs by Hour of Day
         </h3>
         <div className="h-[240px] w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -1104,9 +1104,9 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
       <div className="bg-zinc-900/50 border border-white/5 p-6 md:p-8 rounded-3xl">
         <h3 className="text-xl font-black text-white mb-1 flex items-center gap-3">
           <BrainCircuit className="w-6 h-6 text-orange-500" />
-          Thematic DNA
+          Your Tags &amp; Genres
         </h3>
-        <p className="text-zinc-500 text-xs mb-6 uppercase tracking-widest font-bold">What your consumption says about you</p>
+        <p className="text-zinc-500 text-xs mb-6 uppercase tracking-widest font-bold">Weighted by master pages logged</p>
         
         <div className="space-y-6">
            <div className="flex flex-wrap gap-2">
@@ -1122,7 +1122,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
            {dna.genres.length > 0 && (
              <div className="pt-6 border-t border-white/5">
                 <h4 className="text-white font-bold text-sm mb-4 flex items-center gap-2">
-                  <LayoutGrid className="w-4 h-4 text-zinc-500" /> Domain Mastery
+                  <LayoutGrid className="w-4 h-4 text-zinc-500" /> Top Genres
                 </h4>
                 <div className="space-y-3">
                    {dna.genres.map(([genre, pages]) => (
@@ -1297,9 +1297,9 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
             <Clock className={`w-8 h-8 ${theme.text}`} />
           </div>
           <div className="relative z-10">
-            <h4 className={`${theme.text} font-black text-[10px] uppercase tracking-[0.3em] mb-2`}>Temporal Resonance</h4>
+            <h4 className={`${theme.text} font-black text-[10px] uppercase tracking-[0.3em] mb-2`}>When You Logged Most</h4>
             <p className="text-white font-black text-2xl tracking-tighter">{peakDay ? `${peakDay}s (${habits.profile})` : habits.profile}</p>
-            <p className="text-zinc-400 text-sm mt-1 max-w-md leading-relaxed">{peakDay ? `Your most potent energy manifests on ${peakDay}s. ` : ''}{habits.desc}</p>
+            <p className="text-zinc-400 text-sm mt-1 max-w-md leading-relaxed">{peakDay ? `You logged more on ${peakDay}s than any other day. ` : ''}{habits.desc}</p>
           </div>
        </div>
     );
@@ -1880,7 +1880,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
       <Reveal className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-gradient-to-b from-zinc-950 to-black p-8 md:p-12">
         <div className={`absolute top-0 right-0 w-72 h-72 ${theme.glow} blur-[120px] rounded-full -mr-24 -mt-24 pointer-events-none`} />
         <div className="relative z-10">
-          <div className={`text-[10px] uppercase tracking-[0.4em] ${theme.text} font-black mb-6`}>Deep Cuts</div>
+          <div className={`text-[10px] uppercase tracking-[0.4em] ${theme.text} font-black mb-6`}>The Details</div>
 
           {/* Signature number */}
           <div className="mb-10">
@@ -1940,11 +1940,11 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
         <div className={`absolute top-0 right-0 w-72 h-72 ${theme.glow} blur-[120px] rounded-full -mr-24 -mt-24 pointer-events-none`} />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 mb-8 pb-8 border-b border-white/10">
           <div>
-            <div className={`text-[10px] uppercase tracking-[0.4em] ${theme.text} font-black mb-2`}>Time Capsule</div>
+            <div className={`text-[10px] uppercase tracking-[0.4em] ${theme.text} font-black mb-2`}>Summary</div>
             <h3 className="text-3xl md:text-4xl font-black text-white tracking-tighter">{formatIntervalLabel()}</h3>
           </div>
           <div className="md:text-right">
-            <div className="text-[10px] uppercase tracking-widest text-zinc-600 font-black">Sealed</div>
+            <div className="text-[10px] uppercase tracking-widest text-zinc-600 font-black">Generated</div>
             <div className="text-sm font-bold text-zinc-400">{format(new Date(), 'MMM d, yyyy')}</div>
           </div>
         </div>
@@ -1969,7 +1969,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
           </div>
           <div>
             <h1 className="text-xl md:text-2xl font-black text-white tracking-tight">{theme.label}</h1>
-            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-none mt-1">Archive of the {timeframe}</p>
+            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-none mt-1">Your {timeframe} in review</p>
           </div>
         </div>
         
@@ -2031,7 +2031,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                            className="bg-white text-black hover:bg-zinc-200 px-8 py-4 rounded-2xl text-sm font-black transition-all flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 shadow-2xl shadow-white/5 whitespace-nowrap"
                          >
                            <RefreshCw className={`w-5 h-5 ${isGenerating ? 'animate-spin' : ''}`} /> 
-                           {currentRecap ? 'Forging New Tale' : 'Extract Memories'}
+                           {currentRecap ? 'Rewrite Recap' : 'Write Recap'}
                          </button>
                       </div>
 
@@ -2057,8 +2057,8 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                                <motion.div animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }}>
                                   <RefreshCw className={`w-16 h-16 mb-6 ${isGenerating ? theme.text : 'text-zinc-800'}`} />
                                </motion.div>
-                               <h3 className="text-2xl font-black text-white mb-2">{isGenerating ? "Consulting the Archives..." : "Ready for Chronicle"}</h3>
-                               <p className="text-zinc-500 max-w-md">Your {timeframe}ly journey awaits processing. Forge the legend to see your story unfold.</p>
+                               <h3 className="text-2xl font-black text-white mb-2">{isGenerating ? "Writing your recap..." : "No recap yet"}</h3>
+                               <p className="text-zinc-500 max-w-md">Write the recap to get a narrative of your {timeframe}, with awards and a read on every chart below.</p>
                             </div>
                          )}
                       </div>
@@ -2067,9 +2067,9 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                    {/* Hero Numbers */}
                    <Reveal className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <HeroStat label="Master Pages" delta={comparison.masterPages} accentClass={theme.text} />
-                      <HeroStat label="Media Conquered" delta={comparison.completed} />
-                      <HeroStat label="Logged Actions" delta={comparison.logCount} />
-                      <HeroStat label="Active Journeys" delta={comparison.titles} />
+                      <HeroStat label="Titles Finished" delta={comparison.completed} />
+                      <HeroStat label="Logs" delta={comparison.logCount} />
+                      <HeroStat label="Titles Tracked" delta={comparison.titles} />
                    </Reveal>
 
                    {/* The measured story: pace, consistency, rhythm, outcomes,
@@ -2107,7 +2107,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                             <div className="flex items-center justify-between mb-8">
                                <h3 className="text-2xl font-black text-white flex items-center gap-4">
                                  <Trophy className={`w-8 h-8 ${theme.text}`} />
-                                 {timeframe === 'week' ? "Weekly Standings" : timeframe === 'month' ? "Monthly Vanguard" : "The Yearly Pantheon"}
+                                 {timeframe === 'week' ? "Most Logged This Week" : timeframe === 'month' ? "Most Logged This Month" : "Most Logged This Year"}
                                </h3>
                             </div>
                             {renderRanking()}
@@ -2155,7 +2155,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                    <div className="bg-zinc-950/40 border border-white/5 p-8 rounded-[2.5rem]">
                       <h3 className="text-xl font-black text-white mb-8 flex items-center gap-4">
                         <BarChart3 className={`w-8 h-8 ${theme.text}`} />
-                        Format Allocation
+                        Time by Media Type
                       </h3>
                       {renderTypeBreakdown()}
                       {captions.formats && (
@@ -2183,7 +2183,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                          <div className={`absolute top-0 right-0 w-96 h-96 ${theme.glow} blur-[120px] -mr-32 -mt-32 rounded-full pointer-events-none`} />
                          <h3 className="text-3xl font-black text-white mb-12 flex items-center gap-5">
                            <Medal className={`w-10 h-10 ${theme.text}`} />
-                           Artifacts Conquered
+                           Titles You Finished
                          </h3>
                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
                            {completedMedia.map(m => (
@@ -2220,7 +2220,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                       <div className="bg-black border border-white/5 p-10 md:p-14 rounded-[3rem]">
                           <h3 className="text-xl font-black text-white mb-8 flex items-center gap-4">
                             <Library className="w-8 h-8 text-zinc-500" />
-                            Ongoing Chronicles
+                            Still in Progress
                           </h3>
                           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
                              {activeMedia.filter(m => m.status !== 'Completed' && m.status !== 'Extras').map(m => (
@@ -2294,8 +2294,8 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                      <div className="w-32 h-32 rounded-[2.5rem] bg-white/5 border border-white/10 flex items-center justify-center mb-8 rotate-12">
                         <Sparkles className="w-12 h-12 text-zinc-700" />
                      </div>
-                     <h2 className="text-3xl font-black text-white mb-4">The Chronicles are Empty</h2>
-                     <p className="text-zinc-500 max-w-sm mx-auto text-lg leading-relaxed">No echoes of your journeys were heard during this interval. Log your actions to fill these pages.</p>
+                     <h2 className="text-3xl font-black text-white mb-4">Nothing logged this {timeframe}</h2>
+                     <p className="text-zinc-500 max-w-sm mx-auto text-lg leading-relaxed">There's no activity in this period yet. Log some progress and the recap will fill in.</p>
                   </div>
                )}
 

@@ -359,7 +359,7 @@ export function Armory() {
              <Gem className="w-6 h-6 text-purple-500" />
              The Armory
           </h1>
-          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-none mt-1">Conquest Loot & Relics</p>
+          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-none mt-1">Your gear and loot</p>
         </div>
         {isMigrating && (
           <div className="flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-full">
@@ -543,8 +543,8 @@ export function Armory() {
                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03] mix-blend-overlay"></div>
                      <h3 className="text-sm sm:text-base font-black text-white mb-6 uppercase tracking-[0.2em] flex items-center gap-2 font-display">
                        <Gem className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />
-                       Unidentified Loot
-                       <span className="ml-2 px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded text-[10px] tracking-widest">{unlootedMedia.length} Pending</span>
+                       Loot to claim
+                       <span className="ml-2 px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded text-[10px] tracking-widest">{unlootedMedia.length} waiting</span>
                      </h3>
                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 gap-4 relative z-10">
                        {unlootedMedia.map(item => (
@@ -553,7 +553,7 @@ export function Armory() {
                            onClick={() => handleClaimLoot(item)}
                            disabled={!!isLootingMediaId}
                            className="aspect-square rounded-2xl bg-zinc-900 border border-white/5 cursor-pointer hover:border-indigo-500 hover:ring-2 hover:ring-indigo-500/50 hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all relative group flex flex-col items-center justify-center p-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                           title={`Identify loot from ${item.title}`}
+                           title={`Generate loot for ${item.title}`}
                          >
                             <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl"></div>
                              {isLootingMediaId === item.id ? (
@@ -570,7 +570,7 @@ export function Armory() {
                                "text-[8px] font-black uppercase text-zinc-500 group-hover:text-indigo-300 truncate w-full text-center tracking-widest px-1 font-display transition-all duration-300",
                                isLootingMediaId === item.id && "text-indigo-300 font-bold scale-110 drop-shadow-[0_0_5px_rgba(99,102,241,0.5)] bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 via-purple-300 to-indigo-300 animate-pulse"
                             )}>
-                               {isLootingMediaId === item.id ? "Forging Relic..." : item.title}
+                               {isLootingMediaId === item.id ? "Generating..." : item.title}
                             </div>
                          </button>
                        ))}
@@ -580,7 +580,7 @@ export function Armory() {
                     <div className="h-full bg-gradient-to-br from-zinc-900/30 to-black border-2 border-dashed border-white/5 rounded-[2.5rem] p-12 flex flex-col items-center justify-center text-center">
                        <Shield className="w-16 h-16 text-zinc-800 mb-6" />
                        <p className="text-xs font-black text-zinc-600 uppercase tracking-[0.2em] font-display max-w-[200px] leading-relaxed">
-                          All completed conquests have been looted.
+                          You've claimed loot from everything you've finished.
                        </p>
                     </div>
                  )}

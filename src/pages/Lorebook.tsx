@@ -109,7 +109,7 @@ export function Lorebook() {
             <BookOpen className="w-8 h-8 text-orange-400" />
             The Lorebook
           </h2>
-          <p className="text-zinc-400 mt-2">The complete, chronicled journey of your conquests.</p>
+          <p className="text-zinc-400 mt-2">Every session and status change you've logged, newest first.</p>
         </div>
 
         <div className="flex gap-3 w-full sm:w-auto">

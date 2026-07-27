@@ -580,7 +580,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
           {lore && lore.timeline.length > 0 && (
             <div className="mb-8">
               <h3 className="text-sm font-bold text-zinc-500 mb-3 tracking-wider uppercase flex items-center gap-2">
-                <Clock className="w-4 h-4" /> Status Journey
+                <Clock className="w-4 h-4" /> Status history
               </h3>
               <div className="flex w-full h-2.5 rounded-full overflow-hidden border border-white/10">
                 {lore.timeline.map((s, i) => {
@@ -994,7 +994,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
               <div className="mb-8">
                 <h3 className="text-lg font-bold text-white mb-3 tracking-wide flex items-center gap-2">
                    <Gem className="w-5 h-5 text-purple-400" />
-                   {isOngoingPlaytimeMedia ? 'Ongoing Conquest Loot' : 'Conquest Loot'}
+                   {isOngoingPlaytimeMedia ? 'Loot earned so far' : 'Loot earned'}
                 </h3>
                 {isOngoingPlaytimeMedia && (
                   <div className="mb-4">

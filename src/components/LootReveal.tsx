@@ -325,7 +325,7 @@ export function LootReveal({ artifact, onClose }: LootRevealProps) {
                   : cn("bg-zinc-800 text-white hover:bg-zinc-700 border border-white/10", "hover:border-" + colorConfig.border.split('-')[1] + "-500/50")
               )}
             >
-              Collect Relic
+              Add to Inventory
             </motion.button>
           </div>
         </motion.div>

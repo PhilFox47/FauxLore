@@ -95,7 +95,7 @@ export function MediaLibrary() {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
               <span className="w-2 h-2 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent-hover)]" style={{ boxShadow: `0 0 8px ${accentBase}`}}></span>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 font-display">The Vault</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 font-display">Library</span>
             </div>
             <h2 className="text-4xl sm:text-5xl font-black text-white font-display tracking-tight leading-none mb-2">{decodedMediaType}s</h2>
             <div className="relative group w-fit">
@@ -166,7 +166,7 @@ export function MediaLibrary() {
             className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shrink-0 font-display mt-2 lg:mt-0 flex items-center justify-center gap-2 whitespace-nowrap"
             style={{ boxShadow: `0 0 20px ${accentBase}4D` }}
           >
-            <Plus className="w-4 h-4" /> Inscribe Record
+            <Plus className="w-4 h-4" /> Add Media
           </button>
         </div>
       </header>
@@ -176,7 +176,7 @@ export function MediaLibrary() {
           <div className="w-16 h-16 rounded-2xl bg-zinc-900/80 border border-white/5 flex items-center justify-center mx-auto mb-6 shadow-md shadow-black">
              <Search className="w-8 h-8 text-zinc-700" />
           </div>
-          <h3 className="text-xl font-black text-white font-display mb-2">Vault is Empty</h3>
+          <h3 className="text-xl font-black text-white font-display mb-2">Nothing here yet</h3>
           <p className="text-zinc-500 font-medium">No {decodedMediaType.toLowerCase()}s found matching your current filters.</p>
         </div>
       ) : (

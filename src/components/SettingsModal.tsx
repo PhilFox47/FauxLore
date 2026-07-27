@@ -608,7 +608,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   </div>
                   <p className="text-[10px] text-zinc-500 mt-4 leading-relaxed italic">
                     Lower difficulty reduces the progress required (Hours, Chapters, Pages, etc.) to defeat active World Bosses. 
-                    Changes are applied instantly to all of your currently active encounters.
+                    Changes apply instantly to all of your active enemies.
                   </p>
                 </div>
 

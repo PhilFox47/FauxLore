@@ -3,14 +3,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Gem, Anvil, Sparkles, Flame, Wand2, Stars } from 'lucide-react';
 import { cn } from '../lib/utils';
 
+// What the generator is actually doing while you wait, in order. Saying the
+// real step is more reassuring during a long wait than a mystical noise.
 const FORGING_PHRASES = [
-  "Striking the Anvil...",
-  "Appraising Relic...",
-  "Channeling Arcane...",
-  "Polishing Gemstones...",
-  "Weaving Fate...",
-  "Extracting Magic...",
-  "Unveiling Legacy..."
+  "Reading this media's Codex...",
+  "Picking an item from its world...",
+  "Writing its description...",
+  "Drawing the icon...",
+  "Almost there..."
 ];
 
 export function ForgingButton({ isLooting, onClick }: { isLooting: boolean, onClick: () => void }) {
@@ -143,7 +143,7 @@ export function ForgingButton({ isLooting, onClick }: { isLooting: boolean, onCl
     >
       <Gem className="w-8 h-8 text-purple-400 group-hover:scale-110 group-hover:text-purple-300 transition-all mb-1 drop-shadow-lg" />
       <span className="font-black text-purple-400 tracking-wider">
-         Claim Conquest Loot!
+         Claim Loot
       </span>
     </button>
   );

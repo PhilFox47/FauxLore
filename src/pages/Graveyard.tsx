@@ -41,7 +41,7 @@ export function Graveyard() {
         </div>
         <h2 className="text-2xl font-bold text-zinc-400 mb-2 font-serif">The Graveyard is Empty</h2>
         <p className="text-zinc-600 max-w-sm mb-6 pb-12 border-b border-zinc-800/50">
-          You haven't abandoned any journeys... yet.
+          You haven't dropped anything yet.
         </p>
       </div>
     );
