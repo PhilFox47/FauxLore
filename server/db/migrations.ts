@@ -277,4 +277,12 @@ export function runMigrations(db: Db) {
   try { db.prepare("ALTER TABLE world_bosses ADD COLUMN imageUrl TEXT").run(); console.log("Migration: Added imageUrl to world_bosses"); } catch (e) {}
   try { db.prepare("ALTER TABLE artifacts ADD COLUMN imageStatus TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE world_bosses ADD COLUMN imageStatus TEXT").run(); } catch (e) {}
+
+  // Codex-authored enemies and loot. The AI now writes the epithet, the flavour
+  // text and the image prompt in one go, so all three are stored alongside the
+  // name instead of being re-derived at image time.
+  try { db.prepare("ALTER TABLE world_bosses ADD COLUMN title TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE world_bosses ADD COLUMN description TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE world_bosses ADD COLUMN imagePrompt TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE artifacts ADD COLUMN imagePrompt TEXT").run(); } catch (e) {}
 }

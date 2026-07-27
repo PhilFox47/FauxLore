@@ -69,3 +69,25 @@ export async function nanoGenerateText(
   const data: any = await res.json();
   return (data.choices?.[0]?.message?.content || "").trim();
 }
+
+/**
+ * Parses JSON out of a model reply that may be fenced, prefixed with prose, or
+ * both. Throws if nothing parseable is in there.
+ */
+export function parseJsonLoose<T = any>(text: string): T {
+  let body = (text || "").trim();
+  const fenced = body.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced) body = fenced[1].trim();
+
+  try {
+    return JSON.parse(body) as T;
+  } catch (_) {
+    // Fall back to the outermost {...} / [...] the reply contains.
+    const start = body.search(/[{[]/);
+    const end = Math.max(body.lastIndexOf("}"), body.lastIndexOf("]"));
+    if (start !== -1 && end > start) {
+      return JSON.parse(body.slice(start, end + 1)) as T;
+    }
+    throw new Error("The model did not return parseable JSON.");
+  }
+}

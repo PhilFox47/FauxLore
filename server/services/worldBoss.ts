@@ -1,14 +1,102 @@
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
-import { getAiConfig, nanoGenerateText } from "../lib/ai";
+import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
+import { AUTHENTICITY, LEVEL_DESCRIPTIONS, SHARPNESS, enemyTier } from "../lib/artDirection";
+import { codexPromptBlock, type CodexService } from "./codex";
 
-/** Weekly/encore World Boss spawner with level/difficulty scaling and AI naming. */
+export interface GeneratedEnemy {
+  name: string;
+  title: string;
+  description: string;
+  imagePrompt: string;
+}
+
+/** Weekly/encore World Boss spawner with level/difficulty scaling and AI-written enemies. */
 export function createWorldBossService(
-  { db, generateBossImageBackground }: {
+  { db, generateBossImageBackground, codex }: {
     db: Db;
-    generateBossImageBackground: (userId: string, bossId: string, bossName: string, mediaTitle: string, mediaType: string, bossLevel?: number) => Promise<void>;
+    generateBossImageBackground: (userId: string, bossId: string) => Promise<void>;
+    codex: CodexService;
   },
 ) {
+  /**
+   * Writes one enemy for an encounter.
+   *
+   * The app fixes only what it must — which media, which level, how much progress
+   * beats it. Everything else is the AI's: it reads the media's Codex, picks or
+   * invents an opponent that belongs in that world, gives it an epithet, writes
+   * its flavour text and art-directs its portrait in one pass. No assembling of
+   * name fragments, no second lookup at image time.
+   */
+  async function generateEnemy(userId: string, mediaItem: any, level: number): Promise<GeneratedEnemy | null> {
+    const aiConfig = getAiConfig(db, userId);
+    if (!aiConfig) return null;
+
+    const codexRow = await codex.tryEnsureCodex(userId, {
+      mediaId: mediaItem.id,
+      title: mediaItem.title,
+      mediaType: mediaItem.mediaType,
+    });
+    const codexBlock = codexPromptBlock(codexRow);
+    const tier = enemyTier(level);
+
+    const prompt = `You are the Enemy Forge of FauxLore. Your job is to conjure ONE opponent out of a piece of media the player is currently working through, and to make it feel like it genuinely stepped out of that world.
+
+THE SOURCE: "${mediaItem.title}" (${mediaItem.mediaType})
+
+${codexBlock || `(No Codex is on record for this title — rely on your own knowledge of it, and stay faithful to what you actually know.)`}
+
+THE ENCOUNTER (fixed by the game — honour it exactly):
+- Difficulty: Level ${level} of 5 — ${LEVEL_DESCRIPTIONS[level] || LEVEL_DESCRIPTIONS[3]}
+- Visually it must read as ${tier.word}: ${tier.look}.
+
+HOW TO WRITE IT:
+1. Choose the opponent yourself. Ideally it is a real character, creature, faction member or force from this work — the Codex above lists candidates — picked so its stature matches Level ${level}. A Level 1 should be something the fandom would laugh at; a Level 5 should be the kind of thing the whole work builds towards.
+2. If nothing in the work fits that level, invent one — but build it out of this work's own material: its factions, its terminology, its creatures, its aesthetics. Never a generic fantasy monster.
+3. Give it an RPG epithet that suits the tier ("King of the Koopas", "Intern of the Seventh Circle"). Keep the name the entity's real name where one exists.
+4. Write 1-3 sentences of flavour text: what it is, how it fights or thwarts the player, in the voice and tone of the source work. Be specific and let its personality show. Wit is welcome at low levels; dread at high ones.
+5. Art-direct its portrait yourself as a single ready-to-use text-to-image prompt.
+
+THE IMAGE PROMPT MUST:
+- Be 2-4 natural sentences that stand entirely on their own, written for the "Z-Image-Turbo" diffusion model (it follows natural language and renders any art style, including real text and logos).
+- Render the subject in the ACTUAL art style, medium and palette of "${mediaItem.title}"${codexRow?.data?.artStyle?.summary ? ` — the Codex records it as: ${codexRow.data.artStyle.summary}` : ""}. Name that style explicitly and reference the franchise to anchor the look. Never default to generic 2D cartoon or flat vector art unless the source really is that.
+- ${AUTHENTICITY(mediaItem.title)}
+- Show ONE subject only: a striking character portrait or full-body hero shot, centered, against ${tier.scene}. Never a crowd or a collage.
+- Describe its anatomy, armour, weapons, materials, aura, posture and expression, all pitched at Level ${level}.
+- ${SHARPNESS}
+- Contain no watermarks, no signatures, no lettering and no duplicate characters.
+
+Return ONLY a pure JSON object, no markdown fence, no commentary:
+{
+  "name": "the entity's name, no epithet",
+  "title": "its RPG epithet, without the name",
+  "description": "1-3 sentences of flavour text",
+  "imagePrompt": "the complete image prompt"
+}`;
+
+    try {
+      // No web search here: the Codex already did the research, so this call is
+      // pure creative writing and runs on the cheaper, faster model.
+      const raw = await nanoGenerateText(aiConfig, prompt, { temperature: 1.0 });
+      if (!raw) throw new Error("The model returned an empty enemy.");
+      const parsed = parseJsonLoose<any>(raw);
+
+      const clean = (v: any) => String(v || "").replace(/\*\*/g, "").replace(/^["']|["']$/g, "").trim();
+      const name = clean(parsed.name);
+      if (!name) throw new Error("The enemy has no name.");
+
+      return {
+        name,
+        title: clean(parsed.title),
+        description: clean(parsed.description),
+        imagePrompt: String(parsed.imagePrompt || "").trim(),
+      };
+    } catch (e) {
+      console.error("Enemy generation failed", e);
+      return null;
+    }
+  }
+
   async function spawnWorldBoss(userId: string, throwOnEmpty = false, targetMediaType?: string) {
     try {
       // Eligible media: non-movies that are 'Active', plus Movies that are 'Active' OR
@@ -157,43 +245,10 @@ export function createWorldBossService(
       // A movie boss is beaten simply by watching the movie once, regardless of difficulty.
       const target = mediaItem.mediaType === 'Movie' ? 1 : Math.max(0.1, baseTarget * difficulty);
       const unit = getUnit(mediaItem.mediaType);
-      
-      let bossName = "";
-      
-      const aiConfig = getAiConfig(db, userId);
-      if (aiConfig) {
-        try {
-          const levelDescriptions: Record<number, string> = {
-            1: "Pleb (Laughable, pathetic, weakest minion, joke enemy)",
-            2: "Easy (Common enemy, foot soldier, standard hurdle)",
-            3: "Medium (Actual threat, elite minion, mini-boss)",
-            4: "Hard (Menacing, dangerous antagonist, major boss)",
-            5: "World Boss (EPIC, realm-ending, the final form, supreme being)"
-          };
 
-          const prompt = `You are an RPG boss generator.
-Task: Create ONE boss name and title that perfectly fits the universe of "${mediaItem.title}" (Type: ${mediaItem.mediaType}).
-Difficulty: Level ${level} - ${levelDescriptions[level as keyof typeof levelDescriptions]}.
-
-Instructions:
-1. USE WEB SEARCH to find actual characters, creatures, villains, or lore from exactly "${mediaItem.title}".
-2. Pick an appropriate entity from that media based on the difficulty level. Level 1 should be a joke/laughable, while Level 5 should be an epic, ultimate threat.
-3. Make them an RPG boss by giving them an appropriate title based on the difficulty. If the media doesn't have obvious bosses, create a thematic boss out of a character/concept from it.
-4. Return ONLY the name and title. No explanations, no markdown.
-5. Example format: "Bowser, King of the Koopas".
-
-It MUST directly reference "${mediaItem.title}". Do not use generic fantasy names.`;
-
-          const text = (await nanoGenerateText(aiConfig, prompt, { temperature: 0.9, webSearch: true }))
-            .replace(/\*\*/g, '').replace(/\"/g, '').trim();
-          if (text) bossName = text;
-        } catch (e) { console.error("Boss name generation failed", e); }
-      }
-
-      if (!bossName) {
-        const fallbackNames = ["Void Stalker", "Doom Herald", "Chaos Reaver", "Eternal Echo"];
-        bossName = fallbackNames[Math.floor(Math.random() * fallbackNames.length)];
-      }
+      const enemy = await generateEnemy(userId, mediaItem, level);
+      const fallbackNames = ["Void Stalker", "Doom Herald", "Chaos Reaver", "Eternal Echo"];
+      const bossName = enemy?.name || fallbackNames[Math.floor(Math.random() * fallbackNames.length)];
 
       let nextMonday = new Date();
       nextMonday.setDate(nextMonday.getDate() + ((1 + 7 - nextMonday.getDay()) % 7 || 7));
@@ -201,17 +256,17 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
 
       const bossId = uuidv4();
       db.prepare(`
-        INSERT INTO world_bosses (id, userId, mediaId, name, level, targetProgress, currentProgress, expiresAt, createdAt, updatedAt, unit)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(bossId, userId, mediaItem.id, bossName, level, target, 0, nextMonday.toISOString(), new Date().toISOString(), new Date().toISOString(), unit);
-      
-      // Auto-generate image in background (styled to the boss's level)
-      generateBossImageBackground(userId, bossId, bossName, mediaItem.title, mediaItem.mediaType, level);
-    } catch (e) { 
-        console.error("Boss spawn failed", e); 
+        INSERT INTO world_bosses (id, userId, mediaId, name, title, description, imagePrompt, level, targetProgress, currentProgress, expiresAt, createdAt, updatedAt, unit)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(bossId, userId, mediaItem.id, bossName, enemy?.title || null, enemy?.description || null, enemy?.imagePrompt || null, level, target, 0, nextMonday.toISOString(), new Date().toISOString(), new Date().toISOString(), unit);
+
+      // Auto-generate the portrait in the background, from the prompt the AI just wrote.
+      generateBossImageBackground(userId, bossId);
+    } catch (e) {
+        console.error("Boss spawn failed", e);
         if (throwOnEmpty) throw e;
     }
   }
 
-  return { spawnWorldBoss };
+  return { spawnWorldBoss, generateEnemy };
 }

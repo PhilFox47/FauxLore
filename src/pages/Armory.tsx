@@ -117,6 +117,7 @@ export function Armory() {
         targetType: generated.targetType,
         targetValue: generated.targetValue,
         bonusPercent: generated.bonusPercent,
+        imagePrompt: generated.imagePrompt || undefined,
         earnedAt: new Date().toISOString(),
         durability: calculatedDurability,
         maxDurability: calculatedDurability,
@@ -178,7 +179,8 @@ export function Armory() {
               slot: regenerated.slot as any,
               targetType: regenerated.targetType,
               targetValue: regenerated.targetValue,
-              bonusPercent: regenerated.bonusPercent
+              bonusPercent: regenerated.bonusPercent,
+              imagePrompt: regenerated.imagePrompt || undefined
             });
           } else {
              // Or if item deleted, just give it a default to stop checking

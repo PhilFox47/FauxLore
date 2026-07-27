@@ -203,6 +203,27 @@ export function initSchema(db: Db) {
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
     );
 
+    -- One researched dossier per title, shared by auto-tagging, enemy generation
+    -- and item generation. Identity is the title+type (titleKey), not the media
+    -- row, so re-runs share one Codex and a Codex researched while adding an
+    -- entry is adopted once that entry exists.
+    CREATE TABLE IF NOT EXISTS media_codex (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      mediaId TEXT,
+      titleKey TEXT NOT NULL,
+      title TEXT NOT NULL,
+      mediaType TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'ready', -- generating | ready | failed
+      error TEXT,
+      data TEXT,                            -- the Codex JSON document
+      model TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      UNIQUE(userId, titleKey)
+    );
+    CREATE INDEX IF NOT EXISTS idx_media_codex_media ON media_codex(userId, mediaId);
+
     CREATE TABLE IF NOT EXISTS oracle_messages (
       id TEXT PRIMARY KEY,
       userId TEXT NOT NULL,

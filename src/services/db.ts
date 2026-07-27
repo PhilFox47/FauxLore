@@ -1,4 +1,4 @@
-import { MediaItem, ProgressLog, MetricType, MediaType, Artifact } from '../types/schema';
+import { MediaItem, ProgressLog, MetricType, MediaType, Artifact, MediaCodex } from '../types/schema';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function apiFetch(url: string, options: RequestInit = {}) {
@@ -259,6 +259,36 @@ export const DatabaseService = {
     const url = key ? `/api/ai-text?key=${encodeURIComponent(key)}` : '/api/ai-text';
     const res = await apiFetch(url, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to clear AI text');
+  },
+
+  /** The Codex on record for a media entry, or null if it has never been researched. */
+  async getCodex(mediaId: string): Promise<MediaCodex | null> {
+    try {
+      const res = await apiFetch(`/api/media/${mediaId}/codex`);
+      if (!res.ok) return null;
+      return res.json();
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
+  },
+
+  /**
+   * Returns a media's Codex, researching it first if it has none. Works for an
+   * entry that has not been saved yet (Auto Tag from the Add Media form) by
+   * passing a title and type instead of an id.
+   */
+  async ensureCodex(subject: { mediaId?: string; title?: string; mediaType?: string; force?: boolean }): Promise<MediaCodex> {
+    const res = await apiFetch('/api/codex/ensure', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(subject)
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to compile the Codex');
+    }
+    return res.json();
   },
 
   async getArtifacts(): Promise<Artifact[]> {

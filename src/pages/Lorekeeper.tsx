@@ -688,9 +688,16 @@ export function Lorekeeper() {
                       
                       <div className="flex-1 flex flex-col mb-4 relative z-10">
                           <div className="flex items-start justify-between gap-2 mb-2">
-                            <h4 className="text-lg sm:text-xl font-black text-white drop-shadow-md break-words leading-tight">
-                              {boss.name}
-                            </h4>
+                            <div className="min-w-0">
+                              <h4 className="text-lg sm:text-xl font-black text-white drop-shadow-md break-words leading-tight">
+                                {boss.name}
+                              </h4>
+                              {boss.title && (
+                                <p className="text-xs text-amber-500/80 italic break-words leading-snug mt-0.5">
+                                  {boss.title}
+                                </p>
+                              )}
+                            </div>
                             <div className="flex gap-1 shrink-0">
                               {boss.status === "Active" && (
                                 <>
@@ -725,7 +732,7 @@ export function Lorekeeper() {
                                       if (icon) icon.classList.remove("animate-spin", "text-amber-500");
                                     }}
                                     className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
-                                    title="Reroll Boss Name"
+                                    title="Reroll this enemy (new name, flavour and portrait)"
                                   >
                                     <RefreshCw className="w-4 h-4 text-zinc-500" />
                                   </button>
@@ -736,6 +743,11 @@ export function Lorekeeper() {
                           <p className="text-xs text-zinc-400/80 truncate italic">
                             Target: {mediaItem?.title || "Unknown"}
                           </p>
+                          {boss.description && (
+                            <p className="text-xs text-zinc-400 leading-snug mt-2">
+                              {boss.description}
+                            </p>
+                          )}
                       </div>
 
                       <div className="space-y-2">
@@ -816,13 +828,25 @@ export function Lorekeeper() {
                       
                       <div className="flex-1 flex flex-col mb-4 relative z-10">
                           <div className="flex items-start justify-between gap-2 mb-2">
-                            <h4 className="text-lg sm:text-xl font-black text-white drop-shadow-md break-words leading-tight">
-                              {boss.name}
-                            </h4>
+                            <div className="min-w-0">
+                              <h4 className="text-lg sm:text-xl font-black text-white drop-shadow-md break-words leading-tight">
+                                {boss.name}
+                              </h4>
+                              {boss.title && (
+                                <p className="text-xs text-amber-500/80 italic break-words leading-snug mt-0.5">
+                                  {boss.title}
+                                </p>
+                              )}
+                            </div>
                           </div>
                           <p className="text-xs text-zinc-400/80 truncate italic">
                             Target: {mediaItem?.title || "Unknown"}
                           </p>
+                          {boss.description && (
+                            <p className="text-xs text-zinc-400 leading-snug mt-2">
+                              {boss.description}
+                            </p>
+                          )}
                       </div>
 
                       <div className="space-y-2">

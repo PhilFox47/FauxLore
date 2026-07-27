@@ -22,6 +22,7 @@ import { createBackupManager } from "./services/backup";
 import { createImageService } from "./services/images";
 import { createOracleService } from "./services/oracle";
 import { createWorldBossService } from "./services/worldBoss";
+import { createCodexService } from "./services/codex";
 
 import { registerAuthRoutes } from "./routes/auth";
 import { registerUserRoutes } from "./routes/users";
@@ -31,6 +32,7 @@ import { registerLogRoutes } from "./routes/logs";
 import { registerSettingsRoutes } from "./routes/settings";
 import { registerRecapRoutes } from "./routes/recaps";
 import { registerAiRoutes } from "./routes/ai";
+import { registerCodexRoutes } from "./routes/codex";
 import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerBossRoutes } from "./routes/bosses";
 import { registerOracleRoutes } from "./routes/oracle";
@@ -80,10 +82,12 @@ async function startServer() {
     createDatabaseBackup();
   });
 
-  // RPG / AI services
-  const { generateBossImageBackground, generateArtifactImageBackground } = createImageService({ db, aiImagesDir });
+  // RPG / AI services. The Codex sits underneath the creative ones: it does the
+  // research once per title, and enemies, loot and tags are written from it.
+  const codex = createCodexService({ db });
+  const { generateBossImageBackground, generateArtifactImageBackground } = createImageService({ db, aiImagesDir, codex });
   const { generateOracleMessage, checkMissedOracleMessages } = createOracleService({ db });
-  const { spawnWorldBoss } = createWorldBossService({ db, generateBossImageBackground });
+  const { spawnWorldBoss, generateEnemy } = createWorldBossService({ db, generateBossImageBackground, codex });
 
   // Log headless-browser availability once at boot (GameStoryLog needs it).
   reportBrowserStatus();
@@ -143,8 +147,10 @@ async function startServer() {
     createDatabaseBackup,
     generateOracleMessage,
     spawnWorldBoss,
+    generateEnemy,
     generateBossImageBackground,
     generateArtifactImageBackground,
+    codex,
     hltbSearch,
     getIgdbToken,
   };
@@ -159,6 +165,7 @@ async function startServer() {
   registerSettingsRoutes(app, ctx);
   registerRecapRoutes(app, ctx);
   registerAiRoutes(app, ctx);
+  registerCodexRoutes(app, ctx);
   registerArtifactRoutes(app, ctx);
   registerBossRoutes(app, ctx);
   registerOracleRoutes(app, ctx);

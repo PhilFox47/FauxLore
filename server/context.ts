@@ -1,4 +1,6 @@
 import type DatabaseConstructor from "better-sqlite3";
+import type { CodexService } from "./services/codex";
+import type { GeneratedEnemy } from "./services/worldBoss";
 
 /** The better-sqlite3 database instance type. */
 export type Db = DatabaseConstructor.Database;
@@ -20,22 +22,12 @@ export interface ServerContext {
   createDatabaseBackup: () => { success: boolean; file?: string; error?: string };
   generateOracleMessage: (userId: string, type: "morning" | "evening") => Promise<void>;
   spawnWorldBoss: (userId: string, throwOnEmpty?: boolean, targetMediaType?: string) => Promise<void>;
-  generateBossImageBackground: (
-    userId: string,
-    bossId: string,
-    bossName: string,
-    mediaTitle: string,
-    mediaType: string,
-    bossLevel?: number,
-  ) => Promise<void>;
-  generateArtifactImageBackground: (
-    userId: string,
-    artifactId: string,
-    artifactName: string,
-    artifactDesc: string,
-    mediaTitle: string,
-    rarity?: string,
-  ) => Promise<void>;
+  generateEnemy: (userId: string, mediaItem: any, level: number) => Promise<GeneratedEnemy | null>;
+  // Both image jobs read everything they need (including the AI-written image
+  // prompt) off the row itself, so callers only identify what to draw.
+  generateBossImageBackground: (userId: string, bossId: string) => Promise<void>;
+  generateArtifactImageBackground: (userId: string, artifactId: string) => Promise<void>;
+  codex: CodexService;
   hltbSearch: (query: string) => Promise<any[]>;
   getIgdbToken: (clientId: string, clientSecret: string) => Promise<string>;
 }

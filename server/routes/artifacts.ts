@@ -19,8 +19,8 @@ export function registerArtifactRoutes(app: Express, ctx: ServerContext) {
       const userId = getAuthUser(req, res);
       if (!userId) return;
       const stmt = db.prepare(`
-        INSERT INTO artifacts (id, userId, mediaId, name, description, rarity, type, earnedAt, durability, maxDurability, slot, isEquipped, targetType, targetValue, bonusPercent)
-        VALUES (@id, @userId, @mediaId, @name, @description, @rarity, @type, @earnedAt, @durability, @maxDurability, @slot, @isEquipped, @targetType, @targetValue, @bonusPercent)
+        INSERT INTO artifacts (id, userId, mediaId, name, description, rarity, type, earnedAt, durability, maxDurability, slot, isEquipped, targetType, targetValue, bonusPercent, imagePrompt)
+        VALUES (@id, @userId, @mediaId, @name, @description, @rarity, @type, @earnedAt, @durability, @maxDurability, @slot, @isEquipped, @targetType, @targetValue, @bonusPercent, @imagePrompt)
       `);
       stmt.run({
         id: artifact.id,
@@ -37,7 +37,10 @@ export function registerArtifactRoutes(app: Express, ctx: ServerContext) {
         isEquipped: artifact.isEquipped ? 1 : 0,
         targetType: artifact.targetType || null,
         targetValue: artifact.targetValue || null,
-        bonusPercent: artifact.bonusPercent || 0
+        bonusPercent: artifact.bonusPercent || 0,
+        // Written by the loot generator alongside the item's name and flavour, so
+        // the icon is drawn from the same idea rather than re-derived later.
+        imagePrompt: artifact.imagePrompt || null
       });
 
       // Image generation is triggered explicitly by the client via
@@ -54,14 +57,12 @@ export function registerArtifactRoutes(app: Express, ctx: ServerContext) {
       const userId = getAuthUser(req, res);
       if (!userId) return;
       const artifactId = req.params.id;
-      const artifact = db.prepare('SELECT name, description, mediaId, rarity FROM artifacts WHERE id = ? AND userId = ?').get(artifactId, userId) as any;
+      const artifact = db.prepare('SELECT id FROM artifacts WHERE id = ? AND userId = ?').get(artifactId, userId) as any;
       if (!artifact) return res.status(404).json({ error: 'Not found' });
-      const mediaItem = db.prepare('SELECT title FROM media WHERE id = ?').get(artifact.mediaId) as any;
-      if (!mediaItem) return res.status(404).json({ error: 'Media not found' });
-      
+
       // Await so the UI blocks and shows the loading spinner
-      await generateArtifactImageBackground(userId, artifactId, artifact.name, artifact.description, mediaItem.title, artifact.rarity);
-      
+      await generateArtifactImageBackground(userId, artifactId);
+
       res.json({ success: true, message: 'Image generation finished.' });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -71,10 +72,14 @@ export function registerArtifactRoutes(app: Express, ctx: ServerContext) {
       const artifact = req.body;
       const userId = getAuthUser(req, res);
       if (!userId) return;
+      // An edited item is a different item: its stored image prompt no longer
+      // describes it, so it is replaced (or dropped, and re-art-directed on the
+      // next image generation).
       const stmt = db.prepare(`
-        UPDATE artifacts SET 
-          name = @name, description = @description, rarity = @rarity, type = @type, 
-          slot = @slot, targetType = @targetType, targetValue = @targetValue, bonusPercent = @bonusPercent
+        UPDATE artifacts SET
+          name = @name, description = @description, rarity = @rarity, type = @type,
+          slot = @slot, targetType = @targetType, targetValue = @targetValue, bonusPercent = @bonusPercent,
+          imagePrompt = @imagePrompt
         WHERE id = @id AND userId = @userId
       `);
       stmt.run({
@@ -87,7 +92,8 @@ export function registerArtifactRoutes(app: Express, ctx: ServerContext) {
         slot: artifact.slot || null,
         targetType: artifact.targetType || null,
         targetValue: artifact.targetValue || null,
-        bonusPercent: artifact.bonusPercent || 0
+        bonusPercent: artifact.bonusPercent || 0,
+        imagePrompt: artifact.imagePrompt || null
       });
       res.json({ success: true, artifact });
     } catch (e) { res.status(500).json({ error: String(e) }); }

@@ -146,6 +146,7 @@ export interface Artifact {
   bonusPercent?: number;
   imageUrl?: string;
   imageStatus?: 'generating' | 'done' | 'failed';
+  imagePrompt?: string; // written by the loot generator, reused when drawing the icon
 }
 
 export interface WorldBoss {
@@ -153,6 +154,8 @@ export interface WorldBoss {
   userId: string;
   mediaId: string;
   name: string;
+  title?: string;       // the RPG epithet, e.g. "King of the Koopas"
+  description?: string; // flavour text, written in the voice of the source work
   level: number; // 1-5
   targetProgress: number;
   currentProgress: number;
@@ -163,6 +166,62 @@ export interface WorldBoss {
   updatedAt?: string;
   imageUrl?: string;
   imageStatus?: 'generating' | 'done' | 'failed';
+  imagePrompt?: string; // written by the enemy generator, reused when drawing the portrait
+}
+
+/**
+ * The Codex: one researched dossier per title, compiled by web search the first
+ * time any AI feature touches that media, and reused by all of them afterwards
+ * (auto-tagging, enemy generation, item generation).
+ */
+export interface CodexEntity {
+  name: string;
+  description?: string;
+  role?: string;
+  tier?: string;
+}
+
+export interface CodexData {
+  overview?: string;
+  setting?: string;
+  tone?: string;
+  themes?: string[];
+  artStyle?: {
+    summary?: string;
+    medium?: string;
+    palette?: string;
+    iconography?: string;
+  };
+  characters?: CodexEntity[];
+  enemies?: CodexEntity[];
+  factions?: CodexEntity[];
+  locations?: CodexEntity[];
+  items?: CodexEntity[];
+  terminology?: { term: string; meaning: string }[];
+  genres?: string[];
+  tags?: string[];
+  creators?: string;
+  releaseYear?: number | string;
+  confidence?: string;
+  notes?: string;
+  sources?: string[];
+}
+
+export interface MediaCodex {
+  id: string;
+  userId: string;
+  mediaId: string | null;
+  titleKey: string;
+  title: string;
+  mediaType: string;
+  status: 'generating' | 'ready' | 'failed';
+  error?: string | null;
+  data: CodexData | null;
+  model?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** The Codex rendered as prompt context, formatted server-side. */
+  promptBlock?: string;
 }
 
 export interface OracleMessage {

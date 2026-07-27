@@ -1,12 +1,16 @@
-import { apiFetch } from './db';
+import { apiFetch, DatabaseService } from './db';
 
 /**
  * All AI text generation goes through NanoGPT's OpenAI-compatible endpoint.
  *
  * Two models are configurable: one for ordinary generation and one for tasks that
- * must look things up (tagging a niche release, inventing loot from a game's lore).
- * Web search is enabled by appending ":online" to the model name, which is how
- * NanoGPT exposes it.
+ * must look things up. Web search is enabled by appending ":online" to the model
+ * name, which is how NanoGPT exposes it.
+ *
+ * These days the lookup happens once, in the Codex (see server/services/codex.ts):
+ * the first AI task to touch a media entry researches it, and tagging and loot are
+ * then written from that dossier plus the model's own knowledge. So the calls in
+ * here are creative, not investigative, and run on the cheaper model.
  */
 export interface AiSettings {
   nanoGptApiKey?: string;
@@ -54,6 +58,42 @@ async function nanoChat(
   return (data.choices?.[0]?.message?.content || '').trim();
 }
 
+/** Strips fences/prose and returns the JSON object a reply contains. */
+function parseJsonLoose(text: string): any {
+  let body = (text || '').trim();
+  const fenced = body.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced) body = fenced[1].trim();
+  try {
+    return JSON.parse(body);
+  } catch (e) {
+    const start = body.search(/[{[]/);
+    const end = Math.max(body.lastIndexOf('}'), body.lastIndexOf(']'));
+    if (start !== -1 && end > start) return JSON.parse(body.slice(start, end + 1));
+    throw new Error('The model did not return parseable JSON.');
+  }
+}
+
+/**
+ * The media's Codex, researched now if it does not exist yet.
+ *
+ * Returns an empty string rather than failing: a Codex that could not be compiled
+ * (no network, a title nothing is written about) should degrade the prompt, not
+ * block the feature.
+ */
+async function getCodexContext(item: any): Promise<string> {
+  try {
+    const codex = await DatabaseService.ensureCodex({
+      mediaId: item?.id,
+      title: item?.title,
+      mediaType: item?.mediaType,
+    });
+    return codex?.promptBlock || '';
+  } catch (e) {
+    console.warn('Codex unavailable, continuing without it:', e);
+    return '';
+  }
+}
+
 /** Creative text (titles, flavour). No lookup needed, so no web search. */
 export async function generateAiText(settings: AiSettings | undefined, systemPrompt: string, userPrompt: string, temperature: number = 0.9) {
   try {
@@ -69,6 +109,9 @@ export async function generateAiTags(settings: AiSettings | undefined, item: any
   const validGenres = taxonomies.filter(t => t.type === 'genre').map(t => t.name);
   const validTags = taxonomies.filter(t => t.type === 'tag').map(t => t.name);
 
+  // Researches the title if this is the first AI task to touch it.
+  const codexBlock = await getCodexContext(item);
+
   const gptSystem = `You are FauxLore, an expert taxonomy system. Your job is to classify media.
 Existing Genres: ${validGenres.join(', ')}
 Existing Tags: ${validTags.join(', ')}
@@ -79,7 +122,9 @@ Rules:
 3. Select between 1 and 3 core Genres. ONLY use up to 5 if absolutely essential. Order them from most defining/important to least.
 4. Select between 3 and 10 highly relevant Tags. ONLY use more (up to 15) if absolutely essential. Be strict and focused - less is often more. Order them from most defining/important to least.
 5. NO DUPLICATES: A term can be a Genre OR a Tag, never both. Do not use an existing Genre as a Tag, or an existing Tag as a Genre.
-6. USE YOUR WEB SEARCH CAPABILITIES to confirm details about "${item.title}" (${item.mediaType}).
+6. ${codexBlock
+    ? `Base your classification on the Codex supplied with the request — it is the researched record of this work — mapped onto the vocabulary above. The Codex's own genre and tag suggestions are raw material, not answers: translate them into the Existing lists wherever a match exists.`
+    : `USE YOUR WEB SEARCH CAPABILITIES to confirm details about "${item.title}" (${item.mediaType}).`}
 7. Return ONLY a pure JSON object in this exact format:
 {"genres": ["Genre1", "Genre2"], "tags": ["Tag1", "Tag2"]}
 Do not wrap it in markdown. Do not include any explanations.`;
@@ -90,24 +135,16 @@ Type: ${item.mediaType}
 Description: ${item.description || 'N/A'}
 Legacy Context genres: ${item.genres?.join(', ') || 'N/A'}
 Legacy Context tags: ${item.tags?.join(', ') || 'N/A'}
-Legacy Context platforms: ${item.platforms?.join(', ') || 'N/A'}`;
+Legacy Context platforms: ${item.platforms?.join(', ') || 'N/A'}${codexBlock ? `\n\n${codexBlock}` : ''}`;
 
   try {
-    // Web search on: tagging depends on knowing what a niche or very new release is.
-    let jsonText = await nanoChat(settings, gptSystem, gptUser, { temperature: 0.1, webSearch: true });
+    // With a Codex in hand the facts are already settled, so this is a plain
+    // classification call. Without one, fall back to searching the web here.
+    const jsonText = await nanoChat(settings, gptSystem, gptUser, { temperature: 0.1, webSearch: !codexBlock });
     if (!jsonText) throw new Error("The model returned an empty response.");
 
-    const match = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
-    if (match) {
-      jsonText = match[1];
-    } else {
-      const rawMatch = jsonText.match(/```\s*([\s\S]*?)\s*```/);
-      if (rawMatch) jsonText = rawMatch[1];
-    }
-    jsonText = jsonText.trim();
+    const parsed = parseJsonLoose(jsonText);
 
-    const parsed = JSON.parse(jsonText);
-    
     // Cross-contamination cleanup: ensure known genres aren't tags, and known tags aren't genres
     const finalGenres = new Set<string>();
     const finalTags = new Set<string>();
@@ -120,7 +157,7 @@ Legacy Context platforms: ${item.platforms?.join(', ') || 'N/A'}`;
         g = g.trim();
         const knownTag = getKnownTag(g);
         const knownGenre = getKnownGenre(g);
-        
+
         if (knownTag && !knownGenre) {
           finalTags.add(knownTag);
         } else {
@@ -134,7 +171,7 @@ Legacy Context platforms: ${item.platforms?.join(', ') || 'N/A'}`;
         t = t.trim();
         const knownGenre = getKnownGenre(t);
         const knownTag = getKnownTag(t);
-        
+
         if (knownGenre && !knownTag) {
           finalGenres.add(knownGenre);
         } else {
@@ -166,7 +203,7 @@ export async function generateAiArtifact(settings: AiSettings | undefined, item:
     else if (rand < 50) rarity = 'Rare';
     else if (rand < 75) rarity = 'Uncommon';
     else rarity = 'Common';
-    
+
     const slots = ['Head', 'Body', 'Legs', 'Primary', 'Secondary', 'Accessory'];
     slot = slots[Math.floor(Math.random() * slots.length)];
   }
@@ -210,6 +247,9 @@ export async function generateAiArtifact(settings: AiSettings | undefined, item:
     }
   }
 
+  // Researches the title if this is the first AI task to touch it.
+  const codexBlock = await getCodexContext(item);
+
   const contextSnippet = `
 Title: ${item.title}
 Type: ${item.mediaType}
@@ -223,15 +263,17 @@ Tags (ordered by importance): ${item.tags?.join(", ") || 'N/A'}
 Legacy Name: ${oldArtifact.name}
 Legacy Description: ${oldArtifact.description}` : '';
 
-  const prompt = `You are a legendary RPG Loot Master. The user has just finished or made significant progress in a piece of media. 
+  const prompt = `You are a legendary RPG Loot Master. The user has just finished or made significant progress in a piece of media.
 Your task is to generate a unique, flavor-rich Artifact that deeply references the lore, characters, themes, or signature items of this media.${legacySnippet}
 
-USE YOUR WEB SEARCH CAPABILITIES to confirm details about "${item.title}" (${item.mediaType}) so the loot feels authentic and "inside-baseball" for fans. 
+${codexBlock
+    ? `The Codex below is the researched record of this work — its cast, its equipment, its vocabulary and its look. Treat it as ground truth, then invent freely on top of it, so the loot feels "inside-baseball" for fans.\n\n${codexBlock}`
+    : `USE YOUR WEB SEARCH CAPABILITIES to confirm details about "${item.title}" (${item.mediaType}) so the loot feels authentic and "inside-baseball" for fans.`}
 
 Media Context:
 ${contextSnippet}
 
-PRE-DETERMINED ATTRIBUTES:
+PRE-DETERMINED ATTRIBUTES (fixed by the game — honour them exactly):
 - Rarity: ${rarity}
 - Slot: ${slot} (Conceptually fit this slot. Head=hat/helmet, Body=armor/clothing, etc.)
 - Bonus Effect: Grants a bonus to ${targetType}: "${targetValue}"
@@ -240,38 +282,33 @@ REQUIREMENTS:
 1. Ensure the Item Name and Description perfectly match the specified Rarity, Slot, and Bonus Effect.
 2. Target Rarity: ${rarity} (Adjust the "epicness". Common is mundane, Legendary/Mythic are world-altering).
 3. The item name should be clever, thematic (max 4 words), and sound like a tangible item you would equip in the "${slot}" slot. Let the rarity guide how grand the name sounds.
-4. The description should be 1-2 sentences of high-quality RPG flavor text mentioning lore details found via your search. It MUST subtly hint at the Bonus Effect (${targetType}: "${targetValue}").
+4. The description should be 1-2 sentences of high-quality RPG flavor text drawing on real lore details. It MUST subtly hint at the Bonus Effect (${targetType}: "${targetValue}").
 5. The type should be a logical RPG category that fits the slot (e.g., Weapon, Relic, Armor, Helmet, Trinket, Consumable, etc.).
+6. Art-direct the item's inventory icon yourself, as a single ready-to-use text-to-image prompt of 2-4 natural sentences for the "Z-Image-Turbo" diffusion model. It must:
+   - Keep the object literal and correct — if it is a sword it is a sword, if it is a cassette it is a cassette. Never substitute a generic ring, gem or orb.
+   - Render it in the ACTUAL art style, medium and material language of "${item.title}"${codexBlock ? ' (the Codex records that style — name it explicitly)' : ''}, referencing the franchise by name, and borrowing its authentic emblems, insignia and motifs where they belong.
+   - Show ONE item only, centered, as a polished inventory icon / studio product shot with a soft contact shadow, on a background that suits ${rarity} rarity.
+   - Describe its exact materials, shape, engravings and wear, with sharp focus, crisp detail and even lighting — no bokeh, no heavy vignette.
+   - Include no hands, no people, no extra props, no lettering and no watermarks.
 
 Return EXACTLY and ONLY a pure JSON object with the following keys:
 {
   "name": "The item name",
   "description": "The flavor text",
-  "type": "The RPG item type"
+  "type": "The RPG item type",
+  "imagePrompt": "The complete image prompt"
 }`;
 
   try {
-    // Web search on: loot should reference the actual lore of the media.
-    let jsonText = await nanoChat(settings, 'You are an RPG Loot Master for the FauxLore media tracker.', prompt, { temperature: 0.9, webSearch: true });
+    // Creative call: the Codex already did the looking-up, so no web search unless
+    // there is no Codex to lean on.
+    const jsonText = await nanoChat(settings, 'You are an RPG Loot Master for the FauxLore media tracker.', prompt, { temperature: 0.9, webSearch: !codexBlock });
     if (!jsonText) {
       throw new Error("The model returned an empty response.");
     }
 
-    // Clean up potential markdown JSON block
-    const match = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
-    if (match) {
-      jsonText = match[1];
-    } else {
-      // Sometimes it might not include the json identifier but still be backticked
-      const rawMatch = jsonText.match(/```\s*([\s\S]*?)\s*```/);
-      if (rawMatch) {
-        jsonText = rawMatch[1];
-      }
-    }
-    jsonText = jsonText.trim();
+    const parsed = parseJsonLoose(jsonText);
 
-    const parsed = JSON.parse(jsonText);
-    
     let bonusPercent = 20;
     if (rarity === 'Mythic') bonusPercent = 300;
     else if (rarity === 'Legendary') bonusPercent = 150;
@@ -284,6 +321,7 @@ Return EXACTLY and ONLY a pure JSON object with the following keys:
       name: parsed.name || "Mysterious Artifact",
       description: parsed.description || "An item of unknown origin.",
       type: parsed.type || "Trinket",
+      imagePrompt: typeof parsed.imagePrompt === 'string' ? parsed.imagePrompt.trim() : '',
       slot: slot || "Accessory",
       targetType: targetType,
       targetValue: targetValue,

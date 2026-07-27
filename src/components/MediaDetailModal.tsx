@@ -14,6 +14,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '../services/db';
 import { Artifact, RARITY_COLORS } from '../types/schema';
 import { LootReveal } from './LootReveal';
+import { MediaCodexPanel } from './MediaCodexPanel';
 import { ForgingButton } from './ForgingButton';
 import { AreaChart, Area, BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, YAxis } from 'recharts';
 
@@ -289,6 +290,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
         targetType: generated.targetType,
         targetValue: generated.targetValue,
         bonusPercent: generated.bonusPercent,
+        imagePrompt: generated.imagePrompt || undefined,
         earnedAt: new Date().toISOString(),
         durability: calculatedDurability,
         maxDurability: calculatedDurability,
@@ -870,6 +872,9 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
             </div>
           )}
 
+          {/* What the app has researched about this title — and generates from */}
+          <MediaCodexPanel mediaId={item.id} title={item.title} mediaType={item.mediaType} />
+
           {/* Enemies faced (World Bosses spawned from this media) */}
           {bossesForItem.length > 0 && (
             <div className="mb-8">
@@ -883,6 +888,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-bold text-white truncate">{b.name}</div>
+                      {b.title && <div className="text-[11px] text-amber-500/80 italic truncate">{b.title}</div>}
                       <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-black">Lv {b.level} Boss</div>
                     </div>
                     <span className={cn("text-[10px] uppercase tracking-widest font-black px-2 py-1 rounded-full shrink-0",

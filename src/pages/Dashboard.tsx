@@ -209,6 +209,7 @@ export function Dashboard() {
                         <div className="flex justify-between items-start mb-2">
                            <div className="min-w-0 pr-2">
                               <h4 className="text-xs font-bold text-white truncate font-display">{boss.name}</h4>
+                              {boss.title && <div className="text-[10px] text-amber-500/70 italic truncate">{boss.title}</div>}
                               <div className="text-[9px] text-zinc-500 uppercase tracking-widest mt-0.5 truncate">LVL {boss.level} • {mediaItem?.title}</div>
                            </div>
                            <button 
