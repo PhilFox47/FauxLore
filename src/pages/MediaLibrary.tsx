@@ -180,7 +180,7 @@ export function MediaLibrary() {
           <p className="text-zinc-500 font-medium">No {decodedMediaType.toLowerCase()}s found matching your current filters.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 flex-1 items-start">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 flex-1 items-start content-start">
           {libraryMedia.map(item => (
             <MediaCard 
               key={item.id} 
