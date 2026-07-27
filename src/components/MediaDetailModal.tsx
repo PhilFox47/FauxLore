@@ -35,6 +35,8 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   const [lootedArtifact, setLootedArtifact] = useState<Artifact | null>(null);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [chartMode, setChartMode] = useState<'cumulative' | 'daily'>('cumulative');
+  const [isEditingRoute, setIsEditingRoute] = useState(false);
+  const [routeDraft, setRouteDraft] = useState('');
   const [editLogData, setEditLogData] = useState<{
     delta: number;
     note: string;
@@ -161,7 +163,21 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }, [item, media]);
 
-  const hasRouteTracking = runFamily.some((m) => (m.route || '').trim());
+  // Shown for the types where routes make sense, even before one is recorded:
+  // this is the only place a route can be committed to, including on a first run.
+  // It stays a single quiet row until used, so it never forces route tracking.
+  const showRoutes = !!item && (item.mediaType === 'Visual Novel' || item.mediaType === 'Game');
+
+  const saveRoute = async () => {
+    if (!item) return;
+    try {
+      await saveMediaItem({ ...item, route: routeDraft.trim() || undefined } as any);
+      setIsEditingRoute(false);
+      toast.success(routeDraft.trim() ? `Route set to "${routeDraft.trim()}".` : 'Route cleared.');
+    } catch (e: any) {
+      toast.error(e.message || 'Could not save the route.');
+    }
+  };
 
   const sourceUrl = item ? getSourceUrl(item) : null;
 
@@ -301,20 +317,17 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   };
 
   const handleReRun = async () => {
-    // A re-run is how a different route gets played, so ask for it here rather
-    // than making the user open the edit form afterwards. Only for types where
-    // routes make sense, and skippable: an empty answer just means no route.
-    let route: string | undefined;
-    if (item.mediaType === 'Visual Novel' || item.mediaType === 'Game') {
-      const played = runFamily.map(r => (r.route || '').trim()).filter(Boolean);
-      const answer = window.prompt(
-        played.length
-          ? `Which route is this run?\n\nAlready played: ${played.join(', ')}\n\n(Leave blank to skip.)`
-          : 'Which route is this run? (Leave blank to skip.)',
-        '',
+    // Deliberately does not ask for a route: at the start of a run you usually
+    // don't know which one you'll end up on. Past routes are shown as a reminder
+    // of what's already been covered, and the route gets set later from the
+    // Routes Played list once it's actually clear.
+    const played = runFamily.map(r => (r.route || '').trim()).filter(Boolean);
+    if (played.length) {
+      const ok = window.confirm(
+        `Start another run of ${item.title}?\n\nRoutes played so far: ${played.join(', ')}\n\n` +
+          `You can set this run's route later, once you know it.`,
       );
-      if (answer === null) return; // cancelled
-      route = answer.trim() || undefined;
+      if (!ok) return;
     }
 
     const newId = uuidv4();
@@ -324,7 +337,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
       status: 'Active',
       isReRun: true,
       originalMediaId: item.originalMediaId || item.id,
-      route,
+      route: undefined, // decided later, from the Routes Played list
       playtimeHours: 0,
       pagesRead: 0,
       chaptersRead: 0,
@@ -580,7 +593,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
           )}
 
           {/* Routes played across every run of this title */}
-          {hasRouteTracking && (
+          {showRoutes && (
             <div className="mb-8">
               <h3 className="text-sm font-bold text-zinc-500 mb-3 tracking-wider uppercase flex items-center gap-2">
                 <GitBranch className="w-4 h-4" /> Routes Played
@@ -598,13 +611,53 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                       )}
                     >
                       <span className="text-[10px] font-black text-zinc-600 w-5 shrink-0 text-center">{i + 1}</span>
-                      <span className={cn('flex-1 min-w-0 truncate text-sm', run.route ? 'text-white font-medium' : 'text-zinc-500 italic')}>
-                        {run.route?.trim() || 'No route recorded'}
-                      </span>
-                      {isCurrent && (
-                        <span className="text-[10px] uppercase tracking-widest font-black text-zinc-400 bg-white/10 px-2 py-0.5 rounded shrink-0">
-                          This run
-                        </span>
+                      {isCurrent && isEditingRoute ? (
+                        <>
+                          <input
+                            autoFocus
+                            list="lore-route-options"
+                            value={routeDraft}
+                            onChange={(e) => setRouteDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') { e.preventDefault(); saveRoute(); }
+                              if (e.key === 'Escape') setIsEditingRoute(false);
+                            }}
+                            placeholder="Which route was this?"
+                            className="flex-1 min-w-0 bg-black/40 border border-white/20 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-orange-500"
+                          />
+                          <datalist id="lore-route-options">
+                            {Array.from(new Set(
+                              (media || [])
+                                .filter(m => m.mediaType === item.mediaType && (m.route || '').trim())
+                                .map(m => (m.route as string).trim()),
+                            )).map(r => <option key={r} value={r} />)}
+                          </datalist>
+                          <button onClick={saveRoute} className="text-[10px] uppercase tracking-widest font-black text-emerald-300 bg-emerald-500/20 px-2 py-1 rounded shrink-0 hover:bg-emerald-500/30 transition-colors">
+                            Save
+                          </button>
+                          <button onClick={() => setIsEditingRoute(false)} className="text-[10px] uppercase tracking-widest font-black text-zinc-400 px-1 shrink-0 hover:text-white transition-colors">
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className={cn('flex-1 min-w-0 truncate text-sm', run.route ? 'text-white font-medium' : 'text-zinc-500 italic')}>
+                            {run.route?.trim() || (isCurrent ? 'Route not set yet' : 'No route recorded')}
+                          </span>
+                          {isCurrent && (
+                            <>
+                              <button
+                                onClick={() => { setRouteDraft(item.route || ''); setIsEditingRoute(true); }}
+                                className="text-[10px] uppercase tracking-widest font-black text-orange-300 bg-orange-500/15 px-2 py-0.5 rounded shrink-0 hover:bg-orange-500/25 transition-colors"
+                              >
+                                {run.route?.trim() ? 'Change' : 'Set route'}
+                              </button>
+                              <span className="text-[10px] uppercase tracking-widest font-black text-zinc-400 bg-white/10 px-2 py-0.5 rounded shrink-0">
+                                This run
+                              </span>
+                            </>
+                          )}
+                        </>
                       )}
                       <span className={cn(
                         'text-[10px] uppercase tracking-widest font-black px-2 py-0.5 rounded shrink-0',
@@ -617,7 +670,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                 })}
               </div>
               <p className="text-[11px] text-zinc-600 mt-2">
-                One route per playthrough. Use Re-run to start another.
+                One route per playthrough, set whenever you know it. Use Re-run to start another.
               </p>
             </div>
           )}
