@@ -222,7 +222,7 @@ export function ConsistencyRing({ metrics, accent, caption, className }: {
 
 /** A 24-hour dial: which hours of the day this period actually happened in. */
 export function ActivityClock({ clock, accent, caption, className }: {
-  clock: { hourly: number[]; peakHour: number; peakWindow: { start: number; end: number; share: number }; dominant: { name: string; share: number } };
+  clock: { hourly: number[]; peakHour: number; peakWindow: { start: number; end: number; share: number }; dominant: { name: string; range: string; share: number } };
   accent: string;
   caption?: string;
   className?: string;
@@ -289,7 +289,8 @@ export function ActivityClock({ clock, accent, caption, className }: {
           </div>
           <div className="min-w-0">
             <div className="text-[9px] uppercase tracking-[0.3em] text-zinc-500 font-black mb-1">Mostly a</div>
-            <div className="text-xl font-black text-white capitalize tracking-tight truncate">{clock.dominant.name}</div>
+            <div className="text-xl font-black text-white tracking-tight truncate">{clock.dominant.name}</div>
+            <div className="text-[10px] text-zinc-500 font-mono tabular-nums leading-snug">{clock.dominant.range}</div>
             <div className="text-[11px] text-zinc-500 font-bold mt-1 leading-snug">{Math.round(clock.dominant.share * 100)}% of your master pages</div>
           </div>
         </div>

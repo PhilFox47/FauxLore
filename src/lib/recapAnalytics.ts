@@ -3,6 +3,7 @@ import { calculateScaledDelta } from './scaling';
 import { groupLogsIntoSessions } from './sessions';
 import { differenceInDays, parseISO, isSameDay, getHours, subHours, format } from 'date-fns';
 import { mulberry32 } from './rpgSystem';
+import { TIME_BANDS, bandIndexForHour, logWeekdayIndex } from './timeBands';
 
 export interface RecapAnalyticsData {
   timeScale: 'week' | 'month' | 'year';
@@ -52,30 +53,32 @@ export function analyzeContrarian(data: RecapAnalyticsData) {
 
 export function analyzeHabits(data: RecapAnalyticsData) {
   if (data.logs.length === 0) return null;
-  
+
   const hourCounts = Array(24).fill(0);
-  const dayCounts = Array(7).fill(0); // 0 = Sunday
-  
+  const dayCounts = Array(7).fill(0); // 0 = Monday, on the 05:00 day boundary
+
   data.logs.forEach(l => {
     const d = new Date(l.timestamp);
     hourCounts[d.getHours()]++;
-    dayCounts[d.getDay()]++;
+    dayCounts[logWeekdayIndex(l.timestamp)]++;
   });
 
-  // Calculate generic shifts
-  const night = hourCounts.slice(22, 24).reduce((a,b)=>a+b, 0) + hourCounts.slice(0, 4).reduce((a,b)=>a+b, 0); // 10pm - 4am
-  const morning = hourCounts.slice(5, 10).reduce((a,b)=>a+b, 0); // 5am - 10am
-  const afternoon = hourCounts.slice(12, 17).reduce((a,b)=>a+b, 0); // 12pm - 5pm
-  const evening = hourCounts.slice(17, 22).reduce((a,b)=>a+b, 0); // 5pm - 10pm
+  // Shares of the day, on the shared bands. The old hand-rolled slices left
+  // 04:00, 10:00 and 11:00 in no segment at all, which quietly deflated every
+  // share they were compared against.
+  const bandTotals = TIME_BANDS.map((_, i) =>
+    hourCounts.reduce((sum, count, hour) => (bandIndexForHour(hour) === i ? sum + count : sum), 0),
+  );
+  const [morning, afternoon, evening, night] = bandTotals;
 
   const total = data.logs.length;
   let profile = 'Chaotic Neutral';
   let desc = 'You consume media at literally any hour unpredictably.';
   
-  if ((night / total) > 0.4) { profile = 'Night Owl'; desc = 'You thrive in the dark.'; }
-  else if ((morning / total) > 0.4) { profile = 'Early Bird'; desc = 'Dawn is your domain.'; }
-  else if ((afternoon / total) > 0.4) { profile = 'Daywalker'; desc = 'Prime daytime consumer.'; }
-  else if ((evening / total) > 0.4) { profile = 'Evening Wind-Down'; desc = 'Prime evening consumer.'; }
+  if ((night / total) > 0.4) { profile = 'Night Owl'; desc = 'You thrive in the dark (22:00–04:59).'; }
+  else if ((morning / total) > 0.4) { profile = 'Early Bird'; desc = 'Dawn is your domain (05:00–11:59).'; }
+  else if ((afternoon / total) > 0.4) { profile = 'Daywalker'; desc = 'Prime daytime consumer (12:00–16:59).'; }
+  else if ((evening / total) > 0.4) { profile = 'Evening Wind-Down'; desc = 'Prime evening consumer (17:00–21:59).'; }
 
   return { 
     profile, 

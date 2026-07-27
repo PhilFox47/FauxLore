@@ -3,8 +3,9 @@ import { calculateScaledDelta } from './scaling';
 import { groupLogsIntoSessions } from './sessions';
 import {
   differenceInCalendarDays, eachDayOfInterval, eachMonthOfInterval, eachWeekOfInterval,
-  format, isWithinInterval, parseISO, subHours,
+  format, isWithinInterval, parseISO,
 } from 'date-fns';
+import { TIME_BANDS, bandIndexForHour, logDate } from './timeBands';
 
 /**
  * The measured half of a recap.
@@ -19,8 +20,8 @@ import {
 export type Timeframe = 'week' | 'month' | 'year';
 export interface Interval { start: Date; end: Date }
 
-/** The 5am day boundary the rest of the app logs against. */
-export const shift = (iso: string) => subHours(parseISO(iso), 5);
+/** The 05:00 day boundary the rest of the app logs against (see lib/timeBands). */
+export const shift = (iso: string) => logDate(iso);
 
 export interface IntervalMetrics {
   masterPages: number;
@@ -193,18 +194,15 @@ export function buildClock(metrics: IntervalMetrics) {
     if (sum > bestSum) { bestSum = sum; bestStart = h; }
   }
 
-  const band = (from: number, to: number) => {
-    let sum = 0;
-    for (let h = from; h !== to; h = (h + 1) % 24) sum += metrics.hourly[h];
-    return sum;
-  };
-  const segments = {
-    night: band(22, 5),
-    morning: band(5, 12),
-    afternoon: band(12, 17),
-    evening: band(17, 22),
-  };
-  const dominant = (Object.entries(segments).sort((a, b) => b[1] - a[1])[0] || ['evening', 0]) as [string, number];
+  // Shares per time of day, on the shared bands (see lib/timeBands).
+  const bandTotals = TIME_BANDS.map((_, i) =>
+    metrics.hourly.reduce((sum, pages, hour) => (bandIndexForHour(hour) === i ? sum + pages : sum), 0),
+  );
+  const segments: Record<string, number> = {};
+  TIME_BANDS.forEach((b, i) => { segments[b.key] = bandTotals[i]; });
+
+  const dominantIndex = bandTotals.indexOf(Math.max(...bandTotals));
+  const dominantBand = TIME_BANDS[dominantIndex];
 
   return {
     hourly: metrics.hourly,
@@ -212,7 +210,7 @@ export function buildClock(metrics: IntervalMetrics) {
     peakHour,
     peakWindow: { start: bestStart, end: (bestStart + 3) % 24, pages: bestSum, share: bestSum / total },
     segments,
-    dominant: { name: dominant[0], share: dominant[1] / total },
+    dominant: { name: dominantBand.label, range: dominantBand.range, share: bandTotals[dominantIndex] / total },
   };
 }
 

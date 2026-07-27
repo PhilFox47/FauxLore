@@ -7,6 +7,7 @@ import { calculateScaledDelta } from '../lib/scaling';
 import { buildStatusTimeline, getItemPace, STATUS_HEX } from '../lib/history';
 import { getSourceUrl, getSourceLabel } from '../lib/sourceLinks';
 import { groupLogsIntoSessions } from '../lib/sessions';
+import { TIME_BANDS, bandIndexForHour } from '../lib/timeBands';
 import { cn } from '../lib/utils';
 import { format, differenceInDays } from 'date-fns';
 import { generateAiArtifact } from '../services/aiService';
@@ -124,17 +125,23 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
     let homeN = 0;
     located.forEach(l => { const loc = l.location!.trim(); placeCounts[loc] = (placeCounts[loc] || 0) + 1; if (isHome(loc)) homeN++; });
     const topPlaces = Object.entries(placeCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
-    const hours = new Array(24).fill(0);
-    progress.forEach(l => { hours[new Date(l.timestamp).getHours()]++; });
-    const band = (a: number, b: number) => hours.slice(a, b).reduce((x, y) => x + y, 0);
-    const bands = [
-      { label: 'the early hours', n: band(0, 6) },
-      { label: 'the morning', n: band(6, 12) },
-      { label: 'the afternoon', n: band(12, 17) },
-      { label: 'the evening', n: band(17, 22) },
-      { label: 'late at night', n: band(22, 24) },
-    ];
-    const peakBand = bands.reduce((a, b) => (b.n > a.n ? b : a), bands[0]);
+    // Time of day, on the shared 05:00-boundary bands: every hour belongs to
+    // exactly one, and a 02:00 session is the night before rather than a
+    // vaguely-named "early hours".
+    const bandCounts = TIME_BANDS.map(() => 0);
+    progress.forEach(l => { bandCounts[bandIndexForHour(new Date(l.timestamp).getHours())]++; });
+    const bandTotal = bandCounts.reduce((a, b) => a + b, 0);
+    const peakIndex = bandCounts.indexOf(Math.max(...bandCounts));
+    const peakBand = {
+      band: TIME_BANDS[peakIndex],
+      n: bandCounts[peakIndex],
+      share: bandTotal > 0 ? bandCounts[peakIndex] / bandTotal : 0,
+    };
+    const bandBreakdown = TIME_BANDS.map((b, i) => ({
+      band: b,
+      n: bandCounts[i],
+      share: bandTotal > 0 ? bandCounts[i] / bandTotal : 0,
+    }));
 
     // Library rank (by master pages, among same media type)
     const typePeers = (media || []).filter(m => m.mediaType === item.mediaType);
@@ -151,7 +158,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
     const rankTotal = typePeers.length;
     const percentile = rankTotal > 1 ? Math.round((1 - (rankPos - 1) / rankTotal) * 100) : 100;
 
-    return { timeline, pace, sessionCount: sessions.length, longestSession, avgSession, located: located.length, homeN, topPlaces, peakBand, rankPos, rankTotal, percentile, myMP };
+    return { timeline, pace, sessionCount: sessions.length, longestSession, avgSession, located: located.length, homeN, topPlaces, peakBand, bandBreakdown, rankPos, rankTotal, percentile, myMP };
   }, [item, logs, allLogs, media, settings]);
 
   // Every playthrough of this title: the original plus its re-runs. Each carries at
@@ -732,8 +739,34 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
           {lore && (lore.located > 0 || lore.pace.activeDays > 0) && (
             <div className="mb-8 p-4 bg-zinc-800/30 rounded-2xl border border-white/5 space-y-3">
               <h3 className="text-sm font-bold text-zinc-500 tracking-wider uppercase flex items-center gap-2"><MapPin className="w-4 h-4" /> Where &amp; When</h3>
-              {lore.pace.activeDays > 0 && (
-                <p className="text-sm text-zinc-300">You mostly experienced this in <span className="text-white font-semibold">{lore.peakBand.label}</span>.</p>
+              {lore.pace.activeDays > 0 && lore.peakBand.n > 0 && (
+                <>
+                  <p className="text-sm text-zinc-300">
+                    You mostly experienced this in the{' '}
+                    <span className="text-white font-semibold">{lore.peakBand.band.label.toLowerCase()}</span>{' '}
+                    <span className="text-zinc-500 font-mono tabular-nums">({lore.peakBand.band.range})</span>
+                    {lore.peakBand.share > 0 && <span className="text-zinc-500"> — {Math.round(lore.peakBand.share * 100)}% of your sessions</span>}.
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {lore.bandBreakdown.map(({ band, n, share }) => (
+                      <div
+                        key={band.key}
+                        className={cn(
+                          "rounded-xl border px-2.5 py-2",
+                          band.key === lore.peakBand.band.key ? "border-amber-500/30 bg-amber-500/[0.07]" : "border-white/5 bg-black/20",
+                        )}
+                      >
+                        <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400">{band.label}</div>
+                        <div className="text-[9px] text-zinc-600 font-mono tabular-nums mb-1">{band.range}</div>
+                        <div className="text-sm font-black text-white">
+                          {n}
+                          <span className="text-[10px] text-zinc-600 font-bold mx-1">·</span>
+                          <span className="text-[10px] text-zinc-500 font-bold">{Math.round(share * 100)}%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
               {lore.located > 0 && (
                 <>

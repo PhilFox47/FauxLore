@@ -6,6 +6,7 @@ import { BarChart3, DatabaseZap, Clock, ListChecks, Calendar, Target, Activity, 
 import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
 import { calculateNativeUnits, NATIVE_UNIT_LABELS } from '../lib/rpgSystem';
 import { groupLogsIntoSessions } from '../lib/sessions';
+import { TIME_BANDS, bandIndexForHour, logWeekdayIndex } from '../lib/timeBands';
 import { aggregateStatusHistory } from '../lib/history';
 import { ProgressLog, MediaItem, MEDIA_HEX } from '../types/schema';
 import { GithubHeatmap } from '../components/Heatmap';
@@ -296,22 +297,22 @@ export function Statistics() {
     return { count: rated.length, avg, distArr, topGenres: byGenre.slice(0, 4), lowGenres: byGenre.slice(-3).reverse() };
   }, [media]);
 
-  // When you consume: weekday x time-of-band heatmap (respects date/type filters)
+  // When you consume: weekday x time-of-day heatmap (respects date/type filters).
+  // Bands run morning -> night on the app's 05:00 day boundary, so a 02:00 log
+  // lands on the previous day's Night rather than opening a new morning.
   const whenHeatmap = useMemo(() => {
     const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const BANDS = ['Night', 'Morning', 'Afternoon', 'Evening'];
-    const grid: number[][] = DAYS.map(() => BANDS.map(() => 0));
+    const grid: number[][] = DAYS.map(() => TIME_BANDS.map(() => 0));
     let max = 0;
     filteredLogs.forEach(l => {
       if (l.metricType === 'statusChange') return;
       const d = new Date(l.timestamp);
-      const dow = (d.getDay() + 6) % 7; // Mon=0
-      const h = d.getHours();
-      const b = h < 6 ? 0 : h < 12 ? 1 : h < 17 ? 2 : h < 22 ? 3 : 0;
+      const dow = logWeekdayIndex(l.timestamp);
+      const b = bandIndexForHour(d.getHours());
       grid[dow][b] += 1;
       if (grid[dow][b] > max) max = grid[dow][b];
     });
-    return { DAYS, BANDS, grid, max };
+    return { DAYS, BANDS: TIME_BANDS, grid, max };
   }, [filteredLogs]);
 
   // Tag chemistry: which tags co-occur most on your items (respects type filter via media set)
@@ -727,17 +728,24 @@ export function Statistics() {
         {/* When you consume */}
         {whenHeatmap.max > 0 && (
           <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6">
-            <h4 className="text-sm font-bold text-zinc-400 mb-5 flex items-center gap-2"><Clock className="w-4 h-4 text-orange-400" /> When You Log</h4>
+            <h4 className="text-sm font-bold text-zinc-400 mb-1 flex items-center gap-2"><Clock className="w-4 h-4 text-orange-400" /> When You Log</h4>
+            <p className="text-[11px] text-zinc-600 mb-5">Days run 05:00 to 04:59, so a 02:00 session counts as the night before.</p>
             <div className="overflow-x-auto">
               <div className="inline-grid gap-1" style={{ gridTemplateColumns: `auto repeat(${whenHeatmap.BANDS.length}, minmax(64px, 1fr))` }}>
                 <div />
-                {whenHeatmap.BANDS.map(b => <div key={b} className="text-[10px] text-zinc-500 uppercase tracking-wider text-center pb-1">{b}</div>)}
+                {whenHeatmap.BANDS.map(b => (
+                  <div key={b.key} className="text-center pb-1">
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider">{b.label}</div>
+                    <div className="text-[9px] text-zinc-600 font-mono tabular-nums">{b.range}</div>
+                  </div>
+                ))}
                 {whenHeatmap.DAYS.map((day, di) => (
                   <React.Fragment key={day}>
                     <div className="text-[11px] text-zinc-500 pr-2 flex items-center justify-end">{day}</div>
                     {whenHeatmap.grid[di].map((n, bi) => {
                       const intensity = whenHeatmap.max > 0 ? n / whenHeatmap.max : 0;
-                      return <div key={bi} title={`${n} logs`} className="h-8 rounded" style={{ backgroundColor: n === 0 ? 'rgba(255,255,255,0.03)' : `rgba(249,115,22,${0.15 + intensity * 0.85})` }} />;
+                      const band = whenHeatmap.BANDS[bi];
+                      return <div key={bi} title={`${n} logs — ${day}, ${band.label} (${band.range})`} className="h-8 rounded" style={{ backgroundColor: n === 0 ? 'rgba(255,255,255,0.03)' : `rgba(249,115,22,${0.15 + intensity * 0.85})` }} />;
                     })}
                   </React.Fragment>
                 ))}
