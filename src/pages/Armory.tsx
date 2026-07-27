@@ -35,7 +35,7 @@ export function Armory() {
   const handleClaimLoot = async (item: any) => {
     setIsLootingMediaId(item.id);
     try {
-      const generated = await generateAiArtifact(settings, item);
+      const generated = await generateAiArtifact(item);
       
       const itemArtifacts = artifacts?.filter(a => a.mediaId === item.id) || [];
       let allowedArtifactsCount = 0;
@@ -170,7 +170,7 @@ export function Armory() {
           const item = media.find(m => m.id === a.mediaId);
           if (item) {
             console.log("Migrating legacy artifact", a.name);
-            const regenerated = await generateAiArtifact(settings, item, a);
+            const regenerated = await generateAiArtifact(item, a);
             await updateArtifact(a.id, {
               ...a,
               name: regenerated.name,

@@ -190,146 +190,21 @@ Legacy Context platforms: ${item.platforms?.join(', ') || 'N/A'}${codexBlock ? `
   }
 }
 
-export async function generateAiArtifact(settings: AiSettings | undefined, item: any, oldArtifact?: any) {
-
-  // Generate rarity and slot based on distribution (consistent with the app's RPG system)
-  let rarity = oldArtifact?.rarity || 'Common';
-  let slot = oldArtifact?.slot;
-  if (!oldArtifact) {
-    const rand = Math.random() * 100;
-    if (rand < 5) rarity = 'Mythic';
-    else if (rand < 15) rarity = 'Legendary';
-    else if (rand < 30) rarity = 'Super Rare';
-    else if (rand < 50) rarity = 'Rare';
-    else if (rand < 75) rarity = 'Uncommon';
-    else rarity = 'Common';
-
-    const slots = ['Head', 'Body', 'Legs', 'Primary', 'Secondary', 'Accessory'];
-    slot = slots[Math.floor(Math.random() * slots.length)];
+/**
+ * Loot generation lives on the server (see server/services/loot.ts), next to the
+ * Codex it is written from — same as enemies. Rarity, slot and the bonus target
+ * are rolled there, the AI writes the item and art-directs its icon in one pass,
+ * and the caller here only decides the item's durability before saving it.
+ */
+export async function generateAiArtifact(item: any, oldArtifact?: any) {
+  const res = await apiFetch('/api/artifacts/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mediaId: item.id, oldArtifact }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to generate an artifact.');
   }
-
-  // Pre-determine Bonus Effect via software-level RNG
-  let targetType = oldArtifact?.targetType || 'MediaType';
-  let targetValue = oldArtifact?.targetValue || '';
-
-  if (!oldArtifact) {
-    const hasGenre = item.genres && item.genres.length > 0;
-    const hasTag = item.tags && item.tags.length > 0;
-    const hasFranchise = item.franchises && item.franchises.length > 0;
-
-    let pool = [];
-    if (hasGenre) pool.push({ type: 'Genre', weight: 25 });
-    if (hasTag) pool.push({ type: 'Tag', weight: 25 });
-    if (hasFranchise) pool.push({ type: 'Franchise', weight: 30 });
-    pool.push({ type: 'MediaType', weight: 20 });
-
-    let totalWeight = pool.reduce((acc, curr) => acc + curr.weight, 0);
-    let r = Math.random() * totalWeight;
-    let currentWeight = 0;
-    for (const option of pool) {
-      currentWeight += option.weight;
-      if (r <= currentWeight) {
-        targetType = option.type;
-        break;
-      }
-    }
-
-    if (targetType === 'Genre') {
-      targetValue = item.genres[Math.floor(Math.random() * item.genres.length)];
-    } else if (targetType === 'Tag') {
-      targetValue = item.tags[Math.floor(Math.random() * item.tags.length)];
-    } else if (targetType === 'Franchise') {
-      targetValue = item.franchises[Math.floor(Math.random() * item.franchises.length)];
-    } else if (targetType === 'MediaType') {
-      const allMediaTypes = ['Game', 'Visual Novel', 'Book', 'Manga', 'Series', 'Comic', 'Movie'];
-      const otherMediaTypes = allMediaTypes.filter(m => m !== item.mediaType);
-      targetValue = otherMediaTypes[Math.floor(Math.random() * otherMediaTypes.length)];
-    }
-  }
-
-  // Researches the title if this is the first AI task to touch it.
-  const codexBlock = await getCodexContext(item);
-
-  const contextSnippet = `
-Title: ${item.title}
-Type: ${item.mediaType}
-Creator/Author: ${item.creator || item.publisher || 'Unknown'}
-Synopsis/Description: ${item.description || 'No description provided.'}
-Genres (ordered by importance): ${item.genres?.join(", ") || 'N/A'}
-Tags (ordered by importance): ${item.tags?.join(", ") || 'N/A'}
-`;
-
-  const legacySnippet = oldArtifact ? `\nThe item is a legacy artifact! You MUST incorporate its essence.
-Legacy Name: ${oldArtifact.name}
-Legacy Description: ${oldArtifact.description}` : '';
-
-  const prompt = `You are a legendary RPG Loot Master. The user has just finished or made significant progress in a piece of media.
-Your task is to generate a unique, flavor-rich Artifact that deeply references the lore, characters, themes, or signature items of this media.${legacySnippet}
-
-${codexBlock
-    ? `The Codex below is the researched record of this work — its cast, its equipment, its vocabulary and its look. Treat it as ground truth, then invent freely on top of it, so the loot feels "inside-baseball" for fans.\n\n${codexBlock}`
-    : `USE YOUR WEB SEARCH CAPABILITIES to confirm details about "${item.title}" (${item.mediaType}) so the loot feels authentic and "inside-baseball" for fans.`}
-
-Media Context:
-${contextSnippet}
-
-PRE-DETERMINED ATTRIBUTES (fixed by the game — honour them exactly):
-- Rarity: ${rarity}
-- Slot: ${slot} (Conceptually fit this slot. Head=hat/helmet, Body=armor/clothing, etc.)
-- Bonus Effect: Grants a bonus to ${targetType}: "${targetValue}"
-
-REQUIREMENTS:
-1. Ensure the Item Name and Description perfectly match the specified Rarity, Slot, and Bonus Effect.
-2. Target Rarity: ${rarity} (Adjust the "epicness". Common is mundane, Legendary/Mythic are world-altering).
-3. The item name should be clever, thematic (max 4 words), and sound like a tangible item you would equip in the "${slot}" slot. Let the rarity guide how grand the name sounds.
-4. The description should be 1-2 sentences of high-quality RPG flavor text drawing on real lore details. It MUST subtly hint at the Bonus Effect (${targetType}: "${targetValue}").
-5. The type should be a logical RPG category that fits the slot (e.g., Weapon, Relic, Armor, Helmet, Trinket, Consumable, etc.).
-6. Art-direct the item's inventory icon yourself, as a single ready-to-use text-to-image prompt of 2-4 natural sentences for the "Z-Image-Turbo" diffusion model. It must:
-   - Keep the object literal and correct — if it is a sword it is a sword, if it is a cassette it is a cassette. Never substitute a generic ring, gem or orb.
-   - Render it in the ACTUAL art style, medium and material language of "${item.title}"${codexBlock ? ' (the Codex records that style — name it explicitly)' : ''}, referencing the franchise by name, and borrowing its authentic emblems, insignia and motifs where they belong.
-   - Show ONE item only, centered, as a polished inventory icon / studio product shot with a soft contact shadow, on a background that suits ${rarity} rarity.
-   - Describe its exact materials, shape, engravings and wear, with sharp focus, crisp detail and even lighting — no bokeh, no heavy vignette.
-   - Include no hands, no people, no extra props, no lettering and no watermarks.
-
-Return EXACTLY and ONLY a pure JSON object with the following keys:
-{
-  "name": "The item name",
-  "description": "The flavor text",
-  "type": "The RPG item type",
-  "imagePrompt": "The complete image prompt"
-}`;
-
-  try {
-    // Creative call: the Codex already did the looking-up, so no web search unless
-    // there is no Codex to lean on.
-    const jsonText = await nanoChat(settings, 'You are an RPG Loot Master for the FauxLore media tracker.', prompt, { temperature: 0.9, webSearch: !codexBlock });
-    if (!jsonText) {
-      throw new Error("The model returned an empty response.");
-    }
-
-    const parsed = parseJsonLoose(jsonText);
-
-    let bonusPercent = 20;
-    if (rarity === 'Mythic') bonusPercent = 300;
-    else if (rarity === 'Legendary') bonusPercent = 150;
-    else if (rarity === 'Epic') bonusPercent = 125;
-    else if (rarity === 'Super Rare') bonusPercent = 100;
-    else if (rarity === 'Rare') bonusPercent = 75;
-    else if (rarity === 'Uncommon') bonusPercent = 40;
-
-    return {
-      name: parsed.name || "Mysterious Artifact",
-      description: parsed.description || "An item of unknown origin.",
-      type: parsed.type || "Trinket",
-      imagePrompt: typeof parsed.imagePrompt === 'string' ? parsed.imagePrompt.trim() : '',
-      slot: slot || "Accessory",
-      targetType: targetType,
-      targetValue: targetValue,
-      bonusPercent,
-      rarity
-    };
-  } catch (error) {
-    console.error("AI Artifact Generation Error:", error);
-    throw error;
-  }
+  return res.json();
 }

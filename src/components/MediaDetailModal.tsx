@@ -209,7 +209,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   const handleClaimLoot = async () => {
     setIsLooting(true);
     try {
-      const generated = await generateAiArtifact(settings, item);
+      const generated = await generateAiArtifact(item);
       
       let allowedArtifactsCount = 0;
       if (item.status === 'Completed' || item.status === 'Extras') {

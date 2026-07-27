@@ -6,14 +6,15 @@ import { codexPromptBlock, type CodexRow } from "../services/codex";
  * Codex endpoints.
  *
  * Reading is cheap and never generates: the Media Detail view asks whether a
- * Codex exists and shows it if so. Generation is an explicit POST, used both by
- * the "Consult the Codex" button and by the client-side AI features (tagging,
- * loot) that need one before they can write anything.
+ * Codex exists and shows it if so. Generation is an explicit POST, used by the
+ * "Consult the Codex" button and by auto-tagging, which runs in the browser and
+ * needs a Codex before it can classify anything. Enemies and loot are generated
+ * on the server and reach the Codex service directly.
  */
 export function registerCodexRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, codex } = ctx;
 
-  // The client embeds the Codex in its own prompts (tagging, loot), so the
+  // Auto-tagging embeds the Codex in its own prompt from the browser, so the
   // rendered prompt block ships with it and only one formatter ever exists.
   const withPromptBlock = (row: CodexRow | null) =>
     row ? { ...row, promptBlock: codexPromptBlock(row) } : null;

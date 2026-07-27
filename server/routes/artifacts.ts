@@ -2,7 +2,28 @@ import type { Express } from "express";
 import type { ServerContext } from "../context";
 
 export function registerArtifactRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser, generateArtifactImageBackground } = ctx;
+  const { db, getAuthUser, generateArtifactImageBackground, generateLoot } = ctx;
+
+  /**
+   * Writes a drop for a media entry: rarity, slot and bonus are rolled here, and
+   * the AI names it, writes its flavour and art-directs its icon from the media's
+   * Codex. The client keeps the result and decides its durability before saving.
+   */
+  app.post("/api/artifacts/generate", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const { mediaId, oldArtifact } = req.body || {};
+      const mediaItem = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(mediaId, userId) as any;
+      if (!mediaItem) return res.status(404).json({ error: 'Media not found' });
+
+      const loot = await generateLoot(userId, ctx.normalizeMedia(mediaItem), oldArtifact);
+      if (!loot) {
+        return res.status(502).json({ error: 'The Loot Master could not forge an item. Check that a Nano-GPT key is configured.' });
+      }
+      res.json(loot);
+    } catch (e: any) { res.status(500).json({ error: String(e?.message || e) }); }
+  });
 
   app.get("/api/artifacts", (req, res) => {
     try {
