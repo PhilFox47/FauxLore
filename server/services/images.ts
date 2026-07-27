@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
+import { getAiConfig, nanoGenerateText } from "../lib/ai";
 
 /**
  * Default image-generation settings for NanoGPT's Z-Image-Turbo model.
@@ -95,7 +96,7 @@ function enemyTier(level: number): { word: string; look: string; scene: string }
   };
 }
 
-/** AI image generation (Gemini art-direction prompt -> NanoGPT Z-Image-Turbo) and local storage. */
+/** AI image generation (NanoGPT art-direction prompt -> NanoGPT Z-Image-Turbo) and local storage. */
 export function createImageService({ db, aiImagesDir }: { db: Db; aiImagesDir: string }) {
   function readImageConfig() {
     let row: any = {};
@@ -156,11 +157,9 @@ export function createImageService({ db, aiImagesDir }: { db: Db; aiImagesDir: s
 
   async function generateBossImageBackground(userId: string, bossId: string, bossName: string, mediaTitle: string, mediaType: string, bossLevel: number = 1) {
     try {
-      const sysSettings: any = db.prepare('SELECT geminiApiKey, nanoGptApiKey FROM system_settings WHERE id = \'system\'').get();
-      const userSettings: any = db.prepare('SELECT geminiApiKey, nanoGptApiKey FROM settings WHERE userId = ?').get(userId);
-      const geminiKey = userSettings?.geminiApiKey || sysSettings?.geminiApiKey || process.env.GEMINI_API_KEY;
-      const nanoGptKey = userSettings?.nanoGptApiKey || sysSettings?.nanoGptApiKey;
-      if (!geminiKey || !nanoGptKey) return;
+      const aiConfig = getAiConfig(db, userId);
+      if (!aiConfig) return;
+      const nanoGptKey = aiConfig.apiKey;
 
       db.prepare("UPDATE world_bosses SET imageStatus = 'generating' WHERE id = ?").run(bossId);
       const tier = enemyTier(bossLevel);
@@ -170,7 +169,7 @@ export function createImageService({ db, aiImagesDir }: { db: Db; aiImagesDir: s
 SUBJECT: a single RPG enemy named "${bossName}", from the media "${mediaTitle}" (a ${mediaType}). It is ${tier.word}, and should look ${tier.look}, set against ${tier.scene}.
 
 YOUR TASK:
-1. Use Google Search to identify what "${bossName}" actually is within "${mediaTitle}", AND — crucially — the AUTHENTIC visual art style, medium and color palette of "${mediaTitle}" itself (e.g. gritty photoreal 3D, painterly anime key-art, cel-shaded, 16-bit pixel art, watercolor, dark-fantasy oil painting, claymation, comic ink, etc.).
+1. Use web search to identify what "${bossName}" actually is within "${mediaTitle}", AND — crucially — the AUTHENTIC visual art style, medium and color palette of "${mediaTitle}" itself (e.g. gritty photoreal 3D, painterly anime key-art, cel-shaded, 16-bit pixel art, watercolor, dark-fantasy oil painting, claymation, comic ink, etc.).
 2. Write ONE vivid prompt of 2-4 natural sentences describing this single character/creature so it looks like it genuinely belongs in "${mediaTitle}".
 
 THE PROMPT MUST:
@@ -183,19 +182,7 @@ THE PROMPT MUST:
 
 Return ONLY the final image prompt text, nothing else.`;
 
-      const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          tools: [{ googleSearch: {} }],
-          generationConfig: { temperature: 0.7 }
-        })
-      });
-
-      if (!aiRes.ok) throw new Error("Failed to generate boss prompt");
-      const data = await aiRes.json();
-      const imagePrompt = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      const imagePrompt = await nanoGenerateText(aiConfig, prompt, { temperature: 0.7, webSearch: true });
       if (!imagePrompt) throw new Error("Empty boss prompt");
 
       const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt, BOSS_NEGATIVE_EXTRA);
@@ -209,11 +196,9 @@ Return ONLY the final image prompt text, nothing else.`;
 
   async function generateArtifactImageBackground(userId: string, artifactId: string, artifactName: string, artifactDesc: string, mediaTitle: string, rarity: string = "Common") {
     try {
-      const sysSettings: any = db.prepare('SELECT geminiApiKey, nanoGptApiKey FROM system_settings WHERE id = \'system\'').get();
-      const userSettings: any = db.prepare('SELECT geminiApiKey, nanoGptApiKey FROM settings WHERE userId = ?').get(userId);
-      const geminiKey = userSettings?.geminiApiKey || sysSettings?.geminiApiKey || process.env.GEMINI_API_KEY;
-      const nanoGptKey = userSettings?.nanoGptApiKey || sysSettings?.nanoGptApiKey;
-      if (!geminiKey || !nanoGptKey) return;
+      const aiConfig = getAiConfig(db, userId);
+      if (!aiConfig) return;
+      const nanoGptKey = aiConfig.apiKey;
 
       db.prepare("UPDATE artifacts SET imageStatus = 'generating' WHERE id = ?").run(artifactId);
       const art = rarityArt(rarity);
@@ -223,7 +208,7 @@ Return ONLY the final image prompt text, nothing else.`;
 SUBJECT: a single RPG loot item named "${artifactName}", described as "${artifactDesc}", from the media "${mediaTitle}". Rarity: ${rarity}. At this rarity the item should read as ${art.grandeur}, carrying ${art.aura}.
 
 YOUR TASK:
-1. Use Google Search to determine what "${artifactName}" literally IS — its real object type and shape — within "${mediaTitle}", AND the AUTHENTIC art style, medium and material language of "${mediaTitle}".
+1. Use web search to determine what "${artifactName}" literally IS — its real object type and shape — within "${mediaTitle}", AND the AUTHENTIC art style, medium and material language of "${mediaTitle}".
 2. Write ONE vivid prompt of 2-4 natural sentences for a single game-inventory icon of this exact object.
 
 THE PROMPT MUST:
@@ -238,19 +223,7 @@ THE PROMPT MUST:
 
 Return ONLY the final image prompt text, nothing else.`;
 
-      const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          tools: [{ googleSearch: {} }],
-          generationConfig: { temperature: 0.7 }
-        })
-      });
-
-      if (!aiRes.ok) throw new Error("Failed to generate artifact prompt");
-      const data = await aiRes.json();
-      const imagePrompt = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      const imagePrompt = await nanoGenerateText(aiConfig, prompt, { temperature: 0.7, webSearch: true });
       if (!imagePrompt) throw new Error("Empty artifact prompt");
 
       const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt, LOOT_NEGATIVE_EXTRA);

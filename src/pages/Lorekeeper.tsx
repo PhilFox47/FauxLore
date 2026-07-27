@@ -33,7 +33,6 @@ import {
   generateText,
   getPersonaDescription,
 } from "../services/nanoGptService";
-import { generateGeminiText } from "../services/geminiService";
 import { DatabaseService } from "../services/db";
 import { buildTitleSystemPrompt, buildBatchTitlePrompt, buildMainTitlePrompt } from "../lib/lorekeeperTitles";
 import { GeneratedImage } from "../components/GeneratedImage";
@@ -138,7 +137,7 @@ export function Lorekeeper() {
   const missingTitleRef = useRef(false);
 
   useEffect(() => {
-    if (!settings?.nanoGptApiKey && !settings?.geminiApiKey) return;
+    if (!settings?.nanoGptApiKey) return;
     if (isRegeneratingTitle || missingTitleRef.current) return;
     
     if (missingMainTitle || missingMediaTypes.length > 0) {
@@ -147,7 +146,7 @@ export function Lorekeeper() {
         missingTitleRef.current = false;
       });
     }
-  }, [missingMainTitle, missingMediaTypes.length, settings?.nanoGptApiKey, settings?.geminiApiKey]);
+  }, [missingMainTitle, missingMediaTypes.length, settings?.nanoGptApiKey]);
 
   const getDynamicTitle = () => {
     return aiTextCache[`rpg_title_${rpgState.level}`] || rpgState.className;
@@ -218,7 +217,7 @@ export function Lorekeeper() {
   };
 
   const generateMissingTitles = async (generateMain: boolean, mediaTypesToGenerate: string[], manualRes: boolean = false) => {
-    if (!settings?.nanoGptApiKey && !settings?.geminiApiKey) {
+    if (!settings?.nanoGptApiKey) {
       if (manualRes) toast.error("Please configure an AI API Key in Settings first.");
       return;
     }
@@ -259,9 +258,6 @@ export function Lorekeeper() {
         const apiKey = settings.nanoGptApiKey;
         const model = settings.nanoGptModel || "gpt-4o-mini";
         titleRes = await generateText(apiKey, model, systemPrompt, titlePrompt, 1.2);
-      } else if (settings.geminiApiKey) {
-        const apiKey = settings.geminiApiKey;
-        titleRes = await generateGeminiText(apiKey, systemPrompt, titlePrompt, 1.2);
       }
 
       const cleanJson = titleRes.replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -299,7 +295,7 @@ export function Lorekeeper() {
 
 
   const handleRegenerate = async () => {
-    if (!settings?.nanoGptApiKey && !settings?.geminiApiKey) {
+    if (!settings?.nanoGptApiKey) {
       toast.error("Please configure an AI API Key in Settings first.");
       return;
     }
@@ -324,8 +320,6 @@ export function Lorekeeper() {
       let titleRes = "";
       if (settings.nanoGptApiKey) {
         titleRes = await generateText(settings.nanoGptApiKey, settings.nanoGptModel || "gpt-4o-mini", titleSystemPrompt, titlePrompt, 1.2);
-      } else if (settings.geminiApiKey) {
-        titleRes = await generateGeminiText(settings.geminiApiKey, titleSystemPrompt, titlePrompt, 1.2);
       }
 
       await saveAiText(titleKey, titleRes);
@@ -358,18 +352,6 @@ export function Lorekeeper() {
           const model = settings.nanoGptModel || "gpt-4o-mini";
           qTitleRes = await generateText(apiKey, model, systemPrompt, tPrompt, 1.2);
           qDescRes = await generateText(apiKey, model, systemPrompt, dPrompt);
-        } else if (settings.geminiApiKey) {
-          qTitleRes = await generateGeminiText(
-            settings.geminiApiKey,
-            systemPrompt,
-            tPrompt,
-            1.2
-          );
-          qDescRes = await generateGeminiText(
-            settings.geminiApiKey,
-            systemPrompt,
-            dPrompt,
-          );
         }
 
         await saveAiText(qTitleKey, qTitleRes);
@@ -1080,7 +1062,7 @@ function QuestCard({
 
     const needsFetch = 
       (!dynTitleCached || !dynDescCached || (originalStrCached !== undefined && originalStrCached !== currentQuestStr)) &&
-      (settings?.nanoGptApiKey || settings?.geminiApiKey) &&
+      settings?.nanoGptApiKey &&
       fetchedForRef.current !== currentQuestStr &&
       !quest.isFailed &&
       !quest.isCompleted &&
@@ -1126,19 +1108,6 @@ function QuestCard({
             qDescRes = await generateText(
               apiKey,
               model,
-              systemPrompt,
-              descPrompt,
-            );
-          } else if (settings.geminiApiKey) {
-            const apiKey = settings.geminiApiKey;
-            qTitleRes = await generateGeminiText(
-              apiKey,
-              systemPrompt,
-              titlePrompt,
-              1.2
-            );
-            qDescRes = await generateGeminiText(
-              apiKey,
               systemPrompt,
               descPrompt,
             );
@@ -1198,8 +1167,6 @@ function QuestCard({
       
       if (settings?.nanoGptApiKey) {
         res = await generateText(settings.nanoGptApiKey, settings.nanoGptModel || "chatgpt-4o-latest", systemPrompt, prompt, type === 'title' ? 1.2 : 0.9);
-      } else if (settings?.geminiApiKey) {
-        res = await generateGeminiText(settings.geminiApiKey, systemPrompt, prompt, type === 'title' ? 1.2 : 0.9);
       }
 
       await saveAiText(`quest_${type}_${quest.id}`, res);

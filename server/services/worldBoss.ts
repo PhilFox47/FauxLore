@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
+import { getAiConfig, nanoGenerateText } from "../lib/ai";
 
 /** Weekly/encore World Boss spawner with level/difficulty scaling and AI naming. */
 export function createWorldBossService(
@@ -65,7 +66,7 @@ export function createWorldBossService(
       const chosenType = typePool[Math.floor(Math.random() * typePool.length)];
 
 
-      const settings: any = db.prepare('SELECT geminiApiKey, enemyDifficulty, mediaDifficulty FROM settings WHERE userId = ?').get(userId);
+      const settings: any = db.prepare('SELECT enemyDifficulty, mediaDifficulty FROM settings WHERE userId = ?').get(userId);
       const enemyDifficulty = settings?.enemyDifficulty ?? 1.0;
       let mDiff = 1.0;
       if (settings?.mediaDifficulty) {
@@ -159,9 +160,8 @@ export function createWorldBossService(
       
       let bossName = "";
       
-      const sysSettings: any = db.prepare('SELECT geminiApiKey FROM system_settings WHERE id = \'system\'').get();
-      const apiKey = settings?.geminiApiKey || sysSettings?.geminiApiKey || process.env.GEMINI_API_KEY;
-      if (apiKey) {
+      const aiConfig = getAiConfig(db, userId);
+      if (aiConfig) {
         try {
           const levelDescriptions: Record<number, string> = {
             1: "Pleb (Laughable, pathetic, weakest minion, joke enemy)",
@@ -184,21 +184,9 @@ Instructions:
 
 It MUST directly reference "${mediaItem.title}". Do not use generic fantasy names.`;
 
-          const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              tools: [{ googleSearch: {} }],
-              generationConfig: { temperature: 0.9 }
-            })
-          });
-
-          if (aiRes.ok) {
-            const data = await aiRes.json();
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.replace(/\*\*/g, '').replace(/\"/g, '').trim() || "";
-            if (text) bossName = text;
-          }
+          const text = (await nanoGenerateText(aiConfig, prompt, { temperature: 0.9, webSearch: true }))
+            .replace(/\*\*/g, '').replace(/\"/g, '').trim();
+          if (text) bossName = text;
         } catch (e) { console.error("Boss name generation failed", e); }
       }
 

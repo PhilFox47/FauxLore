@@ -4,7 +4,7 @@ import { X, Search, Loader2, RefreshCw, BrainCircuit, AlertTriangle } from "luci
 import { IntegrationsService, GameMetadata } from "../services/integrations";
 import { cn } from "../lib/utils";
 import { useMediaContext } from "../contexts/MediaContext";
-import { generateAiTagsWithGemini } from "../services/geminiService";
+import { generateAiTags } from "../services/aiService";
 import { useToast } from "../contexts/ToastContext";
 import { format } from "date-fns";
 
@@ -447,8 +447,8 @@ export function MediaFormModal({
 
     setIsAiTagging(true);
     try {
-      const parsed = await generateAiTagsWithGemini(
-        settings?.geminiApiKey,
+      const parsed = await generateAiTags(
+        settings,
         formData,
         taxonomies,
       );

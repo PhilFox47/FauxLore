@@ -13,7 +13,6 @@
     "start": "node dist/server.cjs"
   },
   "dependencies": {
-    "@google/genai": "^1.50.1",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.1.14",
     "@types/node-cron": "^3.0.11",

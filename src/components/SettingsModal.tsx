@@ -31,6 +31,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     googleBooksApiKey: '',
     nanoGptApiKey: '',
     nanoGptModel: '',
+    nanoGptWebModel: '',
     geminiApiKey: '',
     imageModel: 'z-image-turbo',
     imageSize: '1024x1024',
@@ -84,6 +85,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         googleBooksApiKey: settings.googleBooksApiKey || '',
         nanoGptApiKey: settings.nanoGptApiKey || '',
         nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
+        nanoGptWebModel: settings.nanoGptWebModel || '',
         geminiApiKey: settings.geminiApiKey || '',
         imageModel: settings.imageModel || 'z-image-turbo',
         imageSize: settings.imageSize || '1024x1024',
@@ -135,6 +137,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             googleBooksApiKey: settings.googleBooksApiKey || '',
             nanoGptApiKey: settings.nanoGptApiKey || '',
             nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
+            nanoGptWebModel: settings.nanoGptWebModel || '',
             geminiApiKey: settings.geminiApiKey || '',
             imageModel: settings.imageModel || 'z-image-turbo',
             imageSize: settings.imageSize || '1024x1024',
@@ -370,6 +373,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         googleBooksApiKey: formData.googleBooksApiKey,
         nanoGptApiKey: formData.nanoGptApiKey,
         nanoGptModel: formData.nanoGptModel,
+        nanoGptWebModel: formData.nanoGptWebModel,
         geminiApiKey: formData.geminiApiKey,
         imageModel: formData.imageModel,
         imageSize: formData.imageSize,
@@ -899,7 +903,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Nano-GPT Model</label>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Nano-GPT Model (Standard)</label>
                     <input
                       type="text"
                       name="nanoGptModel"
@@ -908,18 +912,19 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       className="input-field"
                       placeholder="gpt-4o-mini"
                     />
+                    <p className="text-[10px] text-zinc-500 mt-1">Used for titles, quest flavour text and recaps.</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Gemini API Key (Google AI Studio)</label>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Nano-GPT Model (Web Search)</label>
                     <input
-                      type="password"
-                      name="geminiApiKey"
-                      value={formData.geminiApiKey}
+                      type="text"
+                      name="nanoGptWebModel"
+                      value={formData.nanoGptWebModel}
                       onChange={handleChange}
                       className="input-field"
-                      placeholder="..."
+                      placeholder="gpt-4o-mini"
                     />
-                    <p className="text-[10px] text-zinc-500 mt-1">Required for advanced Item Generation with web search capabilities.</p>
+                    <p className="text-[10px] text-zinc-500 mt-1">Used for auto-tagging, loot and enemy generation. FauxLore appends <code>:online</code> to enable Nano-GPT web search, so leave that suffix off. Falls back to the standard model when blank.</p>
                   </div>
                 </div>
 

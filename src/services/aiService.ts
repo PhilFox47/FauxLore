@@ -1,39 +1,70 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { apiFetch } from './db';
 
-export async function generateGeminiText(userApiKey: string | undefined, systemPrompt: string, userPrompt: string, temperature: number = 0.9) {
-  const apiKey = userApiKey || process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-    throw new Error("Gemini API Key is not configured. Please set it in Settings -> API Integrations.");
+/**
+ * All AI text generation goes through NanoGPT's OpenAI-compatible endpoint.
+ *
+ * Two models are configurable: one for ordinary generation and one for tasks that
+ * must look things up (tagging a niche release, inventing loot from a game's lore).
+ * Web search is enabled by appending ":online" to the model name, which is how
+ * NanoGPT exposes it.
+ */
+export interface AiSettings {
+  nanoGptApiKey?: string;
+  nanoGptModel?: string;
+  nanoGptWebModel?: string;
+}
+
+function resolveModel(settings: AiSettings | undefined, webSearch: boolean): string {
+  const base = webSearch
+    ? (settings?.nanoGptWebModel || settings?.nanoGptModel)
+    : settings?.nanoGptModel;
+  const model = (base || 'gpt-4o-mini').trim();
+  if (!webSearch) return model;
+  // Don't double-suffix if the configured name already opts in.
+  return /:online\b/.test(model) ? model : `${model}:online`;
+}
+
+async function nanoChat(
+  settings: AiSettings | undefined,
+  systemPrompt: string,
+  userPrompt: string,
+  opts: { temperature?: number; webSearch?: boolean } = {},
+): Promise<string> {
+  const apiKey = settings?.nanoGptApiKey;
+  if (!apiKey) {
+    throw new Error('Nano-GPT API key is not configured. Set it in Settings -> API Integrations.');
   }
-
-  const ai = new GoogleGenAI({ apiKey });
-
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        { role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }
+  const res = await apiFetch('/api/nano-gpt/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-nano-gpt-key': apiKey },
+    body: JSON.stringify({
+      model: resolveModel(settings, !!opts.webSearch),
+      temperature: opts.temperature ?? 0.9,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
       ],
-      config: {
-        temperature: temperature
-      }
-    });
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Nano-GPT error (${res.status}): ${detail.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  return (data.choices?.[0]?.message?.content || '').trim();
+}
 
-    return response.text || "";
+/** Creative text (titles, flavour). No lookup needed, so no web search. */
+export async function generateAiText(settings: AiSettings | undefined, systemPrompt: string, userPrompt: string, temperature: number = 0.9) {
+  try {
+    return await nanoChat(settings, systemPrompt, userPrompt, { temperature });
   } catch (error) {
-    console.error("Gemini Text Gen Error:", error);
+    console.error("AI text generation failed:", error);
     throw error;
   }
 }
 
-export async function generateAiTagsWithGemini(userApiKey: string | undefined, item: any, taxonomies: any[]) {
-
-  const apiKey = userApiKey || process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-    throw new Error("Gemini API Key is not configured. Please set it in Settings -> API Integrations.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
+export async function generateAiTags(settings: AiSettings | undefined, item: any, taxonomies: any[]) {
 
   const validGenres = taxonomies.filter(t => t.type === 'genre').map(t => t.name);
   const validTags = taxonomies.filter(t => t.type === 'tag').map(t => t.name);
@@ -62,21 +93,9 @@ Legacy Context tags: ${item.tags?.join(', ') || 'N/A'}
 Legacy Context platforms: ${item.platforms?.join(', ') || 'N/A'}`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        { role: 'user', parts: [{ text: gptSystem + '\n\n' + gptUser }] }
-      ],
-      config: {
-        tools: [
-          { googleSearch: {} }
-        ],
-        temperature: 0.1
-      }
-    });
-
-    let jsonText = response.text;
-    if (!jsonText) throw new Error("Gemini returned an empty response.");
+    // Web search on: tagging depends on knowing what a niche or very new release is.
+    let jsonText = await nanoChat(settings, gptSystem, gptUser, { temperature: 0.1, webSearch: true });
+    if (!jsonText) throw new Error("The model returned an empty response.");
 
     const match = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
     if (match) {
@@ -89,7 +108,7 @@ Legacy Context platforms: ${item.platforms?.join(', ') || 'N/A'}`;
 
     const parsed = JSON.parse(jsonText);
     
-    // Cross-污染 cleanup: ensure known genres aren't tags, and known tags aren't genres
+    // Cross-contamination cleanup: ensure known genres aren't tags, and known tags aren't genres
     const finalGenres = new Set<string>();
     const finalTags = new Set<string>();
 
@@ -129,20 +148,12 @@ Legacy Context platforms: ${item.platforms?.join(', ') || 'N/A'}`;
 
     return parsed;
   } catch (error) {
-    console.error("Gemini Auto-Tag Error:", error);
+    console.error("AI Auto-Tag Error:", error);
     throw error;
   }
 }
 
-export async function generateAiArtifactWithGemini(userApiKey: string | undefined, item: any, oldArtifact?: any) {
-  // Use the provided key from settings, fallback to environment variable
-  const apiKey = userApiKey || process.env.GEMINI_API_KEY;
-  
-  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-    throw new Error("Gemini API Key is not configured. Please set it in Settings -> API Integrations.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
+export async function generateAiArtifact(settings: AiSettings | undefined, item: any, oldArtifact?: any) {
 
   // Generate rarity and slot based on distribution (consistent with the app's RPG system)
   let rarity = oldArtifact?.rarity || 'Common';
@@ -240,19 +251,10 @@ Return EXACTLY and ONLY a pure JSON object with the following keys:
 }`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        tools: [
-          { googleSearch: {} }
-        ]
-      }
-    });
-
-    let jsonText = response.text;
+    // Web search on: loot should reference the actual lore of the media.
+    let jsonText = await nanoChat(settings, 'You are an RPG Loot Master for the FauxLore media tracker.', prompt, { temperature: 0.9, webSearch: true });
     if (!jsonText) {
-      throw new Error("Gemini returned an empty response.");
+      throw new Error("The model returned an empty response.");
     }
 
     // Clean up potential markdown JSON block
@@ -289,7 +291,7 @@ Return EXACTLY and ONLY a pure JSON object with the following keys:
       rarity
     };
   } catch (error) {
-    console.error("Gemini Artifact Generation Error:", error);
+    console.error("AI Artifact Generation Error:", error);
     throw error;
   }
 }

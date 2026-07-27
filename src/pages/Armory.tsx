@@ -4,7 +4,7 @@ import { useToast } from '../contexts/ToastContext';
 import { Gem, Copy, Sword, Shield, Footprints, Sparkles, Hammer, AlertCircle, CheckCircle2, RotateCw, Crown, Shirt, User, ImageIcon, Flame } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { MEDIA_COLORS, Artifact, RARITY_COLORS } from '../types/schema';
-import { generateAiArtifactWithGemini } from '../services/geminiService';
+import { generateAiArtifact } from '../services/aiService';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '../services/db';
 import { LootReveal } from '../components/LootReveal';
@@ -35,7 +35,7 @@ export function Armory() {
   const handleClaimLoot = async (item: any) => {
     setIsLootingMediaId(item.id);
     try {
-      const generated = await generateAiArtifactWithGemini(settings?.geminiApiKey, item);
+      const generated = await generateAiArtifact(settings, item);
       
       const itemArtifacts = artifacts?.filter(a => a.mediaId === item.id) || [];
       let allowedArtifactsCount = 0;
@@ -156,7 +156,7 @@ export function Armory() {
 
   // Legacy artifact migration
   useEffect(() => {
-    if (!settings?.geminiApiKey || isMigrating) return;
+    if (!settings?.nanoGptApiKey || isMigrating) return;
     
     // Check for artifacts missing targetType
     const legacyArtifacts = artifacts.filter(a => a.targetType === undefined || a.targetType === null);
@@ -169,7 +169,7 @@ export function Armory() {
           const item = media.find(m => m.id === a.mediaId);
           if (item) {
             console.log("Migrating legacy artifact", a.name);
-            const regenerated = await generateAiArtifactWithGemini(settings?.geminiApiKey, item, a);
+            const regenerated = await generateAiArtifact(settings, item, a);
             await updateArtifact(a.id, {
               ...a,
               name: regenerated.name,

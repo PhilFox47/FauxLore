@@ -9,7 +9,7 @@ import { getSourceUrl, getSourceLabel } from '../lib/sourceLinks';
 import { groupLogsIntoSessions } from '../lib/sessions';
 import { cn } from '../lib/utils';
 import { format, differenceInDays } from 'date-fns';
-import { generateAiArtifactWithGemini } from '../services/geminiService';
+import { generateAiArtifact } from '../services/aiService';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '../services/db';
 import { Artifact, RARITY_COLORS } from '../types/schema';
@@ -208,7 +208,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
   const handleClaimLoot = async () => {
     setIsLooting(true);
     try {
-      const generated = await generateAiArtifactWithGemini(settings?.geminiApiKey, item);
+      const generated = await generateAiArtifact(settings, item);
       
       let allowedArtifactsCount = 0;
       if (item.status === 'Completed' || item.status === 'Extras') {

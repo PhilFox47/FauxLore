@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
+import { getAiConfig, nanoGenerateText } from "../lib/ai";
 
 export function registerBossRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, generateBossImageBackground, spawnWorldBoss } = ctx;
@@ -59,12 +60,9 @@ export function registerBossRoutes(app: Express, ctx: ServerContext) {
       if (!boss) return res.status(404).json({ error: "Not found" });
       
       const mediaItem = db.prepare('SELECT * FROM media WHERE id = ?').get(boss.mediaId) as any;
-      const settings = db.prepare('SELECT geminiApiKey FROM settings WHERE userId = ?').get(userId) as any;
-      
       let newName = "Void Stalker"; // fallback
-      const sysSettings: any = db.prepare('SELECT geminiApiKey FROM system_settings WHERE id = \'system\'').get();
-      const apiKey = settings?.geminiApiKey || sysSettings?.geminiApiKey || process.env.GEMINI_API_KEY;
-      if (mediaItem && apiKey) {
+      const aiConfig = getAiConfig(db, userId);
+      if (mediaItem && aiConfig) {
         try {
           const levelDescriptions: Record<number, string> = {
             1: "Pleb (Laughable, pathetic, weakest minion, joke enemy)",
@@ -87,23 +85,9 @@ Instructions:
 
 It MUST directly reference "${mediaItem.title}". Do not use generic fantasy names.`;
 
-          const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              tools: [{ googleSearch: {} }],
-              generationConfig: { temperature: 0.9 }
-            })
-          });
-
-          if (aiRes.ok) {
-            const data = await aiRes.json();
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.replace(/\*\*/g, '').replace(/\"/g, '').trim() || "";
-            if (text) newName = text;
-          } else {
-            console.error("Gemini API error", await aiRes.text());
-          }
+          const text = (await nanoGenerateText(aiConfig, prompt, { temperature: 0.9, webSearch: true }))
+            .replace(/\*\*/g, '').replace(/\"/g, '').trim();
+          if (text) newName = text;
         } catch (e) { console.error("Reroll failed", e); }
       }
       

@@ -123,6 +123,11 @@ export function runMigrations(db: Db) {
   try { db.prepare("ALTER TABLE settings ADD COLUMN yearlyGoals TEXT").run(); console.log("Migration: Added yearlyGoals"); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptApiKey TEXT").run(); console.log("Migration: Added nanoGptApiKey"); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptModel TEXT").run(); console.log("Migration: Added nanoGptModel"); } catch (e) {}
+  // Separate model for tasks that must look things up online (tagging, loot, boss
+  // names, image prompts). Sent with a :online suffix, which is how NanoGPT enables
+  // web search.
+  try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptWebModel TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE system_settings ADD COLUMN nanoGptWebModel TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN geminiApiKey TEXT").run(); console.log("Migration: Added geminiApiKey"); } catch (e) {}
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN googleBooksApiKey TEXT").run(); } catch(e) {}
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN imageModel TEXT").run(); } catch(e) {}

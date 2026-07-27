@@ -181,6 +181,7 @@ export interface Settings {
   googleBooksApiKey?: string;
   nanoGptApiKey?: string;
   nanoGptModel?: string;
+  nanoGptWebModel?: string; // model used for tasks that need web search
   geminiApiKey?: string;
   // Image generation (system-wide; merged in from system_settings on the client)
   imageModel?: string;

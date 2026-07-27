@@ -22,8 +22,8 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
 
       const settings = req.body;
       db.prepare(`
-        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey, imageModel, imageSize, imageSteps, imageGuidance, imageNegativePrompt)
-        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey, @imageModel, @imageSize, @imageSteps, @imageGuidance, @imageNegativePrompt)
+        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, geminiApiKey, googleBooksApiKey, imageModel, imageSize, imageSteps, imageGuidance, imageNegativePrompt)
+        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @geminiApiKey, @googleBooksApiKey, @imageModel, @imageSize, @imageSteps, @imageGuidance, @imageNegativePrompt)
         ON CONFLICT(id) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -31,6 +31,7 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
           hardcoverApiKey=excluded.hardcoverApiKey,
           nanoGptApiKey=excluded.nanoGptApiKey,
           nanoGptModel=excluded.nanoGptModel,
+          nanoGptWebModel=excluded.nanoGptWebModel,
           geminiApiKey=excluded.geminiApiKey,
           googleBooksApiKey=excluded.googleBooksApiKey,
           imageModel=excluded.imageModel,
@@ -45,6 +46,7 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
         hardcoverApiKey: settings.hardcoverApiKey || null,
         nanoGptApiKey: settings.nanoGptApiKey || null,
         nanoGptModel: settings.nanoGptModel || null,
+        nanoGptWebModel: settings.nanoGptWebModel || null,
         geminiApiKey: settings.geminiApiKey || null,
         googleBooksApiKey: settings.googleBooksApiKey || null,
         imageModel: settings.imageModel || null,
