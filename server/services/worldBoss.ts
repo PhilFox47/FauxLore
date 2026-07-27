@@ -34,30 +34,36 @@ export function createWorldBossService(
         return;
       }
 
-      // --- Weighted type roll ---
-      // Pick a media TYPE first, weighted by sqrt(number of eligible entries) so large
-      // libraries get a slight edge without dominating; then pick a specific entry within
-      // that type (high-priority entries get doubled odds).
+      // --- Even type roll, then rotate ---
+      // The media TYPE is chosen first and every type has the same chance, so a large
+      // library never crowds out a small one. Only types with at least one eligible
+      // entry can be drawn, since byType is built from the candidates themselves.
+      //
+      // Types that already have a live enemy are then set aside, so a second enemy
+      // lands on a different type. Once every eligible type is represented, the
+      // exclusion is dropped and types may repeat.
       const byType: Record<string, any[]> = {};
       for (const c of candidates) {
         (byType[c.mediaType] = byType[c.mediaType] || []).push(c);
       }
-      const types = Object.keys(byType);
-      const typeWeights = types.map(t => Math.sqrt(byType[t].length));
-      const totalTypeWeight = typeWeights.reduce((a, b) => a + b, 0);
-      let tr = Math.random() * totalTypeWeight;
-      let chosenType = types[0];
-      for (let i = 0; i < types.length; i++) {
-        tr -= typeWeights[i];
-        if (tr < 0) { chosenType = types[i]; break; }
-      }
+      const allTypes = Object.keys(byType);
 
-      const entryPool: any[] = [];
-      for (const m of byType[chosenType]) {
-        entryPool.push(m);
-        if (m.isHighPriority) entryPool.push(m);
-      }
-      const mediaItem = entryPool[Math.floor(Math.random() * entryPool.length)];
+      const activeTypes = new Set(
+        (db
+          .prepare(
+            `SELECT DISTINCT m.mediaType AS t FROM world_bosses b
+               JOIN media m ON m.id = b.mediaId
+              WHERE b.userId = ? AND b.status = 'Active'`,
+          )
+          .all(userId) as any[]).map((r) => r.t),
+      );
+
+      const unrepresented = allTypes.filter((t) => !activeTypes.has(t));
+      // An explicit type request (Encore on a specific type) always wins.
+      const typePool = typeFilter ? allTypes : (unrepresented.length > 0 ? unrepresented : allTypes);
+
+      const chosenType = typePool[Math.floor(Math.random() * typePool.length)];
+
 
       const settings: any = db.prepare('SELECT geminiApiKey, enemyDifficulty, mediaDifficulty FROM settings WHERE userId = ?').get(userId);
       const enemyDifficulty = settings?.enemyDifficulty ?? 1.0;
@@ -65,8 +71,8 @@ export function createWorldBossService(
       if (settings?.mediaDifficulty) {
         try {
           const parsed = JSON.parse(settings.mediaDifficulty);
-          if (parsed[mediaItem.mediaType] !== undefined) {
-             mDiff = parsed[mediaItem.mediaType];
+          if (parsed[chosenType] !== undefined) {
+             mDiff = parsed[chosenType];
           }
         } catch(e) {}
       }
@@ -87,7 +93,7 @@ export function createWorldBossService(
       };
 
       let level: number;
-      if (mediaItem.mediaType === 'Movie') {
+      if (chosenType === 'Movie') {
         level = 2;
       } else {
         const weights = LEVEL_WEIGHTS_BY_DAY[new Date().getDay()] || LEVEL_WEIGHTS_BY_DAY[0];
@@ -110,6 +116,15 @@ export function createWorldBossService(
           level--;
         }
       }
+
+      // Finally the specific entry, now that type and level are settled. Entries within
+      // the type are equally likely, except high-priority ones which get doubled odds.
+      const entryPool: any[] = [];
+      for (const m of byType[chosenType]) {
+        entryPool.push(m);
+        if (m.isHighPriority) entryPool.push(m);
+      }
+      const mediaItem = entryPool[Math.floor(Math.random() * entryPool.length)];
 
       const getBaseTarget = (type: string, lv: number) => {
         const levels = {
