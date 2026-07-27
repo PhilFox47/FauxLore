@@ -127,11 +127,12 @@ async function renderPage(url: string): Promise<string> {
     // Wait for the metadata block the parser depends on, but don't hard-fail:
     // a missing selector is reported by looksRendered on the returned HTML.
     await page.waitForSelector("dt", { timeout: 10000 }).catch(() => {});
-    // Reveal the changelog tab so past versions can be collected too. Entirely
-    // best-effort: if the tab is absent or the markup shifts, the metadata we
-    // already have is unaffected.
+    // Reveal the version history so past releases can be collected too. The tab is
+    // labelled by its data-tab="versions" attribute and holds the per-release
+    // changelog. Best-effort: if the tab is absent or the markup shifts, the
+    // metadata already parsed is unaffected.
     try {
-      const tab = await page.$('[data-tab="changelog"]');
+      const tab = await page.$('[data-tab="versions"]');
       if (tab) {
         await tab.click();
         await new Promise((r) => setTimeout(r, 800));
@@ -329,7 +330,8 @@ export function parseGamePage(html: string, slug: string): GslGame {
  *
  * Besides the headline version, GSL exposes a distinct "last content update"
  * version (a title attribute such as: Last content update: March 7, 2025 (v0.11.0)),
- * and the changelog tab — when it has been opened — lists past releases. Scripts and
+ * and the versions tab — when it has been opened — lists past releases with their
+ * changelogs. Scripts and
  * style blocks are stripped first, otherwise bundled library versions leak in.
  */
 function collectVersions(html: string, current?: string): string[] {
@@ -354,9 +356,10 @@ function collectVersions(html: string, current?: string): string[] {
   const contentUpdate = body.match(/Last content update:[^"()]*\(([^)]+)\)/i);
   if (contentUpdate) add(decode(contentUpdate[1]));
 
-  // Changelog entries, when that tab has been rendered.
-  const changelog = body.match(/data-tab="changelog"[\s\S]{0,40000}/i)?.[0] || "";
-  for (const m of changelog.matchAll(/>\s*(v\d+[\w.]*)\s*</gi)) add(decode(m[1]));
+  // Version history, once the "versions" tab has been opened. Each release is an
+  // <article> headed by its version, so match that heading directly rather than
+  // scanning forward from the tab button: the panel sits far from it in the DOM.
+  for (const m of body.matchAll(/<h3[^>]*>\s*(v[\d][\w.\-]*)\s*<\/h3>/gi)) add(decode(m[1]));
 
   // Any remaining version-shaped chips elsewhere in the page body.
   for (const m of body.matchAll(/rounded-full[^>]*>\s*(v\d+\.\d+[\w.]*)\s*</gi)) add(decode(m[1]));
