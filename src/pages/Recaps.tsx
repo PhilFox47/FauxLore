@@ -14,22 +14,22 @@ import { calculateScaledDelta } from '../lib/scaling';
 import { calculateRPGState } from '../lib/rpgSystem';
 import { MediaItem, MEDIA_COLORS, ProgressLog, RARITY_COLORS } from '../types/schema';
 import { cn } from '../lib/utils';
-import { generateAiRecapText, generateText } from '../services/nanoGptService';
-import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon, Skull } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map as MapIcon, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon, Skull } from 'lucide-react';
 import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog, analyzeContrarian, extractJournals, calculateLongestStreak } from '../lib/recapAnalytics';
+import {
+  buildClock, buildComparison, buildHistoryMetrics, buildIntervalMetrics, buildMomentumSeries,
+  buildPipeline, buildRankRace, buildRecords, buildTasteAlignment, logsInInterval, shift,
+} from '../lib/recapInsights';
+import {
+  ActivityClock, ConsistencyRing, HeroStat, MomentumChart, PipelineFunnel, RankRace,
+  RecordsBoard, TasteScatter,
+} from '../components/RecapCharts';
+import { AwardsShelf, LookAhead, RecapDek, RecapNarrative, readRecap } from '../components/RecapStory';
+import { generateStructuredRecap } from '../services/recapAi';
 import { groupLogsIntoSessions } from '../lib/sessions';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, AreaChart, Area, Legend } from 'recharts';
 
 type Timeframe = 'week' | 'month' | 'year';
-
-/** Splits an AI plain-text narrative into clean paragraphs (blank-line separated). */
-function toParagraphs(text: string): string[] {
-  return String(text || '')
-    .replace(/\r\n/g, '\n')
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-}
 
 /** A number that animates up from 0 (eased) whenever it mounts or its value changes. */
 function CountUp({ value, duration = 1300, className }: { value: number; duration?: number; className?: string }) {
@@ -216,6 +216,114 @@ export function Recaps() {
       return acc + calculateScaledDelta(log.delta || 0, m, settings);
     }, 0);
   }, [activeProgressLogs, media, settings]);
+
+  // --- The measured layer -------------------------------------------------
+  // Every infographic and every number the narrative quotes comes from here, so
+  // the charts and the prose can never disagree about what happened.
+
+  const previousInterval = useMemo(() => {
+    if (timeframe === 'week') {
+      const t = subWeeks(currentInterval.start, 1);
+      return { start: startOfISOWeek(t), end: endOfISOWeek(t) };
+    }
+    if (timeframe === 'month') {
+      const t = subMonths(currentInterval.start, 1);
+      return { start: startOfMonth(t), end: endOfMonth(t) };
+    }
+    const t = subYears(currentInterval.start, 1);
+    return { start: startOfYear(t), end: endOfYear(t) };
+  }, [timeframe, currentInterval]);
+
+  const previousProgressLogs = useMemo(
+    () => logsInInterval(validLogs, previousInterval).filter((l) => l.metricType !== 'statusChange'),
+    [validLogs, previousInterval],
+  );
+
+  /** Titles that changed to a finished state inside an interval. */
+  const countCompletedIn = React.useCallback((interval: { start: Date; end: Date }) => {
+    const ids = new Set(
+      logsInInterval(validLogs, interval)
+        .filter((l) => l.metricType === 'statusChange' && (l.note?.toLowerCase().includes('to completed') || l.note?.toLowerCase().includes('to extras')))
+        .map((l) => l.mediaId),
+    );
+    return ids.size;
+  }, [validLogs]);
+
+  const currentMetrics = useMemo(
+    () => buildIntervalMetrics(activeProgressLogs, media, settings, currentInterval, {
+      completed: completedMedia.length,
+      dropped: droppedMedia.length,
+    }),
+    [activeProgressLogs, media, settings, currentInterval, completedMedia.length, droppedMedia.length],
+  );
+
+  const previousMetrics = useMemo(
+    () => buildIntervalMetrics(previousProgressLogs, media, settings, previousInterval, {
+      completed: countCompletedIn(previousInterval),
+    }),
+    [previousProgressLogs, media, settings, previousInterval, countCompletedIn],
+  );
+
+  const comparison = useMemo(
+    () => buildComparison(currentMetrics, previousProgressLogs.length > 0 ? previousMetrics : null),
+    [currentMetrics, previousMetrics, previousProgressLogs.length],
+  );
+
+  const momentumSeries = useMemo(
+    () => buildMomentumSeries(currentMetrics, previousProgressLogs.length > 0 ? previousMetrics : null),
+    [currentMetrics, previousMetrics, previousProgressLogs.length],
+  );
+
+  const clock = useMemo(() => buildClock(currentMetrics), [currentMetrics]);
+
+  // A title "started here" if its very first log in the whole archive lands in
+  // this period — that is what separates a fresh start from a carry-over.
+  const startedIds = useMemo(() => {
+    const firstSeen = new Map<string, number>();
+    validLogs.forEach((l) => {
+      const t = shift(l.timestamp).getTime();
+      const known = firstSeen.get(l.mediaId);
+      if (known === undefined || t < known) firstSeen.set(l.mediaId, t);
+    });
+    const ids = new Set<string>();
+    activeMedia.forEach((m) => {
+      const first = firstSeen.get(m.id);
+      if (first !== undefined && first >= currentInterval.start.getTime() && first <= currentInterval.end.getTime()) {
+        ids.add(m.id);
+      }
+    });
+    return ids;
+  }, [validLogs, activeMedia, currentInterval]);
+
+  const pipeline = useMemo(
+    () => buildPipeline({ touched: activeMedia, completedIds: completedMediaIds, droppedIds: droppedMediaIds, startedIds }),
+    [activeMedia, completedMediaIds, droppedMediaIds, startedIds],
+  );
+
+  const rankRace = useMemo(
+    () => buildRankRace(activeProgressLogs, media, settings, currentInterval, timeframe),
+    [activeProgressLogs, media, settings, currentInterval, timeframe],
+  );
+
+  const taste = useMemo(() => buildTasteAlignment(activeMedia), [activeMedia]);
+
+  // Records are only meaningful against comparable periods, so history is
+  // bucketed by the same timeframe the user is currently looking at.
+  const records = useMemo(() => {
+    const keyFor = (d: Date) =>
+      timeframe === 'week' ? format(d, "RRRR-'W'II") : timeframe === 'month' ? format(d, 'yyyy-MM') : format(d, 'yyyy');
+    const boundsFor = (d: Date) =>
+      timeframe === 'week'
+        ? { start: startOfISOWeek(d), end: endOfISOWeek(d) }
+        : timeframe === 'month'
+          ? { start: startOfMonth(d), end: endOfMonth(d) }
+          : { start: startOfYear(d), end: endOfYear(d) };
+    const history = buildHistoryMetrics(
+      validLogs.filter((l) => l.metricType !== 'statusChange'),
+      media, settings, keyFor, boundsFor,
+    );
+    return buildRecords(currentMetrics, history, timeId);
+  }, [validLogs, media, settings, timeframe, currentMetrics, timeId]);
 
   const currentRecap = useMemo(() => {
     if (isLoading) return undefined; // Return undefined while loading to avoid false "missing" states
@@ -409,56 +517,40 @@ ${gatheredLoot.length > 0 ? gatheredLoot.map(a => `- ${a.name} (${a.rarity}): ${
 JOURNAL NOTES (User's personal thoughts and reactions!):
 ${activeLogs.filter(l => l.note && l.note.trim().length > 0).map(l => `- [${l.timestamp.split('T')[0]}] On ${activeMedia.find(m => m.id === l.mediaId)?.title || 'Media'}: "${l.note}"`).join('\n') || 'None'}
 
+MEASURED SIGNALS (hard numbers — quote them, never invent them):
+Master pages this ${timeframe}: ${Math.round(comparison.masterPages.value)}${comparison.masterPages.pct !== null ? ` (previous ${timeframe}: ${Math.round(comparison.masterPages.previous)}, ${comparison.masterPages.diff >= 0 ? 'up' : 'down'} ${Math.abs(Math.round(comparison.masterPages.pct))}%)` : ' (no previous period on record)'}
+Titles touched: ${comparison.titles.value}${comparison.titles.pct !== null ? ` (was ${comparison.titles.previous})` : ''} | Finished: ${comparison.completed.value}${comparison.completed.pct !== null ? ` (was ${comparison.completed.previous})` : ''}
+Consistency: active on ${currentMetrics.activeDays} of ${currentMetrics.totalDays} days, ${currentMetrics.restDays} rest days, longest streak ${currentMetrics.longestStreak} days
+Sessions: ${currentMetrics.sessions}, averaging ${Math.round(currentMetrics.avgSession)} MP${currentMetrics.biggestSession ? `; biggest was ${Math.round(currentMetrics.biggestSession.pages)} MP on "${currentMetrics.biggestSession.title}"` : ''}
+${currentMetrics.bestDay ? `Biggest day: ${Math.round(currentMetrics.bestDay.pages)} MP on ${currentMetrics.bestDay.key}` : ''}
+${clock ? `When they consume: peak window ${clock.peakWindow.start}:00-${clock.peakWindow.end}:00 (${Math.round(clock.peakWindow.share * 100)}% of everything), mostly a ${clock.dominant.name} consumer (${Math.round(clock.dominant.share * 100)}%)` : ''}
+Outcomes: ${pipeline.stages.map(st => `${st.label} ${st.count}`).join(', ')}; ${pipeline.stillOpen} carried forward; ${Math.round(pipeline.closureRate * 100)}% closed out
+${taste ? `Taste vs critics: ${taste.stance} overall (average gap ${taste.avgGap.toFixed(1)})${taste.biggestChampion ? `; championed "${taste.biggestChampion.title}" (+${taste.biggestChampion.gap.toFixed(1)})` : ''}${taste.biggestSkeptic ? `; resisted "${taste.biggestSkeptic.title}" (${taste.biggestSkeptic.gap.toFixed(1)})` : ''}` : ''}
+${rankRace ? `The race: ${rankRace.series.map(r => r.title).join(' vs ')}${rankRace.leadChanges > 0 ? `, lead changed hands ${rankRace.leadChanges} time(s)` : ', one title led throughout'}` : ''}
+PERSONAL RECORDS this ${timeframe}: ${records.filter(r => r.isRecord).map(r => `${r.label} — ${r.value} ${r.unit} (previous best ${r.previousBest})`).join(' | ') || 'None broken'}
+NEAR MISSES: ${records.filter(r => !r.isRecord && r.previousBest > 0 && r.value >= r.previousBest * 0.85).map(r => `${r.label} — ${r.value} vs best ${r.previousBest}`).join(' | ') || 'None close'}
+
 PREVIOUS RECAPS (Chronological):
 ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title}): \n${r.summary}`).join('\n\n') : 'No past recaps available.'}
 `;
 
-      const aiResponsePromise = generateAiRecapText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', `Write a title and a sharp, opinionated recap of this ${timeframe}'s media life. You are a commentator and analyst who has been following this person closely — NOT a summarizer. The data below is your evidence, not your script.
-
-CRITICAL INSTRUCTIONS:
-1. TITLE: First write the recap, then read it back and title it. Give this ${timeframe} a title that captures the ONE defining story you found (instruction 2). It should read like a great episode, chapter or album title — evocative, specific and a little stylish (2-6 words). Anchor it in what actually happened: a standout title they played or read, a genre obsession, a mood, a milestone or personal record, a dropped heartbreak, or a thread running through their journal notes. It must feel personal and earned, never interchangeable. In the spirit of: "The Sci-Fi Spiral", "Three Books, No Sleep", "Death of a Backlog", "The Boss Finally Fell", "Cozy Hours and Cold Coffee". NEVER use generic filler like "A Week of Media", "Productive Times", "The Journey Continues" or "Media Recap", and do not just name the timeframe. No subtitle, no quotes, no explanation.
-2. THESIS, NOT A LIST: Open by naming the single biggest story of this ${timeframe} — an obsession, a slump, a genre bender, a finishing spree, a crisis of commitment — and build the whole piece around that throughline. NEVER walk through the logs item by item. The moment you catch yourself writing "they also..." or listing what happened, stop and cut it.
-3. ANALYZE, DON'T ECHO: Your entire job is interpretation. Spot patterns and name them out loud: shifts in taste, changes in pace, what they gravitate toward versus avoid, contradictions between what they rate highly and what they actually sink time into, bingeing versus grazing, and what their dropped media and journal notes reveal about their headspace. Make claims, then back them with the data — never just restate the data.
-4. TAKE A STANCE: Have real opinions. Tease them about their patterns, push them, gently call out the backlog they keep ignoring, and genuinely celebrate the wins. React like a friend who has been watching, not a report generator.
-5. CONTINUITY & FOLLOW-UP (important): Treat "PREVIOUS RECAPS" as one ongoing story and explicitly follow up on it. Did they finally finish the thing you flagged last time? Is the slump over, or worse? Did a habit you called out improve? Are they still avoiding something? Reward streaks, callbacks, and repeats by name. If there are NO previous recaps, set the baseline and say what you'll be watching for next time.
-6. EVIDENCE, WOVEN IN: Use journal notes, locations, ratings, loot, bosses, dropped titles and quest stats as supporting evidence for your points — woven naturally into prose, never as standalone lists, bullet points, or roll-calls.
-7. ACCURACY: Only treat something as completed if it appears in 'MEDIA COMPLETED'. Do not invent events or feelings the data doesn't support.
-8. LENGTH & ARC: Weekly: 2-3 tight paragraphs. Monthly/Yearly: 4-6 paragraphs with a clear arc — the story, the evidence, and where it's heading.
-9. PR ALERT: If they hit a Personal Record in Master Pages, make a real moment of it.
-10. HUMAN VOICE / ANTI-SLOP: Write like a smart, real person talking. Avoid AI clichés ("delve", "tapestry", "embark", "testament", "symphony", "not merely", "in the realm of") and limp conclusions ("In conclusion", "Overall", "One thing is certain"). Be specific, grounded, and a little unhinged when it's earned.
-11. PLAIN TEXT ONLY: Output prose in blank-line-separated paragraphs. No Markdown or HTML — no asterisks, underscores, hashes, bullets, headings, or links. They render as literal characters and look broken.
-
-Context: 
-${promptContext}`, settings.aiPersona);
-
-      const roastPromise = generateText(
-        settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini',
-        "You are an AI roasting bot inside a media tracking app. Keep it fun and lighthearted, but throw some serious shade at the user's media habits. Just return the string directly, max 2 sentences.",
-        promptContext
-      );
-
-      const themePromise = generateText(
-        settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini',
-        "You are an AI summarizing bot. Name the 'Theme of the Period' based on the user's media consumption. Provide just the theme name (max 5 words).",
-        promptContext
-      );
-
-      const [aiResponse, aiRoast, aiTheme] = await Promise.all([
-        aiResponsePromise,
-        timeframe === 'month' || timeframe === 'year' ? roastPromise.catch(e => "Error loading roast.") : Promise.resolve(null),
-        timeframe === 'month' || timeframe === 'year' ? themePromise.catch(e => "Error loading theme.") : Promise.resolve(null)
-      ]);
-      
-      if (!aiResponse.summary || String(aiResponse.summary).trim().length === 0) {
-        throw new Error("The AI failed to generate a narrative summary.");
-      }
+      const recap = await generateStructuredRecap({
+        apiKey: settings.nanoGptApiKey,
+        model: settings.nanoGptModel || 'gpt-4o-mini',
+        persona: settings.aiPersona,
+        timeframe,
+        intervalLabel: formatIntervalLabel(),
+        context: promptContext,
+      });
 
       await saveAiRecap({
         timeframe,
         timeId,
-        title: aiResponse.title,
-        summary: aiResponse.summary,
+        title: recap.title,
+        summary: recap.summary,
         data: {
+          // The whole issue — chapters, awards, chart captions, look-ahead.
+          structured: recap,
           totalMasterPages,
           isNewPR,
           defeatedBosses: defeatedBosses.map(b => ({ id: b.id, name: b.name, level: b.level, mediaId: b.mediaId, imageUrl: b.imageUrl })),
@@ -470,8 +562,9 @@ ${promptContext}`, settings.aiPersona);
           rpgClass: finalClassName,
           exp: rpgStateAtEnd.currentExp, 
           nextLevelExp: rpgStateAtEnd.nextLevelExp,
-          aiRoast,
-          aiTheme,
+          // Kept flat as well: older recap readers still look for these.
+          aiRoast: recap.roast,
+          aiTheme: recap.theme,
           lootDist,
           backlogVelocity,
           midnightOil: habitsDetails?.timeSegments?.night || 0,
@@ -492,8 +585,8 @@ ${promptContext}`, settings.aiPersona);
     }
   };
 
-  const renderThemeOfTheMonth = () => {
-    const themeText = currentRecap?.data?.aiTheme;
+  const renderThemeBanner = () => {
+    const themeText = story?.theme || currentRecap?.data?.aiTheme;
     if (!themeText) return null;
     return (
       <div className="w-full text-center py-6">
@@ -813,6 +906,9 @@ ${promptContext}`, settings.aiPersona);
   };
 
   const theme = getTheme();
+  /** The recap as an issue: chapters, awards, captions — legacy rows included. */
+  const story = useMemo(() => readRecap(currentRecap), [currentRecap]);
+  const captions = story?.captions || {};
 
   const renderTopCreator = () => {
      const creatorPages: Record<string, number> = {};
@@ -1345,7 +1441,7 @@ ${promptContext}`, settings.aiPersona);
      return (
         <div className="bg-zinc-900/50 border border-white/5 p-6 rounded-3xl">
            <h3 className="text-lg font-black text-white mb-6 flex items-center gap-3">
-             <Map className="w-5 h-5 text-zinc-400" />
+             <MapIcon className="w-5 h-5 text-zinc-400" />
              Scouted Locations
            </h3>
            <div className="space-y-4">
@@ -1788,7 +1884,7 @@ ${promptContext}`, settings.aiPersona);
       mostPlayed && { icon: <Flame className="w-4 h-4" />, label: 'Most played', value: mostPlayed.item.title, sub: `${Math.round(mostPlayed.pages).toLocaleString()} pages` },
       topRated && { icon: <Star className="w-4 h-4" />, label: 'Highest rated', value: topRated.title, sub: `${topRated.userRating}★` },
       longest.pages > 0 && { icon: <Zap className="w-4 h-4" />, label: 'Longest session', value: longest.title, sub: `${Math.round(longest.pages).toLocaleString()} pages` },
-      topPlace && { icon: <Map className="w-4 h-4" />, label: 'Most-logged place', value: topPlace[0], sub: `${topPlace[1]} logs` },
+      topPlace && { icon: <MapIcon className="w-4 h-4" />, label: 'Most-logged place', value: topPlace[0], sub: `${topPlace[1]} logs` },
       topBoss && { icon: <Skull className="w-4 h-4" />, label: 'Biggest foe felled', value: topBoss.name, sub: `Level ${topBoss.level}` },
       comeback && { icon: <History className="w-4 h-4" />, label: 'Comeback', value: (comeback as { title: string; gap: number }).title, sub: `after ${(comeback as { title: string; gap: number }).gap}d away` },
     ].filter(Boolean);
@@ -1952,16 +2048,18 @@ ${promptContext}`, settings.aiPersona);
                          </button>
                       </div>
 
+                      {story?.dek && (
+                        <div className="relative z-10 mb-8">
+                          <RecapDek dek={story.dek} mood={story.mood} />
+                        </div>
+                      )}
+
                       {renderIdentity()}
 
                       <div className="text-xl md:text-2xl text-zinc-400 relative z-10 leading-relaxed font-light mt-8">
                          {currentRecap ? (
                              <>
-                             <div className="max-w-3xl space-y-5">
-                               {toParagraphs(currentRecap.summary).map((p, i) => (
-                                 <p key={i} className={cn("text-lg md:text-xl text-zinc-300/90 leading-relaxed font-light", i === 0 && "first-letter:float-left first-letter:mr-3 first-letter:text-6xl first-letter:font-black first-letter:leading-[0.8] first-letter:text-white")}>{p}</p>
-                               ))}
-                             </div>
+                             {story && <RecapNarrative recap={story} accentText={theme.text} />}
                             {renderAIRoast()}
                             {renderMonthlyStats()}
                             {renderBossTrophyRoom()}
@@ -1981,19 +2079,32 @@ ${promptContext}`, settings.aiPersona);
 
                    {/* Hero Numbers */}
                    <Reveal className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {[
-                        { label: 'Master Pages', value: Math.round(totalMasterPages), accent: true },
-                        { label: 'Media Conquered', value: completedMedia.length, accent: false },
-                        { label: 'Logged Actions', value: activeLogs.length, accent: false },
-                        { label: 'Active Journeys', value: activeMedia.length, accent: false },
-                      ].map((s) => (
-                        <div key={s.label} className="bg-black/40 border border-white/5 p-6 md:p-8 rounded-3xl flex flex-col items-center justify-center text-center relative overflow-hidden group hover:bg-white/[0.04] transition-all">
-                           <div className={`absolute -top-10 -right-10 w-24 h-24 ${theme.glow} blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity`} />
-                           <CountUp value={s.value} className={cn("text-4xl md:text-6xl font-black tracking-tighter mb-2", s.accent ? theme.text : "text-white")} />
-                           <div className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] font-black">{s.label}</div>
-                        </div>
-                      ))}
+                      <HeroStat label="Master Pages" delta={comparison.masterPages} accentClass={theme.text} />
+                      <HeroStat label="Media Conquered" delta={comparison.completed} />
+                      <HeroStat label="Logged Actions" delta={comparison.logCount} />
+                      <HeroStat label="Active Journeys" delta={comparison.titles} />
                    </Reveal>
+
+                   {/* The measured story: pace, consistency, rhythm, outcomes,
+                       the race for first place, taste and the record books.
+                       Each card carries the AI's one-line reading of it. */}
+                   {renderThemeBanner()}
+
+                   <div className="grid grid-cols-1 lg:grid-cols-6 gap-6 grid-flow-dense">
+                      <MomentumChart
+                        className="lg:col-span-4"
+                        points={momentumSeries}
+                        accent={accentHex}
+                        timeframe={timeframe}
+                        caption={captions.momentum}
+                      />
+                      <ConsistencyRing className="lg:col-span-2" metrics={currentMetrics} accent={accentHex} />
+                      {clock && <ActivityClock className="lg:col-span-2" clock={clock} accent={accentHex} caption={captions.rhythm} />}
+                      <PipelineFunnel className="lg:col-span-2" pipeline={pipeline} accent={accentHex} caption={captions.pipeline} />
+                      <RecordsBoard className="lg:col-span-2" records={records} caption={captions.records} />
+                      {rankRace && <RankRace className="lg:col-span-3" race={rankRace} />}
+                      {taste && <TasteScatter className="lg:col-span-3" taste={taste} accent={accentHex} caption={captions.taste} />}
+                   </div>
 
                    {/* #1 Spotlight (Last.fm / Wrapped-style top media moment) */}
                    {renderSpotlight()}
@@ -2060,6 +2171,12 @@ ${promptContext}`, settings.aiPersona);
                         Format Allocation
                       </h3>
                       {renderTypeBreakdown()}
+                      {captions.formats && (
+                        <div className="mt-6 pt-4 border-t border-white/5 flex gap-2.5 items-start">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500/70 shrink-0 mt-0.5" />
+                          <p className="text-sm text-zinc-400 italic leading-snug">{captions.formats}</p>
+                        </div>
+                      )}
                    </div>
 
                    {/* Insights — full-width activity map, then a gap-free spanned grid */}
@@ -2173,8 +2290,14 @@ ${promptContext}`, settings.aiPersona);
                       </div>
                    )}
 
+                   {/* The AI's awards, handed to specific titles */}
+                   {story?.awards?.length ? <AwardsShelf awards={story.awards} media={media} /> : null}
+
                    {/* Deep cuts: signature number + superlatives */}
                    {renderDeepCuts()}
+
+                   {/* Where this leaves them, and what to do about it */}
+                   {story?.lookAhead && <LookAhead lookAhead={story.lookAhead} timeframe={timeframe} />}
 
                    {/* Sealed time capsule (closing) */}
                    {renderTimeCapsule()}
