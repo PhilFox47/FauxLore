@@ -153,6 +153,23 @@ export function MediaFormModal({
     return out;
   }, [formData.sourceVersion, formData.sourceVersions, formData.installedVersion]);
 
+  // Routes already recorded for this title, so re-runs can reuse consistent names
+  // instead of "Bella" / "bella" / "Bella route" drifting apart.
+  const routeOptions = useMemo(() => {
+    const rootId = formData.originalMediaId || formData.id;
+    if (!rootId) return [];
+    const family = (media || []).filter(
+      (m: any) => m.id === rootId || m.originalMediaId === rootId,
+    );
+    const seen = new Set<string>();
+    const out: string[] = [];
+    family.forEach((m: any) => {
+      const r = (m.route || '').trim();
+      if (r && !seen.has(r.toLowerCase())) { seen.add(r.toLowerCase()); out.push(r); }
+    });
+    return out;
+  }, [media, formData.id, formData.originalMediaId]);
+
   const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -766,6 +783,29 @@ export function MediaFormModal({
                 If you're replaying or rereading it, use the Re-run option on that entry instead of
                 adding it again.
               </div>
+            </div>
+          )}
+
+          {["Visual Novel", "Game"].includes(formData.mediaType) && (
+            <div className="block mt-4 relative z-0">
+              <label className="block text-sm font-medium text-zinc-400 mb-1">
+                Route <span className="text-zinc-600 font-normal">(optional)</span>
+              </label>
+              <input
+                name="route"
+                list="route-options"
+                value={formData.route || ""}
+                onChange={handleChange}
+                className="input-field"
+                placeholder="E.g., Bella, Corruption path, True Ending"
+                autoComplete="off"
+              />
+              <datalist id="route-options">
+                {routeOptions.map((r) => <option key={r} value={r} />)}
+              </datalist>
+              <p className="text-[11px] text-zinc-500 mt-1">
+                One route per playthrough. To play another, use Re-run on this entry.
+              </p>
             </div>
           )}
 

@@ -28,6 +28,7 @@
       isHighPriority: row.isHighPriority === 1,
       noAutoDrop: row.noAutoDrop === 1,
       expectedReleaseDate: row.expectedReleaseDate || null,
+      route: row.route || null,
       releaseStatus: row.releaseStatus || null,
       lastSyncAt: row.lastSyncAt || null,
       metadataSource: row.metadataSource || null,

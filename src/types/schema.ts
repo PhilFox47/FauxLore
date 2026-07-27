@@ -62,6 +62,7 @@ export interface MediaItem {
   isHighPriority?: boolean;
   noAutoDrop?: boolean;
   storyHeavyModifier?: number; // 0.5x to 1.5x
+  route?: string; // Optional: which route/path this playthrough follows (VNs)
   releaseStatus?: string;
   lastSyncAt?: string;
 
