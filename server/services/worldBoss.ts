@@ -80,41 +80,42 @@ export function createWorldBossService(
       const difficulty = enemyDifficulty * mDiff;
 
       // --- Level determination ---
-      // Movies are ALWAYS level 2. Everything else rolls by weekday using relative weights
-      // for levels [1,2,3,4,5] (normalized at pick time so they need not sum to 100).
-      const LEVEL_WEIGHTS_BY_DAY: Record<number, number[]> = {
-        1: [10, 25, 30, 25, 10], // Monday
-        2: [10, 25, 30, 30, 5],  // Tuesday
-        3: [15, 30, 35, 20, 0],  // Wednesday
-        4: [15, 35, 40, 10, 0],  // Thursday
-        5: [25, 40, 30, 0, 0],   // Friday
-        6: [55, 45, 10, 0, 0],   // Saturday
-        0: [80, 20, 0, 0, 0],    // Sunday
+      // Difficulty ramps with how many enemies are already live, rather than with the
+      // weekday: the auto-spawn lands on an empty board and should be survivable on a
+      // busy week, while asking for more is opting in to harder ones.
+      //
+      //   no enemies yet -> always level 3 (the Monday spawn)
+      //   one enemy live  -> the first Encore: level 5 (75%) or level 4 (25%)
+      //   beyond that     -> any level, subject to the caps below
+      //
+      // Levels 4 and 5 are mutually exclusive and capped: at most two level 4s, at
+      // most one level 5, and neither may join the other. Movies ignore all of this
+      // and are always level 2, since a movie boss is beaten by watching it once.
+      const activeLevels = (db
+        .prepare("SELECT level, COUNT(*) as c FROM world_bosses WHERE userId = ? AND status = 'Active' GROUP BY level")
+        .all(userId) as any[]);
+      const countAt: Record<number, number> = {};
+      activeLevels.forEach((row) => { countAt[row.level] = row.c; });
+      const activeCount = activeLevels.reduce((sum, row) => sum + row.c, 0);
+
+      const allows = (lv: number) => {
+        if (lv === 5) return (countAt[5] || 0) < 1 && (countAt[4] || 0) === 0;
+        if (lv === 4) return (countAt[4] || 0) < 2 && (countAt[5] || 0) === 0;
+        return true; // 1-3 are uncapped
       };
 
       let level: number;
       if (chosenType === 'Movie') {
         level = 2;
+      } else if (activeCount === 0) {
+        level = 3;
+      } else if (activeCount === 1) {
+        // First Encore: weighted toward the big one, but only among what the caps allow.
+        const wanted = Math.random() < 0.75 ? [5, 4] : [4, 5];
+        level = wanted.find(allows) ?? 3;
       } else {
-        const weights = LEVEL_WEIGHTS_BY_DAY[new Date().getDay()] || LEVEL_WEIGHTS_BY_DAY[0];
-        const totalLevelWeight = weights.reduce((a, b) => a + b, 0);
-        let lr = Math.random() * totalLevelWeight;
-        level = 1;
-        for (let i = 0; i < weights.length; i++) {
-          lr -= weights[i];
-          if (lr < 0) { level = i + 1; break; }
-        }
-
-        // Enforce active-enemy caps with a downgrade cascade:
-        // L5 max 1, L4 max 1, L3 max 3, L1/L2 unlimited. If the rolled level is full,
-        // step down one level at a time until it fits (or reaches level 1).
-        const LEVEL_CAPS: Record<number, number> = { 3: 3, 4: 1, 5: 1 };
-        const activeCounts: Record<number, number> = {};
-        (db.prepare("SELECT level, COUNT(*) as c FROM world_bosses WHERE userId = ? AND status = 'Active' GROUP BY level").all(userId) as any[])
-          .forEach(row => { activeCounts[row.level] = row.c; });
-        while (level > 1 && LEVEL_CAPS[level] !== undefined && (activeCounts[level] || 0) >= LEVEL_CAPS[level]) {
-          level--;
-        }
+        const open = [1, 2, 3, 4, 5].filter(allows);
+        level = open[Math.floor(Math.random() * open.length)];
       }
 
       // Finally the specific entry, now that type and level are settled. Entries within
