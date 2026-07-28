@@ -205,7 +205,6 @@ export function runMigrations(db: Db) {
       db.prepare("UPDATE artifacts SET userId = ? WHERE userId = 'default_user'").run(adminId);
       db.prepare("UPDATE ai_text_cache SET userId = ? WHERE userId = 'default_user'").run(adminId);
       db.prepare("UPDATE world_bosses SET userId = ? WHERE userId = 'default_user'").run(adminId);
-      db.prepare("UPDATE oracle_messages SET userId = ? WHERE userId = 'default_user'").run(adminId);
       db.prepare("UPDATE franchises SET userId = ? WHERE userId = 'default_user'").run(adminId);
     }
   } catch(e) { console.error('Migration of default_user failed:', e); }

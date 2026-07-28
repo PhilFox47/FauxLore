@@ -368,22 +368,6 @@ export const DatabaseService = {
     await apiFetch(`/api/artifacts/${id}/generate-image`, { method: 'POST' });
   },
 
-  async getOracleMessages(): Promise<any[]> {
-    try {
-      const res = await apiFetch('/api/oracle');
-      if (!res.ok) return [];
-      return res.json();
-    } catch (e) {
-      console.error(e);
-      return [];
-    }
-  },
-
-  async generateOracleMessage(): Promise<void> {
-    const res = await apiFetch('/api/oracle/generate', { method: 'POST' });
-    if (!res.ok) throw new Error('Failed to generate oracle message');
-  },
-
   async saveArtifact(artifact: any): Promise<void> {
     const res = await apiFetch('/api/artifacts', {
       method: 'POST',

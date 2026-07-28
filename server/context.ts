@@ -22,7 +22,6 @@ export interface ServerContext {
   safeJsonParse: (str: any) => any[];
   syncOngoingMediaInBackground: (userId: string) => Promise<void>;
   createDatabaseBackup: () => { success: boolean; file?: string; error?: string };
-  generateOracleMessage: (userId: string, type: "morning" | "evening") => Promise<void>;
   spawnWorldBoss: (userId: string, throwOnEmpty?: boolean, targetMediaType?: string) => Promise<void>;
   generateEnemy: (userId: string, mediaItem: any, level: number) => Promise<GeneratedEnemy | null>;
   generateLoot: (userId: string, mediaItem: any, oldArtifact?: any) => Promise<GeneratedLoot | null>;

@@ -1,8 +1,8 @@
 /**
  * The voices FauxLore can speak in.
  *
- * One list, used by everything that writes prose: the Oracle's daily messages
- * (server-side), the recap columnist, and the quest-title rewriter. Adding a
+ * One list, used by everything that writes prose: the recap columnist, the
+ * quest-title rewriter, and the backlog recommender. Adding a
  * persona here puts it in the Settings picker automatically — the description
  * IS the prompt, so it is written as an instruction to the model rather than as
  * marketing copy.

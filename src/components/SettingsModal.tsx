@@ -527,7 +527,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-zinc-400 mb-1">AI Persona (Recaps & Oracles)</label>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">AI Persona</label>
                       <div className="relative">
                         <select
                           name="aiPersona"
@@ -544,7 +544,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         </div>
                       </div>
                       <p className="text-[10px] text-zinc-500 mt-1">
-                        {getPersona(formData.aiPersona).hint} Sets the voice of the Oracle, your recaps and quest titles.
+                        {getPersona(formData.aiPersona).hint} Sets the voice of your recaps and quest titles.
                       </p>
                     </div>
                   </div>

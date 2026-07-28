@@ -225,14 +225,6 @@ export function initSchema(db: Db) {
     );
     CREATE INDEX IF NOT EXISTS idx_media_codex_media ON media_codex(userId, mediaId);
 
-    CREATE TABLE IF NOT EXISTS oracle_messages (
-      id TEXT PRIMARY KEY,
-      userId TEXT NOT NULL,
-      message TEXT NOT NULL,
-      type TEXT, -- 'morning', 'evening'
-      timestamp TEXT NOT NULL
-    );
-
     CREATE TABLE IF NOT EXISTS notifications (
       id TEXT PRIMARY KEY,
       userId TEXT NOT NULL,

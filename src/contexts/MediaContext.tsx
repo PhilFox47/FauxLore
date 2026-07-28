@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode, useRef } from 'react';
-import { MediaItem, ProgressLog, MetricType, MediaType, Settings, Artifact, WorldBoss, OracleMessage, getMetricForType } from '../types/schema';
+import { MediaItem, ProgressLog, MetricType, MediaType, Settings, Artifact, WorldBoss, getMetricForType } from '../types/schema';
 import { DatabaseService } from '../services/db';
 import { calculateRPGState } from '../lib/rpgSystem';
 import { generateText, getPersonaDescription } from '../services/nanoGptService';
@@ -14,7 +14,6 @@ interface MediaContextType {
   aiRecaps: any[];
   artifacts: Artifact[];
   worldBosses: WorldBoss[];
-  oracleMessages: OracleMessage[];
   aiTextCache: Record<string, string>;
   taxonomies: any[];
   refreshData: () => Promise<void>;
@@ -36,7 +35,6 @@ interface MediaContextType {
   updateArtifact: (id: string, artifact: Partial<Artifact>) => Promise<void>;
   equipArtifact: (id: string, slot: string) => Promise<void>;
   unequipArtifact: (id: string) => Promise<void>;
-  fetchOracleMessage: () => Promise<void>;
   saveAiText: (key: string, value: string) => Promise<void>;
   clearAiTextCache: (key?: string) => Promise<void>;
   addTaxonomy: (name: string, type: 'genre'|'tag') => Promise<void>;
@@ -63,7 +61,6 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   const [aiRecaps, setAiRecaps] = useState<any[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [worldBosses, setWorldBosses] = useState<WorldBoss[]>([]);
-  const [oracleMessages, setOracleMessages] = useState<OracleMessage[]>([]);
   const [aiTextCache, setAiTextCache] = useState<Record<string, string>>({});
   const [taxonomies, setTaxonomies] = useState<any[]>([]);
   const [franchises, setFranchises] = useState<any[]>([]);
@@ -86,7 +83,6 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       setAiRecaps([]);
       setArtifacts([]);
       setWorldBosses([]);
-      setOracleMessages([]);
       setAiTextCache({});
       setTaxonomies([]);
       setFranchises([]);
@@ -96,14 +92,13 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     }
     try {
       setIsLoading(true);
-      const [mediaData, logsData, settingsData, recapsData, artifactsData, bossesData, oracleData, textCacheData, taxData, franchisesData] = await Promise.all([
+      const [mediaData, logsData, settingsData, recapsData, artifactsData, bossesData, textCacheData, taxData, franchisesData] = await Promise.all([
         DatabaseService.getAllMedia(),
         DatabaseService.getAllLogs(),
         DatabaseService.getSettings(),
         DatabaseService.getAiRecaps(),
         DatabaseService.getArtifacts(),
         DatabaseService.getWorldBosses(),
-        DatabaseService.getOracleMessages(),
         DatabaseService.getAiTextCache(),
         DatabaseService.getTaxonomies(),
         DatabaseService.getAllFranchises()
@@ -114,7 +109,6 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       setAiRecaps(recapsData);
       setArtifacts(artifactsData);
       setWorldBosses(bossesData);
-      setOracleMessages(oracleData);
       setAiTextCache(textCacheData);
       setTaxonomies(taxData);
       setFranchises(franchisesData);
@@ -296,11 +290,6 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     await refreshData();
   }, [refreshData]);
 
-  const fetchOracleMessage = useCallback(async () => {
-    await DatabaseService.generateOracleMessage();
-    await refreshData();
-  }, [refreshData]);
-
   const rerollBoss = useCallback(async (id: string) => {
     await DatabaseService.rerollBoss(id);
     await refreshData();
@@ -357,7 +346,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [refreshData]);
 
   return (
-    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, oracleMessages, taxonomies, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, refreshMetadata, acknowledgeUpdate, notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, fetchOracleMessage, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, taxonomies, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, refreshMetadata, acknowledgeUpdate, notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
       {children}
     </MediaContext.Provider>
   );

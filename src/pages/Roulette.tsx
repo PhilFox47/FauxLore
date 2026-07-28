@@ -19,8 +19,8 @@ export function Roulette() {
   const [seed, setSeed] = useState(0);
 
   const [randomPick, setRandomPick] = useState<MediaItem | null>(null);
-  const [isOracleLoading, setIsOracleLoading] = useState(false);
-  const [oracleRecommendation, setOracleRecommendation] = useState<string | null>(null);
+  const [isAdviceLoading, setIsAdviceLoading] = useState(false);
+  const [aiRecommendation, setAiRecommendation] = useState<string | null>(null);
 
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -53,10 +53,10 @@ export function Roulette() {
     setRandomPick(pool[Math.floor(Math.random() * pool.length)].item);
   };
 
-  const consultOracle = async () => {
+  const askForAdvice = async () => {
     if (!settings?.nanoGptApiKey || backlogCount === 0) return;
-    setIsOracleLoading(true);
-    setOracleRecommendation(null);
+    setIsAdviceLoading(true);
+    setAiRecommendation(null);
     try {
       const recentLogs = [...logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 20);
       const recentMediaIds = Array.from(new Set(recentLogs.map(l => l.mediaId)));
@@ -67,14 +67,14 @@ export function Roulette() {
       const aiText = await generateText(
         settings.nanoGptApiKey,
         settings.nanoGptModel || 'gpt-4o-mini',
-        `You are 'The Oracle' inside an RPG media tracker. ${personaDesc} Recommend EXACTLY ONE item from the user's BACKLOG and justify it based on their recent consumption. Make the tone match your persona. Keep it to 2-3 sentences.`,
+        `You are the recommendation assistant inside a media tracker. ${personaDesc} Recommend EXACTLY ONE item from the user's BACKLOG and justify it based on their recent consumption. Make the tone match your persona. Keep it to 2-3 sentences.`,
         promptContext,
       );
-      setOracleRecommendation(aiText);
+      setAiRecommendation(aiText);
     } catch (e: any) {
-      console.error('Oracle connection failed: ' + e.message);
+      console.error('Recommendation request failed: ' + e.message);
     } finally {
-      setIsOracleLoading(false);
+      setIsAdviceLoading(false);
     }
   };
 
@@ -264,37 +264,37 @@ export function Roulette() {
         </section>
       )}
 
-      {/* The Oracle (AI) */}
+      {/* Ask the AI for a pick */}
       <section className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border border-indigo-500/20 rounded-3xl p-5 sm:p-8 relative overflow-hidden">
         <div className="absolute -top-32 -right-32 w-64 h-64 bg-indigo-500/20 blur-[100px] rounded-full pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
           <div className="flex-1">
             <h3 className="text-3xl font-black text-indigo-100 flex items-center gap-3 mb-4 tracking-tight">
-              <Eye className="w-8 h-8 text-indigo-400" /> Consult The Oracle
+              <Eye className="w-8 h-8 text-indigo-400" /> Ask the AI
             </h3>
             <p className="text-indigo-200/70 mb-6 text-sm leading-relaxed max-w-lg">
-              Prefer a verdict with personality? Let the Oracle scry your backlog and name the one path you must take.
+              Want a pick with reasoning behind it? The AI reads your backlog and what you have been logging lately, then names one thing to start next.
             </p>
             <button
-              onClick={consultOracle}
-              disabled={isOracleLoading || backlogCount === 0 || !settings?.nanoGptApiKey}
+              onClick={askForAdvice}
+              disabled={isAdviceLoading || backlogCount === 0 || !settings?.nanoGptApiKey}
               className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-900 disabled:text-indigo-500 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-bold transition-colors flex items-center gap-2"
             >
-              {isOracleLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-              {isOracleLoading ? 'The Oracle is Scrying...' : 'Ask The Oracle'}
+              {isAdviceLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+              {isAdviceLoading ? 'Thinking...' : 'Recommend one for me'}
             </button>
-            {!settings?.nanoGptApiKey && <p className="text-indigo-300/50 text-xs mt-3">Configure a NanoGPT key in Settings to use the Oracle.</p>}
+            {!settings?.nanoGptApiKey && <p className="text-indigo-300/50 text-xs mt-3">Configure a NanoGPT key in Settings to use this.</p>}
           </div>
-          {(oracleRecommendation || isOracleLoading) && (
+          {(aiRecommendation || isAdviceLoading) && (
             <div className="flex-1 w-full bg-black/40 border border-indigo-500/30 rounded-2xl p-6 min-h-[180px]">
-              {isOracleLoading ? (
+              {isAdviceLoading ? (
                 <div className="h-full flex flex-col items-center justify-center text-indigo-400 opacity-70 gap-4">
                   <Eye className="w-10 h-10 animate-pulse" />
-                  <span className="text-sm tracking-widest uppercase font-bold text-indigo-300">Peering into the void...</span>
+                  <span className="text-sm tracking-widest uppercase font-bold text-indigo-300">Reading your backlog...</span>
                 </div>
               ) : (
                 <div className="prose prose-invert prose-sm prose-indigo max-w-none">
-                  <Markdown>{oracleRecommendation}</Markdown>
+                  <Markdown>{aiRecommendation}</Markdown>
                 </div>
               )}
             </div>

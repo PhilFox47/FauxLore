@@ -1,6 +1,6 @@
 import { apiFetch } from './db';
 
-// Personas live in lib/personas, which the Oracle on the server reads too.
+// Personas live in lib/personas, which the server reads too.
 import { getPersonaDescription } from '../lib/personas';
 export { getPersonaDescription };
 

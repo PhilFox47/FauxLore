@@ -237,14 +237,6 @@ export interface MediaCodex {
   promptBlock?: string;
 }
 
-export interface OracleMessage {
-  id: string;
-  userId: string;
-  message: string;
-  type: 'morning' | 'evening';
-  timestamp: string;
-}
-
 export interface Settings {
   userId: string;
   igdbClientId?: string;

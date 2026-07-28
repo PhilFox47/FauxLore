@@ -20,7 +20,6 @@ import { createNotifications } from "./services/notifications";
 import { reportBrowserStatus } from "./integrations/gamestorylog";
 import { createBackupManager } from "./services/backup";
 import { createImageService } from "./services/images";
-import { createOracleService } from "./services/oracle";
 import { createWorldBossService } from "./services/worldBoss";
 import { createCodexService } from "./services/codex";
 import { createLootService } from "./services/loot";
@@ -37,7 +36,6 @@ import { registerAiRoutes } from "./routes/ai";
 import { registerCodexRoutes } from "./routes/codex";
 import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerBossRoutes } from "./routes/bosses";
-import { registerOracleRoutes } from "./routes/oracle";
 import { registerFranchiseRoutes } from "./routes/franchises";
 import { registerSystemRoutes } from "./routes/system";
 import { registerTaxonomyRoutes } from "./routes/taxonomy";
@@ -70,9 +68,9 @@ async function startServer() {
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
   if (!fs.existsSync(aiImagesDir)) fs.mkdirSync(aiImagesDir);
 
-  // Schema + migrations must run before any startup query (e.g. the missed-oracle
-  // check below) reads a table. Both are idempotent and safe to run against an
-  // existing production database: CREATE TABLE IF NOT EXISTS and guarded ALTERs.
+  // Schema + migrations must run before any startup query reads a table. Both are
+  // idempotent and safe to run against an existing production database:
+  // CREATE TABLE IF NOT EXISTS and guarded ALTERs.
   initSchema(db);
   runMigrations(db);
 
@@ -88,7 +86,6 @@ async function startServer() {
   // research once per title, and enemies, loot and tags are written from it.
   const codex = createCodexService({ db });
   const { generateBossImageBackground, generateArtifactImageBackground } = createImageService({ db, aiImagesDir, codex });
-  const { generateOracleMessage, checkMissedOracleMessages } = createOracleService({ db });
   const { spawnWorldBoss, generateEnemy } = createWorldBossService({ db, generateBossImageBackground, codex });
   const { generateLoot } = createLootService({ db, codex });
   const autoTag = createAutoTagService({ db, codex });
@@ -97,7 +94,7 @@ async function startServer() {
   reportBrowserStatus();
 
   // Daily metadata refresh: re-check tracked media (Active / On Hold) against their
-  // source for new versions. Runs early, off-peak, before the morning Oracle.
+  // source for new versions. Runs early and off-peak.
   const { notify, runAllChecks, runForAllUsers } = createNotifications(db);
   const { refreshTrackedMedia, refreshAllUsers } = createMetadataRefresh(db, notify);
   cron.schedule("30 4 * * *", () => {
@@ -111,16 +108,6 @@ async function startServer() {
   cron.schedule("0 6 * * *", () => runForAllUsers());
   setTimeout(() => runForAllUsers(), 10_000);
 
-  // Cron schedule for Oracle messages (09:00 and 21:00)
-  cron.schedule("0 9 * * *", () => {
-    const users = db.prepare("SELECT id FROM users").all() as { id: string }[];
-    for (const u of users) generateOracleMessage(u.id, "morning");
-  });
-  cron.schedule("0 21 * * *", () => {
-    const users = db.prepare("SELECT id FROM users").all() as { id: string }[];
-    for (const u of users) generateOracleMessage(u.id, "evening");
-  });
-
   // Weekly boss spawn (Mondays)
   cron.schedule("0 5 * * 1", () => {
     const users = db.prepare("SELECT id FROM users").all() as { id: string }[];
@@ -132,8 +119,6 @@ async function startServer() {
       spawnWorldBoss(u.id);
     }
   });
-
-  checkMissedOracleMessages();
 
   // Request-scoped helpers
   const getAuthUser = createGetAuthUser(db);
@@ -149,7 +134,6 @@ async function startServer() {
     safeJsonParse,
     syncOngoingMediaInBackground,
     createDatabaseBackup,
-    generateOracleMessage,
     spawnWorldBoss,
     generateEnemy,
     generateLoot,
@@ -174,7 +158,6 @@ async function startServer() {
   registerCodexRoutes(app, ctx);
   registerArtifactRoutes(app, ctx);
   registerBossRoutes(app, ctx);
-  registerOracleRoutes(app, ctx);
   registerFranchiseRoutes(app, ctx);
   registerSystemRoutes(app, ctx);
   registerTaxonomyRoutes(app, ctx);
