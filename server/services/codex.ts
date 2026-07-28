@@ -183,10 +183,10 @@ const TYPE_BRIEF: Record<string, string> = {
   Game: "a video game. NOT a film, series, book or comic adaptation of it",
   "Visual Novel": "a visual novel / interactive fiction game. NOT its anime, manga or film adaptation",
   Book: "a written book or novel. NOT a film, series or game adaptation of it",
-  Audiobook: "the audiobook edition of a written work — describe the book's own content. NOT a film or series adaptation",
+  Audiobook: "an audiobook OR a podcast. For an audiobook, describe the written work's own content and NOT a film or series adaptation. For a podcast — including a non-fiction one — describe the show itself: its hosts, format and subject matter. Do not go looking for a book that does not exist",
   Manga: "a manga (Japanese comic). NOT its anime, film or live-action adaptation",
   Comic: "a comic book or graphic novel. NOT its film or series adaptation",
-  Series: "an episodic television or streaming series. NOT a feature film, book or game of the same name",
+  Series: "an episodic television or streaming series. NOT a feature film, book or game of the same name. This is not only fiction: it also covers reality and competition shows (Game Changer, Taskmaster), documentary series, talk and panel shows, and recurring sporting competitions or seasons (Formula 1). Describe whichever of those it actually is",
   Movie: "a single feature film. NOT a television series, book or game of the same name",
 };
 
@@ -237,7 +237,7 @@ function buildCodexPrompt(subject: CodexSubject, correction?: string) {
       : `- YEAR: unknown. If several works share this name, say so in "notes" and pick the one that best matches the other details.`,
     subject.creator ? `- CREATOR: it is by ${subject.creator}. A same-named work by someone else is a different work.` : "",
     subject.franchises?.length ? `- FRANCHISE: it belongs to ${subject.franchises.join(", ")}.` : "",
-    subject.description ? `- SYNOPSIS: it must match the synopsis on record above. If your candidate's plot contradicts it, you have the wrong work.` : "",
+    subject.description ? `- SYNOPSIS: it must match the synopsis on record above. If your candidate's plot or subject matter contradicts it, you have the wrong work.` : "",
   ].filter(Boolean).join("\n");
 
   const correctionBlock = correction
@@ -267,7 +267,7 @@ Return ONLY a pure JSON object, no markdown fence, no commentary, in exactly thi
   "identifiedAs": {
     "title": "the work's own full title as published",
     "year": ${year || 0},
-    "type": "film | television series | video game | novel | manga | comic | visual novel | audiobook",
+    "type": "film | television series | reality or competition show | documentary series | sporting competition | video game | novel | manga | comic | visual novel | audiobook | podcast",
     "creator": "studio, author, director or developer",
     "why": "one sentence on how you know this is the right one and not a same-named work",
     "alternatives": ["same-named works you rejected, with their year and format"]
@@ -297,7 +297,17 @@ Return ONLY a pure JSON object, no markdown fence, no commentary, in exactly thi
   "sources": ["up to 4 URLs you actually consulted"]
 }
 
-Aim for up to 8 characters, 8 enemies, 5 factions, 5 locations, 8 items and 8 terminology entries — as many as the work genuinely supports. If the work has no combat at all, still fill "enemies" with its obstacles, rivals, antagonistic forces or thematic adversaries, because the app must be able to build an opponent out of it.`;
+Aim for up to 8 characters, 8 enemies, 5 factions, 5 locations, 8 items and 8 terminology entries — as many as the work genuinely supports. If the work has no combat at all, still fill "enemies" with its obstacles, rivals, antagonistic forces or thematic adversaries, because the app must be able to build an opponent out of it.
+
+IF THIS IS NOT FICTION — a reality or competition show, a documentary, a podcast, a sporting competition — do not force it into a story it does not have, and do not invent one. The fields still apply, they just mean real things:
+- "characters" are the real people: hosts, presenters, regular contestants, commentators, drivers, athletes. Describe them as they actually appear.
+- "factions" are the teams, constructors, studios, networks or recurring groups.
+- "locations" are the real venues: circuits, studios, arenas, the places it is filmed or held.
+- "items" are the real equipment and paraphernalia: the cars, the trophy, the buzzer, the format's props, the signature gear.
+- "terminology" is the genuine jargon of that world: DRS, undercut, the rules of the game, scoring terms, in-show catchphrases.
+- "enemies" are the real opposition: rival competitors, rival teams, the reigning champion, the format's own difficulty, the clock, the conditions.
+- "setting" is the real world it takes place in — the sport, the era, the circuit calendar, the studio — and "themes" are what it is actually about.
+Say plainly in "notes" that this is a non-fiction work, and never dress a real person up as a fantasy creature.`;
 }
 
 /**
@@ -309,13 +319,30 @@ function typeFamily(value: string): string | null {
   if (/visual novel|renpy|ren'py/.test(v)) return "visualnovel";
   if (/manga|manhwa|manhua/.test(v)) return "manga";
   if (/comic|graphic novel/.test(v)) return "comic";
-  if (/audiobook|audio drama/.test(v)) return "audiobook";
-  if (/series|show|tv|television|streaming|anime series|season/.test(v)) return "series";
+  if (/audiobook|audio drama|podcast/.test(v)) return "audiobook";
+  if (/series|show|tv|television|streaming|anime series|season|reality|documentary|docuseries|sport|racing|championship|league/.test(v)) return "series";
   if (/film|movie|feature/.test(v)) return "movie";
   if (/game|videogame/.test(v)) return "game";
   if (/book|novel|light novel|memoir|non-fiction/.test(v)) return "book";
   return null;
 }
+
+/**
+ * How to name the wanted format when telling the model it got the wrong one.
+ * The bare media type would send it hunting for the wrong thing on a retry:
+ * "find the Audiobook of that name" is unhelpful when the entry is a podcast.
+ */
+const RETRY_LABEL: Record<string, string> = {
+  Audiobook: "audiobook or podcast",
+  Series: "episodic series",
+  "Visual Novel": "visual novel",
+};
+
+/** Said once at the end, where the label alone would not be enough of a steer. */
+const RETRY_HINT: Record<string, string> = {
+  Series: " It may be fiction, a reality or competition show, a documentary series, or a sporting competition.",
+  Audiobook: " If it is a podcast, describe the show itself rather than looking for a book.",
+};
 
 const OUR_FAMILY: Record<string, string> = {
   Game: "game",
@@ -353,7 +380,9 @@ export function identificationProblem(data: CodexData, subject: CodexSubject): s
       ["game", "visualnovel"],
     ].some(([a, b]) => (wantFamily === a && gotFamily === b) || (wantFamily === b && gotFamily === a));
     if (!sameWork) {
-      return `You described a ${identified.type}, but the entry is a ${subject.mediaType}. Find the ${subject.mediaType}${wantYear ? ` released in ${wantYear}` : ""} of that name.`;
+      const wanted = RETRY_LABEL[subject.mediaType] || subject.mediaType.toLowerCase();
+      const article = /^[aeiou]/i.test(wanted) ? "an" : "a";
+      return `You described a ${identified.type}, but the entry is ${article} ${wanted}. Find the ${wanted}${wantYear ? ` from ${wantYear}` : ""} of that name.${RETRY_HINT[subject.mediaType] || ""}`;
     }
   }
 
