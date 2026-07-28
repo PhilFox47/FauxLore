@@ -282,14 +282,27 @@ export async function renderWallpaper(
   }
 
   if (subtitle) {
-    const size = Math.round(W * (format === 'mobile' ? 0.038 : 0.016));
-    ctx.font = `900 ${size}px Inter, "Helvetica Neue", Arial, sans-serif`;
+    const text = subtitle.toUpperCase();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    // Not universally supported; where it is missing the caption simply sets tight.
-    try { (ctx as any).letterSpacing = `${Math.round(size * 0.3)}px`; } catch { /* ignore */ }
     ctx.fillStyle = 'rgba(255,255,255,0.62)';
-    ctx.fillText(subtitle.toUpperCase(), W / 2, captionY + size * 1.1);
+
+    // Captions vary in length — "2026" against "W1 2026 (2.1 - 8.1)" — so the
+    // size is fitted rather than fixed, or a weekly label runs off a phone.
+    const maxWidth = W * (format === 'mobile' ? 0.8 : 0.6);
+    let size = Math.round(W * (format === 'mobile' ? 0.038 : 0.016));
+    const apply = (s: number) => {
+      ctx.font = `900 ${s}px Inter, "Helvetica Neue", Arial, sans-serif`;
+      // Not universally supported; where it is missing the caption sets tight.
+      try { (ctx as any).letterSpacing = `${Math.round(s * 0.3)}px`; } catch { /* ignore */ }
+    };
+    apply(size);
+    while (size > 10 && ctx.measureText(text).width > maxWidth) {
+      size = Math.round(size * 0.92);
+      apply(size);
+    }
+
+    ctx.fillText(text, W / 2, captionY + size * 1.1);
     try { (ctx as any).letterSpacing = '0px'; } catch { /* ignore */ }
   }
 

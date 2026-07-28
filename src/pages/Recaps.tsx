@@ -1927,24 +1927,32 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
   /**
    * The recap as a wallpaper.
    *
-   * Monthly and yearly only: a week rarely has enough distinct covers to fill a
-   * mosaic without repeating itself, and a wallpaper of four covers is not a
-   * wallpaper. The label is always the absolute period — "Last Month" makes
-   * sense in the header and no sense on a file you keep.
+   * The label set under the wordmark is always the absolute period — "Last
+   * Month" makes sense in the page header and none at all on a file you keep.
+   * A week gets its number and its dates, since neither alone identifies it:
+   * "W1 2026 (2.1 - 8.1)". The week number and year come from the same ISO
+   * tokens as the recap's own timeId, so a week straddling New Year is labelled
+   * the same way everywhere.
    */
   const wallpaperLabel = timeframe === 'month'
     ? format(currentInterval.start, 'MMMM yyyy')
     : timeframe === 'year'
       ? format(currentInterval.start, 'yyyy')
-      : `${format(currentInterval.start, 'MMM d')} – ${format(currentInterval.end, 'MMM d, yyyy')}`;
+      : `${format(currentInterval.start, "'W'I RRRR")} (${format(currentInterval.start, 'd.M')} - ${format(currentInterval.end, 'd.M')})`;
+
+  /** The same period, reduced to something that belongs in a filename. */
+  const wallpaperSlug = timeframe === 'month'
+    ? format(currentInterval.start, 'MMMM-yyyy').toLowerCase()
+    : timeframe === 'year'
+      ? format(currentInterval.start, 'yyyy')
+      : format(currentInterval.start, "'w'I-RRRR").toLowerCase();
 
   const handleWallpaper = async (fmt: WallpaperFormat) => {
     if (wallpaperBusy) return;
     setWallpaperBusy(fmt);
     try {
       const result = await renderWallpaper(wallpaperSources, fmt, wallpaperLabel);
-      const slug = wallpaperLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-      downloadWallpaper(result.blob, `fauxlore-${slug}-${fmt}.jpg`);
+      downloadWallpaper(result.blob, `fauxlore-${wallpaperSlug}-${fmt}.jpg`);
       setWallpaper({ format: fmt, previewUrl: result.previewUrl, covers: result.coversUsed });
     } catch (e: any) {
       toast.error('Could not build the wallpaper: ' + (e?.message || e));
@@ -1954,8 +1962,10 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
   };
 
   const renderWallpaperCard = () => {
-    if (timeframe === 'week') return null;
-    if (wallpaperSources.length < 4) return null;
+    // Two covers is the floor: below that the mosaic is one image repeated, which
+    // is a pattern rather than a record of the period. A quiet week above that
+    // repeats a little, which is an honest picture of a quiet week.
+    if (wallpaperSources.length < 2) return null;
 
     return (
       <Reveal className="bg-black/40 border border-white/5 rounded-[2.5rem] p-6 md:p-12 relative overflow-hidden">
