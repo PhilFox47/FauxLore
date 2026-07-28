@@ -362,8 +362,12 @@ export function MediaFormModal({
       language: match.language,
       maturityRating: match.maturityRating,
       year: match.year,
-      genres: match.genres || [],
-      tags: match.tags || [],
+      // Genres and tags are never taken from a metadata source — every source
+      // uses its own vocabulary, and importing it fills the library with terms
+      // outside the taxonomy. Auto-tagging owns these fields, so an auto-fill
+      // leaves whatever is already on the entry alone rather than clearing it.
+      genres: prev.genres || [],
+      tags: prev.tags || [],
       platforms: formData.platforms || [], // Keep existing or empty, do not auto-populate
       franchises: match.franchises || [],
       reviewScore: match.reviewScore,
@@ -425,8 +429,8 @@ export function MediaFormModal({
       year: season.airDate
         ? new Date(season.airDate).getFullYear()
         : series.year,
-      genres: series.genres || [],
-      tags: series.tags || [],
+      genres: prev.genres || [],
+      tags: prev.tags || [],
       reviewScore: season.voteAverage
         ? Math.round(season.voteAverage) / 2
         : series.reviewScore,

@@ -32,8 +32,6 @@ export interface GslGame {
   developer?: string;
   engine?: string;
   platforms: string[];
-  genres: string[];
-  tags: string[];
   reviewScore?: number; // 0-5
   averagePlaytime?: number; // hours
   version?: string; // "Season 1: v1.06"
@@ -293,10 +291,6 @@ export function parseGamePage(html: string, slug: string): GslGame {
   const playtimeMatch = html.match(/Avg playtime[\s\S]{0,300}?(\d+\s*hrs?(?:\s*\d+\s*min)?)/i);
   const averagePlaytime = parsePlaytime(playtimeMatch?.[1]);
 
-  // Tags are grouped under headings (Content / Genre / Gameplay / Protagonist ...).
-  // Genre entries map to FauxLore genres; everything else becomes a tag.
-  const { genres, tags } = parseTags(html);
-
   const updatedAt = parseDate(updatedRaw);
 
   return {
@@ -312,8 +306,6 @@ export function parseGamePage(html: string, slug: string): GslGame {
     platforms: platformsRaw
       ? platformsRaw.split(",").map((p) => p.trim()).filter(Boolean)
       : [],
-    genres,
-    tags,
     reviewScore,
     averagePlaytime,
     version,
@@ -367,38 +359,6 @@ function collectVersions(html: string, current?: string): string[] {
   return out;
 }
 
-/** Pulls the tag cloud, splitting the "Genre" group out into genres. */
-function parseTags(html: string): { genres: string[]; tags: string[] } {
-  const genres: string[] = [];
-  const tags: string[] = [];
-
-  // Tag links look like: <a href="/browse?tags=...">Comedy</a>, grouped after a
-  // heading such as ">Genre<". Walk the tag section and attribute each link to the
-  // most recent heading seen.
-  const section = html.match(/>\s*Tags\s*<[\s\S]{0,20000}/i)?.[0] || html;
-  const GROUPS = ["Content", "Genre", "Gameplay", "Protagonist", "Art", "Engine"];
-  const tokenRe = new RegExp(
-    `>\\s*(${GROUPS.join("|")})\\s*<|href="[^"]*(?:/browse\\?[^"]*tag|/tags?/)[^"]*"[^>]*>([^<]{1,60})<`,
-    "gi",
-  );
-
-  let current = "";
-  let m: RegExpExecArray | null;
-  while ((m = tokenRe.exec(section)) !== null) {
-    if (m[1]) {
-      current = m[1];
-      continue;
-    }
-    const value = decode(m[2] || "");
-    if (!value || value.length > 50) continue;
-    if (current === "Genre") {
-      if (!genres.includes(value)) genres.push(value);
-    } else if (!tags.includes(value)) {
-      tags.push(value);
-    }
-  }
-  return { genres, tags };
-}
 
 /* -------------------------------------------------------------- sitemap index */
 

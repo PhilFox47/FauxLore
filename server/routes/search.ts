@@ -23,10 +23,10 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
       const token = await getIgdbToken(clientId, clientSecret);
 
       // We use Apicalypse to query IGDB
-      // We grab standard fields + involved companies (for developers/publishers) + genres
+      // We grab standard fields + involved companies (for developers/publishers)
       const body = `
         search "${query}";
-        fields name, summary, url, cover.image_id, first_release_date, total_rating, total_rating_count, category, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, genres.name, themes.name, platforms.name, franchises.name;
+        fields name, summary, url, cover.image_id, first_release_date, total_rating, total_rating_count, category, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, platforms.name, franchises.name;
         limit 50;
       `;
 
@@ -112,8 +112,11 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           hltbMainExtra,
           hltbCompletionist,
           selectedHltbType: 'mainExtra' as const,
-          genres: [],
-          tags: [],
+          // Genres and tags are deliberately absent. Every source names them
+          // differently — IGDB themes, TMDB keywords, MangaDex tags,
+          // GameStoryLog's tag cloud — and importing any of them fills the
+          // library with terms that are not in the taxonomy. Auto-tagging owns
+          // these two fields; see server/services/autoTag.ts.
           platforms: game.platforms ? game.platforms.map((p: any) => p.name) : [],
           franchises: game.franchises ? game.franchises.map((f: any) => f.name) : [],
           developer,
@@ -178,9 +181,9 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
       const searchData = await searchRes.json();
       const topResults = (searchData.results || []).slice(0, 20);
 
-      // 2. Fetch detailed info (credits + genres + keywords) for the top 20
+      // 2. Fetch detailed info (credits) for the top 20
       const detailedResults = await Promise.all(topResults.map(async (item: any) => {
-         const detailRes = await fetch(`https://api.themoviedb.org/3/${type}/${item.id}?api_key=${apiKey}&append_to_response=credits,keywords`);
+         const detailRes = await fetch(`https://api.themoviedb.org/3/${type}/${item.id}?api_key=${apiKey}&append_to_response=credits`);
          if (!detailRes.ok) return null;
          return detailRes.json();
       }));
@@ -193,14 +196,6 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
            if (director) creator = director.name;
         } else if (type === 'tv' && detail.created_by && detail.created_by.length > 0) {
            creator = detail.created_by.map((c: any) => c.name).join(', ');
-        }
-
-        const genres = (detail.genres || []).map((g: any) => g.name);
-
-        let tags: string[] = [];
-        if (detail.keywords) {
-           const kwList = detail.keywords.keywords || detail.keywords.results || [];
-           tags = kwList.map((k: any) => k.name).filter(Boolean);
         }
 
         let franchises: string[] = [];
@@ -240,8 +235,11 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           coverImageUrl: detail.poster_path ? `https://image.tmdb.org/t/p/w500${detail.poster_path}` : "",
           year: type === 'movie' ? (detail.release_date ? new Date(detail.release_date).getFullYear() : undefined) : (detail.first_air_date ? new Date(detail.first_air_date).getFullYear() : undefined),
           reviewScore: detail.vote_average ? Math.round(detail.vote_average) / 2 : undefined, // 0-10 -> 0-5
-          genres: [],
-          tags: [],
+          // Genres and tags are deliberately absent. Every source names them
+          // differently — IGDB themes, TMDB keywords, MangaDex tags,
+          // GameStoryLog's tag cloud — and importing any of them fills the
+          // library with terms that are not in the taxonomy. Auto-tagging owns
+          // these two fields; see server/services/autoTag.ts.
           franchises: franchises,
           creator: creator,
           totalEpisodes: type === 'tv' ? detail.number_of_episodes : undefined,
@@ -268,7 +266,7 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
 
       const payload = {
         filters: ["search", "=", query],
-        fields: "title, image.url, description, rating, developers.name, length_minutes, released, tags.name",
+        fields: "title, image.url, description, rating, developers.name, length_minutes, released",
         results: 20
       };
 
@@ -294,7 +292,11 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           year: vn.released ? new Date(vn.released).getFullYear() : undefined,
           reviewScore: vn.rating ? Math.round(vn.rating / 10) / 2 : undefined, // Convert 1-100 to 0-5
           averagePlaytime: vn.length_minutes ? Math.round(vn.length_minutes / 60) : undefined,
-          genres: [],
+          // Genres and tags are deliberately absent. Every source names them
+          // differently — IGDB themes, TMDB keywords, MangaDex tags,
+          // GameStoryLog's tag cloud — and importing any of them fills the
+          // library with terms that are not in the taxonomy. Auto-tagging owns
+          // these two fields; see server/services/autoTag.ts.
           metadataSource: "vndb",
           metadataSourceId: vn.id,
           sourceUrl: `https://vndb.org/${vn.id}`
@@ -328,7 +330,7 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           // so keep those as stubs even if the page fetch hiccups.
           failures.push(String(e?.message || e));
           if (m.verified) {
-            detailed.push({ id: m.slug, slug: m.slug, title: m.title, url: m.url, platforms: [], genres: [], tags: [] });
+            detailed.push({ id: m.slug, slug: m.slug, title: m.title, url: m.url, platforms: [] });
           }
         }
       }
@@ -360,8 +362,11 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           coverImageUrl: g.coverImageUrl,
           creator: g.developer,
           developer: g.developer,
-          genres: g.genres || [],
-          tags: g.tags || [],
+          // Genres and tags are deliberately absent. Every source names them
+          // differently — IGDB themes, TMDB keywords, MangaDex tags,
+          // GameStoryLog's tag cloud — and importing any of them fills the
+          // library with terms that are not in the taxonomy. Auto-tagging owns
+          // these two fields; see server/services/autoTag.ts.
           platforms: g.platforms || [],
           reviewScore: g.reviewScore,
           averagePlaytime: g.averagePlaytime,
@@ -532,7 +537,11 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
               reviewScore: volumeInfo.averageRating ? Math.round(volumeInfo.averageRating * 2) / 2 : undefined,
               totalPages: volumeInfo.pageCount,
               creator: creator,
-              genres: []
+              // Genres and tags are deliberately absent. Every source names them
+              // differently — IGDB themes, TMDB keywords, MangaDex tags,
+              // GameStoryLog's tag cloud — and importing any of them fills the
+              // library with terms that are not in the taxonomy. Auto-tagging owns
+              // these two fields; see server/services/autoTag.ts.
             };
           });
         }
@@ -677,8 +686,11 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           reviewScore: undefined,
           totalChapters,
           totalIssues,
-          genres: [],
-          tags: attr.tags.map((t: any) => t.attributes.name.en),
+          // Genres and tags are deliberately absent. Every source names them
+          // differently — IGDB themes, TMDB keywords, MangaDex tags,
+          // GameStoryLog's tag cloud — and importing any of them fills the
+          // library with terms that are not in the taxonomy. Auto-tagging owns
+          // these two fields; see server/services/autoTag.ts.
           creator: author,
           releaseStatus: attr.status.toUpperCase(),
           isOngoing: attr.status === "ongoing"
