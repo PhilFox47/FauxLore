@@ -15,7 +15,8 @@ import { calculateRPGState } from '../lib/rpgSystem';
 import { MediaItem, MEDIA_COLORS, ProgressLog, RARITY_COLORS } from '../types/schema';
 import { cn } from '../lib/utils';
 import { hasNewContent, isWaitingOnRelease, newContentReason } from '../lib/onHold';
-import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map as MapIcon, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon, Skull } from 'lucide-react';
+import { WALLPAPER_SPECS, WallpaperFormat, downloadWallpaper, renderWallpaper } from '../services/wallpaper';
+import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map as MapIcon, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon, Skull, Download, Image as ImageIcon } from 'lucide-react';
 import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog, analyzeContrarian, extractJournals, calculateLongestStreak } from '../lib/recapAnalytics';
 import {
   buildClock, buildComparison, buildHistoryMetrics, buildIntervalMetrics, buildMomentumSeries,
@@ -83,6 +84,11 @@ function Reveal({ children, className, delay = 0 }: { children: React.ReactNode;
 export function Recaps() {
   const { media, logs, settings, aiRecaps, saveAiRecap, artifacts, worldBosses, isLoading, aiTextCache } = useMediaContext();
   const toast = useToast();
+
+  // Wallpaper: rendered on demand, because it means fetching every cover in the
+  // period through the proxy and compositing a 4K canvas.
+  const [wallpaperBusy, setWallpaperBusy] = useState<WallpaperFormat | null>(null);
+  const [wallpaper, setWallpaper] = useState<{ format: WallpaperFormat; previewUrl: string; covers: number } | null>(null);
   const [timeframe, setTimeframe] = useState<Timeframe>('week');
   const [offsetOffset, setOffsetOffset] = useState(1); 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -302,6 +308,20 @@ export function Recaps() {
   const franchiseInsights = useMemo(
     () => buildFranchiseInsights(activeProgressLogs, validLogs, media, settings, currentInterval, timeframe),
     [activeProgressLogs, validLogs, media, settings, currentInterval, timeframe],
+  );
+
+  // Every cover from the period, weighted by what was actually logged against it.
+  const wallpaperSources = useMemo(
+    () => activeMedia
+      .filter(m => m.coverImageUrl)
+      .map(m => ({
+        url: m.coverImageUrl as string,
+        pages: activeProgressLogs
+          .filter(l => l.mediaId === m.id)
+          .reduce((acc, l) => acc + calculateScaledDelta(l.delta, m, settings), 0),
+      }))
+      .filter(s => s.pages > 0),
+    [activeMedia, activeProgressLogs, settings],
   );
 
   const taste = useMemo(() => buildTasteAlignment(activeMedia), [activeMedia]);
@@ -1904,6 +1924,111 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
     );
   };
 
+  /**
+   * The recap as a wallpaper.
+   *
+   * Monthly and yearly only: a week rarely has enough distinct covers to fill a
+   * mosaic without repeating itself, and a wallpaper of four covers is not a
+   * wallpaper. The label is always the absolute period — "Last Month" makes
+   * sense in the header and no sense on a file you keep.
+   */
+  const wallpaperLabel = timeframe === 'month'
+    ? format(currentInterval.start, 'MMMM yyyy')
+    : timeframe === 'year'
+      ? format(currentInterval.start, 'yyyy')
+      : `${format(currentInterval.start, 'MMM d')} – ${format(currentInterval.end, 'MMM d, yyyy')}`;
+
+  const handleWallpaper = async (fmt: WallpaperFormat) => {
+    if (wallpaperBusy) return;
+    setWallpaperBusy(fmt);
+    try {
+      const result = await renderWallpaper(wallpaperSources, fmt, wallpaperLabel);
+      const slug = wallpaperLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      downloadWallpaper(result.blob, `fauxlore-${slug}-${fmt}.jpg`);
+      setWallpaper({ format: fmt, previewUrl: result.previewUrl, covers: result.coversUsed });
+    } catch (e: any) {
+      toast.error('Could not build the wallpaper: ' + (e?.message || e));
+    } finally {
+      setWallpaperBusy(null);
+    }
+  };
+
+  const renderWallpaperCard = () => {
+    if (timeframe === 'week') return null;
+    if (wallpaperSources.length < 4) return null;
+
+    return (
+      <Reveal className="bg-black/40 border border-white/5 rounded-[2.5rem] p-6 md:p-12 relative overflow-hidden">
+        <div className={`absolute -top-24 -right-24 w-96 h-96 ${theme.glow} blur-[120px] rounded-full pointer-events-none`} />
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 font-black mb-3">Keepsake</div>
+            <h3 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-4 flex items-center gap-4">
+              <ImageIcon className={`w-8 h-8 ${theme.text}`} />
+              Take It With You
+            </h3>
+            <p className="text-zinc-400 leading-relaxed mb-8 max-w-md">
+              Every cover from {wallpaperLabel}, tiled into a wallpaper — with what you sank the most time
+              into sitting closest to the middle. {wallpaperSources.length} title{wallpaperSources.length === 1 ? '' : 's'} to work with.
+            </p>
+
+            <div className="flex flex-wrap gap-3">
+              {(['desktop', 'mobile'] as WallpaperFormat[]).map(fmt => {
+                const spec = WALLPAPER_SPECS[fmt];
+                const busy = wallpaperBusy === fmt;
+                return (
+                  <button
+                    key={fmt}
+                    onClick={() => handleWallpaper(fmt)}
+                    disabled={!!wallpaperBusy}
+                    className="flex items-center gap-3 bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed border border-white/10 hover:border-white/20 rounded-2xl px-5 py-3.5 transition-colors text-left"
+                  >
+                    {busy
+                      ? <RefreshCw className="w-5 h-5 animate-spin text-zinc-300 shrink-0" />
+                      : <Download className="w-5 h-5 text-zinc-400 shrink-0" />}
+                    <span className="min-w-0">
+                      <span className="block text-sm font-black text-white leading-tight">
+                        {busy ? 'Building…' : spec.label}
+                      </span>
+                      <span className="block text-[10px] font-mono text-zinc-500 mt-0.5">
+                        {spec.width} × {spec.height} · {spec.ratio}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {wallpaper && (
+              <p className="text-[11px] text-zinc-600 font-bold mt-4">
+                Saved · {wallpaper.covers} cover{wallpaper.covers === 1 ? '' : 's'} used
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-center">
+            {wallpaper ? (
+              <img
+                src={wallpaper.previewUrl}
+                alt={`${wallpaperLabel} wallpaper`}
+                className={cn(
+                  'rounded-2xl border border-white/10 shadow-2xl object-contain',
+                  wallpaper.format === 'mobile' ? 'max-h-[380px]' : 'w-full',
+                )}
+              />
+            ) : (
+              <div className="w-full aspect-video rounded-2xl border-2 border-dashed border-white/10 bg-white/[0.02] flex flex-col items-center justify-center text-center p-6">
+                <ImageIcon className="w-10 h-10 text-zinc-800 mb-4" />
+                <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-black leading-relaxed">
+                  Pick a size<br />and it lands in your downloads
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </Reveal>
+    );
+  };
+
   // Deep Cuts: a signature hero number (with delta vs the previous equivalent interval)
   // plus a superlatives grid — the period's bests at a glance.
   const renderDeepCuts = () => {
@@ -2271,6 +2396,8 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                       {renderBookends()}
                    </div>
                    {renderTypeStack()}
+
+                   {renderWallpaperCard()}
 
                    {/* Conquered Gallery */}
                    {completedMedia.length > 0 && (
