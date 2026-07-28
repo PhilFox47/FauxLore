@@ -10,6 +10,7 @@ import { groupLogsIntoSessions } from '../lib/sessions';
 import { TIME_BANDS, bandIndexForHour } from '../lib/timeBands';
 import { cn } from '../lib/utils';
 import { buildGroupIndex, groupsFor } from '../lib/locationGroups';
+import { logSpan, formatDuration, spreadOverClock } from '../lib/logDuration';
 import { format, differenceInDays } from 'date-fns';
 import { generateAiArtifact } from '../services/aiService';
 import { v4 as uuidv4 } from 'uuid';
@@ -157,7 +158,13 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
     // exactly one, and a 02:00 session is the night before rather than a
     // vaguely-named "early hours".
     const bandCounts = TIME_BANDS.map(() => 0);
-    progress.forEach(l => { bandCounts[bandIndexForHour(new Date(l.timestamp).getHours())]++; });
+    // Spread over the hours each log actually covered, so a long sitting reads
+    // as the stretch it was rather than as the minute it was written down.
+    progress.forEach(l => {
+      for (const slice of spreadOverClock(l, item, settings, 1)) {
+        bandCounts[bandIndexForHour(slice.hour)] += slice.value;
+      }
+    });
     const bandTotal = bandCounts.reduce((a, b) => a + b, 0);
     const peakIndex = bandCounts.indexOf(Math.max(...bandCounts));
     const peakBand = {
@@ -779,7 +786,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                     You mostly experienced this in the{' '}
                     <span className="text-white font-semibold">{lore.peakBand.band.label.toLowerCase()}</span>{' '}
                     <span className="text-zinc-500 font-mono tabular-nums">({lore.peakBand.band.range})</span>
-                    {lore.peakBand.share > 0 && <span className="text-zinc-500"> — {Math.round(lore.peakBand.share * 100)}% of your sessions</span>}.
+                    {lore.peakBand.share > 0 && <span className="text-zinc-500"> — {Math.round(lore.peakBand.share * 100)}% of the time you spent on it</span>}.
                   </p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {lore.bandBreakdown.map(({ band, n, share }) => (
@@ -793,9 +800,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                         <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400">{band.label}</div>
                         <div className="text-[9px] text-zinc-600 font-mono tabular-nums mb-1">{band.range}</div>
                         <div className="text-sm font-black text-white">
-                          {n}
-                          <span className="text-[10px] text-zinc-600 font-bold mx-1">·</span>
-                          <span className="text-[10px] text-zinc-500 font-bold">{Math.round(share * 100)}%</span>
+                          {Math.round(share * 100)}<span className="text-[10px] text-zinc-500 font-bold">%</span>
                         </div>
                       </div>
                     ))}
@@ -1250,9 +1255,22 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                       <>
                         <div className="flex items-center gap-3 mb-2 relative z-10 pl-4">
                           <div className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)] -ml-[21px]" />
-                          <span className="text-xs font-mono text-zinc-400">
-                            {new Date(log.timestamp).toLocaleDateString()} {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                          {/* Logs record a stretch of time, not an instant, so the
+                              row shows the span it covered rather than only its
+                              end. This is what every time-of-day chart now reads. */}
+                          {(() => {
+                            const span = logSpan(log, item, settings);
+                            const hhmm = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            return (
+                              <span className="text-xs font-mono text-zinc-400">
+                                {new Date(log.timestamp).toLocaleDateString()}{' '}
+                                {span.minutes > 0 ? `${hhmm(span.start)}–${hhmm(span.end)}` : hhmm(span.end)}
+                                {span.minutes > 0 && (
+                                  <span className="text-zinc-600"> · {formatDuration(span.minutes)}</span>
+                                )}
+                              </span>
+                            );
+                          })()}
                           <span className="text-xs font-bold text-orange-400 ml-auto bg-orange-500/10 px-2 py-0.5 rounded">
                             {log.metricType === 'statusChange' ? 'Status Update' : `+${log.metricType === 'playtimeHours' ? Number((log.delta).toFixed(1)) : log.delta} ${log.metricType}`}
                           </span>

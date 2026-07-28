@@ -6,6 +6,7 @@ import { calculateLogExp } from '../lib/rpgSystem';
 import { format } from 'date-fns';
 import { useMediaContext } from '../contexts/MediaContext';
 import { buildGroupIndex, groupsFor } from '../lib/locationGroups';
+import { logSpan, formatDuration } from '../lib/logDuration';
 
 interface ProgressModalProps {
   isOpen: boolean;
@@ -95,6 +96,24 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       setInputValue(currentVal + 1);
     }
   };
+
+  /**
+   * The stretch this log will represent. A log is not an instant — eight hours
+   * entered at 22:00 ran from 14:00, and every time-of-day chart reads it that
+   * way — so the span is shown before saving rather than inferred afterwards.
+   */
+  const pendingSpan = (() => {
+    if (typeof inputValue !== 'number' || !item) return null;
+    const delta = mode === 'set' ? inputValue - currentVal : inputValue;
+    if (delta <= 0) return null;
+    const at = isHistorical ? new Date() : (() => {
+      const d = new Date(logDate);
+      if (logTime) { const [h, m] = logTime.split(':').map(Number); d.setHours(h, m, 0, 0); }
+      return d;
+    })();
+    const span = logSpan({ delta, metricType: metricType || 'pagesRead', timestamp: at.toISOString() } as any, item, settings);
+    return span.minutes > 0 ? span : null;
+  })();
 
   const handleLog = () => {
     if (typeof inputValue !== 'number' || !metricType) return;
@@ -325,6 +344,15 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
                              <span className="text-emerald-400 font-mono">+{Math.floor(calculateLogExp(inputValue - currentVal, item, settings, artifacts?.filter(a => a?.isEquipped) || []))} EXP</span>
                           </div>
                        )}
+                       {pendingSpan && (
+                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 uppercase font-black bg-zinc-900/50 px-3 py-1 rounded-full border border-white/5 shadow-inner">
+                             <Clock className="w-3 h-3" />
+                             <span className="font-mono text-zinc-300">
+                               {pendingSpan.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}–{pendingSpan.end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                             </span>
+                             <span className="text-zinc-600">· {formatDuration(pendingSpan.minutes)}</span>
+                          </div>
+                       )}
                     </div>
                  )}
                  {mode === 'add' && typeof inputValue === 'number' && inputValue > 0 && (
@@ -333,6 +361,15 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
                           <span>You'll earn:</span>
                           <span className="text-emerald-400 font-mono">+{Math.floor(calculateLogExp(inputValue, item, settings, artifacts?.filter(a => a?.isEquipped) || []))} EXP</span>
                        </div>
+                       {pendingSpan && (
+                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 uppercase font-black bg-zinc-900/50 px-3 py-1 rounded-full border border-white/5 shadow-inner">
+                             <Clock className="w-3 h-3" />
+                             <span className="font-mono text-zinc-300">
+                               {pendingSpan.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}–{pendingSpan.end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                             </span>
+                             <span className="text-zinc-600">· {formatDuration(pendingSpan.minutes)}</span>
+                          </div>
+                       )}
                     </div>
                  )}
                </div>

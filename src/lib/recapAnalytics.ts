@@ -4,6 +4,7 @@ import { groupLogsIntoSessions } from './sessions';
 import { differenceInDays, parseISO, isSameDay, getHours, subHours, format } from 'date-fns';
 import { mulberry32 } from './rpgSystem';
 import { TIME_BANDS, bandIndexForHour, logDate as shift, logWeekdayIndex } from './timeBands';
+import { spreadOverClock } from './logDuration';
 
 export interface RecapAnalyticsData {
   timeScale: 'week' | 'month' | 'year';
@@ -71,9 +72,15 @@ export function analyzeHabits(data: RecapAnalyticsData) {
   const hourCounts = Array(24).fill(0);
   const dayCounts = Array(7).fill(0); // 0 = Monday, on the 05:00 day boundary
 
+  // Each log is spread over the hours it actually took, so a long evening
+  // session shows as an evening rather than as a spike at the moment it was
+  // written down. The counts become fractional, which is fine — they are only
+  // ever compared against each other.
+  const mediaById = new Map(data.allMedia.map((m) => [m.id, m]));
   data.logs.forEach(l => {
-    const d = new Date(l.timestamp);
-    hourCounts[d.getHours()]++;
+    for (const slice of spreadOverClock(l, mediaById.get(l.mediaId), data.settings, 1)) {
+      hourCounts[slice.hour] += slice.value;
+    }
     dayCounts[logWeekdayIndex(l.timestamp)]++;
   });
 
@@ -445,7 +452,9 @@ export function buildArchetypeStats(data: RecapAnalyticsData): ArchetypeStats {
     if (m.creator) creatorMP[m.creator] = (creatorMP[m.creator] || 0) + mp;
 
     const when = shift(log.timestamp);
-    hourly[parseISO(log.timestamp).getHours()] += 1;
+    for (const slice of spreadOverClock(log, m, data.settings, 1)) {
+      hourly[slice.hour] += slice.value;
+    }
     weekday[(when.getDay() + 6) % 7] += 1;
     const key = format(when, 'yyyy-MM-dd');
     byDay.set(key, (byDay.get(key) || 0) + mp);

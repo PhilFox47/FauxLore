@@ -6,6 +6,7 @@ import {
   format, isWithinInterval, parseISO,
 } from 'date-fns';
 import { TIME_BANDS, bandIndexForHour, logDate } from './timeBands';
+import { spreadOverClock } from './logDuration';
 
 /**
  * The measured half of a recap.
@@ -61,13 +62,21 @@ export function buildIntervalMetrics(
   const byDay = new Map<string, number>();
   let masterPages = 0;
 
+  const mediaById = new Map(media.map((m) => [m.id, m]));
   for (const log of progressLogs) {
     const when = shift(log.timestamp);
     const pages = pagesOf(log, media, settings);
     masterPages += pages;
     // The clock face uses the real hour, not the shifted one — a 2am log should
-    // sit at 2am on the dial even though it counts toward the previous day.
-    hourly[parseISO(log.timestamp).getHours()] += pages;
+    // sit at 2am on the dial even though it counts toward the previous day. And
+    // a log covers every hour it actually took, so eight hours entered at 22:00
+    // fill the afternoon and evening they were spent in rather than piling onto
+    // one hour of night.
+    for (const slice of spreadOverClock(log, mediaById.get(log.mediaId), settings, pages)) {
+      hourly[slice.hour] += slice.value;
+    }
+    // Days and weekdays stay keyed to the timestamp: they decide streaks and
+    // records, and a session is one day's work however long it ran.
     weekday[(when.getDay() + 6) % 7] += pages; // Mon-first
     const key = format(when, 'yyyy-MM-dd');
     byDay.set(key, (byDay.get(key) || 0) + pages);

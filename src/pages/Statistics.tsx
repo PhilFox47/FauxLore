@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, A
 import { format, subDays, isAfter, startOfDay } from 'date-fns';
 import { BarChart3, DatabaseZap, Clock, ListChecks, Calendar, Target, Activity, Zap, MapPin, Sparkles, GitBranch, Star, Layers } from 'lucide-react';
 import { summariseGroups } from '../lib/locationGroups';
+import { spreadOverClock } from '../lib/logDuration';
 import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
 import { calculateNativeUnits, NATIVE_UNIT_LABELS } from '../lib/rpgSystem';
 import { groupLogsIntoSessions } from '../lib/sessions';
@@ -315,16 +316,20 @@ export function Statistics() {
     const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const grid: number[][] = DAYS.map(() => TIME_BANDS.map(() => 0));
     let max = 0;
+    // A log occupies every band it ran through. Four hours ending at 22:00 is
+    // an evening that spilled into the night, not a night.
+    const mediaById = new Map(media.map(m => [m.id, m]));
     filteredLogs.forEach(l => {
       if (l.metricType === 'statusChange') return;
-      const d = new Date(l.timestamp);
       const dow = logWeekdayIndex(l.timestamp);
-      const b = bandIndexForHour(d.getHours());
-      grid[dow][b] += 1;
-      if (grid[dow][b] > max) max = grid[dow][b];
+      for (const slice of spreadOverClock(l, mediaById.get(l.mediaId), settings, 1)) {
+        const b = bandIndexForHour(slice.hour);
+        grid[dow][b] += slice.value;
+        if (grid[dow][b] > max) max = grid[dow][b];
+      }
     });
     return { DAYS, BANDS: TIME_BANDS, grid, max };
-  }, [filteredLogs]);
+  }, [filteredLogs, media, settings]);
 
   // Tag chemistry: which tags co-occur most on your items (respects type filter via media set)
   const tagChemistry = useMemo(() => {
