@@ -1,6 +1,17 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 
+/**
+ * Genres and tags that keep a cover off the login page.
+ *
+ * Only the login backdrop consults this — it is the one place cover art is
+ * shown to someone who has not signed in. Everywhere inside the app the library
+ * is shown in full. Compared case-insensitively against trimmed terms; near
+ * misses like "Erotica" or "Hentai" are deliberately not inferred, so extending
+ * the list is an edit here rather than a guess at runtime.
+ */
+const ADULT_TERMS = new Set(["erotic", "nsfw", "eroge", "sexual content"]);
+
 export function registerMediaRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, normalizeMedia, safeJsonParse, syncOngoingMediaInBackground, autoTag, activity } = ctx;
 
@@ -9,8 +20,37 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
       // The login page tiles these behind the form. A 4K display needs a few
       // hundred to fill without repeating, so send plenty and let the client
       // take what it can actually show.
-      const rows = db.prepare('SELECT DISTINCT coverImageUrl FROM media WHERE coverImageUrl IS NOT NULL AND coverImageUrl != \'\' ORDER BY RANDOM() LIMIT 400').all() as {coverImageUrl: string}[];
-      res.json(rows.map(r => r.coverImageUrl));
+      //
+      // This is the one endpoint that serves cover art to someone who is not
+      // logged in, so adult titles are held back from it. Filtering happens in
+      // JS rather than SQL because genres and tags are JSON arrays: a LIKE
+      // against the raw text would match substrings and miss casing, and here
+      // a miss means showing the thing we meant to hide.
+      const rows = db
+        .prepare(
+          `SELECT coverImageUrl, genres, tags FROM media
+            WHERE coverImageUrl IS NOT NULL AND coverImageUrl != ''`,
+        )
+        .all() as { coverImageUrl: string; genres: string | null; tags: string | null }[];
+
+      // A cover shared by several entries is withheld if ANY of them is flagged.
+      const blocked = new Set<string>();
+      const safe = new Set<string>();
+      for (const row of rows) {
+        const terms = [...safeJsonParse(row.genres), ...safeJsonParse(row.tags)]
+          .map((t: any) => String(t || "").trim().toLowerCase());
+        if (terms.some((t) => ADULT_TERMS.has(t))) blocked.add(row.coverImageUrl);
+        else safe.add(row.coverImageUrl);
+      }
+
+      const covers = [...safe].filter((url) => !blocked.has(url));
+      // Shuffle here rather than with ORDER BY RANDOM(), so the limit applies to
+      // what is left after filtering instead of to the whole library.
+      for (let i = covers.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [covers[i], covers[j]] = [covers[j], covers[i]];
+      }
+      res.json(covers.slice(0, 400));
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }
