@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Outlet } from 'react-router-dom';
-import { Menu, X, Eye } from 'lucide-react';
+import { Menu, X, Eye, PauseCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { BRAND_LOGO_URL } from '../lib/brand';
 import { SettingsModal } from './SettingsModal';
 import { Celebrations } from './Celebrations';
 import { useAuth } from '../contexts/AuthContext';
+import { useMediaContext } from '../contexts/MediaContext';
 
 export function Layout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { user, impersonating, stopImpersonating } = useAuth();
+  const { activity } = useMediaContext();
 
   const handleReturn = async () => {
     await stopImpersonating();
@@ -71,6 +73,21 @@ export function Layout() {
             >
               Return to my account
             </button>
+          </div>
+        )}
+
+        {/* Paused for inactivity. Said out loud, because the alternative is a
+            user wondering why nothing generates and hitting silent refusals. */}
+        {activity?.frozen && (
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-sky-500/10 border-b border-sky-500/25 text-sky-100 z-30">
+            <PauseCircle className="w-4 h-4 shrink-0 text-sky-400" />
+            <p className="text-sm min-w-0">
+              <strong className="font-black">Paused.</strong>{' '}
+              {activity.lastLogAt
+                ? `Nothing has been logged for ${activity.daysSince} days`
+                : 'Nothing has been logged yet'}
+              , so recaps, enemies and tagging are on hold. Log any progress and they resume immediately.
+            </p>
           </div>
         )}
 

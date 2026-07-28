@@ -68,6 +68,10 @@ export function initSchema(db: Db) {
       location TEXT,
       isHistoric INTEGER DEFAULT 0,
       bonusMultiplier REAL DEFAULT 0,
+      -- When the row was written. The timestamp column is the moment being
+      -- recorded, which for a backfilled session is months ago; this is the one
+      -- that says whether the account is still being used.
+      createdAt TEXT,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
     );
 

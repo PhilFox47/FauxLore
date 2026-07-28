@@ -2,7 +2,7 @@ import type { Express } from "express";
 import type { ServerContext } from "../context";
 
 export function registerAiRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser } = ctx;
+  const { db, getAuthUser, activity } = ctx;
 
   app.get("/api/ai-text", (req, res) => {
     try {
@@ -37,6 +37,8 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
+      // Dormant accounts cost nothing: this call spends tokens.
+      if (!activity.requireActive(userId as string, res)) return;
       const apiKey = req.headers['x-nano-gpt-key'];
       if (!apiKey) {
          res.status(401).json({ error: "Missing API key" });
@@ -56,6 +58,8 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
+      // Dormant accounts cost nothing: this call spends tokens.
+      if (!activity.requireActive(userId as string, res)) return;
       const apiKey = req.headers['x-nano-gpt-key'];
       if (!apiKey) {
          res.status(401).json({ error: "Missing API key" });

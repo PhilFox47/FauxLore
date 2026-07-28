@@ -84,6 +84,7 @@ function Reveal({ children, className, delay = 0 }: { children: React.ReactNode;
 export function Recaps() {
   const { media, logs, settings, aiRecaps, saveAiRecap, artifacts, worldBosses, isLoading, aiTextCache } = useMediaContext();
   const toast = useToast();
+  const { activity } = useMediaContext();
 
   // Wallpaper: rendered on demand, because it means fetching every cover in the
   // period through the proxy and compositing a 4K canvas.
@@ -425,15 +426,21 @@ export function Recaps() {
     // 6. We are looking at a RECENT period (e.g. within the last 2 periods) to prevent mass historical generation
     const isRecent = offsetOffset <= 2;
 
-    if (!isLoading && currentRecap === null && activeLogs.length > 0 && settings?.nanoGptApiKey && !isGenerating && isRecent) {
+    // A paused account never auto-generates: the server would refuse it, and
+    // the point of the freeze is not asking in the first place.
+    if (!isLoading && currentRecap === null && activeLogs.length > 0 && settings?.nanoGptApiKey && !isGenerating && isRecent && !activity?.frozen) {
       if (!attemptedGenRef.current.has(timeId)) {
         attemptedGenRef.current.add(timeId);
         setTimeout(() => handleGenerateAI(), 100);
       }
     }
-  }, [currentRecap, activeLogs.length, settings?.nanoGptApiKey, isGenerating, timeId, isLoading, offsetOffset]);
+  }, [currentRecap, activeLogs.length, settings?.nanoGptApiKey, isGenerating, timeId, isLoading, offsetOffset, activity?.frozen]);
 
   const handleGenerateAI = async () => {
+    if (activity?.frozen) {
+      toast.error(`Paused after ${activity.inactivityDays} days without a log. Log some progress and recaps resume.`);
+      return;
+    }
     if (!settings?.nanoGptApiKey) {
       toast.error("Please configure your Nano-GPT API Key in the Settings menu first.");
       return;

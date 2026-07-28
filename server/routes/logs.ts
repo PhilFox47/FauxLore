@@ -2,7 +2,7 @@ import type { Express } from "express";
 import type { ServerContext } from "../context";
 
 export function registerLogRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser } = ctx;
+  const { db, getAuthUser, activity, autoTag } = ctx;
 
   app.get("/api/logs", (req, res) => {
     try {
@@ -45,9 +45,12 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
       const log = req.body;
       const userId = getAuthUser(req, res);
       if (!userId) return;
+      // Read before the insert: this log is what thaws the account, so the state
+      // afterwards would always say "active" and the transition would be invisible.
+      const wasFrozen = activity.isFrozen(userId as string);
       db.prepare(`
-        INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note, location, isHistoric)
-        VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note, @location, @isHistoric)
+        INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note, location, isHistoric, createdAt)
+        VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note, @location, @isHistoric, @createdAt)
       `).run({
         id: log.id,
         userId: userId,
@@ -57,8 +60,27 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
         delta: log.delta,
         note: log.note || null,
         location: log.location || null,
-        isHistoric: log.isHistoric ? 1 : 0
+        isHistoric: log.isHistoric ? 1 : 0,
+        // When the entry was written, as opposed to the moment it records.
+        // Backfilling old sessions is still using the app, and this is what the
+        // inactivity freeze measures.
+        createdAt: new Date().toISOString()
       });
+
+      // Coming back thaws the account: anything parked while it was dormant runs
+      // now. Auto-tagging is the only deferred work — enemies wait for Monday's
+      // spawn, and recaps are written on demand.
+      if (wasFrozen) {
+        try {
+          const parked = db
+            .prepare("SELECT id FROM media WHERE userId = ? AND autoTagStatus = 'deferred'")
+            .all(userId) as { id: string }[];
+          if (parked.length) {
+            console.log(`[activity] ${userId} is back; tagging ${parked.length} entry(s) added while dormant`);
+            parked.forEach((m) => autoTag.queueAutoTag(userId as string, m.id));
+          }
+        } catch (e) { console.error("Deferred auto-tag on thaw failed", e); }
+      }
 
       // Update Streak Mode
       try {

@@ -392,6 +392,17 @@ export const DatabaseService = {
     }
   },
 
+  /** Whether this account is paused for inactivity, and since when. */
+  async getActivity(): Promise<{ frozen: boolean; lastLogAt: string | null; daysSince: number | null; inactivityDays: number } | null> {
+    try {
+      const res = await apiFetch('/api/activity');
+      if (!res.ok) return null;
+      return res.json();
+    } catch (e) {
+      return null;
+    }
+  },
+
   async createBackup(): Promise<any> {
     const res = await apiFetch('/api/backup', {
       method: 'POST',

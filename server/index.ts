@@ -24,6 +24,7 @@ import { createWorldBossService } from "./services/worldBoss";
 import { createCodexService } from "./services/codex";
 import { createLootService } from "./services/loot";
 import { createAutoTagService } from "./services/autoTag";
+import { createActivityService, INACTIVITY_DAYS } from "./services/activity";
 
 import { registerAuthRoutes } from "./routes/auth";
 import { registerUserRoutes } from "./routes/users";
@@ -84,6 +85,11 @@ async function startServer() {
 
   // RPG / AI services. The Codex sits underneath the creative ones: it does the
   // research once per title, and enemies, loot and tags are written from it.
+  // Dormant accounts are skipped by every scheduled job below and refused by
+  // every endpoint that spends tokens. Nothing runs for someone who has not
+  // logged anything in a week.
+  const activity = createActivityService(db);
+
   const codex = createCodexService({ db });
   const { generateBossImageBackground, generateArtifactImageBackground } = createImageService({ db, aiImagesDir, codex });
   const { spawnWorldBoss, generateEnemy } = createWorldBossService({ db, generateBossImageBackground, codex });
@@ -95,27 +101,36 @@ async function startServer() {
 
   // Daily metadata refresh: re-check tracked media (Active / On Hold) against their
   // source for new versions. Runs early and off-peak.
-  const { notify, runAllChecks, runForAllUsers } = createNotifications(db);
-  const { refreshTrackedMedia, refreshAllUsers } = createMetadataRefresh(db, notify);
+  const { notify, runAllChecks } = createNotifications(db);
+  const { refreshTrackedMedia } = createMetadataRefresh(db, notify);
   cron.schedule("30 4 * * *", () => {
-    console.log("Running daily metadata refresh...");
-    refreshAllUsers().catch((e) => console.error("Metadata refresh failed", e));
+    const users = activity.activeUserIds();
+    console.log(`Running daily metadata refresh for ${users.length} active user(s)...`);
+    Promise.all(users.map((id) => refreshTrackedMedia(id)))
+      .catch((e) => console.error("Metadata refresh failed", e));
   });
 
   // Notification producers (releases, finished recap periods, expiring bosses).
   // Runs each morning, and once shortly after boot so a restart surfaces anything
   // that came due while the server was down.
-  cron.schedule("0 6 * * *", () => runForAllUsers());
-  setTimeout(() => runForAllUsers(), 10_000);
+  cron.schedule("0 6 * * *", () => activity.activeUserIds().forEach((id) => runAllChecks(id)));
+  setTimeout(() => activity.activeUserIds().forEach((id) => runAllChecks(id)), 10_000);
 
   // Weekly boss spawn (Mondays)
   cron.schedule("0 5 * * 1", () => {
+    // Expiring last week's enemies is bookkeeping and costs nothing, so it runs
+    // for everyone. Spawning new ones writes AI text and an image, so it only
+    // runs for accounts that are actually being used.
     const users = db.prepare("SELECT id FROM users").all() as { id: string }[];
     for (const u of users) {
       db.prepare("UPDATE world_bosses SET status = 'Failed' WHERE userId = ? AND status = 'Active' AND expiresAt < ?").run(
         u.id,
         new Date().toISOString(),
       );
+      if (activity.isFrozen(u.id)) {
+        console.log(`[activity] Skipping boss spawn for ${u.id}: no log in ${INACTIVITY_DAYS} days`);
+        continue;
+      }
       spawnWorldBoss(u.id);
     }
   });
@@ -141,6 +156,7 @@ async function startServer() {
     generateArtifactImageBackground,
     codex,
     autoTag,
+    activity,
     hltbSearch,
     getIgdbToken,
   };

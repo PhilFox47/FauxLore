@@ -4,7 +4,7 @@ import { searchGames, getGameDetails, diagnose as gslDiagnose } from "../integra
 import { LOW_RES_WIDTH, bestCoverForVolume } from "../integrations/bookCovers";
 
 export function registerSearchRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser, hltbSearch, getIgdbToken } = ctx;
+  const { db, getAuthUser, hltbSearch, getIgdbToken, activity } = ctx;
 
   app.get("/api/games/search", async (req, res) => {
     try {
@@ -589,6 +589,9 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
+      // Not AI, but a request per book against two upstreams — not something to
+      // run for an account nobody is using.
+      if (!activity.requireActive(userId as string, res)) return;
       const sysSettings: any = db.prepare('SELECT googleBooksApiKey FROM system_settings WHERE id = ?').get('system') || {};
       const apiKey = sysSettings.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
 

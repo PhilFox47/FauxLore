@@ -183,6 +183,7 @@ export function runMigrations(db: Db) {
   // Optional per-playthrough route (VNs). One route per entry; a different route
   // means a new Re-Run entry, which is how routes accumulate across runs.
   try { db.prepare("ALTER TABLE media ADD COLUMN route TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE logs ADD COLUMN createdAt TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE users ADD COLUMN lastActiveAt TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE sessions ADD COLUMN impersonatedBy TEXT").run(); } catch (e) {}
   // Broken items (0 durability) should never remain equipped.

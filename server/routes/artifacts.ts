@@ -2,7 +2,7 @@ import type { Express } from "express";
 import type { ServerContext } from "../context";
 
 export function registerArtifactRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser, generateArtifactImageBackground, generateLoot } = ctx;
+  const { db, getAuthUser, generateArtifactImageBackground, generateLoot, activity } = ctx;
 
   /**
    * Writes a drop for a media entry: rarity, slot and bonus are rolled here, and
@@ -13,6 +13,8 @@ export function registerArtifactRoutes(app: Express, ctx: ServerContext) {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
+      // Dormant accounts cost nothing: this call spends tokens.
+      if (!activity.requireActive(userId as string, res)) return;
       const { mediaId, oldArtifact } = req.body || {};
       const mediaItem = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(mediaId, userId) as any;
       if (!mediaItem) return res.status(404).json({ error: 'Media not found' });
@@ -79,6 +81,8 @@ export function registerArtifactRoutes(app: Express, ctx: ServerContext) {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
+      // Dormant accounts cost nothing: this call spends tokens.
+      if (!activity.requireActive(userId as string, res)) return;
       const artifactId = req.params.id;
       const artifact = db.prepare('SELECT id FROM artifacts WHERE id = ? AND userId = ?').get(artifactId, userId) as any;
       if (!artifact) return res.status(404).json({ error: 'Not found' });

@@ -191,6 +191,14 @@ HOW TO WRITE IT:
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
+    // The server explains refusals (a paused account, for one) in an `error`
+    // field. Showing that beats showing it wrapped in a status code.
+    try {
+      const parsed = JSON.parse(detail);
+      if (parsed?.error) throw new Error(parsed.error);
+    } catch (e: any) {
+      if (e instanceof Error && e.message && !/JSON/i.test(e.message)) throw e;
+    }
     throw new Error(`Nano-GPT Error (${res.status}): ${detail.slice(0, 200)}`);
   }
 

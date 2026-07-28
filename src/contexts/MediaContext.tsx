@@ -16,6 +16,8 @@ interface MediaContextType {
   worldBosses: WorldBoss[];
   aiTextCache: Record<string, string>;
   taxonomies: any[];
+  /** Whether the account is paused for inactivity, and how long since the last log. */
+  activity: { frozen: boolean; lastLogAt: string | null; daysSince: number | null; inactivityDays: number } | null;
   refreshData: () => Promise<void>;
   saveMediaItem: (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => Promise<void>;
   deleteMediaItem: (id: string) => Promise<void>;
@@ -64,6 +66,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   const [aiTextCache, setAiTextCache] = useState<Record<string, string>>({});
   const [taxonomies, setTaxonomies] = useState<any[]>([]);
   const [franchises, setFranchises] = useState<any[]>([]);
+  const [activity, setActivity] = useState<MediaContextType['activity']>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Single source of truth for the current RPG state; consumers read this
@@ -87,12 +90,13 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       setTaxonomies([]);
       setFranchises([]);
       setNotifications([]);
+      setActivity(null);
       setIsLoading(false);
       return;
     }
     try {
       setIsLoading(true);
-      const [mediaData, logsData, settingsData, recapsData, artifactsData, bossesData, textCacheData, taxData, franchisesData] = await Promise.all([
+      const [mediaData, logsData, settingsData, recapsData, artifactsData, bossesData, textCacheData, taxData, franchisesData, activityData] = await Promise.all([
         DatabaseService.getAllMedia(),
         DatabaseService.getAllLogs(),
         DatabaseService.getSettings(),
@@ -101,7 +105,8 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
         DatabaseService.getWorldBosses(),
         DatabaseService.getAiTextCache(),
         DatabaseService.getTaxonomies(),
-        DatabaseService.getAllFranchises()
+        DatabaseService.getAllFranchises(),
+        DatabaseService.getActivity()
       ]);
       setMedia(mediaData);
       setLogs(logsData);
@@ -112,6 +117,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       setAiTextCache(textCacheData);
       setTaxonomies(taxData);
       setFranchises(franchisesData);
+      setActivity(activityData);
       loadNotifications();
     } catch (error) {
       console.error("Failed to load data from server:", error);
@@ -140,7 +146,9 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     const currentLevel = rpgState.level;
 
     if (previousLevel.current === null || previousLevel.current !== currentLevel) {
-      if (settings.nanoGptApiKey) {
+      // A paused account spends nothing. The server refuses this anyway; not
+      // asking keeps a pointless 403 out of the console on every load.
+      if (settings.nanoGptApiKey && !activity?.frozen) {
         const titleKey = `rpg_title_${currentLevel}`;
         
         // Generate if it's an actual level change, OR if it's the initial load and the title is missing
@@ -159,7 +167,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     }
     
     previousLevel.current = currentLevel;
-  }, [rpgState, settings, aiTextCache, isLoading, refreshData, media, logs]);
+  }, [rpgState, settings, aiTextCache, isLoading, refreshData, media, logs, activity?.frozen]);
 
   const saveMediaItem = useCallback(async (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => {
     let oldMetricValue = 0;
@@ -346,7 +354,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [refreshData]);
 
   return (
-    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, taxonomies, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, refreshMetadata, acknowledgeUpdate, notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, taxonomies, activity, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, refreshMetadata, acknowledgeUpdate, notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
       {children}
     </MediaContext.Provider>
   );

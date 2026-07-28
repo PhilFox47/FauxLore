@@ -2,6 +2,7 @@ import type { Express } from "express";
 import dns from "dns/promises";
 import net from "net";
 import type { ServerContext } from "../context";
+import { INACTIVITY_DAYS } from "../services/activity";
 
 /**
  * Hosts a browser is allowed to pull through the image proxy.
@@ -56,10 +57,24 @@ async function resolvesPrivately(hostname: string): Promise<boolean> {
 }
 
 export function registerSystemRoutes(app: Express, ctx: ServerContext) {
-  const { createDatabaseBackup, getAuthUser } = ctx;
+  const { createDatabaseBackup, getAuthUser, activity } = ctx;
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  /**
+   * Whether this account is dormant, so the client can say so plainly instead of
+   * letting the user run into a 403 with no explanation.
+   */
+  app.get("/api/activity", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      res.json({ ...activity.stateOf(userId as string), inactivityDays: INACTIVITY_DAYS });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
   });
 
   /** Re-serves a remote image from this origin, so a canvas can export it. */

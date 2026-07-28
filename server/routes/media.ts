@@ -2,7 +2,7 @@ import type { Express } from "express";
 import type { ServerContext } from "../context";
 
 export function registerMediaRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser, normalizeMedia, safeJsonParse, syncOngoingMediaInBackground, autoTag } = ctx;
+  const { db, getAuthUser, normalizeMedia, safeJsonParse, syncOngoingMediaInBackground, autoTag, activity } = ctx;
 
   app.get("/api/public/covers", (req, res) => {
     try {
@@ -24,6 +24,8 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
+      // Dormant accounts cost nothing: this call spends tokens.
+      if (!activity.requireActive(userId as string, res)) return;
       const media = db.prepare('SELECT id FROM media WHERE id = ? AND userId = ?').get(req.params.id, userId);
       if (!media) return res.status(404).json({ error: 'Media not found' });
 
@@ -226,8 +228,15 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
       // this is where they come from — in the background, on the server, so it
       // survives the user closing the tab. It also compiles the Codex, which the
       // enemy and loot generators will want later anyway.
+      // A dormant account still gets to add things — it just does not get the AI
+      // work until it logs something. The entry is parked as 'deferred' and the
+      // first log picks it up, so nothing is silently lost.
       if (isNewEntry && (item.genres || []).length === 0 && (item.tags || []).length === 0) {
-        autoTag.queueAutoTag(userId as string, item.id);
+        if (activity.isFrozen(userId as string)) {
+          db.prepare("UPDATE media SET autoTagStatus = 'deferred' WHERE id = ?").run(item.id);
+        } else {
+          autoTag.queueAutoTag(userId as string, item.id);
+        }
       }
 
       const saved = db.prepare('SELECT * FROM media WHERE id = ?').get(item.id);

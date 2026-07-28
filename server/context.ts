@@ -1,6 +1,7 @@
 import type DatabaseConstructor from "better-sqlite3";
 import type { CodexService } from "./services/codex";
 import type { AutoTagService } from "./services/autoTag";
+import type { ActivityService } from "./services/activity";
 import type { GeneratedEnemy } from "./services/worldBoss";
 import type { GeneratedLoot } from "./services/loot";
 
@@ -31,6 +32,8 @@ export interface ServerContext {
   generateArtifactImageBackground: (userId: string, artifactId: string) => Promise<void>;
   codex: CodexService;
   autoTag: AutoTagService;
+  /** Whether an account is dormant; gates every scheduled job and AI endpoint. */
+  activity: ActivityService;
   hltbSearch: (query: string) => Promise<any[]>;
   getIgdbToken: (clientId: string, clientSecret: string) => Promise<string>;
 }

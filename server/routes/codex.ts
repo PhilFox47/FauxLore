@@ -12,7 +12,7 @@ import { codexPromptBlock, type CodexRow } from "../services/codex";
  * on the server and reach the Codex service directly.
  */
 export function registerCodexRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser, codex } = ctx;
+  const { db, getAuthUser, codex, activity } = ctx;
 
   // Auto-tagging embeds the Codex in its own prompt from the browser, so the
   // rendered prompt block ships with it and only one formatter ever exists.
@@ -39,6 +39,8 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
+      // Dormant accounts cost nothing: this call spends tokens.
+      if (!activity.requireActive(userId as string, res)) return;
       const media: any = db.prepare("SELECT title, mediaType FROM media WHERE id = ? AND userId = ?").get(req.params.id, userId);
       if (!media) return res.status(404).json({ error: "Media not found" });
 
@@ -65,6 +67,8 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
+      // Dormant accounts cost nothing: this call spends tokens.
+      if (!activity.requireActive(userId as string, res)) return;
       const { mediaId, title, mediaType, force } = req.body || {};
       if (!mediaId && (!title || !mediaType)) {
         return res.status(400).json({ error: "A mediaId, or a title and mediaType, is required." });

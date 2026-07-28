@@ -2,12 +2,14 @@ import type { Express } from "express";
 import type { ServerContext } from "../context";
 
 export function registerBossRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser, generateBossImageBackground, spawnWorldBoss, generateEnemy } = ctx;
+  const { db, getAuthUser, generateBossImageBackground, spawnWorldBoss, generateEnemy, activity } = ctx;
 
   app.post("/api/world-bosses/:id/generate-image", async (req, res) => {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
+      // Dormant accounts cost nothing: this call spends tokens.
+      if (!activity.requireActive(userId as string, res)) return;
       const bossId = req.params.id;
       const boss = db.prepare('SELECT id FROM world_bosses WHERE id = ? AND userId = ?').get(bossId, userId) as any;
       if (!boss) return res.status(404).json({ error: 'Not found' });
@@ -37,6 +39,8 @@ export function registerBossRoutes(app: Express, ctx: ServerContext) {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
+      // Dormant accounts cost nothing: this call spends tokens.
+      if (!activity.requireActive(userId as string, res)) return;
       
       const { mediaType } = req.body || {};
 
@@ -57,6 +61,8 @@ export function registerBossRoutes(app: Express, ctx: ServerContext) {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
+      // Dormant accounts cost nothing: this call spends tokens.
+      if (!activity.requireActive(userId as string, res)) return;
 
       const boss = db.prepare('SELECT * FROM world_bosses WHERE id = ? AND userId = ?').get(req.params.id, userId) as any;
       if (!boss) return res.status(404).json({ error: "Not found" });
