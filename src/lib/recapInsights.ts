@@ -433,6 +433,172 @@ export function buildHistoryMetrics(
   }));
 }
 
+export interface UniverseEntry {
+  name: string;
+  pages: number;
+  /** Share of everything logged this period, franchised or not. */
+  share: number;
+  titles: { id: string; title: string; mediaType: string; pages: number }[];
+  /** The period's pages split by media type, biggest first. */
+  types: { type: string; pages: number }[];
+  coverImageUrl?: string;
+  /** Never logged before this period — a universe entered for the first time. */
+  isNew: boolean;
+  /** Master pages logged against this universe before the period began. */
+  priorPages: number;
+  /** Sub-period totals, aligned to `timeline.buckets`. */
+  values: number[];
+}
+
+export interface FranchiseInsights {
+  universes: UniverseEntry[];
+  totalPages: number;
+  franchisedPages: number;
+  standalonePages: number;
+  franchisedShare: number;
+  distinct: number;
+  newCount: number;
+  /** Universes that were already on the books before this period. */
+  returningCount: number;
+  /** The universe the most separate titles were touched in. */
+  deepest: UniverseEntry | null;
+  /** Sub-period labels, present whenever there is enough of a period to plot. */
+  buckets: string[] | null;
+  /** Everything outside a franchise, per bucket — the baseline in the timeline. */
+  standaloneValues: number[];
+}
+
+/**
+ * The period read as a map of universes rather than a list of titles.
+ *
+ * A franchise is the one grouping the user maintains by hand, so it carries
+ * intent the media type and genre never do: three entries in one universe is a
+ * deliberate run at it, and a first visit is a decision to start something. Both
+ * are invisible in a per-title ranking, which is what this exists to fix.
+ *
+ * An entry can belong to several franchises, so its pages are counted toward
+ * each — the shares are of the period, not of each other, and are not meant to
+ * sum to 100%.
+ */
+export function buildFranchiseInsights(
+  progressLogs: ProgressLog[],
+  allProgressLogs: ProgressLog[],
+  media: MediaItem[],
+  settings: Settings | null | undefined,
+  interval: Interval,
+  timeframe: Timeframe,
+): FranchiseInsights | null {
+  const buckets =
+    timeframe === 'week'
+      ? eachDayOfInterval(interval).map((d) => ({ start: d, label: format(d, 'EEE') }))
+      : timeframe === 'month'
+        ? eachWeekOfInterval(interval, { weekStartsOn: 1 }).map((d, i) => ({ start: d, label: `W${i + 1}` }))
+        : eachMonthOfInterval(interval).map((d) => ({ start: d, label: format(d, 'MMM') }));
+
+  const bucketIndex = (when: Date) => {
+    let idx = 0;
+    for (let i = 0; i < buckets.length; i++) if (when >= buckets[i].start) idx = i;
+    return idx;
+  };
+
+  const mediaById = new Map(media.map((m) => [m.id, m]));
+  const zero = () => Array(buckets.length).fill(0) as number[];
+
+  const byName = new Map<string, {
+    pages: number;
+    values: number[];
+    titles: Map<string, number>;
+    types: Map<string, number>;
+  }>();
+  const standaloneValues = zero();
+  let totalPages = 0;
+  let franchisedPages = 0;
+  let standalonePages = 0;
+
+  for (const log of progressLogs) {
+    const m = mediaById.get(log.mediaId);
+    if (!m) continue;
+    const pages = calculateScaledDelta(log.delta || 0, m, settings);
+    if (pages <= 0) continue;
+    totalPages += pages;
+    const idx = bucketIndex(shift(log.timestamp));
+    const names = (m.franchises || []).filter((f) => f && f.trim());
+    if (names.length === 0) {
+      standalonePages += pages;
+      standaloneValues[idx] += pages;
+      continue;
+    }
+    franchisedPages += pages;
+    for (const raw of names) {
+      const name = raw.trim();
+      const entry = byName.get(name) || { pages: 0, values: zero(), titles: new Map(), types: new Map() };
+      entry.pages += pages;
+      entry.values[idx] += pages;
+      entry.titles.set(m.id, (entry.titles.get(m.id) || 0) + pages);
+      entry.types.set(m.mediaType, (entry.types.get(m.mediaType) || 0) + pages);
+      byName.set(name, entry);
+    }
+  }
+
+  if (byName.size === 0) return null;
+
+  // What each universe had on the books before this period, so a first visit can
+  // be told apart from a return. Anything logged at or after the period's start
+  // is excluded, including logs from later periods when reading an old recap.
+  const priorByName = new Map<string, number>();
+  for (const log of allProgressLogs) {
+    const when = shift(log.timestamp);
+    if (when >= interval.start) continue;
+    const m = mediaById.get(log.mediaId);
+    if (!m || !m.franchises?.length) continue;
+    const pages = calculateScaledDelta(log.delta || 0, m, settings);
+    if (pages <= 0) continue;
+    for (const raw of m.franchises) {
+      const name = (raw || '').trim();
+      if (name) priorByName.set(name, (priorByName.get(name) || 0) + pages);
+    }
+  }
+
+  const universes: UniverseEntry[] = [...byName.entries()]
+    .map(([name, e]) => {
+      const titles = [...e.titles.entries()]
+        .map(([id, pages]) => {
+          const m = mediaById.get(id)!;
+          return { id, title: m.title, mediaType: m.mediaType as string, pages };
+        })
+        .sort((a, b) => b.pages - a.pages);
+      const priorPages = priorByName.get(name) || 0;
+      return {
+        name,
+        pages: e.pages,
+        share: totalPages > 0 ? e.pages / totalPages : 0,
+        titles,
+        types: [...e.types.entries()].map(([type, pages]) => ({ type, pages })).sort((a, b) => b.pages - a.pages),
+        coverImageUrl: titles.map((t) => mediaById.get(t.id)?.coverImageUrl).find(Boolean) || undefined,
+        isNew: priorPages <= 0,
+        priorPages,
+        values: e.values,
+      };
+    })
+    .sort((a, b) => b.pages - a.pages);
+
+  const deepest = [...universes].sort((a, b) => b.titles.length - a.titles.length)[0] || null;
+
+  return {
+    universes,
+    totalPages,
+    franchisedPages,
+    standalonePages,
+    franchisedShare: totalPages > 0 ? franchisedPages / totalPages : 0,
+    distinct: universes.length,
+    newCount: universes.filter((u) => u.isNew).length,
+    returningCount: universes.filter((u) => !u.isNew).length,
+    deepest: deepest && deepest.titles.length > 1 ? deepest : null,
+    buckets: buckets.length >= 3 ? buckets.map((b) => b.label) : null,
+    standaloneValues,
+  };
+}
+
 /** Filters a log set to one interval, using the app's 5am day boundary. */
 export function logsInInterval(logs: ProgressLog[], interval: Interval) {
   return logs.filter((l) => isWithinInterval(shift(l.timestamp), interval));

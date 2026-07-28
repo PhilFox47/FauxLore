@@ -24,6 +24,8 @@ export interface RecapCaptions {
   taste?: string;
   pipeline?: string;
   records?: string;
+  universes?: string;
+  universeTimeline?: string;
 }
 
 export interface StructuredRecap {
@@ -87,7 +89,7 @@ export function normalizeRecap(raw: any, fallbackText = ''): StructuredRecap {
 
   const captionsRaw = raw?.captions || {};
   const captions: RecapCaptions = {};
-  (['momentum', 'formats', 'rhythm', 'taste', 'pipeline', 'records'] as const).forEach((k) => {
+  (['momentum', 'formats', 'rhythm', 'taste', 'pipeline', 'records', 'universes', 'universeTimeline'] as const).forEach((k) => {
     const v = clean(captionsRaw[k]);
     if (v) captions[k] = v;
   });
@@ -149,7 +151,9 @@ Return ONE JSON object, and nothing else, with exactly these keys:
     "rhythm": "one line on WHEN they consume — hours, days, streaks, gaps",
     "taste": "one line on their ratings versus the critics'",
     "pipeline": "one line on what they finished versus what they left open",
-    "records": "one line on any personal bests, or on how close they came"
+    "records": "one line on any personal bests, or on how close they came",
+    "universes": "one line on the franchises they lived in this ${timeframe} — devotion to one, spread across many, or a universe entered for the first time",
+    "universeTimeline": "one line on how those franchises traded places across the ${timeframe}"
   },
   "lookAhead": {"watchFor": "what you will be watching for next ${timeframe}, based on what is unresolved", "challenge": "one concrete, achievable challenge for next ${timeframe}"},
   "theme": "the theme of this ${timeframe}, max 5 words",

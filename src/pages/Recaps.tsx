@@ -19,11 +19,11 @@ import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, C
 import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog, analyzeContrarian, extractJournals, calculateLongestStreak } from '../lib/recapAnalytics';
 import {
   buildClock, buildComparison, buildHistoryMetrics, buildIntervalMetrics, buildMomentumSeries,
-  buildPipeline, buildRankRace, buildRecords, buildTasteAlignment, logsInInterval, shift,
+  buildFranchiseInsights, buildPipeline, buildRankRace, buildRecords, buildTasteAlignment, logsInInterval, shift,
 } from '../lib/recapInsights';
 import {
   ActivityClock, ConsistencyRing, HeroStat, MomentumChart, PipelineFunnel, RankRace,
-  RecordsBoard, TasteScatter, typeHex,
+  RecordsBoard, TasteScatter, UniverseLeaderboard, UniverseTimeline, typeHex,
 } from '../components/RecapCharts';
 import { AwardsShelf, LookAhead, RecapDek, RecapNarrative, readRecap } from '../components/RecapStory';
 import { generateStructuredRecap } from '../services/recapAi';
@@ -296,6 +296,14 @@ export function Recaps() {
     [activeProgressLogs, media, settings, currentInterval, timeframe],
   );
 
+  // Franchises are the one grouping the user curates by hand, so they carry
+  // intent that media type and genre do not. The whole archive is passed in too,
+  // so a first visit can be told apart from a return.
+  const franchiseInsights = useMemo(
+    () => buildFranchiseInsights(activeProgressLogs, validLogs, media, settings, currentInterval, timeframe),
+    [activeProgressLogs, validLogs, media, settings, currentInterval, timeframe],
+  );
+
   const taste = useMemo(() => buildTasteAlignment(activeMedia), [activeMedia]);
 
   // Records are only meaningful against comparable periods, so history is
@@ -561,6 +569,13 @@ ${droppedMedia.length > 0 ? droppedMedia.map(m => `- ${m.title} (${m.mediaType})
 
 MEDIA COMPLETED:
 ${completedMedia.length > 0 ? completedMedia.map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.userReview ? `[User Review: "${m.userReview}"] ` : ''}${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres (ordered by importance): ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags (ordered by importance): ' + m.tags.join(', ') : ''}`).join('\n') : 'None'}
+
+UNIVERSES / FRANCHISES (the groupings the user maintains by hand — a run at one universe, or a first visit to one, is a deliberate choice worth reading):
+${franchiseInsights ? [
+  `${Math.round(franchiseInsights.franchisedShare * 100)}% of this ${timeframe} was spent inside a franchise, across ${franchiseInsights.distinct} of them (${franchiseInsights.newCount} entered for the first time, ${franchiseInsights.returningCount} returned to).`,
+  ...franchiseInsights.universes.slice(0, 6).map(u => `- ${u.name}: ${Math.round(u.pages)} MP (${Math.round(u.share * 100)}% of the ${timeframe}), ${u.titles.length} title(s) — ${u.titles.slice(0, 4).map(t => t.title).join(', ')}${u.isNew ? ' [FIRST VISIT — they had never logged this universe before]' : ` [returning; ${Math.round(u.priorPages)} MP logged here before this ${timeframe}]`}`),
+  franchiseInsights.deepest ? `Deepest run: ${franchiseInsights.deepest.name}, ${franchiseInsights.deepest.titles.length} separate titles.` : '',
+].filter(Boolean).join('\n') : 'No franchised media logged this period — everything was a standalone.'}
 
 TOP RANKED MEDIA (By Engagement/Master Pages):
 ${mediaRanking.slice(0,5).map(m => `- ${m.title} (${Math.round(m.pages)} MP)`).join('\n')}
@@ -2156,6 +2171,21 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                       <RecordsBoard className="lg:col-span-2" records={records} caption={captions.records} />
                       {rankRace && <RankRace className="lg:col-span-3" race={rankRace} />}
                       {taste && <TasteScatter className="lg:col-span-3" taste={taste} accent={accentHex} caption={captions.taste} />}
+                      {franchiseInsights && (
+                        <UniverseLeaderboard
+                          className="lg:col-span-3"
+                          insights={franchiseInsights}
+                          caption={captions.universes}
+                        />
+                      )}
+                      {franchiseInsights && (
+                        <UniverseTimeline
+                          className="lg:col-span-3"
+                          insights={franchiseInsights}
+                          timeframe={timeframe}
+                          caption={captions.universeTimeline}
+                        />
+                      )}
                    </div>
 
                    {/* #1 Spotlight (Last.fm / Wrapped-style top media moment) */}

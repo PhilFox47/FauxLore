@@ -4,10 +4,10 @@ import {
   Area, AreaChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, ResponsiveContainer,
   Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis,
 } from 'recharts';
-import { Sparkles } from 'lucide-react';
+import { Globe, Orbit, Sparkles } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { MEDIA_HEX, MediaType } from '../types/schema';
-import type { Delta, IntervalMetrics, RecordEntry } from '../lib/recapInsights';
+import type { Delta, FranchiseInsights, IntervalMetrics, RecordEntry } from '../lib/recapInsights';
 
 /**
  * The measured infographics of a recap.
@@ -562,6 +562,210 @@ export function RecordsBoard({ records, caption, className }: { records: RecordE
             </div>
           );
         })}
+      </div>
+    </RecapCard>
+  );
+}
+
+/**
+ * Universes get their own ordinal palette rather than borrowing MEDIA_HEX.
+ * A franchise is not a media type, and two of the top universes are often
+ * consumed in the same format — colouring them by format would draw two
+ * identical bands and destroy the one thing the chart is for. Assignment is by
+ * rank, which is stable for the life of a recap.
+ */
+const UNIVERSE_HEX = ['#f97316', '#38bdf8', '#a78bfa', '#34d399', '#f472b6', '#facc15'];
+const STANDALONE_HEX = '#3f3f46';
+
+/**
+ * The period as a map of universes: who you spent it with, in what formats, and
+ * which ones you had never opened before.
+ */
+export function UniverseLeaderboard({ insights, caption, className, limit = 6 }: {
+  insights: FranchiseInsights;
+  caption?: string;
+  className?: string;
+  limit?: number;
+}) {
+  const shown = insights.universes.slice(0, limit);
+  const max = shown[0]?.pages || 1;
+  const rest = insights.universes.length - shown.length;
+
+  return (
+    <RecapCard
+      icon={<Globe className="w-5 h-5 text-orange-400" />}
+      eyebrow={`${insights.distinct} universe${insights.distinct === 1 ? '' : 's'} visited`}
+      title="Where You Spent It"
+      caption={caption}
+      className={className}
+    >
+      {/* The share sits in the body rather than the card header: as a header
+          action it squeezes the title into an ellipsis on a phone. */}
+      <div className="flex items-baseline gap-3 mb-5">
+        <span className="text-3xl font-black text-white tabular-nums leading-none">{Math.round(insights.franchisedShare * 100)}%</span>
+        <span className="text-[10px] uppercase tracking-[0.15em] text-zinc-500 font-black leading-tight">of it spent<br />inside a universe</span>
+      </div>
+
+      <div className="space-y-3.5">
+        {shown.map((u, i) => (
+          <div key={u.name} className="flex gap-3 items-center">
+            <div className="w-9 h-12 rounded-lg bg-zinc-900 border border-white/10 overflow-hidden shrink-0 relative">
+              {u.coverImageUrl ? (
+                <img src={u.coverImageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-zinc-700"><Globe className="w-4 h-4" /></div>
+              )}
+              <span className="absolute bottom-0 right-0 text-[8px] font-black text-white bg-black/80 px-1 tabular-nums">{i + 1}</span>
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline justify-between gap-3 mb-1.5">
+                <div className="flex items-baseline gap-2 min-w-0">
+                  <span className="text-sm font-black text-white truncate">{u.name}</span>
+                  {u.isNew && (
+                    <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 rounded px-1.5 py-0.5 shrink-0">
+                      First visit
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] font-mono text-zinc-500 tabular-nums shrink-0">
+                  {Math.round(u.pages).toLocaleString()} MP
+                </span>
+              </div>
+
+              {/* One bar per universe, segmented by the formats it was consumed in. */}
+              <div className="h-2.5 bg-black/50 rounded-full overflow-hidden flex" style={{ width: `${Math.max(8, (u.pages / max) * 100)}%` }}>
+                {u.types.map((t) => (
+                  <motion.div
+                    key={t.type}
+                    className="h-full first:rounded-l-full last:rounded-r-full"
+                    style={{ backgroundColor: typeHex(t.type) }}
+                    initial={{ width: 0 }}
+                    whileInView={{ width: `${(t.pages / u.pages) * 100}%` }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: i * 0.05 }}
+                    title={`${t.type}: ${Math.round(t.pages).toLocaleString()} MP`}
+                  />
+                ))}
+              </div>
+
+              <div className="text-[10px] text-zinc-500 font-bold mt-1.5 truncate">
+                {u.titles.length} {u.titles.length === 1 ? 'title' : 'titles'}
+                <span className="text-zinc-700"> · </span>
+                {u.titles.slice(0, 3).map((t) => t.title).join(', ')}
+                {u.titles.length > 3 ? ` +${u.titles.length - 3}` : ''}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 pt-4 border-t border-white/5 flex flex-wrap gap-2">
+        {insights.newCount > 0 && (
+          <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400 border border-emerald-500/20 bg-emerald-500/5 rounded-full px-2.5 py-1">
+            {insights.newCount} new
+          </span>
+        )}
+        {insights.returningCount > 0 && (
+          <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 border border-white/10 bg-white/5 rounded-full px-2.5 py-1">
+            {insights.returningCount} returning
+          </span>
+        )}
+        {insights.deepest && (
+          <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400 border border-white/10 bg-white/5 rounded-full px-2.5 py-1 truncate max-w-full">
+            Deepest: {insights.deepest.name} ({insights.deepest.titles.length})
+          </span>
+        )}
+        {rest > 0 && (
+          <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600 border border-white/5 rounded-full px-2.5 py-1">
+            +{rest} more
+          </span>
+        )}
+      </div>
+    </RecapCard>
+  );
+}
+
+/**
+ * When each universe held you — stacked so the height is the period's whole
+ * output and each band is one universe's share of it. Everything outside a
+ * franchise sits at the bottom as the baseline it is.
+ */
+export function UniverseTimeline({ insights, caption, className, timeframe, limit = 5 }: {
+  insights: FranchiseInsights;
+  caption?: string;
+  className?: string;
+  timeframe: 'week' | 'month' | 'year';
+  limit?: number;
+}) {
+  const { buckets, standaloneValues } = insights;
+  if (!buckets) return null;
+  const top = insights.universes.slice(0, limit);
+  if (top.length < 2) return null;
+
+  const data = buckets.map((label, i) => {
+    const row: Record<string, any> = { label };
+    top.forEach((u, k) => { row[`u${k}`] = Math.round(u.values[i]); });
+    row.standalone = Math.round(standaloneValues[i]);
+    return row;
+  });
+  const names = Object.fromEntries([
+    ...top.map((u, k) => [`u${k}`, u.name] as const),
+    ['standalone', 'Outside a universe'] as const,
+  ]);
+  const hasStandalone = standaloneValues.some((v) => v > 0);
+  const unit = timeframe === 'week' ? 'day' : timeframe === 'month' ? 'week' : 'month';
+
+  return (
+    <RecapCard
+      icon={<Orbit className="w-5 h-5 text-sky-400" />}
+      eyebrow={`Universe by ${unit}`}
+      title="Who Held You, When"
+      caption={caption}
+      className={className}
+    >
+      <div className="h-[240px] -ml-2">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+            <XAxis dataKey="label" tick={{ fill: '#71717a', fontSize: 10, fontWeight: 700 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} width={38} />
+            <Tooltip
+              contentStyle={TOOLTIP_STYLE}
+              formatter={(value: any, key: any) => [`${Number(value).toLocaleString()} MP`, names[key] || key]}
+            />
+            {hasStandalone && (
+              <Area type="monotone" dataKey="standalone" stackId="1" stroke={STANDALONE_HEX} fill={STANDALONE_HEX} fillOpacity={0.5} strokeWidth={1} />
+            )}
+            {top.map((u, k) => (
+              <Area
+                key={u.name}
+                type="monotone"
+                dataKey={`u${k}`}
+                stackId="1"
+                stroke={UNIVERSE_HEX[k % UNIVERSE_HEX.length]}
+                fill={UNIVERSE_HEX[k % UNIVERSE_HEX.length]}
+                fillOpacity={0.75}
+                strokeWidth={1.5}
+              />
+            ))}
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-2 mt-4">
+        {top.map((u, k) => (
+          <div key={u.name} className="flex items-center gap-2 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: UNIVERSE_HEX[k % UNIVERSE_HEX.length] }} />
+            <span className="text-[10px] font-black text-zinc-300 truncate">{u.name}</span>
+          </div>
+        ))}
+        {hasStandalone && (
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: STANDALONE_HEX }} />
+            <span className="text-[10px] font-black text-zinc-500">Outside a universe</span>
+          </div>
+        )}
       </div>
     </RecapCard>
   );
