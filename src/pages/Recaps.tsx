@@ -375,12 +375,13 @@ export function Recaps() {
           allMedia: media,
           settings,
           periodDays: metrics.totalDays,
+          locationGroups,
         },
         { limit: 3, seed: format(interval.start, 'yyyy-MM-dd') },
       ).forEach((a) => ids.push(a.id));
     }
     return ids;
-  }, [intervalBefore, validLogs, media, settings, timeframe]);
+  }, [intervalBefore, validLogs, media, settings, timeframe, locationGroups]);
 
   const archetypes = useMemo(
     () => determineArchetypes(
@@ -392,10 +393,11 @@ export function Recaps() {
         settings,
         previousLogs: previousProgressLogs,
         periodDays: currentMetrics.totalDays,
+        locationGroups,
       },
       { avoidIds: previousArchetypeIds, limit: 6, seed: timeId },
     ),
-    [timeframe, activeProgressLogs, activeMedia, media, settings, previousProgressLogs, previousArchetypeIds, currentMetrics.totalDays, timeId],
+    [timeframe, activeProgressLogs, activeMedia, media, settings, previousProgressLogs, previousArchetypeIds, currentMetrics.totalDays, timeId, locationGroups],
   );
 
   const currentRecap = useMemo(() => {

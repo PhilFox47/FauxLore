@@ -19,6 +19,12 @@ export interface RecapAnalyticsData {
    * consecutive days would satisfy.
    */
   periodDays?: number;
+  /**
+   * The user's own location groups. Where they exist, a group called "Home" or
+   * "Travelling" decides which logs count as which — their judgement beats
+   * guessing at the wording, which cannot tell a sofa from a showroom.
+   */
+  locationGroups?: { id: string; name: string; color?: string | null; locations: string[] }[];
 }
 
 export function analyzeSunkCost(data: RecapAnalyticsData) {
@@ -376,13 +382,37 @@ interface Archetype {
   reason: (s: ArchetypeStats) => string;
 }
 
+/** Last resort when the user has not grouped their locations. */
 const HOME_RE = /home|bedroom|living room|mancave|garden|pc room|couch|sofa|bed\b/i;
 const TRANSIT_RE = /train|bus|commut|metro|subway|tram|flight|plane|car|travel/i;
+
+/**
+ * Builds "is this home?" / "is this transit?" from the user's groups when they
+ * have any, falling back to the wording when they do not. A group named Home or
+ * Travelling (or Transit / Commute / On the road) is taken as the answer.
+ */
+function locationClassifiers(groups?: RecapAnalyticsData['locationGroups']) {
+  const pick = (re: RegExp) => (groups || []).filter((g) => re.test((g.name || '').trim()));
+  const homeGroups = pick(/^home$/i);
+  const transitGroups = pick(/^(travel(ling|ing)?|transit|commute|commuting|on the road)$/i);
+  const memberOf = (list: typeof homeGroups) => {
+    const set = new Set<string>();
+    list.forEach((g) => g.locations.forEach((l) => set.add(l.trim().toLowerCase())));
+    return set;
+  };
+  const homeSet = memberOf(homeGroups);
+  const transitSet = memberOf(transitGroups);
+  return {
+    isHome: (loc: string) => (homeGroups.length ? homeSet.has(loc.trim().toLowerCase()) : HOME_RE.test(loc)),
+    isTransit: (loc: string) => (transitGroups.length ? transitSet.has(loc.trim().toLowerCase()) : TRANSIT_RE.test(loc)),
+  };
+}
 
 /** Everything the catalogue is allowed to reason about, in one pass. */
 export function buildArchetypeStats(data: RecapAnalyticsData): ArchetypeStats {
   const logs = data.logs.filter((l) => l.metricType !== 'statusChange');
   const mediaOf = (id: string) => data.allMedia.find((m) => m.id === id);
+  const classify = locationClassifiers(data.locationGroups);
 
   let totalMP = 0;
   const typeMP: Record<string, number> = {};
@@ -424,8 +454,8 @@ export function buildArchetypeStats(data: RecapAnalyticsData): ArchetypeStats {
     if (loc) {
       locatedLogs += 1;
       locationCounts[loc] = (locationCounts[loc] || 0) + 1;
-      if (HOME_RE.test(loc)) homeLogs += 1;
-      if (TRANSIT_RE.test(loc)) transitLogs += 1;
+      if (classify.isHome(loc)) homeLogs += 1;
+      if (classify.isTransit(loc)) transitLogs += 1;
     }
     const note = (log.note || '').trim();
     if (note.length > 0) {

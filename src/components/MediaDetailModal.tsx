@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useToast } from '../contexts/ToastContext';
@@ -9,6 +9,7 @@ import { getSourceUrl, getSourceLabel } from '../lib/sourceLinks';
 import { groupLogsIntoSessions } from '../lib/sessions';
 import { TIME_BANDS, bandIndexForHour } from '../lib/timeBands';
 import { cn } from '../lib/utils';
+import { buildGroupIndex, groupsFor } from '../lib/locationGroups';
 import { format, differenceInDays } from 'date-fns';
 import { generateAiArtifact } from '../services/aiService';
 import { v4 as uuidv4 } from 'uuid';
@@ -28,7 +29,8 @@ interface MediaDetailModalProps {
 }
 
 export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaDetailModalProps) {
-  const { settings, media, logs: allLogs, worldBosses, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem, generateArtifactImage, acknowledgeUpdate } = useMediaContext();
+  const { settings, media, logs: allLogs, worldBosses, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem, generateArtifactImage, acknowledgeUpdate, locationGroups } = useMediaContext();
+  const locationGroupIndex = useMemo(() => buildGroupIndex(locationGroups), [locationGroups]);
   const toast = useToast();
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [deleteConfirmLogId, setDeleteConfirmLogId] = useState<string | null>(null);
@@ -119,13 +121,38 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
     const longestSession = sessionMP.length ? Math.max(...sessionMP) : 0;
     const avgSession = sessionMP.length ? sessionMP.reduce((a, b) => a + b, 0) / sessionMP.length : 0;
 
-    // Where & when
+    // Where & when. Places are grouped into kinds of place where the user has
+    // said which belong together, so this reads "mostly at the cinema" rather
+    // than listing three venue names that mean nothing on their own.
     const located = progress.filter(l => l.location && l.location.trim());
-    const isHome = (loc: string) => /home|bedroom|living room|mancave|garden|pc room/i.test(loc);
+    const groupIndex = buildGroupIndex(locationGroups || []);
+    const homeGroup = (locationGroups || []).find((g: any) => /^home$/i.test((g.name || '').trim()));
+    const homeIndex = homeGroup ? buildGroupIndex([homeGroup]) : null;
+    const isHome = (loc: string) =>
+      homeIndex ? groupsFor(loc, homeIndex).length > 0
+                : /home|bedroom|living room|mancave|garden|pc room/i.test(loc);
     const placeCounts: Record<string, number> = {};
+    const kindCounts = new Map<string, { name: string; color?: string | null; n: number }>();
     let homeN = 0;
-    located.forEach(l => { const loc = l.location!.trim(); placeCounts[loc] = (placeCounts[loc] || 0) + 1; if (isHome(loc)) homeN++; });
+    let groupedN = 0;
+    located.forEach(l => {
+      const loc = l.location!.trim();
+      placeCounts[loc] = (placeCounts[loc] || 0) + 1;
+      if (isHome(loc)) homeN++;
+      const matched = groupsFor(loc, groupIndex);
+      if (matched.length > 0) groupedN++;
+      matched.forEach(g => {
+        const entry = kindCounts.get(g.id) || { name: g.name, color: g.color, n: 0 };
+        entry.n += 1;
+        kindCounts.set(g.id, entry);
+      });
+    });
     const topPlaces = Object.entries(placeCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const topKinds = [...kindCounts.entries()]
+      .map(([id, v]) => ({ id, ...v, share: located.length > 0 ? v.n / located.length : 0 }))
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 4);
+    const homeFromGroup = !!homeGroup;
     // Time of day, on the shared 05:00-boundary bands: every hour belongs to
     // exactly one, and a 02:00 session is the night before rather than a
     // vaguely-named "early hours".
@@ -159,8 +186,8 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
     const rankTotal = typePeers.length;
     const percentile = rankTotal > 1 ? Math.round((1 - (rankPos - 1) / rankTotal) * 100) : 100;
 
-    return { timeline, pace, sessionCount: sessions.length, longestSession, avgSession, located: located.length, homeN, topPlaces, peakBand, bandBreakdown, rankPos, rankTotal, percentile, myMP };
-  }, [item, logs, allLogs, media, settings]);
+    return { timeline, pace, sessionCount: sessions.length, longestSession, avgSession, located: located.length, homeN, topPlaces, topKinds, groupedN, homeFromGroup, peakBand, bandBreakdown, rankPos, rankTotal, percentile, myMP };
+  }, [item, logs, allLogs, media, settings, locationGroups]);
 
   // Every playthrough of this title: the original plus its re-runs. Each carries at
   // most one route, so the family is the record of which routes have been played.
@@ -779,8 +806,22 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                 <>
                   <p className="text-sm text-zinc-400">
                     <span className="text-white font-semibold">{Math.round((lore.homeN / lore.located) * 100)}%</span> at home,{' '}
-                    <span className="text-white font-semibold">{Math.round(((lore.located - lore.homeN) / lore.located) * 100)}%</span> away.
+                    <span className="text-white font-semibold">{Math.round(((lore.located - lore.homeN) / lore.located) * 100)}%</span> away
+                    {lore.homeFromGroup ? '' : ' (guessed from the names — group them in the Atlas to be sure)'}.
                   </p>
+                  {lore.topKinds.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {lore.topKinds.map(k => (
+                        <span
+                          key={k.id}
+                          className="text-xs px-2.5 py-1 rounded-lg border font-bold"
+                          style={{ color: k.color || '#a1a1aa', borderColor: `${k.color || '#71717a'}44`, backgroundColor: `${k.color || '#71717a'}14` }}
+                        >
+                          {k.name} <span className="opacity-60 font-mono">· {Math.round(k.share * 100)}%</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     {lore.topPlaces.map(([place, n]) => (
                       <span key={place} className="text-xs px-2 py-1 bg-black/30 border border-white/5 rounded-lg text-zinc-300">{place} <span className="text-zinc-500">· {n}</span></span>
@@ -1147,9 +1188,14 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                                         setEditLogData({ ...editLogData, location: loc });
                                         setShowLocationDropdown(false);
                                       }}
-                                      className="w-full text-left px-3 py-2 text-xs font-mono text-zinc-300 hover:bg-white/10 hover:text-white transition-colors border-b border-white/5 last:border-0"
+                                      className="w-full text-left px-3 py-2 text-xs font-mono text-zinc-300 hover:bg-white/10 hover:text-white transition-colors border-b border-white/5 last:border-0 flex items-center gap-2"
                                     >
-                                      {loc}
+                                      <span className="truncate">{loc}</span>
+                                      <span className="ml-auto flex items-center gap-1 shrink-0">
+                                        {groupsFor(loc, locationGroupIndex).slice(0, 2).map(g => (
+                                          <span key={g.id} className="w-2 h-2 rounded-full" title={g.name} style={{ backgroundColor: g.color || '#71717a' }} />
+                                        ))}
+                                      </span>
                                     </button>
                                   ))}
                                </div>

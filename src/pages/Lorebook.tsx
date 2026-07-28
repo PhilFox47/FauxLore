@@ -5,6 +5,7 @@ import { format, parseISO } from 'date-fns';
 import { MEDIA_COLORS, ProgressLog } from '../types/schema';
 import { groupLogsIntoSessions, LogSession } from '../lib/sessions';
 import { cn } from '../lib/utils';
+import { buildGroupIndex, groupsFor } from '../lib/locationGroups';
 
 // A single strand of the chronicle: either a merged progress session or a lone status change.
 type JournalEntry =
@@ -58,7 +59,8 @@ const getStatusColor = (status: string) => {
 };
 
 export function Lorebook() {
-  const { logs, media } = useMediaContext();
+  const { logs, media, locationGroups } = useMediaContext();
+  const groupIndex = useMemo(() => buildGroupIndex(locationGroups), [locationGroups]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('All');
 
@@ -245,9 +247,22 @@ export function Lorebook() {
                             )}
 
                             {location && (
-                              <span className="flex items-center gap-1 text-[10px] text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded ml-auto tracking-widest uppercase font-mono shadow-inner">
-                                <MapPin className="w-3 h-3" />
-                                {location}
+                              <span className="flex items-center gap-1.5 ml-auto">
+                                {/* The place itself, then the kinds of place it counts as. */}
+                                <span className="flex items-center gap-1 text-[10px] text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded tracking-widest uppercase font-mono shadow-inner">
+                                  <MapPin className="w-3 h-3" />
+                                  {location}
+                                </span>
+                                {groupsFor(location, groupIndex).slice(0, 2).map(g => (
+                                  <span
+                                    key={g.id}
+                                    title={`In your "${g.name}" group`}
+                                    className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border"
+                                    style={{ color: g.color || '#a1a1aa', borderColor: `${g.color || '#71717a'}44`, backgroundColor: `${g.color || '#71717a'}14` }}
+                                  >
+                                    {g.name}
+                                  </span>
+                                ))}
                               </span>
                             )}
                           </div>

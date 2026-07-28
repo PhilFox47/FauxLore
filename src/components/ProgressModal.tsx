@@ -5,6 +5,7 @@ import { cn } from '../lib/utils';
 import { calculateLogExp } from '../lib/rpgSystem';
 import { format } from 'date-fns';
 import { useMediaContext } from '../contexts/MediaContext';
+import { buildGroupIndex, groupsFor } from '../lib/locationGroups';
 
 interface ProgressModalProps {
   isOpen: boolean;
@@ -14,7 +15,8 @@ interface ProgressModalProps {
 }
 
 export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalProps) {
-  const { saveMediaItem, logs, settings, artifacts } = useMediaContext();
+  const { saveMediaItem, logs, settings, artifacts, locationGroups } = useMediaContext();
+  const locationGroupIndex = React.useMemo(() => buildGroupIndex(locationGroups), [locationGroups]);
   const [mode, setMode] = useState<'set' | 'add'>('set');
   const [inputValue, setInputValue] = useState<number | ''>(1);
   const [note, setNote] = useState('');
@@ -413,9 +415,14 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
                                 setLocation(loc);
                                 setShowLocationDropdown(false);
                               }}
-                              className="w-full text-left px-3 py-2 text-xs font-mono text-zinc-300 hover:bg-white/10 hover:text-white transition-colors border-b border-white/5 last:border-0"
+                              className="w-full text-left px-3 py-2 text-xs font-mono text-zinc-300 hover:bg-white/10 hover:text-white transition-colors border-b border-white/5 last:border-0 flex items-center gap-2"
                             >
-                              {loc}
+                              <span className="truncate">{loc}</span>
+                              <span className="ml-auto flex items-center gap-1 shrink-0">
+                                {groupsFor(loc, locationGroupIndex).slice(0, 2).map(g => (
+                                  <span key={g.id} className="w-2 h-2 rounded-full" title={g.name} style={{ backgroundColor: g.color || '#71717a' }} />
+                                ))}
+                              </span>
                             </button>
                           ))}
                        </div>
