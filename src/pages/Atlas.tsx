@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useToast } from '../contexts/ToastContext';
-import { MapPin, Home, Plane, Merge, Loader2, Check } from 'lucide-react';
+import { MapPin, Home, Plane, Merge, Loader2, Check, Layers } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { calculateScaledDelta } from '../lib/scaling';
 import { groupLogsIntoSessions } from '../lib/sessions';
 import { cn } from '../lib/utils';
-
-const isHome = (loc: string) => /home|bedroom|living room|mancave|garden|pc room/i.test(loc);
+import { LocationGroupManager } from '../components/LocationGroupManager';
+import { buildGroupIndex, groupsFor, homeAwaySplit, summariseGroups, UNGROUPED } from '../lib/locationGroups';
 
 interface LocStat {
   location: string;
@@ -18,14 +18,17 @@ interface LocStat {
 }
 
 export function Atlas() {
-  const { logs, media, settings, mergeLocations } = useMediaContext();
+  const {
+    logs, media, settings, mergeLocations,
+    locationGroups, saveLocationGroup, setLocationGroupMembers, deleteLocationGroup,
+  } = useMediaContext();
   const toast = useToast();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [target, setTarget] = useState('');
   const [isMerging, setIsMerging] = useState(false);
 
-  const { locStats, totalPages, awayPages, homePages, distinctCount, topAway } = useMemo(() => {
+  const { locStats, totalPages, awayPages, homePages, distinctCount, topAway, atHome, homeSource } = useMemo(() => {
     const valid = logs.filter(
       l => l && l.location && l.location.trim() && l.metricType !== 'statusChange'
         && !l.isHistoric && !l.timestamp.startsWith('1970-01-01')
@@ -51,19 +54,34 @@ export function Atlas() {
 
     const list = Object.values(byLoc).sort((a, b) => b.pages - a.pages);
     const total = list.reduce((s, l) => s + l.pages, 0);
-    const home = list.filter(l => isHome(l.location)).reduce((s, l) => s + l.pages, 0);
-    const away = total - home;
-    const topAway = list.filter(l => !isHome(l.location)).slice(0, 6);
+
+    // Home is whatever the user put in a group called "Home". Only when there is
+    // no such group does this fall back to guessing from the wording.
+    const split = homeAwaySplit(logs, media, settings, locationGroups);
+    const homeIndex = buildGroupIndex(locationGroups.filter((g: any) => /^home$/i.test(g.name || '')));
+    const atHome = (loc: string) =>
+      split.source === 'group'
+        ? groupsFor(loc, homeIndex).length > 0
+        : /home|bedroom|living room|mancave|garden|pc room/i.test(loc);
 
     return {
       locStats: list,
       totalPages: total,
-      awayPages: away,
-      homePages: home,
+      awayPages: split.away,
+      homePages: split.home,
       distinctCount: list.length,
-      topAway,
+      topAway: list.filter(l => !atHome(l.location)).slice(0, 6),
+      atHome,
+      homeSource: split.source,
     };
-  }, [logs, media, settings]);
+  }, [logs, media, settings, locationGroups]);
+
+  const groupSummary = useMemo(
+    () => summariseGroups(logs, media, settings, locationGroups),
+    [logs, media, settings, locationGroups],
+  );
+
+  const mergeGroupIndex = useMemo(() => buildGroupIndex(locationGroups), [locationGroups]);
 
   const chartData = locStats.slice(0, 12).map(l => ({
     name: l.location.length > 26 ? l.location.slice(0, 25) + '…' : l.location,
@@ -128,7 +146,7 @@ export function Atlas() {
           {/* Summary tiles */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Tile icon={<MapPin className="w-4 h-4" />} label="Places logged" value={distinctCount.toLocaleString()} />
-            <Tile icon={<Home className="w-4 h-4" />} label="At home" value={`${100 - awayPct}%`} sub={`${Math.floor(homePages).toLocaleString()} pages`} />
+            <Tile icon={<Home className="w-4 h-4" />} label="At home" value={`${100 - awayPct}%`} sub={homeSource === 'group' ? `${Math.floor(homePages).toLocaleString()} pages · from your Home group` : `${Math.floor(homePages).toLocaleString()} pages · guessed`} />
             <Tile icon={<Plane className="w-4 h-4" />} label="Away / on the road" value={`${awayPct}%`} sub={`${Math.floor(awayPages).toLocaleString()} pages`} />
             <Tile icon={<MapPin className="w-4 h-4" />} label="Most-logged place" value={locStats[0]?.location.split(' - ').pop() || '—'} sub={`${Math.floor(locStats[0]?.pages || 0).toLocaleString()} pages`} small />
           </div>
@@ -150,7 +168,7 @@ export function Atlas() {
                   />
                   <Bar dataKey="pages" radius={[0, 4, 4, 0]} barSize={18}>
                     {chartData.map((entry, i) => (
-                      <Cell key={i} fill={isHome(locStats[i]?.location || '') ? '#f97316' : '#818cf8'} />
+                      <Cell key={i} fill={atHome(locStats[i]?.location || '') ? '#f97316' : '#818cf8'} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -182,6 +200,59 @@ export function Atlas() {
             </div>
           )}
 
+          {/* By kind of place */}
+          {groupSummary.stats.length > 0 && locationGroups.length > 0 && (
+            <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6">
+              <div className="flex items-baseline justify-between gap-4 mb-1">
+                <h3 className="text-sm font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-sky-400" /> By kind of place
+                </h3>
+                <span className="text-[11px] text-zinc-500 font-mono shrink-0">
+                  {Math.round((groupSummary.groupedPages / (groupSummary.totalPages || 1)) * 100)}% grouped
+                </span>
+              </div>
+              <p className="text-xs text-zinc-500 mb-5">
+                A place can be in several groups, so these overlap and will not add up to 100%. Anything you
+                have not grouped yet is counted once under {UNGROUPED}.
+              </p>
+              <div className="space-y-3.5">
+                {groupSummary.stats.map(g => (
+                  <div key={g.id}>
+                    <div className="flex items-baseline justify-between gap-3 mb-1.5">
+                      <div className="flex items-baseline gap-2 min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0 self-center" style={{ backgroundColor: g.color || '#52525b' }} />
+                        <span className="text-sm font-black text-white truncate">{g.name}</span>
+                        <span className="text-[10px] font-mono text-zinc-600 shrink-0">{g.places} place{g.places === 1 ? '' : 's'}</span>
+                      </div>
+                      <span className="text-[11px] font-mono text-zinc-500 shrink-0 tabular-nums">
+                        {Math.floor(g.pages).toLocaleString()} · {Math.round(g.share * 100)}%
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-black/50 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{ width: `${Math.max(2, g.share * 100)}%`, backgroundColor: g.color || '#52525b' }}
+                      />
+                    </div>
+                    {g.topPlace && (
+                      <div className="text-[10px] text-zinc-600 font-bold mt-1.5 truncate">
+                        Mostly {g.topPlace.location} · {g.entries} log{g.entries === 1 ? '' : 's'}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <LocationGroupManager
+            groups={locationGroups}
+            locations={locStats.map(l => ({ location: l.location, entries: l.entries }))}
+            onSave={saveLocationGroup}
+            onSetMembers={setLocationGroupMembers}
+            onDelete={deleteLocationGroup}
+          />
+
           {/* Manage / merge tool */}
           <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6">
             <h3 className="text-sm font-bold text-zinc-300 uppercase tracking-widest mb-1 flex items-center gap-2">
@@ -189,7 +260,9 @@ export function Atlas() {
             </h3>
             <p className="text-xs text-zinc-500 mb-5">
               Select one or more places, then type the name they should all become. Selecting a single
-              place lets you rename it. Every affected log is updated.
+              place lets you rename it. Every affected log is updated — this rewrites history, so use it
+              only for places that really are the same. To say places are the same <em>kind</em> of place,
+              group them above instead.
             </p>
 
             <div className="max-h-72 overflow-y-auto no-scrollbar rounded-xl border border-white/5 divide-y divide-white/5 mb-4">
@@ -212,6 +285,14 @@ export function Atlas() {
                       {on && <Check className="w-3 h-3 text-black" />}
                     </span>
                     <span className="flex-1 min-w-0 truncate text-sm text-white">{l.location}</span>
+                    <span className="hidden sm:flex items-center gap-1 shrink-0">
+                      {groupsFor(l.location, mergeGroupIndex).slice(0, 3).map(g => (
+                        <span key={g.id} className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded"
+                              style={{ color: g.color || '#a1a1aa', backgroundColor: `${g.color || '#71717a'}1f` }}>
+                          {g.name}
+                        </span>
+                      ))}
+                    </span>
                     <span className="text-[11px] text-zinc-500 font-mono shrink-0">{l.entries} log{l.entries === 1 ? '' : 's'}</span>
                   </button>
                 );

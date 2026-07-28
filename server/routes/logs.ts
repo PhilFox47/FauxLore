@@ -34,6 +34,24 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
       const result = db
         .prepare(`UPDATE logs SET location = ? WHERE userId = ? AND location IN (${placeholders})`)
         .run(target, userId, ...sources);
+
+      // Group membership is keyed by the location string, so a merge has to bring
+      // it along or the merged name silently drops out of every group its parts
+      // were in. INSERT OR IGNORE first, because several sources in one group
+      // would otherwise collide on the primary key.
+      try {
+        const groups = db
+          .prepare(`SELECT DISTINCT groupId FROM location_group_members WHERE userId = ? AND location IN (${placeholders})`)
+          .all(userId, ...sources) as { groupId: string }[];
+        const adopt = db.prepare("INSERT OR IGNORE INTO location_group_members (groupId, userId, location) VALUES (?,?,?)");
+        const drop = db.prepare(`DELETE FROM location_group_members WHERE userId = ? AND location IN (${placeholders}) AND location != ?`);
+        const tx = db.transaction(() => {
+          groups.forEach((g) => adopt.run(g.groupId, userId, target));
+          drop.run(userId, ...sources, target);
+        });
+        tx();
+      } catch (e) { console.error("Could not carry location groups through a merge", e); }
+
       res.json({ success: true, updated: result.changes, to: target });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });

@@ -392,6 +392,45 @@ export const DatabaseService = {
     }
   },
 
+  async getLocationGroups(): Promise<any[]> {
+    try {
+      const res = await apiFetch('/api/location-groups');
+      if (!res.ok) return [];
+      return res.json();
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  },
+
+  async saveLocationGroup(group: { id?: string; name: string; color?: string | null; icon?: string | null; locations?: string[] }): Promise<any> {
+    const res = await apiFetch('/api/location-groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(group),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error || 'Failed to save the group');
+    }
+    return res.json();
+  },
+
+  async setLocationGroupMembers(id: string, locations: string[]): Promise<any> {
+    const res = await apiFetch(`/api/location-groups/${id}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locations }),
+    });
+    if (!res.ok) throw new Error('Failed to update the group');
+    return res.json();
+  },
+
+  async deleteLocationGroup(id: string): Promise<void> {
+    const res = await apiFetch(`/api/location-groups/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete the group');
+  },
+
   /** Whether this account is paused for inactivity, and since when. */
   async getActivity(): Promise<{ frozen: boolean; lastLogAt: string | null; daysSince: number | null; inactivityDays: number } | null> {
     try {

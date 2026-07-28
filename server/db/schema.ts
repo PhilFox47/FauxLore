@@ -229,6 +229,31 @@ export function initSchema(db: Db) {
     );
     CREATE INDEX IF NOT EXISTS idx_media_codex_media ON media_codex(userId, mediaId);
 
+    -- Locations are free text on each log. A group is a label laid over them —
+    -- "Cinema", "Home", "Travelling" — that says which places belong together
+    -- without rewriting a single log, which is what merging does instead.
+    CREATE TABLE IF NOT EXISTS location_groups (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      color TEXT,
+      icon TEXT,
+      createdAt TEXT NOT NULL,
+      UNIQUE(userId, name)
+    );
+
+    -- Membership is many-to-many on purpose: a local cinema belongs in "Cinema"
+    -- and in the town it is in, and both readings are useful.
+    CREATE TABLE IF NOT EXISTS location_group_members (
+      groupId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      location TEXT NOT NULL,
+      PRIMARY KEY (groupId, location),
+      FOREIGN KEY(groupId) REFERENCES location_groups(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_location_group_members_user
+      ON location_group_members(userId, location);
+
     CREATE TABLE IF NOT EXISTS notifications (
       id TEXT PRIMARY KEY,
       userId TEXT NOT NULL,

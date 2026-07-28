@@ -15,6 +15,7 @@ import { calculateRPGState } from '../lib/rpgSystem';
 import { MediaItem, MEDIA_COLORS, ProgressLog, RARITY_COLORS } from '../types/schema';
 import { cn } from '../lib/utils';
 import { hasNewContent, isWaitingOnRelease, newContentReason } from '../lib/onHold';
+import { summariseGroups, UNGROUPED } from '../lib/locationGroups';
 import { WALLPAPER_SPECS, WallpaperFormat, downloadWallpaper, renderWallpaper } from '../services/wallpaper';
 import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map as MapIcon, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon, Skull, Download, Image as ImageIcon } from 'lucide-react';
 import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog, analyzeContrarian, extractJournals, calculateLongestStreak } from '../lib/recapAnalytics';
@@ -82,9 +83,8 @@ function Reveal({ children, className, delay = 0 }: { children: React.ReactNode;
 }
 
 export function Recaps() {
-  const { media, logs, settings, aiRecaps, saveAiRecap, artifacts, worldBosses, isLoading, aiTextCache } = useMediaContext();
+  const { media, logs, settings, aiRecaps, saveAiRecap, artifacts, worldBosses, isLoading, aiTextCache, activity, locationGroups } = useMediaContext();
   const toast = useToast();
-  const { activity } = useMediaContext();
 
   // Wallpaper: rendered on demand, because it means fetching every cover in the
   // period through the proxy and compositing a 4K canvas.
@@ -323,6 +323,12 @@ export function Recaps() {
       }))
       .filter(s => s.pages > 0),
     [activeMedia, activeProgressLogs, settings],
+  );
+
+  // Locations grouped into kinds of place, for the chart and for the columnist.
+  const groupSummary = useMemo(
+    () => summariseGroups(activeProgressLogs, media, settings, locationGroups),
+    [activeProgressLogs, media, settings, locationGroups],
   );
 
   const taste = useMemo(() => buildTasteAlignment(activeMedia), [activeMedia]);
@@ -612,6 +618,12 @@ ${gatheredLoot.length > 0 ? gatheredLoot.map(a => `- ${a.name} (${a.rarity}): ${
 
 JOURNAL NOTES (User's personal thoughts and reactions!):
 ${activeLogs.filter(l => l.note && l.note.trim().length > 0).map(l => `- [${l.timestamp.split('T')[0]}] On ${activeMedia.find(m => m.id === l.mediaId)?.title || 'Media'}: "${l.note}"`).join('\n') || 'None'}
+
+WHERE THEY WERE (locations, grouped into kinds of place by the user themselves — a group is their own judgement about which places belong together, so it says more than the raw names do):
+${groupSummary.stats.length > 0
+  ? groupSummary.stats.map(g => `- ${g.name}: ${Math.round(g.pages)} MP (${Math.round(g.share * 100)}% of located logs), ${g.places} place(s)${g.topPlace ? `, mostly ${g.topPlace.location}` : ''}`).join('\n')
+  : 'No locations recorded this period.'}
+${groupSummary.stats.length > 0 ? 'Note: a place can belong to several groups, so these overlap and do not sum to 100%.' : ''}
 
 MEASURED SIGNALS (hard numbers — quote them, never invent them):
 Master pages this ${timeframe}: ${Math.round(comparison.masterPages.value)}${comparison.masterPages.pct !== null ? ` (previous ${timeframe}: ${Math.round(comparison.masterPages.previous)}, ${comparison.masterPages.diff >= 0 ? 'up' : 'down'} ${Math.abs(Math.round(comparison.masterPages.pct))}%)` : ' (no previous period on record)'}
@@ -1533,6 +1545,9 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
      if (locationCount === 0 || Object.keys(locations).length === 0) return null;
 
      const sorted = Object.entries(locations).sort((a,b) => b[1] - a[1]);
+     // Individual places are the detail; the groups say what kind of period it
+     // was — a month of cinemas reads differently from a month on trains.
+     const kinds = locationGroups.length > 0 ? groupSummary.stats.filter(g => g.id !== UNGROUPED) : [];
 
      return (
         <div className="bg-zinc-900/50 border border-white/5 p-6 rounded-3xl">
@@ -1540,14 +1555,34 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
              <MapIcon className="w-5 h-5 text-zinc-400" />
              Scouted Locations
            </h3>
+
+           {kinds.length > 0 && (
+              <div className="mb-6 pb-6 border-b border-white/5">
+                 <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-black mb-3">By kind of place</div>
+                 <div className="space-y-2.5">
+                    {kinds.slice(0, 5).map(g => (
+                       <div key={g.id}>
+                          <div className="flex justify-between items-baseline gap-2 mb-1">
+                             <span className="text-xs font-black text-white truncate">{g.name}</span>
+                             <span className="text-[10px] font-mono text-zinc-500 shrink-0">{Math.round(g.share * 100)}%</span>
+                          </div>
+                          <div className="h-1.5 w-full bg-black/50 rounded-full overflow-hidden">
+                             <div className="h-full rounded-full" style={{ width: `${Math.max(3, g.share * 100)}%`, backgroundColor: g.color || '#52525b' }} />
+                          </div>
+                       </div>
+                    ))}
+                 </div>
+              </div>
+           )}
+
            <div className="space-y-4">
               {sorted.map(([loc, pages], idx) => (
                  <div key={idx} className="flex justify-between items-center group">
-                    <div className="flex items-center gap-3">
-                       <div className="w-2 h-2 rounded-full bg-zinc-600 group-hover:bg-white transition-colors" />
+                    <div className="flex items-center gap-3 min-w-0">
+                       <div className="w-2 h-2 rounded-full bg-zinc-600 group-hover:bg-white transition-colors shrink-0" />
                        <span className="text-sm font-bold text-zinc-300 truncate max-w-[150px]" title={loc}>{loc}</span>
                     </div>
-                    <span className="text-zinc-500 font-black text-xs bg-white/5 px-2 py-1 rounded-lg border border-white/5">{Math.round(pages)} MP</span>
+                    <span className="text-zinc-500 font-black text-xs bg-white/5 px-2 py-1 rounded-lg border border-white/5 shrink-0">{Math.round(pages)} MP</span>
                  </div>
               ))}
            </div>

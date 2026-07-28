@@ -3,6 +3,7 @@ import { useMediaContext } from '../contexts/MediaContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid, Cell } from 'recharts';
 import { format, subDays, isAfter, startOfDay } from 'date-fns';
 import { BarChart3, DatabaseZap, Clock, ListChecks, Calendar, Target, Activity, Zap, MapPin, Sparkles, GitBranch, Star, Layers } from 'lucide-react';
+import { summariseGroups } from '../lib/locationGroups';
 import { calculateScaledPages, calculateScaledDelta } from '../lib/scaling';
 import { calculateNativeUnits, NATIVE_UNIT_LABELS } from '../lib/rpgSystem';
 import { groupLogsIntoSessions } from '../lib/sessions';
@@ -14,7 +15,7 @@ import { GithubHeatmap } from '../components/Heatmap';
 type DateRange = '7days' | '30days' | '90days' | '1year' | 'all' | 'custom';
 
 export function Statistics() {
-  const { logs, media, settings } = useMediaContext();
+  const { logs, media, settings, locationGroups } = useMediaContext();
   const [dateRange, setDateRange] = useState<DateRange>('30days');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
@@ -239,6 +240,16 @@ export function Statistics() {
       .sort((a, b) => b.value - a.value)
       .slice(0, 5); // top 5
   }, [filteredLogs, media, settings, mediaTypeFilters]);
+
+  // The same logs read as kinds of place rather than as names. Overlapping by
+  // design, so this is a set of shares of the period, not a partition of it.
+  const locationGroupStats = useMemo(
+    () => summariseGroups(filteredLogs.filter(l => {
+      const m = media.find(x => x.id === l.mediaId);
+      return m && (mediaTypeFilters.includes('All') || mediaTypeFilters.includes(m.mediaType));
+    }), media, settings, locationGroups),
+    [filteredLogs, media, settings, locationGroups, mediaTypeFilters],
+  );
 
   // Taste fingerprint: weight each media item's tags & genres by the Master Pages
   // consumed in the selected timeframe, so your "identity" reflects time invested.
@@ -570,6 +581,34 @@ export function Statistics() {
             </div>
           </div>
           
+          {/* Kinds of place */}
+          {locationGroupStats.stats.length > 0 && locationGroups.length > 0 && (
+            <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6 flex flex-col">
+              <h4 className="text-sm font-bold text-zinc-400 mb-1 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-sky-400" />
+                By Kind of Place
+              </h4>
+              <p className="text-[11px] text-zinc-600 mb-5">
+                Your own groups. Places can be in several, so these overlap.
+              </p>
+              <div className="space-y-3">
+                {locationGroupStats.stats.slice(0, 7).map(g => (
+                  <div key={g.id}>
+                    <div className="flex justify-between items-baseline gap-2 mb-1">
+                      <span className="text-xs font-black text-white truncate">{g.name}</span>
+                      <span className="text-[10px] font-mono text-zinc-500 shrink-0 tabular-nums">
+                        {Math.floor(g.pages).toLocaleString()} · {Math.round(g.share * 100)}%
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-black/50 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${Math.max(2, g.share * 100)}%`, backgroundColor: g.color || '#52525b' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Location Distribution */}
           {locationDistribution.length > 0 && (
             <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6 flex flex-col flex-1 min-h-[250px]">

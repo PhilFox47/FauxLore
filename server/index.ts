@@ -41,6 +41,7 @@ import { registerFranchiseRoutes } from "./routes/franchises";
 import { registerSystemRoutes } from "./routes/system";
 import { registerTaxonomyRoutes } from "./routes/taxonomy";
 import { registerSearchRoutes } from "./routes/search";
+import { registerLocationRoutes } from "./routes/locations";
 
 dotenv.config();
 
@@ -178,6 +179,7 @@ async function startServer() {
   registerSystemRoutes(app, ctx);
   registerTaxonomyRoutes(app, ctx);
   registerSearchRoutes(app, ctx);
+  registerLocationRoutes(app, ctx);
 
   // Notifications
   app.get("/api/notifications", (req, res) => {
