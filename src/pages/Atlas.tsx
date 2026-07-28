@@ -120,7 +120,7 @@ export function Atlas() {
       </header>
 
       {locStats.length === 0 ? (
-        <div className="bg-zinc-900/40 border border-white/5 rounded-3xl p-12 text-center text-zinc-500">
+        <div className="bg-zinc-900/40 border border-white/5 rounded-3xl p-6 sm:p-12 text-center text-zinc-500">
           No locations logged yet. Add a location when you log progress and it'll show up here.
         </div>
       ) : (

@@ -298,14 +298,14 @@ Return JSON only.`;
                     <>
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleEdit(t.id, t.name); }}
-                        className="ml-1 opacity-50 hover:opacity-100 hover:text-green-400 transition-colors"
+                        className="ml-0.5 p-1.5 -m-0.5 opacity-60 hover:opacity-100 hover:text-green-400 transition-colors"
                         title={"Edit " + activeTab}
                       >
                         <Pencil className="w-3 h-3" />
                       </button>
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleMove(t.id, t.name); }}
-                        className="ml-1 opacity-50 hover:opacity-100 hover:text-blue-400 transition-colors"
+                        className="ml-0.5 p-1.5 -m-0.5 opacity-60 hover:opacity-100 hover:text-blue-400 transition-colors"
                         title={activeTab === 'genre' ? "Move to Tags" : "Move to Genres"}
                       >
                         <ArrowRightLeft className="w-3 h-3" />
@@ -313,7 +313,7 @@ Return JSON only.`;
                       {t.usageCount === 0 && (
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
-                          className="ml-1 opacity-50 hover:opacity-100 hover:text-red-400 transition-colors"
+                          className="ml-0.5 p-1.5 -m-0.5 opacity-60 hover:opacity-100 hover:text-red-400 transition-colors"
                           title="Delete"
                         >
                           <Trash2 className="w-3 h-3" />

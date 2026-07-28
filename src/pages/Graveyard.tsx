@@ -35,7 +35,7 @@ export function Graveyard() {
 
   if (droppedMedia.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-center h-[60vh]">
+      <div className="flex flex-col items-center justify-center p-6 sm:p-12 text-center h-[60vh]">
         <div className="w-20 h-20 bg-zinc-900/50 rounded-full flex items-center justify-center mb-6 shadow-inner blur-[1px]">
           <Skull className="w-10 h-10 text-zinc-700" />
         </div>
@@ -159,7 +159,7 @@ export function Graveyard() {
                     <span className="font-serif italic text-rose-500/60 text-sm border-b border-rose-900/30 pb-0.5 inline-block">Cause of death</span>
                     <button 
                       onClick={() => startEditing(item)}
-                      className="text-zinc-600 hover:text-zinc-300 transition-colors bg-zinc-900/50 hover:bg-zinc-800 p-1.5 rounded-md opacity-0 group-hover:opacity-100"
+                      className="text-zinc-600 hover:text-zinc-300 transition-colors bg-zinc-900/50 hover:bg-zinc-800 p-1.5 rounded-md opacity-80 md:opacity-0 md:group-hover:opacity-100"
                       title="Edit cause of death"
                     >
                       <Edit3 className="w-3.5 h-3.5" />

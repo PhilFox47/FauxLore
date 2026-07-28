@@ -425,7 +425,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
         </button>
 
         {/* Left/Background Panel: Cover Art & Basic Info */}
-        <div className="relative w-full md:w-2/5 p-8 flex flex-col justify-end min-h-[300px]">
+        <div className="relative w-full md:w-2/5 p-5 sm:p-8 flex flex-col justify-end min-h-[300px]">
           {/* Blurred Background Image */}
           <div 
             className="absolute inset-0 bg-cover bg-center"
@@ -532,7 +532,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
         </div>
 
         {/* Right Panel: Content */}
-        <div className="w-full md:w-3/5 bg-[#121214] p-8 overflow-y-auto">
+        <div className="w-full md:w-3/5 bg-[#121214] p-5 sm:p-8 overflow-y-auto">
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div className="bg-zinc-800/50 p-4 rounded-2xl border border-white/5">

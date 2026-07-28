@@ -315,7 +315,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
             {onLogProgress && (
               <button
                 onClick={(e) => { e.stopPropagation(); onLogProgress(item); }}
-                className="flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors flex justify-center items-center gap-1.5 bg-white/[0.06] text-zinc-200 hover:bg-white/10"
+                className="flex-1 py-2.5 sm:py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors flex justify-center items-center gap-1.5 bg-white/[0.06] text-zinc-200 hover:bg-white/10"
               >
                 <Plus className="w-3.5 h-3.5" /> Log
               </button>

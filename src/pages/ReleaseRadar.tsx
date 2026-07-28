@@ -64,7 +64,7 @@ export function ReleaseRadar() {
 
   if (radarItems.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-center h-[50vh]">
+      <div className="flex flex-col items-center justify-center p-6 sm:p-12 text-center h-[50vh]">
         <div className="w-20 h-20 bg-blue-500/10 rounded-[2rem] flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(59,130,246,0.15)] border border-blue-500/20">
           <CalendarClock className="w-10 h-10 text-blue-400" />
         </div>

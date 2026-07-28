@@ -356,7 +356,7 @@ export function Dashboard() {
       </header>
 
       {activeMedia.length === 0 ? (
-        <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-12 text-center flex-1 flex flex-col items-center justify-center min-h-[400px]">
+        <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-6 sm:p-12 text-center flex-1 flex flex-col items-center justify-center min-h-[400px]">
           <p className="text-zinc-500 mb-4">No tracking records found.</p>
           <button onClick={handleAddNew} className="text-orange-400 font-medium hover:text-orange-300 transition-colors">
             Start tracking something

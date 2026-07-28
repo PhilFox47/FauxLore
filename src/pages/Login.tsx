@@ -132,7 +132,7 @@ export function Login() {
       <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/50 via-transparent to-black/50" />
 
       {/* Login Card */}
-      <div className="max-w-md w-full bg-black/60 backdrop-blur-md rounded-2xl p-8 border border-white/10 shadow-2xl relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
+      <div className="max-w-md w-full bg-black/60 backdrop-blur-md rounded-2xl p-5 sm:p-8 border border-white/10 shadow-2xl relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
         <div className="flex justify-center mb-8 pb-6 border-b border-white/10">
           <img src={BRAND_LOGO_URL} alt="FauxLore" className="h-[48px] object-contain" />
         </div>

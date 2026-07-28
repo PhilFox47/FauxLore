@@ -376,8 +376,8 @@ export function Armory() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-12">
             
             {/* Paper Doll */}
-            <div className="bg-gradient-to-br from-zinc-950 to-black border border-white/5 rounded-[2.5rem] p-8 sm:p-10 relative overflow-hidden shadow-[inset_0_2px_4px_rgba(255,255,255,0.02),0_20px_40px_-10px_rgba(0,0,0,0.8)]">
-               <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none">
+            <div className="bg-gradient-to-br from-zinc-950 to-black border border-white/5 rounded-[2.5rem] p-5 sm:p-10 relative overflow-hidden shadow-[inset_0_2px_4px_rgba(255,255,255,0.02),0_20px_40px_-10px_rgba(0,0,0,0.8)]">
+               <div className="absolute top-0 right-0 p-5 sm:p-8 opacity-[0.03] pointer-events-none">
                   <User className="w-96 h-96 text-white translate-x-1/4 -translate-y-1/4" />
                </div>
                
@@ -446,7 +446,7 @@ export function Armory() {
                                  onClick={(e) => { e.stopPropagation(); handleUnequip(item); }}
                                  disabled={equippingId === item.id}
                                  title={`Unequip ${item.name}`}
-                                 className="absolute top-1.5 right-1.5 z-30 opacity-0 group-hover/item:opacity-100 focus:opacity-100 transition-opacity text-red-300 bg-red-500/15 hover:bg-red-500/30 border border-red-500/30 rounded-lg p-1 backdrop-blur-sm disabled:opacity-50"
+                                 className="absolute top-1.5 right-1.5 z-30 opacity-90 md:opacity-0 md:group-hover/item:opacity-100 focus:opacity-100 transition-opacity text-red-300 bg-red-500/15 hover:bg-red-500/30 border border-red-500/30 rounded-lg p-2 md:p-1 backdrop-blur-sm disabled:opacity-50"
                                >
                                  {equippingId === item.id ? <RotateCw className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
                                </button>
@@ -539,7 +539,7 @@ export function Armory() {
             <div className="space-y-6">
                <div>
                  {unlootedMedia.length > 0 ? (
-                   <div className="bg-gradient-to-br from-indigo-950/20 to-black border border-indigo-500/20 shadow-[0_0_40px_rgba(99,102,241,0.1)] rounded-[2.5rem] p-8 sm:p-10 relative overflow-hidden">
+                   <div className="bg-gradient-to-br from-indigo-950/20 to-black border border-indigo-500/20 shadow-[0_0_40px_rgba(99,102,241,0.1)] rounded-[2.5rem] p-5 sm:p-10 relative overflow-hidden">
                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03] mix-blend-overlay"></div>
                      <h3 className="text-sm sm:text-base font-black text-white mb-6 uppercase tracking-[0.2em] flex items-center gap-2 font-display">
                        <Gem className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />
@@ -577,7 +577,7 @@ export function Armory() {
                      </div>
                    </div>
                  ) : (
-                    <div className="h-full bg-gradient-to-br from-zinc-900/30 to-black border-2 border-dashed border-white/5 rounded-[2.5rem] p-12 flex flex-col items-center justify-center text-center">
+                    <div className="h-full bg-gradient-to-br from-zinc-900/30 to-black border-2 border-dashed border-white/5 rounded-[2.5rem] p-6 sm:p-12 flex flex-col items-center justify-center text-center">
                        <Shield className="w-16 h-16 text-zinc-800 mb-6" />
                        <p className="text-xs font-black text-zinc-600 uppercase tracking-[0.2em] font-display max-w-[200px] leading-relaxed">
                           You've claimed loot from everything you've finished.
@@ -673,7 +673,7 @@ export function Armory() {
              </div>
 
              {filteredAndSortedInventory.length === 0 ? (
-                <div className="bg-zinc-900/20 border border-white/5 rounded-[2rem] p-12 text-center">
+                <div className="bg-zinc-900/20 border border-white/5 rounded-[2rem] p-6 sm:p-12 text-center">
                    <p className="text-zinc-600 font-bold uppercase tracking-widest text-xs">No items found</p>
                 </div>
              ) : (
@@ -860,7 +860,7 @@ export function Armory() {
           onClick={() => setSelectedArtifact(null)}
         >
           <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto no-scrollbar" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-gradient-to-br from-zinc-900 to-[#121214] shadow-2xl shadow-black border border-white/10 rounded-[2.5rem] p-8 sm:p-10 animate-in fade-in slide-in-from-bottom-8 duration-500 ease-out relative overflow-hidden">
+            <div className="bg-gradient-to-br from-zinc-900 to-[#121214] shadow-2xl shadow-black border border-white/10 rounded-[2.5rem] p-5 sm:p-10 animate-in fade-in slide-in-from-bottom-8 duration-500 ease-out relative overflow-hidden">
                     <div className={cn("absolute inset-0 opacity-[0.05] mix-blend-screen pointer-events-none", RARITY_COLORS[selectedArtifact.rarity]?.bg || RARITY_COLORS['Common'].bg)}></div>
                     <div className="flex items-start justify-between mb-6 relative z-10 w-full gap-4">
                       <div className="min-w-0">

@@ -52,7 +52,7 @@ export function Achievements() {
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       {/* Header / progress */}
-      <header className="relative overflow-hidden rounded-[2rem] border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-black to-black p-8 md:p-10">
+      <header className="relative overflow-hidden rounded-[2rem] border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-black to-black p-5 md:p-10">
         <div className="absolute top-0 right-0 w-72 h-72 bg-amber-500/10 blur-[100px] rounded-full -mr-24 -mt-24 pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
@@ -136,7 +136,7 @@ export function Achievements() {
       </div>
 
       {visible.length === 0 && (
-        <div className="bg-zinc-900/40 border border-white/5 rounded-3xl p-16 text-center text-zinc-500">
+        <div className="bg-zinc-900/40 border border-white/5 rounded-3xl p-5 sm:p-16 text-center text-zinc-500">
           Nothing to show here yet — go make some history.
         </div>
       )}

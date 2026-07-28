@@ -640,7 +640,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
     const roastText = currentRecap?.data?.aiRoast;
     if (!roastText) return null;
     return (
-      <div className="bg-rose-950/30 border border-rose-500/10 p-8 rounded-[2rem] mt-6 relative overflow-hidden group">
+      <div className="bg-rose-950/30 border border-rose-500/10 p-5 sm:p-8 rounded-[2rem] mt-6 relative overflow-hidden group">
         <div className="absolute top-0 left-0 w-1 h-full bg-rose-600"></div>
         <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity">
           <Flame className="w-48 h-48 text-rose-500" />
@@ -806,7 +806,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
     if (!bosses || bosses.length === 0) return null;
 
     return (
-      <div className="bg-black/50 border border-white/5 p-10 rounded-[3rem] mt-8">
+      <div className="bg-black/50 border border-white/5 p-6 sm:p-10 rounded-[3rem] mt-8">
         <h3 className="text-xl font-black text-white mb-8 flex items-center gap-4">
           <Trophy className="w-8 h-8 text-amber-500" />
           Boss Trophy Room
@@ -844,7 +844,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
       .slice(0, 6);
 
     return (
-      <div className="bg-zinc-900/50 border border-white/5 p-8 rounded-[2.5rem] flex flex-col items-center">
+      <div className="bg-zinc-900/50 border border-white/5 p-5 sm:p-8 rounded-[2.5rem] flex flex-col items-center">
         <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-8 self-start">Genre Mix</h4>
         <div className="w-full h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -885,7 +885,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
     if (shifts.length === 0) return null;
 
     return (
-      <div className="bg-zinc-900/50 border border-white/5 p-8 rounded-[2.5rem]">
+      <div className="bg-zinc-900/50 border border-white/5 p-5 sm:p-8 rounded-[2.5rem]">
         <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 mb-6">Genre Shift vs Last Period</h4>
         <div className="space-y-4">
           {shifts.map(s => (
@@ -1114,7 +1114,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
     }));
 
     return (
-      <div className="bg-black/40 border border-white/5 p-8 rounded-3xl flex flex-col h-fit">
+      <div className="bg-black/40 border border-white/5 p-5 sm:p-8 rounded-3xl flex flex-col h-fit">
         <h3 className="text-lg font-black text-white mb-8 flex items-center gap-3">
           <Activity className={`w-5 h-5 ${theme.text}`} />
           Logs by Hour of Day
@@ -1341,7 +1341,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
     });
 
     return (
-       <div className={`${theme.bg} ${theme.border} p-8 rounded-3xl flex items-center gap-6 shadow-2xl relative overflow-hidden`}>
+       <div className={`${theme.bg} ${theme.border} p-5 sm:p-8 rounded-3xl flex items-center gap-6 shadow-2xl relative overflow-hidden`}>
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 blur-3xl rounded-full" />
           <div className={`w-16 h-16 rounded-2xl ${theme.bg} flex items-center justify-center shrink-0 border ${theme.border} relative z-10`}>
             <Clock className={`w-8 h-8 ${theme.text}`} />
@@ -1514,7 +1514,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
           <div className="absolute inset-0 bg-cover bg-center opacity-30 blur-2xl scale-110" style={{ backgroundImage: `url(${m.coverImageUrl})` }} />
         )}
         <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-black/40" />
-        <div className="relative z-10 flex flex-col sm:flex-row items-center gap-8 p-8 md:p-12">
+        <div className="relative z-10 flex flex-col sm:flex-row items-center gap-8 p-5 md:p-12">
           <div className="w-40 h-56 md:w-48 md:h-72 rounded-2xl overflow-hidden border border-white/10 shadow-2xl shrink-0 bg-zinc-900">
             {m.coverImageUrl
               ? <img src={m.coverImageUrl} className="w-full h-full object-cover" alt={m.title} />
@@ -1857,7 +1857,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
     if (journals.length === 0) return null;
     const j = journals[0];
     return (
-      <Reveal className={`relative overflow-hidden rounded-[2rem] border ${theme.border} ${theme.bg} p-8 md:p-12`}>
+      <Reveal className={`relative overflow-hidden rounded-[2rem] border ${theme.border} ${theme.bg} p-5 md:p-12`}>
         <div className={`absolute -top-16 -left-4 text-[14rem] leading-none font-black ${theme.text} opacity-10 select-none pointer-events-none`}>“</div>
         <div className="relative z-10">
           <div className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 font-black mb-4">From your journal</div>
@@ -1926,7 +1926,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
     ].filter(Boolean);
 
     return (
-      <Reveal className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-gradient-to-b from-zinc-950 to-black p-8 md:p-12">
+      <Reveal className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-gradient-to-b from-zinc-950 to-black p-5 md:p-12">
         <div className={`absolute top-0 right-0 w-72 h-72 ${theme.glow} blur-[120px] rounded-full -mr-24 -mt-24 pointer-events-none`} />
         <div className="relative z-10">
           <div className={`text-[10px] uppercase tracking-[0.4em] ${theme.text} font-black mb-6`}>The Details</div>
@@ -1984,7 +1984,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
     ];
 
     return (
-      <Reveal className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-gradient-to-b from-zinc-950 to-black p-8 md:p-12">
+      <Reveal className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-gradient-to-b from-zinc-950 to-black p-5 md:p-12">
         <div className={`absolute top-0 right-0 w-72 h-72 ${theme.glow} blur-[120px] rounded-full -mr-24 -mt-24 pointer-events-none`} />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 mb-8 pb-8 border-b border-white/10">
           <div>
@@ -2200,7 +2200,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                       </div>
                    </div>
                    {/* Themed Breakdown / Distribution */}
-                   <div className="bg-zinc-950/40 border border-white/5 p-8 rounded-[2.5rem]">
+                   <div className="bg-zinc-950/40 border border-white/5 p-5 sm:p-8 rounded-[2.5rem]">
                       <h3 className="text-xl font-black text-white mb-8 flex items-center gap-4">
                         <BarChart3 className={`w-8 h-8 ${theme.text}`} />
                         Time by Media Type
@@ -2227,7 +2227,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
 
                    {/* Conquered Gallery */}
                    {completedMedia.length > 0 && (
-                      <div className={`${theme.bg} ${theme.border} rounded-[3rem] p-10 md:p-16 relative overflow-hidden`}>
+                      <div className={`${theme.bg} ${theme.border} rounded-[3rem] p-6 md:p-16 relative overflow-hidden`}>
                          <div className={`absolute top-0 right-0 w-96 h-96 ${theme.glow} blur-[120px] -mr-32 -mt-32 rounded-full pointer-events-none`} />
                          <h3 className="text-3xl font-black text-white mb-12 flex items-center gap-5">
                            <Medal className={`w-10 h-10 ${theme.text}`} />
@@ -2265,7 +2265,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
 
                    {/* Ongoing / Active Media */}
                    {timeframe !== 'week' && (
-                      <div className="bg-black border border-white/5 p-10 md:p-14 rounded-[3rem]">
+                      <div className="bg-black border border-white/5 p-6 md:p-14 rounded-[3rem]">
                           <h3 className="text-xl font-black text-white mb-8 flex items-center gap-4">
                             <Library className="w-8 h-8 text-zinc-500" />
                             Still in Progress
@@ -2295,7 +2295,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
 
                    {/* Dropped Media */}
                    {droppedMedia.length > 0 && (
-                      <div className="bg-black/80 border border-rose-900/40 p-10 md:p-14 rounded-[3rem] relative overflow-hidden mt-8">
+                      <div className="bg-black/80 border border-rose-900/40 p-6 md:p-14 rounded-[3rem] relative overflow-hidden mt-8">
                           <div className="absolute top-0 right-0 w-96 h-96 bg-rose-900/20 blur-[120px] -mr-32 -mt-32 rounded-full pointer-events-none" />
                           <h3 className="text-xl font-black text-rose-500 mb-8 flex items-center gap-4">
                             <Skull className="w-8 h-8 text-rose-500/80" />

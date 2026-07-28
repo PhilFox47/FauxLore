@@ -465,7 +465,7 @@ export function Lorekeeper() {
       </header>
 
       {/* Hero Overview */}
-      <section className="shrink-0 bg-zinc-900 border border-white/5 rounded-3xl p-8 relative overflow-hidden flex flex-col gap-8">
+      <section className="shrink-0 bg-zinc-900 border border-white/5 rounded-3xl p-5 sm:p-8 relative overflow-hidden flex flex-col gap-8">
         <div className="absolute top-0 right-0 w-96 h-96 bg-orange-500/10 rounded-full blur-[100px] pointer-events-none" />
 
         <div className="flex flex-col md:flex-row items-center gap-8 z-10 relative leading-none">
@@ -485,7 +485,7 @@ export function Lorekeeper() {
               </h3>
               <button
                 onClick={(e) => { e.stopPropagation(); generateMissingTitles(true, [], true); }}
-                className="opacity-0 group-hover/maintitle:opacity-100 flex-shrink-0 p-2 rounded hover:bg-white/5 transition-all outline-none"
+                className="opacity-70 md:opacity-0 md:group-hover/maintitle:opacity-100 flex-shrink-0 p-2 rounded hover:bg-white/5 transition-all outline-none"
                 title="Regenerate Title"
               >
                 <RefreshCw className="w-4 h-4 text-zinc-500 hover:text-zinc-300" />
@@ -553,7 +553,7 @@ export function Lorekeeper() {
                       <div className="text-[10px] sm:text-xs font-black uppercase tracking-widest leading-tight pr-2" style={{ color: accent }} title={currentTitle}>{currentTitle}</div>
                       <button
                         onClick={(e) => { e.stopPropagation(); generateMissingTitles(false, [mediaType], true); }}
-                        className="opacity-0 group-hover/medtitle:opacity-100 flex-shrink-0 p-1 rounded hover:bg-white/5 transition-all outline-none"
+                        className="opacity-70 md:opacity-0 md:group-hover/medtitle:opacity-100 flex-shrink-0 p-2 md:p-1 rounded hover:bg-white/5 transition-all outline-none"
                         title="Regenerate Title"
                       >
                          <RefreshCw className="w-3 h-3 text-zinc-500 hover:text-zinc-300" />
@@ -580,7 +580,7 @@ export function Lorekeeper() {
       </section>
 
       {/* World Bosses Section */}
-      <section className="bg-zinc-900/50 border border-white/5 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden">
+      <section className="bg-zinc-900/50 border border-white/5 rounded-[2.5rem] p-5 md:p-12 relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
           <div>
             <h2 className="text-3xl font-black text-white italic tracking-tight mb-2 flex items-center gap-3">
@@ -591,12 +591,12 @@ export function Lorekeeper() {
               Weekly challenges linked to your currently active media.
             </p>
           </div>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-3 sm:gap-4">
             <select
               title="Limit the new enemy to one media type"
               value={encoreMediaType}
               onChange={(e) => setEncoreMediaType(e.target.value)}
-              className="bg-black/40 hover:bg-zinc-800 border border-white/5 px-4 py-3 rounded-2xl flex items-center justify-center gap-2 transition-all font-bold text-zinc-400 outline-none focus:border-red-500/30"
+              className="bg-black/40 hover:bg-zinc-800 border border-white/5 px-4 py-3 rounded-2xl flex items-center justify-center gap-2 transition-all font-bold text-zinc-400 outline-none focus:border-red-500/30 min-w-0 w-full sm:w-auto"
             >
               <option value="All Media Types">All Media Types</option>
               {MEDIA_TYPES.map(type => (
@@ -615,7 +615,7 @@ export function Lorekeeper() {
                 }
               }}
               disabled={isSpawningBoss}
-              className="bg-black/40 hover:bg-zinc-800 border border-white/5 px-6 py-3 rounded-2xl flex items-center justify-center gap-2 hover:border-red-500/30 transition-all font-bold text-white group disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-black/40 hover:bg-zinc-800 border border-white/5 px-5 sm:px-6 py-3 rounded-2xl flex items-center justify-center gap-2 hover:border-red-500/30 transition-all font-bold text-white group disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
               {isSpawningBoss ? (
                 <Loader2 className="w-5 h-5 text-red-500 animate-spin" />
@@ -624,7 +624,7 @@ export function Lorekeeper() {
               )}
               Spawn Enemy
             </button>
-            <div className="bg-zinc-950 px-6 py-3 rounded-2xl border border-white/5 text-center">
+            <div className="bg-zinc-950 px-5 sm:px-6 py-3 rounded-2xl border border-white/5 text-center grow sm:grow-0">
               <div className="text-[10px] text-zinc-600 font-black uppercase tracking-widest mb-1">
                 Total Defeated
               </div>
@@ -1221,26 +1221,26 @@ function QuestCard({
         <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-[40px]" />
       )}
 
-      <div className="flex justify-between items-start mb-4 relative z-10 w-full overflow-hidden">
-        <div className="flex items-center gap-3 pr-2 w-full">
+      <div className="flex justify-between items-start gap-2 mb-4 relative z-10 w-full overflow-hidden">
+        <div className="flex items-center gap-3 pr-2 min-w-0 flex-1">
           {quest.isCompleted ? (
             <CheckCircle2 className="w-8 h-8 text-emerald-400 shrink-0" />
           ) : (
             <CircleDashed className="w-8 h-8 text-zinc-600 shrink-0" />
           )}
-          <div className="w-full">
+          <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 mb-1 justify-between group/title w-full">
               {showLoading ? (
                 <div className="h-6 w-32 bg-white/10 rounded animate-pulse"></div>
               ) : (
-                <div className="flex items-center gap-2 max-w-[85%]">
-                  <h5 className="font-bold text-white text-lg leading-tight break-words">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <h5 className="font-bold text-white text-lg leading-tight break-words min-w-0">
                     {dynTitle}
                   </h5>
                   {!quest.isCompleted && (
                     <button
                       onClick={(e) => { e.stopPropagation(); generateSpecificText('title'); }}
-                      className="opacity-0 group-hover/title:opacity-100 p-1 rounded hover:bg-white/5 transition-all outline-none"
+                      className="opacity-70 md:opacity-0 md:group-hover/title:opacity-100 p-2 md:p-1 rounded hover:bg-white/5 transition-all outline-none"
                       title="Regenerate Requirement"
                     >
                       <RefreshCw className="w-3 h-3 text-zinc-600 hover:text-zinc-400" />
@@ -1270,12 +1270,12 @@ function QuestCard({
                 <div className="h-4 w-32 bg-white/10 rounded animate-pulse"></div>
               </div>
             ) : (
-              <div className="flex items-center gap-2 group/desc">
-                <p className="text-sm text-zinc-400 break-words">{dynDesc}</p>
+              <div className="flex items-center gap-2 group/desc min-w-0">
+                <p className="text-sm text-zinc-400 break-words min-w-0">{dynDesc}</p>
                 {!quest.isCompleted && (
                   <button
                     onClick={(e) => { e.stopPropagation(); generateSpecificText('desc'); }}
-                    className="opacity-0 group-hover/desc:opacity-100 flex-shrink-0 p-1 rounded hover:bg-white/5 transition-all outline-none"
+                    className="opacity-70 md:opacity-0 md:group-hover/desc:opacity-100 flex-shrink-0 p-2 md:p-1 rounded hover:bg-white/5 transition-all outline-none"
                     title="Regenerate Description"
                   >
                     <RefreshCw className="w-3 h-3 text-zinc-600 hover:text-zinc-400" />

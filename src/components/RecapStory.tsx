@@ -143,7 +143,7 @@ export function AwardsShelf({ awards, media }: { awards: RecapAward[]; media: Me
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-8%' }}
       transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-gradient-to-b from-amber-500/[0.07] to-transparent border border-amber-500/20 rounded-[2.5rem] p-8 md:p-12"
+      className="bg-gradient-to-b from-amber-500/[0.07] to-transparent border border-amber-500/20 rounded-[2.5rem] p-5 md:p-12"
     >
       <div className="flex items-center gap-4 mb-8">
         <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20">
@@ -208,7 +208,7 @@ export function LookAhead({ lookAhead, timeframe }: {
       className="grid grid-cols-1 md:grid-cols-2 gap-4"
     >
       {lookAhead.watchFor && (
-        <div className="bg-black/40 border border-white/5 rounded-[2rem] p-8 relative overflow-hidden">
+        <div className="bg-black/40 border border-white/5 rounded-[2rem] p-5 sm:p-8 relative overflow-hidden">
           <Compass className="absolute -right-6 -bottom-6 w-40 h-40 text-white/[0.02]" />
           <div className="flex items-center gap-3 mb-4 relative z-10">
             <Compass className="w-4 h-4 text-sky-400" />
@@ -218,7 +218,7 @@ export function LookAhead({ lookAhead, timeframe }: {
         </div>
       )}
       {lookAhead.challenge && (
-        <div className="bg-emerald-500/[0.06] border border-emerald-500/20 rounded-[2rem] p-8 relative overflow-hidden">
+        <div className="bg-emerald-500/[0.06] border border-emerald-500/20 rounded-[2rem] p-5 sm:p-8 relative overflow-hidden">
           <Target className="absolute -right-6 -bottom-6 w-40 h-40 text-emerald-500/[0.04]" />
           <div className="flex items-center gap-3 mb-4 relative z-10">
             <Target className="w-4 h-4 text-emerald-400" />

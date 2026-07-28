@@ -86,7 +86,7 @@ export function MediaLibrary() {
   return (
     <>
       <header 
-        className="flex flex-col gap-6 sm:gap-8 mb-8 bg-gradient-to-br from-zinc-900 to-[#0A0A0C] border border-white/5 rounded-3xl p-8 relative shadow-2xl z-20"
+        className="flex flex-col gap-6 sm:gap-8 mb-8 bg-gradient-to-br from-zinc-900 to-[#0A0A0C] border border-white/5 rounded-3xl p-5 sm:p-8 relative shadow-2xl z-20"
         style={{ '--accent': accentBase, '--accent-hover': accentHover } as React.CSSProperties}
       >
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.05] mix-blend-overlay rounded-3xl pointer-events-none"></div>
@@ -172,7 +172,7 @@ export function MediaLibrary() {
       </header>
 
       {libraryMedia.length === 0 ? (
-        <div className="bg-gradient-to-br from-zinc-900/30 to-black border-2 border-dashed border-white/5 rounded-[2.5rem] p-16 text-center shadow-inner flex-1 flex flex-col items-center justify-center min-h-[400px]">
+        <div className="bg-gradient-to-br from-zinc-900/30 to-black border-2 border-dashed border-white/5 rounded-[2.5rem] p-5 sm:p-16 text-center shadow-inner flex-1 flex flex-col items-center justify-center min-h-[400px]">
           <div className="w-16 h-16 rounded-2xl bg-zinc-900/80 border border-white/5 flex items-center justify-center mx-auto mb-6 shadow-md shadow-black">
              <Search className="w-8 h-8 text-zinc-700" />
           </div>

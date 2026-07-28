@@ -99,7 +99,7 @@ export function Universes() {
 
   if (franchiseMap.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-center h-full">
+      <div className="flex flex-col items-center justify-center p-6 sm:p-12 text-center h-full">
         <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center mb-4">
           <Search className="w-8 h-8 text-zinc-600" />
         </div>
@@ -229,7 +229,7 @@ export function Universes() {
             <div className="w-full h-full bg-gradient-to-tr from-zinc-800 to-zinc-900" />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent" />
-          <div className="absolute bottom-0 left-0 p-8 w-full flex justify-between items-end">
+          <div className="absolute bottom-0 left-0 p-5 sm:p-8 w-full flex justify-between items-end">
             <div>
               <h1 className="text-4xl sm:text-5xl font-black text-white px-1 tracking-tight drop-shadow-lg mb-2">
                 {currentFranchise.name}

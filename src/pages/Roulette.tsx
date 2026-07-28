@@ -145,13 +145,13 @@ export function Roulette() {
       </header>
 
       {backlogCount === 0 ? (
-        <div className="bg-zinc-900/40 border border-white/5 rounded-3xl p-16 text-center">
+        <div className="bg-zinc-900/40 border border-white/5 rounded-3xl p-5 sm:p-16 text-center">
           <Dice5 className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
           <h3 className="text-xl font-black text-white mb-2">Your backlog is empty</h3>
           <p className="text-zinc-500">Add some media with the "Planning" status and I'll help you decide what to tackle next.</p>
         </div>
       ) : recommendations.length === 0 ? (
-        <div className="bg-zinc-900/40 border border-white/5 rounded-3xl p-16 text-center text-zinc-500">
+        <div className="bg-zinc-900/40 border border-white/5 rounded-3xl p-5 sm:p-16 text-center text-zinc-500">
           No backlog items match this mood/filter. Try widening it.
         </div>
       ) : (
@@ -161,7 +161,7 @@ export function Roulette() {
             <section className="relative overflow-hidden rounded-[2.5rem] border border-pink-500/20 bg-black">
               <Cover item={topPick.item} className="absolute inset-0 w-full h-full opacity-25 blur-2xl scale-110" />
               <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-black/40" />
-              <div className="relative z-10 flex flex-col sm:flex-row gap-8 p-8 md:p-10">
+              <div className="relative z-10 flex flex-col sm:flex-row gap-8 p-5 md:p-10">
                 <div className="w-40 h-56 md:w-44 md:h-64 rounded-2xl overflow-hidden border border-white/10 shadow-2xl shrink-0 bg-zinc-900">
                   <Cover item={topPick.item} className="w-full h-full" />
                 </div>
@@ -224,7 +224,7 @@ export function Roulette() {
           )}
 
           {/* Surprise me (random) */}
-          <section className="bg-zinc-900/40 border border-white/5 rounded-3xl p-8 flex flex-col items-center text-center">
+          <section className="bg-zinc-900/40 border border-white/5 rounded-3xl p-5 sm:p-8 flex flex-col items-center text-center">
             <h3 className="text-lg font-black text-white mb-1">Can't decide? Let fate pick.</h3>
             <p className="text-zinc-500 text-sm mb-6">A random roll weighted toward your current mood &amp; filters.</p>
             <button onClick={surpriseMe} className="bg-gradient-to-r from-pink-600 to-orange-600 hover:from-pink-500 hover:to-orange-500 text-white px-8 py-3.5 rounded-full font-black tracking-wider uppercase transition-all shadow-[0_0_40px_rgba(249,115,22,0.25)] hover:scale-105 active:scale-95 flex items-center gap-3">
@@ -265,7 +265,7 @@ export function Roulette() {
       )}
 
       {/* The Oracle (AI) */}
-      <section className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border border-indigo-500/20 rounded-3xl p-8 relative overflow-hidden">
+      <section className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border border-indigo-500/20 rounded-3xl p-5 sm:p-8 relative overflow-hidden">
         <div className="absolute -top-32 -right-32 w-64 h-64 bg-indigo-500/20 blur-[100px] rounded-full pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
           <div className="flex-1">

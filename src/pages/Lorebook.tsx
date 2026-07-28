@@ -142,7 +142,7 @@ export function Lorebook() {
       </header>
 
       {!hasEntries ? (
-        <div className="bg-zinc-900/40 border border-white/5 rounded-[2.5rem] p-12 text-center text-zinc-500 mt-8 font-mono shadow-inner">
+        <div className="bg-zinc-900/40 border border-white/5 rounded-[2.5rem] p-6 sm:p-12 text-center text-zinc-500 mt-8 font-mono shadow-inner">
           No memory fragments found matching your search.
         </div>
       ) : (

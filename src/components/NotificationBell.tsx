@@ -100,7 +100,7 @@ export function NotificationBell() {
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); deleteNotification(n.id); }}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-all self-start"
+                    className="shrink-0 opacity-70 md:opacity-0 md:group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-all self-start p-1.5 -m-1.5 md:p-0 md:m-0"
                     title="Dismiss"
                   >
                     <X className="w-3.5 h-3.5" />
