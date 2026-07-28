@@ -239,6 +239,8 @@ export interface MediaCodex {
 
 export interface Settings {
   userId: string;
+  /** Opt out of inactivity aging: no decay visuals, no automatic drop. */
+  disableAutoDrop?: boolean;
   igdbClientId?: string;
   igdbClientSecret?: string;
   tmdbApiKey?: string;

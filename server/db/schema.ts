@@ -138,7 +138,9 @@ export function initSchema(db: Db) {
       mediaDifficulty TEXT,
       questOffsets TEXT,
       questRerollsUsed TEXT,
-      questConfigs TEXT
+      questConfigs TEXT,
+      -- Opt out of inactivity aging: no cobwebs, no automatic drop.
+      disableAutoDrop INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS ai_recaps (

@@ -24,7 +24,7 @@ import { cn } from '../lib/utils';
  * grid, so the active media is the first — and largest — thing on the page.
  */
 export function Dashboard() {
-  const { media, logs, rpgState, saveMediaItem, addLog, deleteMediaItem, aiTextCache, worldBosses, artifacts, rerollBoss } = useMediaContext();
+  const { media, logs, settings, rpgState, saveMediaItem, addLog, deleteMediaItem, aiTextCache, worldBosses, artifacts, rerollBoss } = useMediaContext();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MediaItem | undefined>(undefined);
@@ -66,6 +66,8 @@ export function Dashboard() {
 
   React.useEffect(() => {
     // Automated aging: Drop active items that have not been logged in 50 days (8 weeks ~ day 50)
+    // Opting out in Preferences turns the whole mechanic off, library-wide.
+    if (settings?.disableAutoDrop) return;
     const itemsToDrop = media.filter(item => {
       if (item.status !== 'Active') return false;
       if (item.noAutoDrop) return false; // User opted this media out of automatic dropping
@@ -84,7 +86,7 @@ export function Dashboard() {
       Promise.all(itemsToDrop.map(item => saveMediaItem({ ...item, status: 'Dropped' })))
         .catch(console.error);
     }
-  }, [media, logs, saveMediaItem]);
+  }, [media, logs, saveMediaItem, settings?.disableAutoDrop]);
 
   const handleEdit = (item: MediaItem) => {
     setEditingItem(item);

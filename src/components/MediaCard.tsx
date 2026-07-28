@@ -41,7 +41,7 @@ interface MediaCardProps {
 }
 
 export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaCardProps) {
-  const { logs } = useMediaContext();
+  const { logs, settings } = useMediaContext();
   
   const mediaLogs = useMemo(() => logs.filter(l => l.mediaId === item.id), [logs, item.id]);
   const currentStreak = useMemo(() => calculateStreak(mediaLogs), [mediaLogs]);
@@ -59,8 +59,10 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
   let showRedWarning = false;
   let daysUntilDrop = 0;
 
-  // Inactivity aging visuals are skipped when the user opted out of auto-dropping.
-  if (!item.noAutoDrop) {
+  // Inactivity aging visuals are skipped when auto-dropping is off, whether that
+  // was set for this entry or turned off library-wide in Preferences. The decay
+  // is the warning that a drop is coming, so it makes no sense without one.
+  if (!item.noAutoDrop && !settings?.disableAutoDrop) {
     if (daysSinceActive > 7 && daysSinceActive <= 21) {
       grayscale = ((daysSinceActive - 7) / 14) * 100;
     } else if (daysSinceActive > 21) {

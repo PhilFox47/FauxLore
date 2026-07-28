@@ -42,6 +42,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     imageNegativePrompt: '',
     timezone: '',
     aiPersona: 'witty',
+    disableAutoDrop: false,
     enemyDifficulty: 1.0,
     mediaDifficulty: {
       'Game': 1.0,
@@ -96,6 +97,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         imageNegativePrompt: settings.imageNegativePrompt || '',
         timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
         aiPersona: settings.aiPersona || 'witty',
+        disableAutoDrop: !!settings.disableAutoDrop,
         enemyDifficulty: settings.enemyDifficulty ?? 1.0,
         mediaDifficulty: {
           'Game': settings.mediaDifficulty?.['Game'] ?? 1.0,
@@ -148,6 +150,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             imageNegativePrompt: settings.imageNegativePrompt || '',
             timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
             aiPersona: settings.aiPersona || 'witty',
+            disableAutoDrop: !!settings.disableAutoDrop,
             enemyDifficulty: settings.enemyDifficulty ?? 1.0,
             mediaDifficulty: {
               'Game': settings.mediaDifficulty?.['Game'] ?? 1.0,
@@ -407,6 +410,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         imageNegativePrompt: formData.imageNegativePrompt,
         timezone: formData.timezone,
         aiPersona: formData.aiPersona,
+        disableAutoDrop: formData.disableAutoDrop,
         enemyDifficulty: formData.enemyDifficulty,
         mediaDifficulty: formData.mediaDifficulty,
         masterPageConfig: {
@@ -570,6 +574,31 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       <p className="text-[10px] text-zinc-500 mt-1">
                         {getPersona(formData.aiPersona).hint} Sets the voice of your recaps and quest titles.
                       </p>
+                    </div>
+
+                    <div className="pt-2">
+                      <label
+                        htmlFor="disableAutoDrop"
+                        className="flex items-start gap-3 p-4 bg-zinc-900/50 border border-white/5 rounded-xl cursor-pointer hover:border-white/10 transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          id="disableAutoDrop"
+                          name="disableAutoDrop"
+                          checked={formData.disableAutoDrop}
+                          onChange={(e) => setFormData(p => ({ ...p, disableAutoDrop: e.target.checked }))}
+                          className="mt-0.5 w-4 h-4 shrink-0 accent-orange-500 cursor-pointer"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-zinc-200">Disable auto-dropping</span>
+                          <span className="block text-[11px] text-zinc-500 mt-1 leading-relaxed">
+                            Normally an Active entry fades to greyscale after a week untouched, gathers cobwebs
+                            after three, and is marked Dropped at fifty days. Tick this and none of that happens —
+                            nothing ages and nothing is dropped for you. Individual entries can still be exempted
+                            on their own with "Never auto-drop".
+                          </span>
+                        </span>
+                      </label>
                     </div>
                   </div>
                 )}

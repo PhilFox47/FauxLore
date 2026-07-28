@@ -17,7 +17,8 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
         mediaDifficulty: row.mediaDifficulty ? JSON.parse(row.mediaDifficulty) : undefined,
         questOffsets: row.questOffsets ? JSON.parse(row.questOffsets) : undefined,
         questRerollsUsed: row.questRerollsUsed ? JSON.parse(row.questRerollsUsed) : undefined,
-        questConfigs: row.questConfigs ? JSON.parse(row.questConfigs) : undefined
+        questConfigs: row.questConfigs ? JSON.parse(row.questConfigs) : undefined,
+        disableAutoDrop: row.disableAutoDrop === 1
       });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -38,8 +39,8 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
       const newMediaDifficulty = settings.mediaDifficulty ? JSON.stringify(settings.mediaDifficulty) : null;
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs, disableAutoDrop)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs, @disableAutoDrop)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -59,7 +60,8 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
           mediaDifficulty=excluded.mediaDifficulty,
           questOffsets=excluded.questOffsets,
           questRerollsUsed=excluded.questRerollsUsed,
-          questConfigs=excluded.questConfigs
+          questConfigs=excluded.questConfigs,
+          disableAutoDrop=excluded.disableAutoDrop
       `).run({
         userId: userId,
         igdbClientId: isAdmin ? (settings.igdbClientId || null) : (oldSettings?.igdbClientId || null),
@@ -80,7 +82,8 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
         mediaDifficulty: newMediaDifficulty,
         questOffsets: settings.questOffsets ? JSON.stringify(settings.questOffsets) : null,
         questRerollsUsed: settings.questRerollsUsed ? JSON.stringify(settings.questRerollsUsed) : null,
-        questConfigs: settings.questConfigs ? JSON.stringify(settings.questConfigs) : null
+        questConfigs: settings.questConfigs ? JSON.stringify(settings.questConfigs) : null,
+        disableAutoDrop: settings.disableAutoDrop ? 1 : 0
       });
 
       // Update active bosses if difficulty changed
