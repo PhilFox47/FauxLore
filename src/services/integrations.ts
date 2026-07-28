@@ -146,6 +146,43 @@ export const IntegrationsService = {
   },
 
   /**
+   * The best cover art available for a Google Books volume.
+   *
+   * Search results only carry a ~128px thumbnail, so this is called once a book
+   * is actually chosen; the server tries the larger sources and measures what it
+   * gets back. Returns null rather than throwing — a missing upgrade should
+   * never block adding a book.
+   */
+  async upgradeBookCover(volumeId: string, current?: string): Promise<{ url: string; width: number; height: number; source: string } | null> {
+    try {
+      const url = new URL(`/api/books/${encodeURIComponent(volumeId)}/cover`, window.location.origin);
+      if (current) url.searchParams.set('current', current);
+      const response = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${localStorage.getItem('fauxlore_token')}` },
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data?.found ? data : null;
+    } catch (e) {
+      console.error('Cover upgrade failed:', e);
+      return null;
+    }
+  },
+
+  /** Re-resolves every Google Books cover in the library that is still small. */
+  async upgradeAllBookCovers(): Promise<{ checked: number; upgraded: any[]; skipped: number; failed: number }> {
+    const response = await fetch('/api/books/covers/upgrade', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('fauxlore_token')}` },
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => null);
+      throw new Error(err?.error || 'Cover upgrade failed');
+    }
+    return response.json();
+  },
+
+  /**
    * Search TMDB for Movies or Series
    */
   async searchTMDBMetadata(query: string, type: 'Movie' | 'Series'): Promise<MovieMetadata[] | SeriesMetadata[]> {

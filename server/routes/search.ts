@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { searchGames, getGameDetails, diagnose as gslDiagnose } from "../integrations/gamestorylog";
+import { LOW_RES_WIDTH, bestCoverForVolume } from "../integrations/bookCovers";
 
 export function registerSearchRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, hltbSearch, getIgdbToken } = ctx;
@@ -503,11 +504,14 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
               creator = volumeInfo.authors.join(", ");
             }
 
+            // Only the cleanup that cannot fail here: https, and drop the
+            // page-curl decoration Google bakes into the bitmap. Picking a
+            // genuinely larger cover needs a request per volume to check what
+            // exists, which happens when a result is actually chosen.
             let coverImageUrl = "";
             if (volumeInfo.imageLinks) {
-              coverImageUrl = volumeInfo.imageLinks.thumbnail?.replace('http:', 'https:') 
-                || volumeInfo.imageLinks.smallThumbnail?.replace('http:', 'https:') 
-                || "";
+              const raw = volumeInfo.imageLinks.thumbnail || volumeInfo.imageLinks.smallThumbnail || "";
+              coverImageUrl = raw.replace('http:', 'https:').replace(/&?edge=curl/g, '');
             }
 
             const year = volumeInfo.publishedDate ? parseInt(volumeInfo.publishedDate.substring(0, 4)) : undefined;
@@ -541,6 +545,69 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
     } catch (error: any) {
       console.error("Error searching Google Books:", error);
       res.status(500).json({ error: error.message || "Failed to fetch metadata from Google Books." });
+    }
+  });
+
+  /**
+   * The best cover art available for one Google Books volume.
+   *
+   * Called when a book is picked in the add/edit form, and by the bulk upgrade.
+   * Every candidate is fetched and measured, so the answer says what was
+   * actually found rather than what a URL promised.
+   */
+  app.get("/api/books/:volumeId/cover", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const sysSettings: any = db.prepare('SELECT googleBooksApiKey FROM system_settings WHERE id = ?').get('system') || {};
+      const apiKey = sysSettings.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
+
+      const current = typeof req.query.current === 'string' ? req.query.current : undefined;
+      const best = await bestCoverForVolume(req.params.volumeId, apiKey, current);
+      if (!best) return res.json({ found: false });
+      res.json({ found: true, ...best });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
+
+  /**
+   * Re-resolves covers across the library for books added before any of this
+   * existed. Only entries whose cover is actually small are touched, so running
+   * it twice costs almost nothing the second time.
+   */
+  app.post("/api/books/covers/upgrade", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const sysSettings: any = db.prepare('SELECT googleBooksApiKey FROM system_settings WHERE id = ?').get('system') || {};
+      const apiKey = sysSettings.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
+
+      const rows: any[] = db.prepare(
+        `SELECT id, title, coverImageUrl, metadataSourceId
+           FROM media
+          WHERE userId = ?
+            AND metadataSource = 'googlebooks'
+            AND metadataSourceId IS NOT NULL`,
+      ).all(userId);
+
+      const update = db.prepare('UPDATE media SET coverImageUrl = ?, updatedAt = ? WHERE id = ? AND userId = ?');
+      const upgraded: { id: string; title: string; width: number; source: string }[] = [];
+      let skipped = 0;
+      let failed = 0;
+
+      for (const row of rows) {
+        const best = await bestCoverForVolume(row.metadataSourceId, apiKey, row.coverImageUrl || undefined);
+        if (!best) { failed++; continue; }
+        // Replacing a URL with an equal-or-worse one is churn, not an upgrade.
+        if (best.url === row.coverImageUrl || best.width < LOW_RES_WIDTH) { skipped++; continue; }
+        update.run(best.url, new Date().toISOString(), row.id, userId);
+        upgraded.push({ id: row.id, title: row.title, width: best.width, source: best.source });
+      }
+
+      res.json({ checked: rows.length, upgraded, skipped, failed });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
     }
   });
 

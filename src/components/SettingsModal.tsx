@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Sparkles, RefreshCw, UserCircle, Settings as SettingsIcon, Shield, Database, Users, Target } from 'lucide-react';
+import { X, Save, Sparkles, RefreshCw, UserCircle, Settings as SettingsIcon, Shield, Database, Users, Target, Image as ImageIcon } from 'lucide-react';
 import { DatabaseService } from '../services/db';
+import { IntegrationsService } from '../services/integrations';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
 import { calculateRPGState, QUEST_DEFINITIONS } from '../lib/rpgSystem';
@@ -252,6 +253,29 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       setBackupMessage({ type: 'error', text: e.message || 'Failed to create backup' });
     } finally {
       setIsBackingUp(false);
+    }
+  };
+
+  // Books added before the cover resolver existed still carry Google's ~128px
+  // thumbnail. This re-resolves them in place.
+  const [isUpgradingCovers, setIsUpgradingCovers] = useState(false);
+  const [coverMessage, setCoverMessage] = useState({ type: '', text: '' });
+
+  const handleUpgradeCovers = async () => {
+    setIsUpgradingCovers(true);
+    setCoverMessage({ type: '', text: '' });
+    try {
+      const r = await IntegrationsService.upgradeAllBookCovers();
+      setCoverMessage({
+        type: 'success',
+        text: r.upgraded.length
+          ? `Replaced ${r.upgraded.length} of ${r.checked} covers (widest now ${Math.max(...r.upgraded.map((u: any) => u.width))}px). ${r.skipped} already fine, ${r.failed} could not be checked.`
+          : `Checked ${r.checked} books — nothing better was available.`,
+      });
+    } catch (e: any) {
+      setCoverMessage({ type: 'error', text: e.message || 'Cover upgrade failed' });
+    } finally {
+      setIsUpgradingCovers(false);
     }
   };
 
@@ -1017,7 +1041,29 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               </div>
 
               <div className="pt-6 border-t border-white/5 space-y-4">
-                <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">Database & Backup</h3>
+                <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">Library Maintenance</h3>
+                  <div className="bg-zinc-900/50 border border-white/5 rounded-xl p-5">
+                    <p className="text-sm text-zinc-400 mb-4">
+                      Google Books hands out ~128px thumbnails in its search results. This re-checks every book you
+                      matched against it and swaps in the largest cover any source actually has.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleUpgradeCovers}
+                      disabled={isUpgradingCovers}
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 font-bold text-sm rounded-lg transition-colors border border-emerald-500/30 disabled:opacity-50"
+                    >
+                      <ImageIcon className={`w-4 h-4 ${isUpgradingCovers ? 'animate-pulse' : ''}`} />
+                      {isUpgradingCovers ? "Checking covers..." : "Upgrade book covers"}
+                    </button>
+                    {coverMessage.text && (
+                      <p className={`mt-3 text-sm font-medium ${coverMessage.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {coverMessage.text}
+                      </p>
+                    )}
+                  </div>
+
+                <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest pt-2">Database & Backup</h3>
                   <div className="bg-zinc-900/50 border border-white/5 rounded-xl p-5">
                     <p className="text-sm text-zinc-400 mb-4">
                       Daily backups are automatically created at 13:00 (up to 28 rolling backups). You can also force a manual backup right now.

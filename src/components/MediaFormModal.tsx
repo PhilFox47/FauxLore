@@ -147,6 +147,7 @@ export function MediaFormModal({
   const [isAiTagging, setIsAiTagging] = useState(false);
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
+  const [coverUpgrading, setCoverUpgrading] = useState(false);
   const [platformInput, setPlatformInput] = useState("");
   const [isPlatformDropdownOpen, setIsPlatformDropdownOpen] = useState(false);
   const [selectedSeriesForSeasons, setSelectedSeriesForSeasons] = useState<
@@ -396,6 +397,22 @@ export function MediaFormModal({
     }));
     setAvailablePlatforms(match.platforms || []);
     setSearchResults(null);
+
+    // Google Books search results only carry a ~128px thumbnail. Ask the server
+    // for something worth looking at, in the background — the form is usable
+    // meanwhile, and if the user picks a different book first the guard below
+    // stops a late answer from overwriting it.
+    if (match.metadataSource === "googlebooks" && match.metadataSourceId) {
+      setCoverUpgrading(true);
+      IntegrationsService.upgradeBookCover(match.metadataSourceId, match.coverImageUrl)
+        .then((best) => {
+          if (!best?.url) return;
+          setFormData((prev) =>
+            prev.originalMediaId === match.id ? { ...prev, coverImageUrl: best.url } : prev,
+          );
+        })
+        .finally(() => setCoverUpgrading(false));
+    }
   };
 
   const applySeason = (series: any, season: any) => {
@@ -1457,6 +1474,11 @@ export function MediaFormModal({
               className="input-field"
               placeholder="https://..."
             />
+            {coverUpgrading && (
+              <p className="text-[10px] text-zinc-500 mt-1.5 flex items-center gap-1.5">
+                <RefreshCw className="w-3 h-3 animate-spin" /> Looking for a higher-resolution cover…
+              </p>
+            )}
           </div>
 
           {/* Dynamic Fields Based on MediaType */}
