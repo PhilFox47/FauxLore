@@ -25,6 +25,18 @@ export interface CoverCandidate {
   url: string;
   /** Where the URL came from, for logging and for the API response. */
   source: string;
+  /**
+   * The known-good cover, measured first so the others can be checked against
+   * its shape. This is Google's own thumbnail: tiny, but unquestionably the
+   * right artwork.
+   */
+  isReference?: boolean;
+  /**
+   * Whether this URL is supposed to be the *same* artwork as the reference.
+   * True for Google's own renders, false for another catalogue's edition, which
+   * may legitimately be a different cover with a different shape.
+   */
+  strictShape?: boolean;
 }
 
 export interface ResolvedCover {
@@ -36,9 +48,20 @@ export interface ResolvedCover {
 
 /** Below this a cover is thumbnail-grade and worth replacing. */
 export const LOW_RES_WIDTH = 300;
-/** Wide enough that hunting further is not worth the requests. */
-const GOOD_ENOUGH_WIDTH = 700;
+/** Tall enough that hunting further is not worth the requests. */
+const GOOD_ENOUGH_HEIGHT = 900;
 const MAX_PROBES = 8;
+
+/**
+ * What a book cover can plausibly look like, as width / height.
+ *
+ * Used when there is no reference to compare against. Covers are portrait;
+ * anything wider than it is tall is something else entirely.
+ */
+const MIN_RATIO = 0.4;
+const MAX_RATIO = 1.05;
+/** How far a render of the *same* artwork may drift from the reference shape. */
+const SHAPE_TOLERANCE = 0.15;
 const PROBE_TIMEOUT_MS = 8000;
 /** A cover is at most a couple of MB; anything larger is not a cover. */
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -68,26 +91,25 @@ export function candidateCovers(volume: any, fallbackThumbnail?: string): CoverC
   const links = info.imageLinks || {};
   const out: CoverCandidate[] = [];
   const seen = new Set<string>();
-  const add = (url: string | undefined, source: string) => {
+  const add = (url: string | undefined, source: string, opts: Partial<CoverCandidate> = {}) => {
     if (!url) return;
     const clean = https(url).replace(/&?edge=curl/g, "");
     if (seen.has(clean)) return;
     seen.add(clean);
-    out.push({ url: clean, source });
+    out.push({ url: clean, source, ...opts });
   };
 
-  // The named links, largest first. Present for some volumes, absent for many.
-  add(links.extraLarge, "google:extraLarge");
-  add(links.large, "google:large");
-  add(links.medium, "google:medium");
-  add(links.small, "google:small");
-
-  // The same content endpoint at larger zooms. Which levels exist varies per
-  // volume, which is exactly why every candidate is measured before it is used.
+  // The reference goes first: Google's own thumbnail is small but is definitely
+  // this book's cover, so measuring it gives every other candidate a shape to be
+  // checked against.
   const base = links.thumbnail || links.smallThumbnail || fallbackThumbnail;
-  if (base && base.includes("books.google")) {
-    for (const zoom of [6, 4, 3, 2]) add(googleContentUrl(base, zoom), `google:zoom${zoom}`);
-  }
+  add(base, "google:thumbnail", { isReference: true, strictShape: true });
+
+  // The named links, largest first. Present for some volumes, absent for many.
+  add(links.extraLarge, "google:extraLarge", { strictShape: true });
+  add(links.large, "google:large", { strictShape: true });
+  add(links.medium, "google:medium", { strictShape: true });
+  add(links.small, "google:small", { strictShape: true });
 
   // Open Library, keyed by ISBN. No key needed, and its -L covers are often
   // larger than anything Google will serve. default=false makes a missing cover
@@ -98,10 +120,22 @@ export function candidateCovers(volume: any, fallbackThumbnail?: string): CoverC
     // ISBN-13 first: it is what modern editions are catalogued under.
     .sort((a: string, b: string) => b.length - a.length);
   for (const isbn of isbns.slice(0, 2)) {
-    add(`https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`, "openlibrary");
+    // Not shape-checked against the reference: Open Library may hold a different
+    // edition, whose cover is a different picture at a different aspect ratio.
+    // It still has to look like a book cover at all.
+    add(`https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`, "openlibrary", { strictShape: false });
   }
 
-  add(base, "google:thumbnail");
+  // The same content endpoint at larger zooms. Which levels exist varies per
+  // volume, and a level that has no full-size render answers with something else
+  // entirely — for House of Leaves, zoom=6 returns a 1280px-wide band of the
+  // title lettering rather than the cover. Measuring the pixels is not enough to
+  // catch that; it is caught by the shape check, since a cover is portrait and
+  // that band is six times wider than it is tall.
+  if (base && base.includes("books.google")) {
+    for (const zoom of [6, 4, 3, 2]) add(googleContentUrl(base, zoom), `google:zoom${zoom}`, { strictShape: true });
+  }
+
   return out;
 }
 
@@ -130,20 +164,59 @@ async function measure(url: string): Promise<ResolvedCover | null> {
   }
 }
 
+/** Does this image have the shape of the cover we are looking for? */
+function plausibleCover(
+  candidate: CoverCandidate,
+  measured: ResolvedCover,
+  reference: ResolvedCover | null,
+): boolean {
+  const ratio = measured.width / measured.height;
+  if (ratio < MIN_RATIO || ratio > MAX_RATIO) return false;
+  if (candidate.strictShape && reference) {
+    const refRatio = reference.width / reference.height;
+    if (Math.abs(ratio - refRatio) / refRatio > SHAPE_TOLERANCE) return false;
+  }
+  return true;
+}
+
 /**
- * Walks the candidates in order and returns the widest real image, stopping as
- * soon as one is comfortably large. Returns null only if nothing loaded at all.
+ * Returns the largest image that is actually this book's cover.
+ *
+ * Size alone is not the test. Google's content endpoint answers some zoom levels
+ * with a crop — a wide band of the title lettering — which is both large and
+ * useless, and it wins on width every time. So the tiny reference thumbnail is
+ * measured first purely for its aspect ratio, and anything that is not that
+ * shape is discarded no matter how many pixels it has. Ranking is by height,
+ * since a cover's height is what its resolution actually means.
+ *
+ * Returns null only if nothing loaded at all.
  */
 export async function resolveBestCover(candidates: CoverCandidate[]): Promise<ResolvedCover | null> {
+  const ordered = candidates.slice(0, MAX_PROBES);
+  let reference: ResolvedCover | null = null;
   let best: ResolvedCover | null = null;
-  for (const candidate of candidates.slice(0, MAX_PROBES)) {
+
+  for (const candidate of ordered) {
     const measured = await measure(candidate.url);
     if (!measured) continue;
     const scored = { ...measured, source: candidate.source };
-    if (!best || scored.width > best.width) best = scored;
-    if (best.width >= GOOD_ENOUGH_WIDTH) break;
+
+    if (candidate.isReference) {
+      // The reference is the fallback as well as the yardstick, but only if it
+      // is a believable cover itself.
+      reference = scored;
+      if (plausibleCover(candidate, scored, null) && (!best || scored.height > best.height)) best = scored;
+      continue;
+    }
+
+    if (!plausibleCover(candidate, scored, reference)) continue;
+    if (!best || scored.height > best.height) best = scored;
+    if (best.height >= GOOD_ENOUGH_HEIGHT) break;
   }
-  return best;
+
+  // Everything plausible failed to load, but the reference did: better a small
+  // real cover than nothing.
+  return best || reference;
 }
 
 /** Fetches one volume's full record, which carries the larger image links. */
