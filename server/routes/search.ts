@@ -2,6 +2,7 @@ import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { searchGames, getGameDetails, diagnose as gslDiagnose } from "../integrations/gamestorylog";
 import { LOW_RES_WIDTH, bestCoverForVolume } from "../integrations/bookCovers";
+import { VNDB_TITLE_FIELDS, vndbNames } from "../integrations/vndb";
 
 export function registerSearchRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, hltbSearch, getIgdbToken, activity } = ctx;
@@ -266,7 +267,7 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
 
       const payload = {
         filters: ["search", "=", query],
-        fields: "title, image.url, description, rating, developers.name, length_minutes, released",
+        fields: `${VNDB_TITLE_FIELDS}, image.url, description, rating, developers.name, length_minutes, released`,
         results: 20
       };
 
@@ -283,9 +284,14 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
       const mappedResults = (searchData.results || []).map((vn: any) => {
         const developer = (vn.developers && vn.developers.length > 0) ? vn.developers[0].name : "Unknown Developer";
 
+        // VNDB keeps one title per language; the English one is the title here
+        // and the original Japanese becomes the subtitle.
+        const names = vndbNames(vn);
+
         return {
           id: vn.id,
-          title: vn.title,
+          title: names.title,
+          subtitle: names.subtitle || "",
           description: vn.description,
           coverImageUrl: vn.image?.url || "",
           developer: developer,
