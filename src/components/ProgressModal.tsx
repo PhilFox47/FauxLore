@@ -434,7 +434,7 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
              >
                <option value="Active">Active — currently playing/reading</option>
                <option value="Planning">Planning — not started yet</option>
-               <option value="On Hold">On Hold — paused for now</option>
+               <option value="On Hold">On Hold — waiting for an update or new release</option>
                <option value="Extras">Extras — finished, on post-game/bonus content</option>
                <option value="Completed">Completed — finished it</option>
                <option value="Dropped">Dropped — stopped for good</option>

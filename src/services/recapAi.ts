@@ -166,9 +166,10 @@ HOW TO WRITE IT:
 6. AWARDS: hand out 3 to 5, only to titles that literally appear in the data, spelled exactly as written there. They should be sharp and specific ("Hardest Fought", "Biggest Waste of a Good Evening", "The One That Ate the Month") — not generic categories.
 7. CAPTIONS: each caption sits beneath a chart in the app, so it must read as a standalone observation about that exact dimension. One sentence, no preamble, never repeating the chapter prose verbatim. Omit a caption entirely if the data does not support one.
 8. ACCURACY: only treat something as finished if it appears in MEDIA COMPLETED. Do not invent events, feelings or numbers.
-9. LENGTH: ${CHAPTER_BRIEF[timeframe] || CHAPTER_BRIEF.month}
-10. HUMAN VOICE / ANTI-SLOP: write like a smart, real person talking. Avoid AI clichés ("delve", "tapestry", "embark", "testament", "symphony", "not merely", "in the realm of") and limp conclusions ("In conclusion", "Overall", "One thing is certain"). Be specific, grounded, and a little unhinged when it is earned.
-11. PLAIN TEXT INSIDE THE JSON: no Markdown, no HTML, no asterisks, hashes, bullets or links — they render as literal characters. Separate paragraphs inside a chapter body with a blank line (\\n\\n). Escape every double quote.`;
+9. ON HOLD MEANS WAITING, NOT SLACKING: an On Hold title is parked because the next season, volume, chapter or patch does not exist yet. It is not a backlog they are avoiding and not evidence of a slump. Never tell them to pick one up, never scold them for the gap, and never award it "most neglected". The only exception is anything listed under UNBLOCKED — new content has shipped there, and pointing at it is exactly the right call.
+10. LENGTH: ${CHAPTER_BRIEF[timeframe] || CHAPTER_BRIEF.month}
+11. HUMAN VOICE / ANTI-SLOP: write like a smart, real person talking. Avoid AI clichés ("delve", "tapestry", "embark", "testament", "symphony", "not merely", "in the realm of") and limp conclusions ("In conclusion", "Overall", "One thing is certain"). Be specific, grounded, and a little unhinged when it is earned.
+12. PLAIN TEXT INSIDE THE JSON: no Markdown, no HTML, no asterisks, hashes, bullets or links — they render as literal characters. Separate paragraphs inside a chapter body with a blank line (\\n\\n). Escape every double quote.`;
 
   const res = await apiFetch('/api/nano-gpt/chat/completions', {
     method: 'POST',

@@ -1,5 +1,6 @@
 import { MediaItem, ProgressLog, getMetricForType, MediaType, WorldBoss } from '../types/schema';
 import { calculateScaledDelta } from './scaling';
+import { hasNewContent, isWaitingOnRelease } from './onHold';
 import { groupLogsIntoSessions } from './sessions';
 import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, differenceInDays, subHours } from 'date-fns';
 
@@ -921,6 +922,8 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
       
       const hasDustyItem = media.some(m => {
+          // An entry parked waiting on a release is not dusty, it is blocked.
+          if (isWaitingOnRelease(m)) return false;
           if (m.status === 'Planning' || m.status === 'Active' || m.status === 'On Hold') {
              const itemLogs = allLogs.filter(l => l.mediaId === m.id);
              if (itemLogs.length > 0) {
@@ -975,13 +978,22 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     // These all work with media already in the library. None asks for anything new
     // to be added: the point is to find a different angle on what is already there.
 
-    () => { // 32. Off the Shelf - revive something paused
-      const onHold = media.filter(m => m.status === 'On Hold');
-      if (onHold.length === 0) return null;
+    () => { // 32. Off the Shelf - something parked has new content waiting
+      // On Hold means waiting on a release, so this only offers itself when
+      // something has actually shipped. Otherwise it would ask for progress
+      // that does not exist yet.
+      const unblocked = media.filter(m => m.status === 'On Hold' && hasNewContent(m));
+      if (unblocked.length === 0) return null;
       const target = getQTarget("Off the Shelf", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const onHoldIds = new Set(onHold.map(m => m.id));
-      const current = new Set(logs.filter(l => l.metricType !== 'statusChange' && onHoldIds.has(l.mediaId)).map(l => l.mediaId)).size;
-      return { title: "Off the Shelf", desc: `Wake something up. Log progress on ${target} item currently On Hold`, target, current, type: 'entries' as const, reward: baseReward * 3 };
+      const eligibleIds = new Set(unblocked.map(m => m.id));
+      // Resuming usually flips the entry to Active, so anything that left On Hold
+      // during the period still counts — otherwise completing the quest would
+      // erase its own progress.
+      logs.forEach(l => {
+        if (l.metricType === 'statusChange' && l.note?.includes('from On Hold')) eligibleIds.add(l.mediaId);
+      });
+      const current = new Set(logs.filter(l => l.metricType !== 'statusChange' && eligibleIds.has(l.mediaId)).map(l => l.mediaId)).size;
+      return { title: "Off the Shelf", desc: `Something you were waiting on has new content. Log progress on ${target} of them`, target, current, type: 'entries' as const, reward: baseReward * 3 };
     },
 
     () => { // 33. The Understudy - the active item you have neglected most

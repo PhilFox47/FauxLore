@@ -14,6 +14,7 @@ import { calculateScaledDelta } from '../lib/scaling';
 import { calculateRPGState } from '../lib/rpgSystem';
 import { MediaItem, MEDIA_COLORS, ProgressLog, RARITY_COLORS } from '../types/schema';
 import { cn } from '../lib/utils';
+import { hasNewContent, isWaitingOnRelease, newContentReason } from '../lib/onHold';
 import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map as MapIcon, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon, Skull } from 'lucide-react';
 import { analyzeHabits, analyzeMediaDNA, analyzeSessionVelocity, determineArchetypes, analyzeBingeFactor, analyzeSunkCost, analyzeTimeTraveler, analyzeBacklog, analyzeContrarian, extractJournals, calculateLongestStreak } from '../lib/recapAnalytics';
 import {
@@ -519,6 +520,16 @@ export function Recaps() {
         lootDist[a.rarity] = (lootDist[a.rarity] || 0) + 1;
       });
 
+      // "On Hold" here means waiting on the world — the next season, volume or
+      // patch — not procrastination. Without saying so, the columnist reads a
+      // parked title as neglect and prescribes it as homework the user cannot do.
+      const parkedMedia = media.filter(isWaitingOnRelease);
+      const unblockedMedia = media.filter(m => m.status === 'On Hold' && hasNewContent(m));
+      const holdNote = (m: MediaItem) =>
+        m.status !== 'On Hold' ? ''
+          : hasNewContent(m) ? ' [ON HOLD, but new content has shipped]'
+          : ' [ON HOLD, parked waiting on the next release]';
+
       const promptContext = `
 Timeframe: ${timeframe} (${formatIntervalLabel()})
 Is First Ever Recap?: ${isFirstRecap ? "YES. Welcome the user to their first recap!" : "NO"}
@@ -537,7 +548,13 @@ Total Master Pages (EXP): ${Math.floor(totalMasterPages)} ${isNewPR ? "(PERSONAL
 Total Logs: ${activeLogs.length}
 
 MEDIA IN PROGRESS:
-${inProgressMedia.map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres (ordered by importance): ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags (ordered by importance): ' + m.tags.join(', ') : ''}`).join('\n') || 'None'}
+${inProgressMedia.map(m => `- ${m.title} (${m.mediaType})${holdNote(m)}: [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres (ordered by importance): ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags (ordered by importance): ' + m.tags.join(', ') : ''}`).join('\n') || 'None'}
+
+PARKED, WAITING ON NEW RELEASES (On Hold with nothing new upstream. They are not being neglected — there is literally nothing to consume. NEVER tell them to pick these up, and never count them as a backlog they are avoiding):
+${parkedMedia.length > 0 ? parkedMedia.map(m => `- ${m.title} (${m.mediaType})`).join('\n') : 'None'}
+
+UNBLOCKED (was parked, and new content has since shipped — these ARE fair to point at):
+${unblockedMedia.length > 0 ? unblockedMedia.map(m => `- ${m.title} (${m.mediaType}): ${newContentReason(m)}`).join('\n') : 'None'}
 
 MEDIA DROPPED OR ABANDONED:
 ${droppedMedia.length > 0 ? droppedMedia.map(m => `- ${m.title} (${m.mediaType}): ${m.dropReason ? `[Drop Reason: ${m.dropReason}]` : '[No reason specified]'}`).join('\n') : 'None'}

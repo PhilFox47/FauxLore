@@ -1,4 +1,5 @@
 import { MediaItem, ProgressLog, Settings, MediaType } from '../types/schema';
+import { canBeSuggested, newContentReason } from './onHold';
 
 /**
  * Heuristic "what should I consume next" engine for the backlog (Planning items).
@@ -178,18 +179,33 @@ export function recommendBacklog(
   return recs.slice(0, opts.limit ?? 12);
 }
 
-/** Active / On Hold items gone quiet that are worth picking back up. */
-export function resumableStale(media: MediaItem[], logs: ProgressLog[], limit = 4): { item: MediaItem; days: number }[] {
+/**
+ * Items worth picking back up: Active ones gone quiet, plus On Hold ones that
+ * have something new to come back to.
+ *
+ * An On Hold entry is waiting on a release, not on the user, so silence alone
+ * never qualifies it — but once new content lands it jumps the queue, since
+ * that is the moment it stopped being blocked.
+ */
+export function resumableStale(
+  media: MediaItem[],
+  logs: ProgressLog[],
+  limit = 4,
+): { item: MediaItem; days: number; reason: string | null }[] {
   const lastLog = new Map<string, number>();
   logs.forEach(l => { const t = new Date(l.timestamp).getTime(); if (t > (lastLog.get(l.mediaId) || 0)) lastLog.set(l.mediaId, t); });
   const now = Date.now();
   return media
     .filter(m => m.status === 'Active' || m.status === 'On Hold')
+    .filter(canBeSuggested)
     .map(m => {
       const lt = lastLog.get(m.id) || new Date(m.updatedAt || m.createdAt).getTime();
-      return { item: m, days: Math.floor((now - lt) / 86400000) };
+      return { item: m, days: Math.floor((now - lt) / 86400000), reason: newContentReason(m) };
     })
-    .filter(x => x.days >= 14)
-    .sort((a, b) => b.days - a.days)
+    .filter(x => x.reason !== null || x.days >= 14)
+    .sort((a, b) => {
+      if (!!a.reason !== !!b.reason) return a.reason ? -1 : 1;
+      return b.days - a.days;
+    })
     .slice(0, limit);
 }

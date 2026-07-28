@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
-import { Dice5, Sparkles, RefreshCw, Eye, Clock, Zap, Compass, Play, ArrowRight } from 'lucide-react';
+import { Dice5, Sparkles, RefreshCw, Eye, Clock, Zap, Compass, Play, ArrowRight, PauseCircle, Download } from 'lucide-react';
 import { MediaItem, MEDIA_TYPES, MediaType, MEDIA_COLORS } from '../types/schema';
 import { MediaDetailModal } from '../components/MediaDetailModal';
 import { MediaFormModal } from '../components/MediaFormModal';
 import { generateText, getPersonaDescription } from '../services/nanoGptService';
 import { recommendBacklog, resumableStale, Recommendation } from '../lib/recommend';
+import { isWaitingOnRelease } from '../lib/onHold';
 import { cn } from '../lib/utils';
 import Markdown from 'react-markdown';
 
@@ -35,6 +36,7 @@ export function Roulette() {
   );
 
   const resumable = useMemo(() => resumableStale(media, logs, 4), [media, logs]);
+  const waiting = useMemo(() => media.filter(isWaitingOnRelease), [media]);
 
   const topPick = recommendations[0] || null;
   const otherPicks = recommendations.slice(1, 7);
@@ -248,16 +250,53 @@ export function Roulette() {
       {resumable.length > 0 && (
         <section>
           <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2"><RefreshCw className="w-5 h-5 text-emerald-400" /> Pick something back up</h3>
-          <p className="text-zinc-500 text-sm mb-5">In progress, but gone quiet. Don't let these gather dust.</p>
+          <p className="text-zinc-500 text-sm mb-5">Started but gone quiet, plus anything On Hold that has new content waiting.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {resumable.map(({ item, days }) => (
-              <button key={item.id} onClick={() => handleViewDetails(item)} className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 flex gap-3 text-left hover:border-white/15 transition-colors">
+            {resumable.map(({ item, days, reason }) => (
+              <button
+                key={item.id}
+                onClick={() => handleViewDetails(item)}
+                className={cn(
+                  'bg-zinc-900/40 border rounded-2xl p-4 flex gap-3 text-left transition-colors',
+                  reason ? 'border-emerald-500/30 hover:border-emerald-500/60' : 'border-white/5 hover:border-white/15',
+                )}
+              >
                 <Cover item={item} className="w-12 h-16 rounded-lg shrink-0 border border-white/10" />
                 <div className="min-w-0">
                   <div className="font-bold text-white text-sm truncate">{item.title}</div>
                   <div className={cn('text-[9px] font-black uppercase tracking-widest mt-0.5', MEDIA_COLORS[item.mediaType]?.text || 'text-zinc-400')}>{item.mediaType}</div>
-                  <div className="text-[10px] text-amber-500/80 font-bold mt-1.5">Quiet for {days}d</div>
+                  {reason ? (
+                    <div className="text-[10px] text-emerald-400 font-bold mt-1.5 flex items-center gap-1 truncate">
+                      <Download className="w-3 h-3 shrink-0" /> {reason}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-amber-500/80 font-bold mt-1.5">Quiet for {days}d</div>
+                  )}
                 </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Parked on purpose — shown so they are visibly accounted for rather than
+          silently dropped from every suggestion on the page. */}
+      {waiting.length > 0 && (
+        <section>
+          <h3 className="text-xl font-black text-white mb-1 flex items-center gap-2"><PauseCircle className="w-5 h-5 text-blue-400" /> Waiting on new releases</h3>
+          <p className="text-zinc-500 text-sm mb-5">
+            On Hold, with nothing new upstream yet. These are left out of the picks above until something ships.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {waiting.map(item => (
+              <button
+                key={item.id}
+                onClick={() => handleViewDetails(item)}
+                className="flex items-center gap-2 bg-zinc-900/40 border border-white/5 hover:border-white/15 rounded-full pl-2 pr-4 py-1.5 transition-colors"
+              >
+                <Cover item={item} className="w-6 h-8 rounded shrink-0 border border-white/10" />
+                <span className="text-xs font-bold text-zinc-300 truncate max-w-[200px]">{item.title}</span>
+                <span className={cn('text-[9px] font-black uppercase tracking-widest', MEDIA_COLORS[item.mediaType]?.text || 'text-zinc-500')}>{item.mediaType}</span>
               </button>
             ))}
           </div>
