@@ -186,6 +186,8 @@ export interface CodexEntity {
 export interface CodexIdentification {
   title?: string;
   year?: number | string;
+  /** Which season the research settled on, for series entries. */
+  season?: number | string;
   type?: string;
   creator?: string;
   why?: string;

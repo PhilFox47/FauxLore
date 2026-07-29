@@ -32,6 +32,8 @@ export interface CodexEntity {
 export interface CodexIdentification {
   title?: string;
   year?: number | string;
+  /** Which season the research settled on, for series entries. */
+  season?: number | string;
   type?: string;
   creator?: string;
   why?: string;
@@ -86,10 +88,21 @@ export interface CodexRow {
  * The year is part of that identity. "Avatar: The Last Airbender" is a 2005
  * series and a 2024 series; without the year they would share one dossier and
  * whichever was researched first would win.
+ *
+ * So is the season. Each season of a series is its own entry in the library, and
+ * a dossier for the whole show would describe a cast and a set of antagonists
+ * that the season being tracked has not met yet — and spoil the ones it has not
+ * reached.
  */
-export function codexTitleKey(title: string, mediaType: string, year?: number | null): string {
+export function codexTitleKey(
+  title: string,
+  mediaType: string,
+  year?: number | null,
+  season?: number | null,
+): string {
   const base = `${(title || "").trim().toLowerCase().replace(/\s+/g, " ")}::${(mediaType || "").trim().toLowerCase()}`;
-  return year ? `${base}::${year}` : base;
+  const withYear = year ? `${base}::${year}` : base;
+  return season ? `${withYear}::s${season}` : withYear;
 }
 
 function hydrate(row: any): CodexRow | null {
@@ -127,6 +140,14 @@ export function codexPromptBlock(codex: CodexRow | null): string {
   const lines: string[] = [heading];
   if (identified?.title) {
     lines.push(`This dossier describes that exact work — not a same-named adaptation, remake or original.`);
+  }
+  // Downstream generators need to know the scope, or an enemy written from a
+  // season-1 dossier will reach for a villain the user has not met.
+  if (identified?.season) {
+    lines.push(
+      `SCOPE: season ${identified.season} only. Everything below is that season's own cast, antagonists and vocabulary.`,
+      `Do not invent or reference anything from a later season.`,
+    );
   }
   const push = (label: string, value?: string) => {
     if (value && value.trim()) lines.push(`${label}: ${value.trim()}`);
@@ -193,6 +214,8 @@ const TYPE_BRIEF: Record<string, string> = {
 export interface CodexSubject {
   title: string;
   mediaType: string;
+  /** Which season of a series this entry is. Scopes the whole dossier. */
+  season?: number | null;
   subtitle?: string;
   creator?: string;
   publisher?: string;
@@ -205,6 +228,28 @@ export interface CodexSubject {
   language?: string | null;
 }
 
+/**
+ * Which season the dossier is about.
+ *
+ * The season field is authoritative, but entries created from a season pick are
+ * titled "Show - Season 2" and may carry nothing else, so the title and subtitle
+ * are read as a fallback. Only series have seasons; asking anything else is
+ * meaningless and returns null.
+ */
+export function subjectSeason(subject: CodexSubject): number | null {
+  if (!/series/i.test(subject.mediaType || "")) return null;
+  const explicit = Number(subject.season);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  for (const text of [subject.title, subject.subtitle]) {
+    const m = String(text || "").match(/\b(?:season|series|staffel|s)\s*\.?\s*(\d{1,2})\b/i);
+    if (m) {
+      const n = Number(m[1]);
+      if (n > 0) return n;
+    }
+  }
+  return null;
+}
+
 /** The release year we can hold the research to, from whichever field has one. */
 export function subjectYear(subject: CodexSubject): number | null {
   if (subject.year) return Number(subject.year);
@@ -215,9 +260,11 @@ export function subjectYear(subject: CodexSubject): number | null {
 
 function buildCodexPrompt(subject: CodexSubject, correction?: string) {
   const year = subjectYear(subject);
+  const season = subjectSeason(subject);
   const typeBrief = TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`;
 
   const known = [
+    season ? `Season: ${season} — this entry tracks SEASON ${season} only` : "",
     subject.subtitle ? `Subtitle: ${subject.subtitle}` : "",
     subject.creator ? `Creator / author / studio / director: ${subject.creator}` : "",
     subject.publisher ? `Publisher: ${subject.publisher}` : "",
@@ -238,6 +285,7 @@ function buildCodexPrompt(subject: CodexSubject, correction?: string) {
     subject.creator ? `- CREATOR: it is by ${subject.creator}. A same-named work by someone else is a different work.` : "",
     subject.franchises?.length ? `- FRANCHISE: it belongs to ${subject.franchises.join(", ")}.` : "",
     subject.description ? `- SYNOPSIS: it must match the synopsis on record above. If your candidate's plot or subject matter contradicts it, you have the wrong work.` : "",
+    season ? `- SEASON: the entry is SEASON ${season}. Identify the series first, then narrow to that one season. If the series has no season ${season}, say so in "notes" and set "confidence" to "low" rather than describing a different one.` : "",
   ].filter(Boolean).join("\n");
 
   const correctionBlock = correction
@@ -256,8 +304,16 @@ ${constraints}
 If more than one work carries this name, list the ones you rejected in "identifiedAs.alternatives" and say in "identifiedAs.why" what made you choose yours.
 If NOTHING matches the format and year, do not substitute the famous one. Say so in "notes", set "confidence" to "low", and fill in only what you can actually verify about the work that was asked for.${correctionBlock}
 
-STEP 2 — RESEARCH IT.
-1. USE WEB SEARCH against the work you identified. Search with the year and format included, not the bare title.
+${season ? `STEP 1b — NARROW TO SEASON ${season}. Every season of a series is tracked as its own entry here, so this dossier is about season ${season} and nothing else.
+- Describe season ${season}'s own arc, its own setting, its own tone. Not the series premise in general.
+- "characters" are the cast as they are IN season ${season}: who appears in it, and who they are at that point. A character who has not appeared yet does not belong. A character whose role changed in a later season belongs as they are in this one.
+- "enemies" are season ${season}'s antagonists and obstacles. Not the final villain of the whole show.
+- "items", "locations", "factions" and "terminology" are the ones season ${season} actually features or introduces.
+- HARD RULE ON SPOILERS: include nothing that is first revealed in season ${season + 1} or later. No later-season characters, no later-season twists, no "later becomes" or "is eventually revealed to be". The user is watching this season now. Earlier seasons are fair game, since they have already been seen.
+- If season ${season} is the first, that is simply the show's opening state — say so and describe it.
+
+` : ""}STEP 2 — RESEARCH IT.
+1. USE WEB SEARCH against the work you identified. Search with the year and format included, not the bare title.${season ? ` Search for season ${season} specifically — its episode list, its cast, its plot summary — not the series overview.` : ""}
 2. Fill in the dossier below with concrete, named specifics from that work. Never write filler like "various characters" or "a rich world" — name them.
 3. Prefer widely known material: the premise, the main cast, the marketed antagonists, the signature equipment. Avoid late-story twists and ending spoilers; the user may still be partway through.
 4. If you genuinely cannot verify something, leave that field empty or the array short rather than inventing it, and say so in "notes" with a lowered "confidence".
@@ -267,13 +323,14 @@ Return ONLY a pure JSON object, no markdown fence, no commentary, in exactly thi
   "identifiedAs": {
     "title": "the work's own full title as published",
     "year": ${year || 0},
-    "type": "film | television series | reality or competition show | documentary series | sporting competition | video game | novel | manga | comic | visual novel | audiobook | podcast",
+    "type": "film | television series | reality or competition show | documentary series | sporting competition | video game | novel | manga | comic | visual novel | audiobook | podcast",${season ? `
+    "season": ${season},` : ""}
     "creator": "studio, author, director or developer",
     "why": "one sentence on how you know this is the right one and not a same-named work",
     "alternatives": ["same-named works you rejected, with their year and format"]
   },
-  "overview": "2-4 sentences: what this work is, its premise and what makes it distinctive",
-  "setting": "the world/era/place it takes place in",
+  "overview": "2-4 sentences: ${season ? `what season ${season} is about — its own arc and what distinguishes it from the seasons around it` : "what this work is, its premise and what makes it distinctive"}",
+  "setting": "${season ? `where and when season ${season} takes place` : "the world/era/place it takes place in"}",
   "tone": "one line on mood and register (e.g. bleak military sci-fi with black comedy)",
   "themes": ["up to 6 recurring themes or motifs"],
   "artStyle": {
@@ -369,6 +426,12 @@ export function identificationProblem(data: CodexData, subject: CodexSubject): s
     return `You described "${identified.title || subject.title}" from ${gotYear}, but the entry is the ${wantYear} ${subject.mediaType}. Those are different works.`;
   }
 
+  const wantSeason = subjectSeason(subject);
+  const gotSeason = Number(identified.season || 0);
+  if (wantSeason && gotSeason && gotSeason !== wantSeason) {
+    return `You described season ${gotSeason}, but the entry is season ${wantSeason}. Research season ${wantSeason} on its own and include nothing that is first revealed later.`;
+  }
+
   const wantFamily = OUR_FAMILY[subject.mediaType];
   const gotFamily = typeFamily(String(identified.type || ""));
   // Only complain when the model named a format we recognise and it is a
@@ -395,13 +458,13 @@ export function createCodexService({ db }: { db: Db }) {
   // user hitting "Auto Tag" can land on the same title at the same moment.
   const inFlight = new Map<string, Promise<CodexRow | null>>();
 
-  function getCodexRow(userId: string, opts: { mediaId?: string | null; title?: string; mediaType?: string; year?: number | null }): CodexRow | null {
+  function getCodexRow(userId: string, opts: { mediaId?: string | null; title?: string; mediaType?: string; year?: number | null; season?: number | null }): CodexRow | null {
     if (opts.mediaId) {
       const byMedia = db.prepare("SELECT * FROM media_codex WHERE userId = ? AND mediaId = ?").get(userId, opts.mediaId);
       if (byMedia) return hydrate(byMedia);
     }
     if (opts.title && opts.mediaType) {
-      const key = codexTitleKey(opts.title, opts.mediaType, opts.year);
+      const key = codexTitleKey(opts.title, opts.mediaType, opts.year, opts.season);
       const byTitle: any = db.prepare("SELECT * FROM media_codex WHERE userId = ? AND titleKey = ?").get(userId, key);
       if (byTitle) {
         // A Codex built before the entry was saved (or for a sibling re-run) gets
@@ -431,7 +494,7 @@ export function createCodexService({ db }: { db: Db }) {
     if (!aiConfig) return null;
 
     const year = subjectYear(subject);
-    const key = codexTitleKey(subject.title, subject.mediaType, year);
+    const key = codexTitleKey(subject.title, subject.mediaType, year, subjectSeason(subject));
     const now = new Date().toISOString();
 
     // Upsert on the title key, so two requests that slip past the in-flight guard
@@ -527,6 +590,7 @@ export function createCodexService({ db }: { db: Db }) {
       mediaId: subject.mediaId,
       title,
       mediaType,
+      season: mediaRow?.season ?? null,
       subtitle: mediaRow?.subtitle || undefined,
       creator: mediaRow?.creator || undefined,
       publisher: mediaRow?.publisher || undefined,
@@ -539,11 +603,12 @@ export function createCodexService({ db }: { db: Db }) {
       language: mediaRow?.language || null,
     };
     const year = subjectYear(full);
+    const season = subjectSeason(full);
 
-    const existing = getCodexRow(userId, { mediaId: subject.mediaId, title, mediaType, year });
+    const existing = getCodexRow(userId, { mediaId: subject.mediaId, title, mediaType, year, season });
     if (existing && existing.status === "ready" && existing.data && !subject.force) return existing;
 
-    const key = `${userId}:${codexTitleKey(title, mediaType, year)}`;
+    const key = `${userId}:${codexTitleKey(title, mediaType, year, season)}`;
     const pending = inFlight.get(key);
     if (pending && !subject.force) return pending;
 
