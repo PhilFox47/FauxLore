@@ -3,7 +3,7 @@ import { MediaItem, ProgressLog, MetricType, MediaType, Settings, Artifact, Worl
 import { DatabaseService } from '../services/db';
 import { calculateRPGState } from '../lib/rpgSystem';
 import { generateText, getPersonaDescription } from '../services/nanoGptService';
-import { getProgressionContext, levelBudget, buildTitleSystemPrompt, buildMainTitlePrompt } from '../lib/lorekeeperTitles';
+import { getProgressionContext, levelBudget, buildTitleSystemPrompt, buildTitlePrompt } from '../lib/lorekeeperTitles';
 import { useAuth } from './AuthContext';
 
 interface MediaContextType {
@@ -43,6 +43,12 @@ interface MediaContextType {
   equipArtifact: (id: string, slot: string) => Promise<void>;
   unequipArtifact: (id: string) => Promise<void>;
   saveAiText: (key: string, value: string) => Promise<void>;
+  /**
+   * The earned alias for a level, generating it if it does not exist yet.
+   * Awaited by the level-up celebration, which holds its reveal until the title
+   * is ready rather than showing a placeholder and swapping it later.
+   */
+  ensureLevelTitle: (opts: { level: number; mediaType?: string }) => Promise<string>;
   clearAiTextCache: (key?: string) => Promise<void>;
   addTaxonomy: (name: string, type: 'genre'|'tag') => Promise<void>;
   deleteTaxonomy: (id: string) => Promise<void>;
@@ -147,46 +153,68 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     return () => clearInterval(timer);
   }, [media, refreshData]);
 
+  /**
+   * One place that turns "level N of X" into a written alias.
+   *
+   * Shared because three callers want the same thing at different moments: the
+   * celebration overlay (which awaits it before revealing), the backfill below
+   * (for a title that was never written), and the Lorekeeper's own buttons.
+   * In-flight requests are deduplicated so a level-up cannot pay twice.
+   */
+  const titleRequests = useRef(new Map<string, Promise<string>>());
+  const ensureLevelTitle = useCallback(async ({ level, mediaType }: { level: number; mediaType?: string }): Promise<string> => {
+    const key = mediaType ? `rpg_title_${mediaType}_${level}` : `rpg_title_${level}`;
+    const cached = aiTextCache[key];
+    if (cached) return cached;
+
+    const inFlight = titleRequests.current.get(key);
+    if (inFlight) return inFlight;
+
+    // A paused account spends nothing, and neither does one without a key.
+    if (!settings?.nanoGptApiKey || activity?.frozen) return '';
+
+    const run = (async () => {
+      // A per-format alias is about that format's own climb, so it gets that
+      // format's level band as its window rather than the overall one.
+      const band = mediaType ? rpgState.mediaLevels?.[mediaType] : rpgState;
+      const ctx = getProgressionContext(media, logs, settings, {
+        budgetMasterPages: levelBudget(band as any),
+        mediaType,
+      });
+      const codexBlocks = Object.values(await DatabaseService.getCodexPromptBlocks(ctx.anchors.map((a) => a.id)));
+      const text = await generateText(
+        settings.nanoGptApiKey as string,
+        settings.nanoGptModel || 'gpt-4o-mini',
+        buildTitleSystemPrompt(getPersonaDescription(settings.aiPersona)),
+        buildTitlePrompt({ level, context: ctx.text, anchors: ctx.anchors, codexBlocks, mediaType }),
+        1.2,
+      );
+      const clean = (text || '').trim().replace(/^["']|["']$/g, '');
+      if (clean) {
+        await DatabaseService.saveAiText(key, clean);
+        await refreshData();
+      }
+      return clean;
+    })().finally(() => { titleRequests.current.delete(key); });
+
+    titleRequests.current.set(key, run);
+    return run;
+  }, [aiTextCache, settings, activity?.frozen, media, logs, rpgState, refreshData]);
+
   const previousLevel = useRef<number | null>(null);
 
+  // Backfill only. A genuine level-up is handled by the celebration overlay,
+  // which needs to await the same generation before it can reveal anything.
   useEffect(() => {
     if (isLoading || !settings) return;
-
     const currentLevel = rpgState.level;
-
-    if (previousLevel.current === null || previousLevel.current !== currentLevel) {
-      // A paused account spends nothing. The server refuses this anyway; not
-      // asking keeps a pointless 403 out of the console on every load.
-      if (settings.nanoGptApiKey && !activity?.frozen) {
-        const titleKey = `rpg_title_${currentLevel}`;
-        
-        // Generate if it's an actual level change, OR if it's the initial load and the title is missing
-        if ((previousLevel.current !== null && previousLevel.current !== currentLevel) || !aiTextCache[titleKey]) {
-          // The alias is about the climb, so the window is one level's worth of
-          // progress and the anchors are the works that dominated it. Their
-          // Codex, where one exists, is what lets the title use real nouns.
-          const ctx = getProgressionContext(media, logs, settings, { budgetMasterPages: levelBudget(rpgState) });
-          const systemPrompt = buildTitleSystemPrompt(getPersonaDescription(settings.aiPersona));
-          const apiKey = settings.nanoGptApiKey;
-          const model = settings.nanoGptModel || 'gpt-4o-mini';
-
-          DatabaseService.getCodexPromptBlocks(ctx.anchors.map(a => a.id))
-            .then(blocks => generateText(apiKey, model, systemPrompt, buildMainTitlePrompt({
-              level: currentLevel,
-              context: ctx.text,
-              anchors: ctx.anchors,
-              codexBlocks: Object.values(blocks),
-            }), 1.2))
-            .then(titleRes => {
-               DatabaseService.saveAiText(titleKey, titleRes).then(() => refreshData());
-            })
-            .catch(err => console.error("Auto generation of title failed", err));
-        }
-      }
-    }
-    
+    const known = previousLevel.current;
     previousLevel.current = currentLevel;
-  }, [rpgState, settings, aiTextCache, isLoading, refreshData, media, logs, activity?.frozen]);
+    if (known !== null && known !== currentLevel) return; // the overlay owns this
+    if (!aiTextCache[`rpg_title_${currentLevel}`]) {
+      ensureLevelTitle({ level: currentLevel }).catch((e) => console.error('Title backfill failed', e));
+    }
+  }, [isLoading, settings, rpgState.level, aiTextCache, ensureLevelTitle]);
 
   const saveMediaItem = useCallback(async (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => {
     let oldMetricValue = 0;
@@ -388,7 +416,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [refreshData]);
 
   return (
-    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, taxonomies, activity, locationGroups, saveLocationGroup, setLocationGroupMembers, deleteLocationGroup, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, refreshMetadata, acknowledgeUpdate, notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, taxonomies, activity, locationGroups, saveLocationGroup, setLocationGroupMembers, deleteLocationGroup, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, refreshMetadata, acknowledgeUpdate, notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, ensureLevelTitle, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
       {children}
     </MediaContext.Provider>
   );

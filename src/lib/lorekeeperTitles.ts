@@ -246,11 +246,32 @@ Respond with ONLY raw JSON (no markdown, no commentary), exactly:
 }`;
 }
 
-/** Single plain-text main alias (used by auto-gen on level-up and force-rewrite). */
-export function buildMainTitlePrompt(params: { level: number; context: string; anchors: TitleAnchor[]; codexBlocks?: string[]; forbidden?: string }): string {
-  const { level, context, anchors, codexBlocks, forbidden } = params;
+/**
+ * A single plain-text alias — the overall one, or one for a single format.
+ *
+ * Used by the level-up celebration, which needs exactly one title as fast as
+ * possible, and by the force-rewrite. The batch builder covers the case where
+ * several are wanted at once.
+ */
+export function buildTitlePrompt(params: {
+  level: number;
+  context: string;
+  anchors: TitleAnchor[];
+  codexBlocks?: string[];
+  /** Set for a per-format alias; omitted for the overall one. */
+  mediaType?: string;
+  forbidden?: string;
+}): string {
+  const { level, context, anchors, codexBlocks, mediaType, forbidden } = params;
   const forbiddenRule = forbidden ? `\nAVOID "${forbidden}" or close variants — make it fresh and distinct.` : "";
-  return `The player is Level ${level} (${getLevelContext(level)}).
+  const scope = mediaType
+    ? `The player just reached ${mediaType} Level ${level} (${getLevelContext(level)}). This alias is about their ${mediaType} habit specifically — not their library as a whole.`
+    : `The player is Level ${level} (${getLevelContext(level)}).`;
+  const ask = mediaType
+    ? `Craft ONE alias for them as a ${mediaType} player, shaped by the ${mediaType} above and Level ${level}'s prestige.`
+    : `Craft ONE alias: the player's overall earned handle, shaped by the media above and Level ${level}'s prestige.`;
+
+  return `${scope}
 
 === WHAT EARNED THIS LEVEL (drives the alias) ===
 ${context}
@@ -259,7 +280,12 @@ ${anchorRule(anchors, codexBlocks || [])}
 
 ${TITLE_GUIDELINES}
 
-Craft ONE alias: the player's overall earned handle, shaped by the media above and Level ${level}'s prestige.${forbiddenRule}
+${ask}${forbiddenRule}
 
 Output ONLY the alias text — no quotes, no JSON, no extra words.`;
+}
+
+/** The overall alias. Kept as its own name because most callers only want that. */
+export function buildMainTitlePrompt(params: { level: number; context: string; anchors: TitleAnchor[]; codexBlocks?: string[]; forbidden?: string }): string {
+  return buildTitlePrompt(params);
 }
