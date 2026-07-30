@@ -203,6 +203,7 @@ export function MediaLibrary() {
           setIsDetailOpen(false);
           handleEdit(item);
         }}
+        onLogProgress={(item) => { setIsDetailOpen(false); handleLogProgress(item); }}
       />
 
       <MediaFormModal 
@@ -212,6 +213,7 @@ export function MediaLibrary() {
         onClose={() => setIsFormOpen(false)} 
         onSave={saveMediaItem} 
         onDelete={deleteMediaItem}
+        onOpenExisting={(item) => { setIsFormOpen(false); handleViewDetails(item); }}
       />
 
       <ProgressModal 

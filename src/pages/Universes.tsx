@@ -473,6 +473,7 @@ export function Universes() {
           item={detailItem}
           logs={logs.filter(l => l.mediaId === detailItem?.id)}
           onEdit={(item) => { setIsDetailOpen(false); handleEdit(item); }}
+          onLogProgress={(item) => { setIsDetailOpen(false); handleLogProgress(item); }}
         />
         <MediaFormModal
           isOpen={isFormOpen}
@@ -480,6 +481,7 @@ export function Universes() {
           onClose={() => setIsFormOpen(false)}
           onSave={saveMediaItem}
           onDelete={deleteMediaItem}
+          onOpenExisting={(item) => { setIsFormOpen(false); handleViewDetails(item); }}
         />
         <ProgressModal
           isOpen={isProgressOpen}

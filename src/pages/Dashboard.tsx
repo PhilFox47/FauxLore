@@ -373,6 +373,7 @@ export function Dashboard() {
           setIsDetailOpen(false);
           handleEdit(item);
         }}
+        onLogProgress={(item) => { setIsDetailOpen(false); handleLogProgress(item); }}
       />
 
       <MediaFormModal
@@ -381,6 +382,7 @@ export function Dashboard() {
         onClose={() => setIsFormOpen(false)}
         onSave={saveMediaItem}
         onDelete={deleteMediaItem}
+        onOpenExisting={(item) => { setIsFormOpen(false); handleViewDetails(item); }}
       />
 
       <ProgressModal

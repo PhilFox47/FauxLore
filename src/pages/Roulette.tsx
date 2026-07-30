@@ -355,6 +355,7 @@ export function Roulette() {
         onClose={() => setIsFormOpen(false)}
         onSave={(data) => { saveMediaItem(data); setIsFormOpen(false); }}
         onDelete={(id) => { deleteMediaItem(id); setIsFormOpen(false); }}
+        onOpenExisting={(item) => { setIsFormOpen(false); handleViewDetails(item); }}
       />
     </div>
   );

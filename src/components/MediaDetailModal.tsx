@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useToast } from '../contexts/ToastContext';
-import { X, Edit2, ExternalLink, GitBranch, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame, Ghost, Target, Anchor, Library, BrainCircuit } from 'lucide-react';
+import { X, Plus, Edit2, ExternalLink, GitBranch, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame, Ghost, Target, Anchor, Library, BrainCircuit } from 'lucide-react';
 import { calculateScaledDelta } from '../lib/scaling';
 import { buildStatusTimeline, getItemPace, STATUS_HEX } from '../lib/history';
 import { getSourceUrl, getSourceLabel } from '../lib/sourceLinks';
@@ -27,9 +27,11 @@ interface MediaDetailModalProps {
   item: MediaItem | null;
   logs: ProgressLog[];
   onEdit: (item: MediaItem) => void;
+  /** Opens the log form for this entry. Omitted where the host has none. */
+  onLogProgress?: (item: MediaItem) => void;
 }
 
-export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaDetailModalProps) {
+export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogProgress }: MediaDetailModalProps) {
   const { settings, media, logs: allLogs, worldBosses, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem, generateArtifactImage, acknowledgeUpdate, locationGroups } = useMediaContext();
   const locationGroupIndex = useMemo(() => buildGroupIndex(locationGroups), [locationGroups]);
   const toast = useToast();
@@ -552,6 +554,19 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit }: MediaD
                    <ExternalLink className="w-4 h-4" />
                    Open on {getSourceLabel(item.metadataSource)}
                  </a>
+               )}
+
+               {/* Logging from here matters most when the detail view was reached
+                   from the duplicate check: the answer to "you already have this"
+                   is usually to log against it, not to browse it. */}
+               {onLogProgress && (
+                 <button
+                   onClick={() => onLogProgress(item)}
+                   className="w-full py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl font-medium flex justify-center items-center gap-2 transition shadow-lg shadow-orange-900/20"
+                 >
+                   <Plus className="w-4 h-4" />
+                   Log Progress
+                 </button>
                )}
 
                <button 

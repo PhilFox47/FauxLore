@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { MediaItem, MEDIA_TYPES, STATUSES, MediaType } from "../types/schema";
-import { X, Search, Loader2, RefreshCw, BrainCircuit, AlertTriangle } from "lucide-react";
+import { X, Search, Loader2, RefreshCw, BrainCircuit, AlertTriangle, ArrowRight } from "lucide-react";
 import { IntegrationsService, GameMetadata } from "../services/integrations";
+import { findDuplicateMatches } from "../lib/duplicateMatch";
 import { cn } from "../lib/utils";
 import { useMediaContext } from "../contexts/MediaContext";
 import { DatabaseService } from "../services/db";
@@ -113,6 +114,13 @@ interface MediaFormModalProps {
   ) => void;
   onDelete?: (id: string) => void;
   initialData?: MediaItem;
+  /**
+   * Opens an entry the duplicate check surfaced. Given this, each match becomes
+   * a link out to the thing the user was probably reaching for anyway — log
+   * progress on it, or start a re-run. Without it the matches are still listed,
+   * just not clickable.
+   */
+  onOpenExisting?: (item: MediaItem) => void;
 }
 
 export function MediaFormModal({
@@ -121,6 +129,7 @@ export function MediaFormModal({
   onSave,
   onDelete,
   initialData,
+  onOpenExisting,
 }: MediaFormModalProps) {
   const { taxonomies, settings, media, franchises, refreshData } = useMediaContext();
   const toast = useToast();
@@ -213,22 +222,21 @@ export function MediaFormModal({
   // (Auto-complete-on-progress was removed: editing progress fields must never
   // change a media item's status. Status only changes via the manual dropdown.)
 
-  // Duplicate guard: when adding a brand-new item, surface any existing entry of the
-  // same media type whose title matches (case/punctuation-insensitive). Skipped while
-  // editing. Re-runs are the intended path for replaying/rereading something you own.
-  const duplicateMatches = useMemo(() => {
-    if (initialData) return [];
-    const normalize = (s?: string) =>
-      (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-    const t = normalize(formData.title);
-    if (t.length < 2) return [];
-    return (media || []).filter(
-      (m) =>
-        !m.isReRun &&
-        m.mediaType === formData.mediaType &&
-        normalize(m.title) === t,
-    );
-  }, [formData.title, formData.mediaType, media, initialData]);
+  // Duplicate guard, live as the title is typed. This used to be skipped whenever
+  // `initialData` was passed at all — which the library's own Add button does, to
+  // preseed the media type — so the check was off in the one place duplicates are
+  // most likely. It now runs for anything without an id, i.e. anything not yet saved.
+  const duplicateMatches = useMemo(
+    () =>
+      isEditing
+        ? []
+        : findDuplicateMatches(formData.title || "", formData.mediaType, media || [], {
+            excludeId: initialData?.id,
+          }),
+    [formData.title, formData.mediaType, media, isEditing, initialData?.id],
+  );
+  /** The ones that would really be a second copy, as opposed to another format. */
+  const sameTypeDuplicates = duplicateMatches.filter((d) => d.sameType);
 
   if (!isOpen) return null;
 
@@ -263,8 +271,8 @@ export function MediaFormModal({
 
     // Safeguard against accidental duplicates. If you truly want a fresh entry
     // (a different edition, say), you can still confirm and proceed.
-    if (duplicateMatches.length > 0) {
-      const existing = duplicateMatches[0];
+    if (sameTypeDuplicates.length > 0) {
+      const existing = sameTypeDuplicates[0].item;
       const proceed = window.confirm(
         `You already have a ${existing.mediaType} entry for "${existing.title}" (${existing.status}). ` +
           `If you're replaying or rereading it, use the Re-run option on that entry instead. ` +
@@ -788,23 +796,63 @@ export function MediaFormModal({
           </div>
 
           {duplicateMatches.length > 0 && (
-            <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-200">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
-              <div className="text-sm leading-relaxed">
-                <span className="font-semibold">You already have an entry for this.</span>{" "}
-                {duplicateMatches.length === 1 ? (
-                  <>
-                    "{duplicateMatches[0].title}" ({duplicateMatches[0].status}) is already in
-                    your library.
-                  </>
-                ) : (
-                  <>
-                    {duplicateMatches.length} matching {formData.mediaType} entries are already in
-                    your library.
-                  </>
-                )}{" "}
-                If you're replaying or rereading it, use the Re-run option on that entry instead of
-                adding it again.
+            <div className={cn(
+              "rounded-xl border p-3",
+              sameTypeDuplicates.length > 0
+                ? "border-amber-500/30 bg-amber-500/10"
+                : "border-sky-500/25 bg-sky-500/[0.07]",
+            )}>
+              <div className="flex items-start gap-3">
+                <AlertTriangle className={cn("w-4 h-4 shrink-0 mt-0.5", sameTypeDuplicates.length > 0 ? "text-amber-400" : "text-sky-400")} />
+                <div className="text-sm leading-snug">
+                  <span className="font-semibold text-white">
+                    {sameTypeDuplicates.length > 0
+                      ? "You already have this."
+                      : "You have this in another format."}
+                  </span>{" "}
+                  <span className={sameTypeDuplicates.length > 0 ? "text-amber-200/90" : "text-sky-200/90"}>
+                    {onOpenExisting
+                      ? "Open it to log progress, or start a re-run if you are going through it again."
+                      : "Use the Re-run option on that entry if you are going through it again."}
+                  </span>
+                </div>
+              </div>
+
+              {/* Each match is the entry itself: clicking it leaves this form and
+                  opens the thing the user probably came here to reach. */}
+              <div className="mt-3 space-y-1.5">
+                {duplicateMatches.map(({ item, exact, sameType }) => {
+                  const Row = onOpenExisting ? "button" : "div";
+                  return (
+                    <Row
+                      key={item.id}
+                      {...(onOpenExisting
+                        ? { type: "button" as const, onClick: () => onOpenExisting(item) }
+                        : {})}
+                      className={cn(
+                        "w-full flex items-center gap-3 rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-left",
+                        onOpenExisting && "hover:border-white/25 hover:bg-black/50 transition-colors cursor-pointer",
+                      )}
+                    >
+                      {item.coverImageUrl ? (
+                        <img src={item.coverImageUrl} alt="" referrerPolicy="no-referrer"
+                             className="w-8 h-11 object-cover rounded shrink-0 border border-white/10" />
+                      ) : (
+                        <div className="w-8 h-11 rounded bg-white/5 border border-white/10 shrink-0" />
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold text-white truncate">{item.title}</span>
+                        <span className="block text-[11px] text-zinc-400 truncate">
+                          {item.mediaType} · {item.status}
+                          {item.year ? ` · ${item.year}` : ""}
+                          {!exact && " · similar title"}
+                          {!sameType && " · different format"}
+                        </span>
+                      </span>
+                      {onOpenExisting && <ArrowRight className="w-4 h-4 text-zinc-500 shrink-0" />}
+                    </Row>
+                  );
+                })}
               </div>
             </div>
           )}
