@@ -34,7 +34,7 @@ import {
   getPersonaDescription,
 } from "../services/nanoGptService";
 import { DatabaseService } from "../services/db";
-import { buildTitleSystemPrompt, buildBatchTitlePrompt, buildMainTitlePrompt } from "../lib/lorekeeperTitles";
+import { buildTitleSystemPrompt, buildBatchTitlePrompt, buildMainTitlePrompt, getProgressionContext, levelBudget } from "../lib/lorekeeperTitles";
 import { GeneratedImage } from "../components/GeneratedImage";
 import { Loader2, Dices } from "lucide-react";
 
@@ -164,57 +164,10 @@ export function Lorekeeper() {
     return "basic, beginner-level";
   };
 
-  const getRecentMediaContext = (mediaType?: string) => {
-    const recent = [...media]
-      .filter((m) => m.status === "Active" || m.status === "Completed" || m.status === "Extras")
-      .filter((m) => mediaType ? m.mediaType === mediaType : true)
-      .sort(
-        (a, b) =>
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-      )
-      .slice(0, 50);
-
-    if (recent.length === 0) return { text: "None yet", dominantMedia: null };
-
-    const top10 = recent.slice(0, 10);
-    let totalTop10Mp = 0;
-    const top10WithMp = top10.map((m) => {
-      const nonHistoricLogs = logs.filter(l => l.mediaId === m.id && !l.isHistoric && !l.timestamp.startsWith('1970-01-01'));
-      
-      let mp = 0;
-      if (nonHistoricLogs.length > 0) {
-        mp = nonHistoricLogs.reduce((sum, log) => sum + Math.floor(calculateScaledDelta(log.delta, m, settings)), 0);
-      } else {
-        mp = 1; // Minimum baseline for having started it at all
-      }
-      
-      totalTop10Mp += mp;
-      return { ...m, mp };
-    });
-
-    let dominantMedia = null;
-    if (totalTop10Mp > 0) {
-      dominantMedia =
-        top10WithMp.find((m) => m.mp > totalTop10Mp * 0.5) || null;
-    }
-
-    const top10Str = top10WithMp
-      .map(
-        (m) =>
-          `"${m.title}" (${m.mediaType}, Genres: ${m.genres?.join(", ") || 'none'}, Tags: ${m.tags?.join(", ") || 'none'}, MP: ${m.mp})`
-      )
-      .join(" | ");
-    const restStr = recent
-      .slice(10)
-      .map((m) => `"${m.title}" (${m.mediaType})`)
-      .join(" | ");
-
-    const text =
-      `Most Recent (High Impact): ${top10Str}` +
-      (restStr ? `\nOlder Recent (Low Impact): ${restStr}` : "");
-
-    return { text, dominantMedia };
-  };
+  // One shared builder for every title path: the window that earned the level,
+  // plus the one or two works that dominated it.
+  const titleContext = (mediaType?: string) =>
+    getProgressionContext(media, logs, settings, { budgetMasterPages: levelBudget(rpgState), mediaType });
 
   const generateMissingTitles = async (generateMain: boolean, mediaTypesToGenerate: string[], manualRes: boolean = false) => {
     if (!settings?.nanoGptApiKey) {
@@ -239,17 +192,32 @@ export function Lorekeeper() {
         if (currentMed) forbiddenTitles.push(currentMed);
       });
 
-      const mainCtx = generateMain ? getRecentMediaContext() : null;
-      const perMedia = mediaTypesToGenerate.map(t => ({
+      const mainCtx = generateMain ? titleContext() : null;
+      const perMediaCtx = mediaTypesToGenerate.map(t => ({
         type: t,
         level: rpgState.mediaLevels[t].level,
-        context: getRecentMediaContext(t).text,
+        ctx: titleContext(t),
       }));
+
+      // One round trip for every anchor across every alias being written.
+      const anchorIds = Array.from(new Set([
+        ...(mainCtx?.anchors || []).map(a => a.id),
+        ...perMediaCtx.flatMap(p => p.ctx.anchors.map(a => a.id)),
+      ]));
+      const codexById = await DatabaseService.getCodexPromptBlocks(anchorIds);
+      const blocksFor = (ctx: { anchors: { id: string }[] }) =>
+        ctx.anchors.map(a => codexById[a.id]).filter(Boolean);
 
       const titlePrompt = buildBatchTitlePrompt({
         level: rpgState.level,
-        main: mainCtx ? { context: mainCtx.text, dominantTitle: mainCtx.dominantMedia?.title || null } : null,
-        perMedia,
+        main: mainCtx ? { context: mainCtx.text, anchors: mainCtx.anchors, codexBlocks: blocksFor(mainCtx) } : null,
+        perMedia: perMediaCtx.map(p => ({
+          type: p.type,
+          level: p.level,
+          context: p.ctx.text,
+          anchors: p.ctx.anchors,
+          codexBlocks: blocksFor(p.ctx),
+        })),
         forbidden: forbiddenTitles,
       });
 
@@ -307,12 +275,13 @@ export function Lorekeeper() {
 
       // 1. RPG Title (overall earned alias)
       const titleSystemPrompt = buildTitleSystemPrompt(personaDesc);
-      const titleCtx = getRecentMediaContext();
+      const titleCtx = titleContext();
       const currentMain = aiTextCache[`rpg_title_${rpgState.level}`];
       const titlePrompt = buildMainTitlePrompt({
         level: rpgState.level,
         context: titleCtx.text,
-        dominantTitle: titleCtx.dominantMedia?.title || null,
+        anchors: titleCtx.anchors,
+        codexBlocks: Object.values(await DatabaseService.getCodexPromptBlocks(titleCtx.anchors.map(a => a.id))),
         forbidden: currentMain,
       });
 

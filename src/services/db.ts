@@ -392,6 +392,22 @@ export const DatabaseService = {
     }
   },
 
+  /** Rendered Codex text for entries that already have one. Never generates. */
+  async getCodexPromptBlocks(mediaIds: string[]): Promise<Record<string, string>> {
+    try {
+      if (!mediaIds.length) return {};
+      const res = await apiFetch('/api/codex/prompt-blocks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mediaIds }),
+      });
+      if (!res.ok) return {};
+      return res.json();
+    } catch (e) {
+      return {};
+    }
+  },
+
   async getLocationGroups(): Promise<any[]> {
     try {
       const res = await apiFetch('/api/location-groups');

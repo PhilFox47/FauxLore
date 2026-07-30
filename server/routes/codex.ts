@@ -63,6 +63,35 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
    * you are still filling in the Add Media form. The Codex is stored against the
    * title, and the entry adopts it once it is saved.
    */
+  /**
+   * Rendered Codex blocks for a set of entries, read-only.
+   *
+   * The title-smith runs on the client and wants the flavour of the one or two
+   * works that earned a level. This never researches anything — an entry with no
+   * Codex is simply absent from the answer — so it costs nothing and can be
+   * called freely.
+   */
+  app.post("/api/codex/prompt-blocks", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const ids: string[] = Array.isArray(req.body?.mediaIds)
+        ? req.body.mediaIds.filter((v: any) => typeof v === "string").slice(0, 8)
+        : [];
+      const out: Record<string, string> = {};
+      for (const mediaId of ids) {
+        const row = codex.getCodexRow(userId as string, { mediaId });
+        if (row?.status === "ready" && row.data) {
+          const block = codexPromptBlock(row);
+          if (block) out[mediaId] = block;
+        }
+      }
+      res.json(out);
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
+
   app.post("/api/codex/ensure", async (req, res) => {
     try {
       const userId = getAuthUser(req, res);

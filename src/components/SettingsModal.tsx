@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { calculateRPGState, QUEST_DEFINITIONS } from '../lib/rpgSystem';
 import { generateText } from '../services/nanoGptService';
 import { AI_PERSONAS, getPersona, getPersonaDescription } from '../lib/personas';
-import { getRecentMediaContext, buildTitleSystemPrompt, buildMainTitlePrompt } from '../lib/lorekeeperTitles';
+import { getProgressionContext, levelBudget, buildTitleSystemPrompt, buildMainTitlePrompt } from '../lib/lorekeeperTitles';
 import { UserManagement } from './UserManagement';
 
 interface SettingsModalProps {
@@ -329,9 +329,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       // 1. RPG Title
       const titleKey = `rpg_title_${rpgState.level}`;
       if (!aiTextCache[titleKey] || isForce) {
-        const ctx = getRecentMediaContext(media, logs, settings);
+        const ctx = getProgressionContext(media, logs, settings, { budgetMasterPages: levelBudget(rpgState) });
         const titleSystem = buildTitleSystemPrompt(getPersonaDescription(formData.aiPersona));
-        const prompt = buildMainTitlePrompt({ level: rpgState.level, context: ctx.text, dominantTitle: ctx.dominantTitle });
+        const codexBlocks = Object.values(await DatabaseService.getCodexPromptBlocks(ctx.anchors.map(a => a.id)));
+        const prompt = buildMainTitlePrompt({ level: rpgState.level, context: ctx.text, anchors: ctx.anchors, codexBlocks });
         const result = await generateText(apiKey, model, titleSystem, prompt, 1.2);
         await saveAiText(titleKey, result);
       }

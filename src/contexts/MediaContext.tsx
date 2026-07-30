@@ -3,7 +3,7 @@ import { MediaItem, ProgressLog, MetricType, MediaType, Settings, Artifact, Worl
 import { DatabaseService } from '../services/db';
 import { calculateRPGState } from '../lib/rpgSystem';
 import { generateText, getPersonaDescription } from '../services/nanoGptService';
-import { getRecentMediaContext, buildTitleSystemPrompt, buildMainTitlePrompt } from '../lib/lorekeeperTitles';
+import { getProgressionContext, levelBudget, buildTitleSystemPrompt, buildMainTitlePrompt } from '../lib/lorekeeperTitles';
 import { useAuth } from './AuthContext';
 
 interface MediaContextType {
@@ -162,11 +162,21 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
         
         // Generate if it's an actual level change, OR if it's the initial load and the title is missing
         if ((previousLevel.current !== null && previousLevel.current !== currentLevel) || !aiTextCache[titleKey]) {
-          const ctx = getRecentMediaContext(media, logs, settings);
+          // The alias is about the climb, so the window is one level's worth of
+          // progress and the anchors are the works that dominated it. Their
+          // Codex, where one exists, is what lets the title use real nouns.
+          const ctx = getProgressionContext(media, logs, settings, { budgetMasterPages: levelBudget(rpgState) });
           const systemPrompt = buildTitleSystemPrompt(getPersonaDescription(settings.aiPersona));
-          const titlePrompt = buildMainTitlePrompt({ level: currentLevel, context: ctx.text, dominantTitle: ctx.dominantTitle });
+          const apiKey = settings.nanoGptApiKey;
+          const model = settings.nanoGptModel || 'gpt-4o-mini';
 
-          generateText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', systemPrompt, titlePrompt, 1.2)
+          DatabaseService.getCodexPromptBlocks(ctx.anchors.map(a => a.id))
+            .then(blocks => generateText(apiKey, model, systemPrompt, buildMainTitlePrompt({
+              level: currentLevel,
+              context: ctx.text,
+              anchors: ctx.anchors,
+              codexBlocks: Object.values(blocks),
+            }), 1.2))
             .then(titleRes => {
                DatabaseService.saveAiText(titleKey, titleRes).then(() => refreshData());
             })

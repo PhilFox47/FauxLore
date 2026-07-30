@@ -22,70 +22,196 @@ export function getLevelContext(level: number): string {
   return "basic, beginner-level";
 }
 
-export function getRecentMediaContext(media: MediaItem[], logs: ProgressLog[], settings: Settings | null | undefined, mediaType?: string) {
-  const recent = [...media]
-    .filter((m) => m.status === "Active" || m.status === "Completed" || m.status === "Extras")
-    .filter((m) => (mediaType ? m.mediaType === mediaType : true))
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 50);
-
-  if (recent.length === 0) return { text: "None yet", dominantTitle: null as string | null };
-
-  const top10 = recent.slice(0, 10);
-  let totalTop10Mp = 0;
-  const top10WithMp = top10.map((m) => {
-    const nonHistoricLogs = logs.filter((l) => l.mediaId === m.id && !l.isHistoric && !l.timestamp.startsWith("1970-01-01"));
-    let mp = 0;
-    if (nonHistoricLogs.length > 0) {
-      mp = nonHistoricLogs.reduce((sum, log) => sum + Math.floor(calculateScaledDelta(log.delta, m, settings)), 0);
-    } else {
-      mp = 1;
-    }
-    totalTop10Mp += mp;
-    return { ...m, mp };
-  });
-
-  let dominantTitle: string | null = null;
-  if (totalTop10Mp > 0) {
-    const dom = top10WithMp.find((m) => m.mp > totalTop10Mp * 0.5);
-    if (dom) dominantTitle = dom.title;
-  }
-
-  const top10Str = top10WithMp
-    .map((m) => `"${m.title}" (${m.mediaType}, Genres: ${m.genres?.join(", ") || "none"}, Tags: ${m.tags?.join(", ") || "none"}, MP: ${m.mp})`)
-    .join(" | ");
-  const restStr = recent.slice(10).map((m) => `"${m.title}" (${m.mediaType})`).join(" | ");
-
-  const text = `Most Recent (High Impact): ${top10Str}` + (restStr ? `\nOlder Recent (Low Impact): ${restStr}` : "");
-  return { text, dominantTitle };
+export interface TitleAnchor {
+  id: string;
+  title: string;
+  mediaType: string;
+  mp: number;
+  share: number;
 }
 
-function franchiseRule(dominantTitle: string | null): string {
-  if (dominantTitle) {
-    return `FRANCHISE EXCEPTION: You MAY reference the specific work "${dominantTitle}" by name (and ONLY that one), because it dominates their recent time. Do not name any other specific work.`;
+export interface TitleContext {
+  text: string;
+  /** The one or two works that actually earned this level. Nameable in the alias. */
+  anchors: TitleAnchor[];
+}
+
+/**
+ * The logs that carried the player through roughly the last level.
+ *
+ * Titles used to be built from "the 50 most recently updated entries, weighted
+ * by lifetime master pages", which is a description of the whole library rather
+ * than of the climb that earned the rank. Walking back from now until a level's
+ * worth of progress has been counted answers the question the title is actually
+ * about: what were you doing while you levelled up?
+ */
+export function progressionWindow(
+  logs: ProgressLog[],
+  media: MediaItem[],
+  settings: Settings | null | undefined,
+  budgetMasterPages: number,
+): ProgressLog[] {
+  const mediaById = new Map(media.map((m) => [m.id, m]));
+  const usable = logs
+    .filter((l) => l.metricType !== 'statusChange' && !l.isHistoric && !l.timestamp.startsWith('1970-01-01'))
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  const out: ProgressLog[] = [];
+  let spent = 0;
+  for (const log of usable) {
+    const m = mediaById.get(log.mediaId);
+    if (!m) continue;
+    out.push(log);
+    spent += Math.max(0, calculateScaledDelta(log.delta, m, settings));
+    if (spent >= budgetMasterPages && out.length >= 3) break;
+    // A hard stop so a huge budget on a thin library cannot walk the entire archive.
+    if (out.length >= 400) break;
   }
-  return `Do NOT reference any specific franchise, character or work by name — use genre, medium, mood or theme words only.`;
+  return out;
+}
+
+/**
+ * What the player has been living in lately, as material for an alias.
+ *
+ * Two things changed here and both matter. The window is the last level's worth
+ * of progress rather than the whole library, and the result names one or two
+ * anchors — the works that dominated that window — instead of handing over a
+ * flat list of fifty titles for the model to average into mush. A blend of
+ * everything produces "Curator of Chaotic Lore"; an anchor produces something
+ * that could only be about this player.
+ */
+export function getProgressionContext(
+  media: MediaItem[],
+  logs: ProgressLog[],
+  settings: Settings | null | undefined,
+  opts: { budgetMasterPages: number; mediaType?: string },
+): TitleContext {
+  const scoped = opts.mediaType ? media.filter((m) => m.mediaType === opts.mediaType) : media;
+  const allowed = new Set(scoped.map((m) => m.id));
+  const window = progressionWindow(logs, media, settings, opts.budgetMasterPages).filter((l) => allowed.has(l.mediaId));
+
+  const mpById = new Map<string, number>();
+  for (const log of window) {
+    const m = scoped.find((x) => x.id === log.mediaId);
+    if (!m) continue;
+    mpById.set(log.mediaId, (mpById.get(log.mediaId) || 0) + Math.max(0, calculateScaledDelta(log.delta, m, settings)));
+  }
+
+  // Nothing logged in the window: fall back to what is open right now, so a
+  // returning player still gets something about their own library.
+  if (mpById.size === 0) {
+    const fallback = scoped
+      .filter((m) => m.status === 'Active' || m.status === 'Extras')
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 6);
+    if (fallback.length === 0) return { text: 'None yet', anchors: [] };
+    return {
+      text: `Currently open (nothing logged this level):\n${fallback.map((m) => describeWork(m)).join('\n')}`,
+      anchors: [],
+    };
+  }
+
+  const total = [...mpById.values()].reduce((a, b) => a + b, 0);
+  const ranked = [...mpById.entries()]
+    .map(([id, mp]) => {
+      const m = scoped.find((x) => x.id === id)!;
+      return { id, title: m.title, mediaType: m.mediaType as string, mp, share: total > 0 ? mp / total : 0, item: m };
+    })
+    .sort((a, b) => b.mp - a.mp);
+
+  // One anchor if it clearly dominates; two if the top pair share the level
+  // between them. More than that and the alias goes vague again.
+  const anchors: TitleAnchor[] = [];
+  if (ranked[0] && ranked[0].share >= 0.3) anchors.push(strip(ranked[0]));
+  if (ranked[1] && ranked[1].share >= 0.2 && anchors.length === 1) anchors.push(strip(ranked[1]));
+  // A level spread thin across everything still deserves its two biggest names.
+  if (anchors.length === 0 && ranked.length) {
+    anchors.push(strip(ranked[0]));
+    if (ranked[1]) anchors.push(strip(ranked[1]));
+  }
+
+  const lines = ranked.slice(0, 8).map((r) =>
+    `${describeWork(r.item)} — ${Math.round(r.mp)} MP this level (${Math.round(r.share * 100)}%)`,
+  );
+  const text = `What earned this level (most time first):\n${lines.join('\n')}`;
+  return { text, anchors };
+}
+
+function strip(r: { id: string; title: string; mediaType: string; mp: number; share: number }): TitleAnchor {
+  return { id: r.id, title: r.title, mediaType: r.mediaType, mp: Math.round(r.mp), share: r.share };
+}
+
+function describeWork(m: MediaItem): string {
+  const bits = [
+    m.genres?.length ? `Genres: ${m.genres.slice(0, 4).join(', ')}` : '',
+    m.tags?.length ? `Tags: ${m.tags.slice(0, 6).join(', ')}` : '',
+  ].filter(Boolean).join('; ');
+  return `- "${m.title}" (${m.mediaType})${bits ? ` [${bits}]` : ''}`;
+}
+
+/**
+ * Kept for callers that still want the old shape. The window is the whole
+ * library, which is what the old behaviour amounted to.
+ */
+export function getRecentMediaContext(media: MediaItem[], logs: ProgressLog[], settings: Settings | null | undefined, mediaType?: string) {
+  const ctx = getProgressionContext(media, logs, settings, { budgetMasterPages: Number.MAX_SAFE_INTEGER, mediaType });
+  return { text: ctx.text, dominantTitle: ctx.anchors[0]?.title ?? null };
+}
+
+/**
+ * Permission to name the works that earned the level.
+ *
+ * The old rule forbade naming anything at all unless a single work held more
+ * than half the player's lifetime master pages — a bar almost nothing clears in
+ * a varied library. The model was therefore left with genre and mood words and
+ * nothing else, which is exactly how you get "Curator of Chaotic Lore". The
+ * anchors are now named, and the model is told to mine them.
+ */
+function anchorRule(anchors: TitleAnchor[], codexBlocks: string[]): string {
+  if (anchors.length === 0) {
+    return `They have not logged anything substantial lately, so keep it to genre, medium, mood and theme words. Do not name a specific work.`;
+  }
+  const named = anchors.map((a) => `"${a.title}" (${a.mediaType}, ${Math.round(a.share * 100)}% of this level)`).join(" and ");
+  const codex = codexBlocks.filter(Boolean).join("\n\n");
+  return `ANCHOR ON WHAT THEY ACTUALLY DID: this level was earned mostly in ${named}.
+Build the alias out of THAT — its world, its vocabulary, its imagery, its mood, the role the player occupies inside it. You MAY name it or a thing from it directly. Do NOT name any other work.
+Borrowing one concrete noun from the anchor beats any amount of tasteful vagueness. A title that could be handed to any other player has failed.${codex ? `\n\nEVERYTHING KNOWN ABOUT THE ANCHOR WORK(S) — mine this for real nouns, factions, places, jargon and imagery:\n${codex}` : ""}`;
+}
+
+/**
+ * How much progress one level represents, as a master-page budget.
+ *
+ * Base EXP is master pages one-for-one, so the level band doubles as the size of
+ * the window that earned it. Using the band rather than "EXP so far this level"
+ * means a title generated the instant someone levels up still looks back over
+ * the climb that got them there instead of at an empty window.
+ */
+export function levelBudget(rpgState: { nextLevelExp: number; currentLevelExp: number }): number {
+  const band = (rpgState?.nextLevelExp || 0) - (rpgState?.currentLevelExp || 0);
+  return band > 0 ? band : 2000;
 }
 
 /** The heart of title quality: what makes a good "earned alias". */
 const TITLE_GUIDELINES = `WHAT MAKES A GREAT TITLE:
 - It is the player's personal, earned ALIAS — a flavorful nickname capturing who they have become through what they consume. Think a cool gamertag, a wrestling persona, or a character epithet — NOT a job class.
-- The dominant genres, tags, themes and mood of their recent media drive the flavor (genres/tags are listed most-defining first). Cyberpunk -> sleek and futuristic; cozy slice-of-life -> warm and pastoral; horror -> faintly eerie; sci-fi -> spacey; noir -> shadowy and hardboiled; fantasy -> mythic; if their taste is varied, blend it cleverly.
+- SPECIFIC BEATS ATMOSPHERIC. When an anchor work is given, reach into it for a real noun — a place, a faction, a rank, a piece of equipment, a phrase its world actually uses — and build the alias around that. "Warden of the Severed Floor" says something; "Curator of Chaotic Lore" says nothing and could belong to anyone.
+- Without an anchor, the dominant genres, tags, themes and mood carry the flavor (genres/tags are listed most-defining first). Cyberpunk -> sleek and futuristic; cozy slice-of-life -> warm and pastoral; horror -> faintly eerie; noir -> shadowy and hardboiled; fantasy -> mythic; varied taste -> blend it cleverly.
+- Do not simply restate the work's name. "The Elden Ring Player" is not an alias. Take something from inside it and make the player the subject.
 - Weave PRESTIGE into the tone, never tack it on. Low levels feel humble, scrappy, even a little silly (e.g. "Backseat Galaxy Racer", "The Noir Apprentice", "Couch-Bound Cadet"). High levels feel iconic and self-assured (e.g. "Sovereign of Static", "The Midnight Archivist", "Warden of Cozy Realms"). NEVER append rank words like Novice, Master, Fan, Enthusiast, Hobbyist, Player, Recruit, Aficionado.
 - BREAK THE FORMULA. Vary the grammar wildly: a two-word handle, "The X", "X of the Y", a verb phrase, an epithet. Range examples (do NOT copy): "Neon Walker", "Reads In The Dark", "Collector of Cozy", "Sleepless Streamer", "The Pixel Vagabond", "Keeper of Late Nights", "Doomscroll Daydreamer".
 - Grounded, human, a little playful. No pompous high-fantasy ("Eternal Valor of the Undying Saga"). No bare RPG words (Warrior, Mage, Hero, Champion). Never include the word Level, Lvl, or any number.
 - 2-6 words, Title Case.`;
 
 export function buildTitleSystemPrompt(personaDesc: string): string {
-  return `You are FauxLore's title-smith. You craft a single, personal "earned alias" for the player that reflects their real media-consumption habits and current prestige. ${personaDesc}${FAUXLORE_CONTEXT}
-CRITICAL RULE: Do NOT reference any specific franchise, character, work or media title by name. Use general genre, medium, mood or theme terms instead, UNLESS a FRANCHISE EXCEPTION is explicitly granted in the user message.`;
+  return `You are FauxLore's title-smith. You craft a single, personal "earned alias" for the player that reflects what they have actually been consuming and their current prestige. ${personaDesc}${FAUXLORE_CONTEXT}
+CRITICAL RULE: only the anchor work(s) named in the user message may be referenced. Draw on their world, cast, places and vocabulary freely — that specificity is the whole point — but never name a work that was not given to you.`;
 }
 
 /** Batch prompt that requests the main alias and/or per-media aliases as JSON. */
 export function buildBatchTitlePrompt(params: {
   level: number;
-  main: { context: string; dominantTitle: string | null } | null;
-  perMedia: { type: string; level: number; context: string }[];
+  main: { context: string; anchors: TitleAnchor[]; codexBlocks?: string[] } | null;
+  perMedia: { type: string; level: number; context: string; anchors: TitleAnchor[]; codexBlocks?: string[] }[];
   forbidden: string[];
 }): string {
   const { level, main, perMedia, forbidden } = params;
@@ -94,11 +220,11 @@ export function buildBatchTitlePrompt(params: {
   perMedia.forEach((p) => formatRules.push(`"${p.type}": "The ${p.type} alias here"`));
 
   const mainBlock = main
-    ? `=== OVERALL MEDIA (drives the main alias) ===\n${main.context}\n${franchiseRule(main.dominantTitle)}\n\n`
+    ? `=== OVERALL (drives the main alias) ===\n${main.context}\n\n${anchorRule(main.anchors, main.codexBlocks || [])}\n\n`
     : "";
 
   const perMediaBlocks = perMedia
-    .map((p) => `=== ${p.type} (Level ${p.level}, ${getLevelContext(p.level)}) ===\n${p.context}`)
+    .map((p) => `=== ${p.type} (Level ${p.level}, ${getLevelContext(p.level)}) ===\n${p.context}\n\n${anchorRule(p.anchors, p.codexBlocks || [])}`)
     .join("\n\n");
 
   const forbiddenRule = forbidden.length
@@ -121,14 +247,15 @@ Respond with ONLY raw JSON (no markdown, no commentary), exactly:
 }
 
 /** Single plain-text main alias (used by auto-gen on level-up and force-rewrite). */
-export function buildMainTitlePrompt(params: { level: number; context: string; dominantTitle: string | null; forbidden?: string }): string {
-  const { level, context, dominantTitle, forbidden } = params;
+export function buildMainTitlePrompt(params: { level: number; context: string; anchors: TitleAnchor[]; codexBlocks?: string[]; forbidden?: string }): string {
+  const { level, context, anchors, codexBlocks, forbidden } = params;
   const forbiddenRule = forbidden ? `\nAVOID "${forbidden}" or close variants — make it fresh and distinct.` : "";
   return `The player is Level ${level} (${getLevelContext(level)}).
 
-=== THEIR RECENT MEDIA (drives the alias) ===
+=== WHAT EARNED THIS LEVEL (drives the alias) ===
 ${context}
-${franchiseRule(dominantTitle)}
+
+${anchorRule(anchors, codexBlocks || [])}
 
 ${TITLE_GUIDELINES}
 
