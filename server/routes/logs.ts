@@ -257,10 +257,18 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
           if (boss) {
             const updatedMedia = db.prepare("SELECT status FROM media WHERE id = ?").get(log.mediaId) as any;
             const isCompleted = updatedMedia && updatedMedia.status === 'Completed';
+            // Reaching the end of what exists closes the enemy too. A boss target
+            // is a flat figure per level and takes no account of how much content
+            // a still-updating work actually has, so without this a Lv5 enemy on
+            // a twelve-hour build is unbeatable and expires as a failure.
+            const isCaughtUp = updatedMedia && updatedMedia.status === 'Caught Up';
 
             // Use native log delta instead of scaledPages for media-specific boss goals
             const newProgress = boss.currentProgress + log.delta;
-            if (newProgress >= boss.targetProgress || isCompleted) {
+            if (newProgress >= boss.targetProgress || isCompleted || isCaughtUp) {
+              // Finishing the whole work credits the full target; running out of
+              // released content credits only what was actually played, so the
+              // proportional payout in calculateRPGState scales the reward down.
               const finalProgress = isCompleted ? Math.max(newProgress, boss.targetProgress) : newProgress;
               db.prepare("UPDATE world_bosses SET currentProgress = ?, status = 'Defeated', updatedAt = ? WHERE id = ?").run(finalProgress, new Date().toISOString(), boss.id);
             } else {

@@ -924,7 +924,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       const hasDustyItem = media.some(m => {
           // An entry parked waiting on a release is not dusty, it is blocked.
           if (isWaitingOnRelease(m)) return false;
-          if (m.status === 'Planning' || m.status === 'Active' || m.status === 'On Hold') {
+          if (m.status === 'Planning' || m.status === 'Active' || m.status === 'On Hold' || m.status === 'Caught Up') {
              const itemLogs = allLogs.filter(l => l.mediaId === m.id);
              if (itemLogs.length > 0) {
                  const latestLog = itemLogs.reduce((latest, current) => new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest);
@@ -982,7 +982,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
       // On Hold means waiting on a release, so this only offers itself when
       // something has actually shipped. Otherwise it would ask for progress
       // that does not exist yet.
-      const unblocked = media.filter(m => m.status === 'On Hold' && hasNewContent(m));
+      const unblocked = media.filter(m => (m.status === 'On Hold' || m.status === 'Caught Up') && hasNewContent(m));
       if (unblocked.length === 0) return null;
       const target = getQTarget("Off the Shelf", timeframe, 1, settings, typeof rng !== 'undefined' ? rng : undefined);
       const eligibleIds = new Set(unblocked.map(m => m.id));

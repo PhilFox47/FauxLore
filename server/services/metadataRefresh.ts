@@ -36,7 +36,7 @@ const REFRESHERS: Record<string, Refresher> = {
 };
 
 /** Statuses worth polling — things the user is still engaged with. */
-const TRACKED_STATUSES = ["Active", "On Hold"];
+const TRACKED_STATUSES = ["Active", "On Hold", "Caught Up"];
 
 export function createMetadataRefresh(
   db: Db,

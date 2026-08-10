@@ -43,7 +43,7 @@ export const hasNewContent = (m: MediaItem): boolean => newContentReason(m) !== 
 
 /** Parked on something outside the user's control, with nothing new to show for it. */
 export const isWaitingOnRelease = (m: MediaItem): boolean =>
-  m.status === 'On Hold' && !hasNewContent(m);
+  (m.status === 'On Hold' || m.status === 'Caught Up') && !hasNewContent(m);
 
 /**
  * The gate for every "you could pick this up" surface. Everything passes except

@@ -5,7 +5,13 @@
 export const MEDIA_TYPES = ['Game', 'Book', 'Visual Novel', 'Manga', 'Series', 'Movie', 'Comic', 'Audiobook'] as const;
 export type MediaType = typeof MEDIA_TYPES[number];
 
-export const STATUSES = ['Planning', 'Active', 'Extras', 'On Hold', 'Completed', 'Dropped', 'Unreleased'] as const;
+/**
+ * "Caught Up" is finished-for-now: you have consumed everything that exists so
+ * far of something still being made. It is a real outcome, not a pause — it
+ * closes the current enemy and earns its drop — but the entry then waits on a
+ * release exactly like On Hold does.
+ */
+export const STATUSES = ['Planning', 'Active', 'Extras', 'On Hold', 'Caught Up', 'Completed', 'Dropped', 'Unreleased'] as const;
 export type Status = typeof STATUSES[number];
 
 // Metadata providers an item's data can originate from. Items remember their source

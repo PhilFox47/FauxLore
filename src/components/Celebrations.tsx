@@ -140,7 +140,7 @@ export function Celebrations() {
   useEffect(() => {
     if (isLoading) return;
     const pending = media.filter(
-      (m) => m.updateAvailable && (m.status === 'Active' || m.status === 'On Hold'),
+      (m) => m.updateAvailable && (m.status === 'Active' || m.status === 'On Hold' || m.status === 'Caught Up'),
     );
     if (seenUpdates.current === null) {
       // Announce whatever was waiting when the app opened, then track it.

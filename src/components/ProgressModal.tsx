@@ -479,13 +479,14 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
                <option value="Active">Active — currently playing/reading</option>
                <option value="Planning">Planning — not started yet</option>
                <option value="On Hold">On Hold — waiting for an update or new release</option>
+               <option value="Caught Up">Caught Up — finished everything released so far</option>
                <option value="Extras">Extras — finished, on post-game/bonus content</option>
                <option value="Completed">Completed — finished it</option>
                <option value="Dropped">Dropped — stopped for good</option>
                {/* Keep any other current status selectable (e.g. Unreleased), so the
                    dropdown always shows the item's real status instead of silently
                    falling back to the first option. */}
-               {!['Active', 'Planning', 'On Hold', 'Extras', 'Completed', 'Dropped'].includes(status) && (
+               {!['Active', 'Planning', 'On Hold', 'Caught Up', 'Extras', 'Completed', 'Dropped'].includes(status) && (
                  <option value={status}>{status}</option>
                )}
              </select>

@@ -86,6 +86,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
     switch (status) {
       case 'Active': return <Play className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />;
       case 'On Hold': return <Pause className="w-3.5 h-3.5 fill-blue-400 text-blue-400" />;
+      case 'Caught Up': return <CheckCircle2 className="w-3.5 h-3.5 text-teal-400 drop-shadow-[0_0_8px_rgba(45,212,191,0.5)]" />;
       case 'Completed': return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" />;
       case 'Extras': return <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]" />;
       case 'Planning': return <Clock className="w-3.5 h-3.5 text-zinc-400" />;
@@ -170,6 +171,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
   const STATUS_STYLE: Record<string, { dot: string; text: string }> = {
     'Active':     { dot: 'bg-amber-400',   text: 'text-amber-300' },
     'On Hold':    { dot: 'bg-blue-400',    text: 'text-blue-300' },
+    'Caught Up':  { dot: 'bg-teal-400',    text: 'text-teal-300' },
     'Completed':  { dot: 'bg-emerald-400', text: 'text-emerald-300' },
     'Extras':     { dot: 'bg-orange-400',  text: 'text-orange-300' },
     'Planning':   { dot: 'bg-violet-400',  text: 'text-violet-300' },

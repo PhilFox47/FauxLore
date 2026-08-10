@@ -196,7 +196,7 @@ export function resumableStale(
   logs.forEach(l => { const t = new Date(l.timestamp).getTime(); if (t > (lastLog.get(l.mediaId) || 0)) lastLog.set(l.mediaId, t); });
   const now = Date.now();
   return media
-    .filter(m => m.status === 'Active' || m.status === 'On Hold')
+    .filter(m => m.status === 'Active' || m.status === 'On Hold' || m.status === 'Caught Up')
     .filter(canBeSuggested)
     .map(m => {
       const lt = lastLog.get(m.id) || new Date(m.updatedAt || m.createdAt).getTime();

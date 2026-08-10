@@ -1041,7 +1041,9 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
             let allowedArtifactsCount = 0;
             let nonHistoricalPlaytime = 0;
             
-            if (item.status === 'Completed' || item.status === 'Extras') {
+            // Caught Up earns a drop the same way finishing does: you reached
+            // the end of the thing as it currently exists.
+            if (item.status === 'Completed' || item.status === 'Extras' || item.status === 'Caught Up') {
               allowedArtifactsCount += 1;
             }
             

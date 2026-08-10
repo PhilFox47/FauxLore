@@ -2,11 +2,12 @@ import { MediaItem, ProgressLog, MetricType, getMetricForType } from '../types/s
 import { calculateScaledDelta } from './scaling';
 
 // Shared color/order for statuses (used by timelines, funnels, etc.)
-export const STATUS_ORDER = ['Planning', 'Active', 'On Hold', 'Extras', 'Completed', 'Dropped', 'Unreleased'] as const;
+export const STATUS_ORDER = ['Planning', 'Active', 'On Hold', 'Caught Up', 'Extras', 'Completed', 'Dropped', 'Unreleased'] as const;
 export const STATUS_HEX: Record<string, string> = {
   Planning: '#8b5cf6',
   Active: '#f59e0b',
   'On Hold': '#64748b',
+  'Caught Up': '#2dd4bf',
   Extras: '#fb923c',
   Completed: '#10b981',
   Dropped: '#ef4444',
@@ -172,7 +173,7 @@ export function aggregateStatusHistory(media: MediaItem[], logs: ProgressLog[], 
     });
     if (m.status === 'Completed' || m.status === 'Extras') completed++;
     if (m.status === 'Dropped') dropped++;
-    if (segs.some(s => s.status === 'Active' || s.status === 'Completed' || s.status === 'Extras' || s.status === 'Dropped' || s.status === 'On Hold')) {
+    if (segs.some(s => s.status === 'Active' || s.status === 'Completed' || s.status === 'Extras' || s.status === 'Dropped' || s.status === 'On Hold' || s.status === 'Caught Up')) {
       reachedActive++;
     }
   });

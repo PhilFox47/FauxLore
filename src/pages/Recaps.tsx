@@ -567,11 +567,13 @@ export function Recaps() {
       // patch — not procrastination. Without saying so, the columnist reads a
       // parked title as neglect and prescribes it as homework the user cannot do.
       const parkedMedia = media.filter(isWaitingOnRelease);
-      const unblockedMedia = media.filter(m => m.status === 'On Hold' && hasNewContent(m));
+      const unblockedMedia = media.filter(m => (m.status === 'On Hold' || m.status === 'Caught Up') && hasNewContent(m));
       const holdNote = (m: MediaItem) =>
-        m.status !== 'On Hold' ? ''
-          : hasNewContent(m) ? ' [ON HOLD, but new content has shipped]'
-          : ' [ON HOLD, parked waiting on the next release]';
+        (m.status !== 'On Hold' && m.status !== 'Caught Up') ? ''
+          : hasNewContent(m) ? ` [${m.status === 'Caught Up' ? 'CAUGHT UP' : 'ON HOLD'}, but new content has shipped]`
+          : m.status === 'Caught Up'
+            ? ' [CAUGHT UP — they finished everything released so far and are waiting on the next update]'
+            : ' [ON HOLD, parked waiting on the next release]';
 
       const promptContext = `
 Timeframe: ${timeframe} (${formatIntervalLabel()})
