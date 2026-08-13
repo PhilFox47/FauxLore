@@ -91,6 +91,17 @@ export interface RPGState {
 }
 
 // Exp threshold curve
+/**
+ * Taunting an enemy: it survives the week, but it comes back bigger.
+ *
+ * The target grows, and so do both the reward and the failure penalty. That
+ * symmetry is the whole design — an extension that only softened a loss would
+ * be a free escape hatch, whereas this is a bet. Once per enemy, one enemy at a
+ * time, so it can never become a routine way to stall.
+ */
+export const ENRAGE_TARGET_MULTIPLIER = 1.25;
+export const ENRAGE_REWARD_MULTIPLIER = 1.2;
+
 export function getLevelForExp(exp: number): number {
   if (exp <= 0) return 1;
   let level = Math.floor(Math.sqrt(exp / 1000)) + 1;
@@ -223,6 +234,9 @@ export function calculateRPGState(
   let bossExp = 0;
   // Boss Rewards and Penalties
   worldBosses.forEach(boss => {
+    // Taunting raises both sides of the bet, which is what keeps it from being a
+    // way to dodge a loss: the enemy you could not finish now costs more to lose.
+    const stakes = boss.enraged ? ENRAGE_REWARD_MULTIPLIER : 1;
     // level: 1(50exp), 2(100), 3(200), 4(400), 5(1000)
     let bExp = 0;
     if (boss.level === 1) bExp = 100;
@@ -240,7 +254,7 @@ export function calculateRPGState(
         const ratio = boss.currentProgress / boss.targetProgress;
         payoutPercent = Math.min(1.0, ratio * 2);
       }
-      const actualExp = Math.round(bExp * payoutPercent);
+      const actualExp = Math.round(bExp * payoutPercent * stakes);
       bossExp += actualExp;
       if (mType) mediaExpTrackers[mType] += (actualExp * 2);
     } else if (boss.status === 'Failed') {
@@ -248,7 +262,7 @@ export function calculateRPGState(
       if (bossMedia && bossMedia.status === 'Dropped') {
         penaltyPercent = 0.5;
       }
-      const actualPenalty = Math.round(bExp * penaltyPercent);
+      const actualPenalty = Math.round(bExp * penaltyPercent * stakes);
       penaltyExp -= actualPenalty;
       if (mType) mediaExpTrackers[mType] -= (actualPenalty * 2);
     }

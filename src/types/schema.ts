@@ -175,6 +175,9 @@ export interface WorldBoss {
   imageUrl?: string;
   imageStatus?: 'generating' | 'done' | 'failed';
   imagePrompt?: string; // written by the enemy generator, reused when drawing the portrait
+  /** Taunted: bigger target, bigger stakes, one extra week. Never more than once. */
+  enraged?: boolean;
+  enragedAt?: string;
 }
 
 /**

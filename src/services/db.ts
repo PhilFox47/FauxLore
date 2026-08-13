@@ -356,6 +356,16 @@ export const DatabaseService = {
     return res.json();
   },
 
+  /** Goads an enemy into staying another week — bigger, and worth more either way. */
+  async tauntBoss(id: string): Promise<any> {
+    const res = await apiFetch(`/api/world-bosses/${id}/taunt`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error || 'Could not taunt that enemy.');
+    }
+    return res.json();
+  },
+
   async rerollBoss(id: string): Promise<void> {
     await apiFetch(`/api/world-bosses/${id}/reroll`, { method: 'POST' });
   },

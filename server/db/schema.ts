@@ -207,6 +207,10 @@ export function initSchema(db: Db) {
       updatedAt TEXT,
       imageUrl TEXT,
       imageStatus TEXT,
+      -- Taunted once and never again: a bigger target, a bigger reward, a bigger
+      -- penalty, and one more week to settle it.
+      enraged INTEGER DEFAULT 0,
+      enragedAt TEXT,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
     );
 

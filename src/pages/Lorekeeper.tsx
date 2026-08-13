@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, useRef } from "react";
 import { format, differenceInDays, parseISO, subDays } from 'date-fns';
 import { useMediaContext } from "../contexts/MediaContext";
 import { useToast } from "../contexts/ToastContext";
-import { calculateRPGState } from "../lib/rpgSystem";
+import { calculateRPGState, ENRAGE_TARGET_MULTIPLIER, ENRAGE_REWARD_MULTIPLIER } from "../lib/rpgSystem";
 import { MEDIA_HEX, MEDIA_TYPES } from "../types/schema";
 import {
   Shield,
@@ -56,6 +56,7 @@ export function Lorekeeper() {
     worldBosses,
     artifacts,
     rerollBoss,
+    tauntBoss,
     generateBossImage,
     spawnBoss,
   } = useMediaContext();
@@ -168,6 +169,33 @@ export function Lorekeeper() {
   // plus the one or two works that dominated it.
   const titleContext = (mediaType?: string) =>
     getProgressionContext(media, logs, settings, { budgetMasterPages: levelBudget(rpgState), mediaType });
+
+  /**
+   * Taunting is a bet, not a rescue, so the confirm states both sides of it in
+   * the numbers the player will actually feel.
+   */
+  const [tauntingId, setTauntingId] = useState<string | null>(null);
+  const handleTaunt = async (boss: any) => {
+    const newTarget = Math.round(boss.targetProgress * ENRAGE_TARGET_MULTIPLIER * 100) / 100;
+    const stake = Math.round((ENRAGE_REWARD_MULTIPLIER - 1) * 100);
+    const ok = window.confirm(
+      `Taunt ${boss.name}?\n\n` +
+      `It survives another week instead of expiring — but it comes back angrier:\n` +
+      `  • Target rises from ${boss.targetProgress} to ${newTarget} ${boss.unit || ''}\n` +
+      `  • Reward AND failure penalty both rise by ${stake}%\n\n` +
+      `An enemy can only be taunted once, and only one enraged enemy at a time.`
+    );
+    if (!ok) return;
+    setTauntingId(boss.id);
+    try {
+      await tauntBoss(boss.id);
+      toast.success(`${boss.name} is enraged. Finish it.`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not taunt that enemy.');
+    } finally {
+      setTauntingId(null);
+    }
+  };
 
   const generateMissingTitles = async (generateMain: boolean, mediaTypesToGenerate: string[], manualRes: boolean = false) => {
     if (!settings?.nanoGptApiKey) {
@@ -626,7 +654,9 @@ export function Lorekeeper() {
                           ? "bg-emerald-500/5 border-emerald-500/20"
                           : boss.status === "Failed"
                             ? "bg-red-500/5 border-red-500/20 opacity-60"
-                            : "bg-zinc-950/50 border-white/10",
+                            : boss.enraged
+                              ? "bg-red-500/[0.07] border-red-500/30 shadow-[0_0_30px_-10px_rgba(239,68,68,0.5)]"
+                              : "bg-zinc-950/50 border-white/10",
                       )}
                     >
                       <div className="flex items-center justify-between mb-4 relative z-10">
@@ -642,6 +672,11 @@ export function Lorekeeper() {
                         >
                           {boss.status}
                         </span>
+                        {boss.enraged && (
+                          <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1 ml-2">
+                            <Flame className="w-3 h-3" /> Enraged
+                          </span>
+                        )}
                         <span className="text-[10px] font-black text-zinc-600 uppercase bg-zinc-950/80 px-2 py-0.5 rounded">
                           Lv. {boss.level}
                         </span>
@@ -705,6 +740,16 @@ export function Lorekeeper() {
                                   >
                                     <RefreshCw className="w-4 h-4 text-zinc-500" />
                                   </button>
+                                  {!boss.enraged && (
+                                    <button
+                                      onClick={() => handleTaunt(boss)}
+                                      disabled={tauntingId === boss.id}
+                                      className="p-1.5 bg-white/5 hover:bg-red-500/15 rounded-lg transition-colors disabled:opacity-50 group/taunt"
+                                      title="Taunt: it stays another week, but comes back bigger — and worth more either way"
+                                    >
+                                      <Flame className="w-4 h-4 text-zinc-500 group-hover/taunt:text-red-400 transition-colors" />
+                                    </button>
+                                  )}
                                 </>
                               )}
                             </div>

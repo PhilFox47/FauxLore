@@ -57,6 +57,8 @@ interface MediaContextType {
   franchises: any[];
   saveFranchise: (franchise: any) => Promise<void>;
   rerollBoss: (id: string) => Promise<void>;
+  /** Enrage an enemy: it stays another week, larger, with more at stake. */
+  tauntBoss: (id: string) => Promise<void>;
   generateBossImage: (id: string) => Promise<void>;
   generateArtifactImage: (id: string) => Promise<void>;
   spawnBoss: (mediaType?: string) => Promise<void>;
@@ -360,6 +362,11 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     await refreshData();
   }, [refreshData]);
 
+  const tauntBoss = useCallback(async (id: string) => {
+    await DatabaseService.tauntBoss(id);
+    await refreshData();
+  }, [refreshData]);
+
   const rerollBoss = useCallback(async (id: string) => {
     await DatabaseService.rerollBoss(id);
     await refreshData();
@@ -416,7 +423,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [refreshData]);
 
   return (
-    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, taxonomies, activity, locationGroups, saveLocationGroup, setLocationGroupMembers, deleteLocationGroup, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, refreshMetadata, acknowledgeUpdate, notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, ensureLevelTitle, rerollBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, taxonomies, activity, locationGroups, saveLocationGroup, setLocationGroupMembers, deleteLocationGroup, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, refreshMetadata, acknowledgeUpdate, notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, ensureLevelTitle, rerollBoss, tauntBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
       {children}
     </MediaContext.Provider>
   );
