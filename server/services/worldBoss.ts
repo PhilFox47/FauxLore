@@ -28,6 +28,31 @@ export function createWorldBossService(
    * its flavour text and art-directs its portrait in one pass. No assembling of
    * name fragments, no second lookup at image time.
    */
+  /**
+   * Everything this media has already sent at the player.
+   *
+   * Without it the forge answers the same question from the same Codex every
+   * week, so it keeps reaching for the same obvious antagonist — the one the
+   * Codex lists first. Naming the past enemies is what turns a fresh roll into
+   * a deliberately different one, and it also covers rerolls: the enemy being
+   * replaced is already on this list, so a reroll cannot hand back what it just
+   * discarded.
+   */
+  function previousEnemies(userId: string, mediaId: string): { name: string; title: string | null; level: number; status: string }[] {
+    try {
+      return db
+        .prepare(
+          `SELECT name, title, level, status FROM world_bosses
+            WHERE userId = ? AND mediaId = ?
+            ORDER BY createdAt DESC
+            LIMIT 15`,
+        )
+        .all(userId, mediaId) as any[];
+    } catch {
+      return [];
+    }
+  }
+
   async function generateEnemy(userId: string, mediaItem: any, level: number): Promise<GeneratedEnemy | null> {
     const aiConfig = getAiConfig(db, userId);
     if (!aiConfig) return null;
@@ -40,18 +65,29 @@ export function createWorldBossService(
     const codexBlock = codexPromptBlock(codexRow);
     const tier = enemyTier(level);
 
+    const past = previousEnemies(userId, mediaItem.id);
+    const historyBlock = past.length
+      ? `ALREADY FOUGHT — every opponent this work has already sent, newest first:
+${past.map((p) => `- ${p.name}${p.title ? ` (${p.title})` : ""} — Level ${p.level}, ${p.status.toLowerCase()}`).join("\n")}
+
+DO NOT REPEAT ANY OF THEM. Not the same character under a different epithet, not the same creature type, not the same faction leader. Reach further into the work: a different character, a different faction, a different kind of threat, a different part of the story. If the obvious pick is on that list, it is no longer the obvious pick.
+If this work genuinely has nothing left that fits Level ${level}, you may revisit one — but only as a distinctly different manifestation of it, and say plainly in the flavour text how it has changed since.`
+      : "";
+
     const prompt = `You are the Enemy Forge of FauxLore. Your job is to conjure ONE opponent out of a piece of media the player is currently working through, and to make it feel like it genuinely stepped out of that world.
 
 THE SOURCE: "${mediaItem.title}" (${mediaItem.mediaType})
 
 ${codexBlock || `(No Codex is on record for this title — rely on your own knowledge of it, and stay faithful to what you actually know.)`}
 
+${historyBlock}
+
 THE ENCOUNTER (fixed by the game — honour it exactly):
 - Difficulty: Level ${level} of 5 — ${LEVEL_DESCRIPTIONS[level] || LEVEL_DESCRIPTIONS[3]}
 - Visually it must read as ${tier.word}: ${tier.look}.
 
 HOW TO WRITE IT:
-1. Choose the opponent yourself. Ideally it is a real character, creature, faction member or force from this work — the Codex above lists candidates — picked so its stature matches Level ${level}. A Level 1 should be something the fandom would laugh at; a Level 5 should be the kind of thing the whole work builds towards.
+1. Choose the opponent yourself. Ideally it is a real character, creature, faction member or force from this work — the Codex above lists candidates — picked so its stature matches Level ${level}. A Level 1 should be something the fandom would laugh at; a Level 5 should be the kind of thing the whole work builds towards.${past.length ? " Check your choice against the ALREADY FOUGHT list before you commit to it." : ""}
 2. If nothing in the work fits that level, invent one — but build it out of this work's own material: its factions, its terminology, its creatures, its aesthetics. Never a generic fantasy monster.
 3. Give it an RPG epithet that suits the tier ("King of the Koopas", "Intern of the Seventh Circle"). Keep the name the entity's real name where one exists.
 4. Write 1-3 sentences of flavour text: what it is, how it fights or thwarts the player, in the voice and tone of the source work. Be specific and let its personality show. Wit is welcome at low levels; dread at high ones.
