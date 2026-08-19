@@ -985,41 +985,47 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       placeholder="..."
                     />
                   </div>
-                  <div className="sm:col-span-2 -mb-1">
-                    <p className="text-xs text-zinc-500">
-                      FauxLore splits its AI work in two, because no single model is good at both halves.
-                      An <span className="text-zinc-300 font-semibold">analytical</span> model classifies, extracts
-                      and converts research into structured data — it must invent nothing. A{' '}
-                      <span className="text-zinc-300 font-semibold">creative</span> model writes the prose you
-                      actually read. Enemies and items use both in turn: analytical picks and specs them, creative
-                      gives them a voice.
-                    </p>
+                </div>
+
+                <div className="mt-8 space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                    <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">AI Models (Text)</h3>
+                  </div>
+                  <p className="text-xs text-zinc-500">
+                    FauxLore splits its text generation in two, because no single model is good at both halves.
+                    An <span className="text-zinc-300 font-semibold">analytical</span> model classifies, extracts and
+                    converts research into structured data — it must invent nothing. A{' '}
+                    <span className="text-zinc-300 font-semibold">creative</span> model writes the prose you actually
+                    read. Enemies and items use both in turn: analytical picks and specs them, creative gives them a
+                    voice. Leave a field blank to fall back to the analytical model.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">Analytical Model</label>
+                      <input
+                        type="text"
+                        name="nanoGptModel"
+                        value={formData.nanoGptModel}
+                        onChange={handleChange}
+                        className="input-field"
+                        placeholder="gpt-4o-mini"
+                      />
+                      <p className="text-[10px] text-zinc-500 mt-1">Structuring the Codex, auto-tagging, taxonomy suggestions, image prompts, and the enemy / item briefs. Wants strict schema adherence over flair.</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">Analytical Model (Web Search)</label>
+                      <input
+                        type="text"
+                        name="nanoGptWebModel"
+                        value={formData.nanoGptWebModel}
+                        onChange={handleChange}
+                        className="input-field"
+                        placeholder="gpt-4o-mini"
+                      />
+                      <p className="text-[10px] text-zinc-500 mt-1">Codex research — the only calls that search the web. A large context window helps, since the results are injected into the prompt. FauxLore appends <code>:online</code> itself, so leave that suffix off.</p>
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Analytical Model</label>
-                    <input
-                      type="text"
-                      name="nanoGptModel"
-                      value={formData.nanoGptModel}
-                      onChange={handleChange}
-                      className="input-field"
-                      placeholder="gpt-4o-mini"
-                    />
-                    <p className="text-[10px] text-zinc-500 mt-1">Structuring the Codex, auto-tagging, taxonomy suggestions, image prompts, and the enemy / item briefs. Wants strict schema adherence over flair.</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Analytical Model (Web Search)</label>
-                    <input
-                      type="text"
-                      name="nanoGptWebModel"
-                      value={formData.nanoGptWebModel}
-                      onChange={handleChange}
-                      className="input-field"
-                      placeholder="gpt-4o-mini"
-                    />
-                    <p className="text-[10px] text-zinc-500 mt-1">Codex research — the only calls that search the web. A large context window helps, since the results are injected into the prompt. FauxLore appends <code>:online</code> itself, so leave that suffix off. Falls back to the analytical model when blank.</p>
-                  </div>
-                  <div className="sm:col-span-2">
                     <label className="block text-sm font-medium text-zinc-400 mb-1">Creative Model</label>
                     <input
                       type="text"
@@ -1029,7 +1035,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       className="input-field"
                       placeholder="gpt-4o-mini"
                     />
-                    <p className="text-[10px] text-zinc-500 mt-1">Everything you read as prose: enemy and item flavour text, level and quest titles, recap writing, Roulette blurbs. A roleplay-tuned model is a good fit here. Falls back to the analytical model when blank.</p>
+                    <p className="text-[10px] text-zinc-500 mt-1">Everything you read as prose: enemy and item flavour text, level and quest titles, recap writing, Roulette blurbs. A roleplay-tuned model is a good fit here.</p>
                   </div>
                 </div>
 
