@@ -30,57 +30,58 @@ export { subjectSeason, subjectYear, type CodexSubject };
  */
 
 /**
- * One thing in a work: a person, a threat, a place, a group, an object.
+ * One thing in a work: a person, a group, a place, an object, an antagonist.
  *
- * The fields are a superset — a character has no `material` and an item has no
- * `personality` — because everything that reads a Codex reads them the same way
- * and a shared shape keeps that simple. Every field past `name` is optional and
+ * The fields are a superset — a character has no `material` and an object has no
+ * `personality` — because everything that reads a Codex reads it the same way and
+ * a shared shape keeps that simple. Every field past `name` is optional and
  * absent when the research did not support it.
+ *
+ * Note what is NOT here: no difficulty level, no boss tier, no loot rarity. The
+ * Codex records what a work contains; deciding that the Warden makes a good
+ * level 4 this week is the enemy forge's job, made at the moment it has the
+ * level, the history and the difficulty setting in front of it. Grading it once
+ * at research time froze that decision and, worse, biased the research toward
+ * things that would make good bosses instead of things that are actually there.
  */
 export interface CodexEntity {
   name: string;
   /** Other names, titles, epithets and nicknames this goes by. */
   aliases?: string[];
   description?: string;
-  role?: string;
-  tier?: string;
-  /**
-   * What size of encounter this would make, on the game's own 1-5 scale.
-   *
-   * The enemy forge has to pick an opponent whose stature matches a given
-   * level, and was left inferring that from prose. Grading the cast at research
-   * time means the pick is made from a shortlist that already fits.
-   */
-  level?: number;
-
   /** What it looks like, kept apart from what it is — image prompts need this alone. */
   appearance?: string;
   /** Which group, house, team or side it belongs to. */
   affiliation?: string;
 
   // People
+  role?: string;
+  /** How central this is TO THE WORK: central, major, recurring, minor. */
+  prominence?: string;
   abilities?: string;
   /** Temperament, manner, verbal tics — the voice to write it in. */
   personality?: string;
+  /** How they connect to the rest of the cast: family, rivals, mentors, debts. */
+  relationships?: string;
   status?: string;
 
-  // Threats
-  howItFights?: string;
-  /** The move or tactic it is known for. Boss flavour writes itself from this. */
-  signatureAttack?: string;
-  weakness?: string;
-  /** Where it is fought, ideally a name from the locations list. */
-  arena?: string;
+  // Antagonists
+  /** person, group, institution, creature type, force, circumstance. */
+  nature?: string;
+  motivation?: string;
+  /** How it operates and what it is capable of. */
+  methods?: string;
+  opposedTo?: string;
 
   // Objects
-  /** weapon, armour, accessory, consumable, relic, vehicle, tool… */
-  kind?: string;
-  /** What it is made of and how it reads — fuel for an icon prompt. */
+  /** What it is made of. */
   material?: string;
-  effect?: string;
+  /** What it does, or what it is for. */
+  purpose?: string;
+  /** What it means in the work and why it matters. */
+  significance?: string;
   owner?: string;
   origin?: string;
-  rarity?: string;
 
   // Places
   /** The larger place this sits inside, giving the world a hierarchy. */
@@ -154,8 +155,16 @@ export interface CodexData {
   structure?: string;
   /** What separates it from the obvious comparisons. Feeds tagging. */
   distinctive?: string;
-  /** How strength, rank or threat is measured in this world, roughly ordered. */
-  powerScale?: string;
+  /** The tensions that actually drive the work, and what is at stake in each. */
+  conflicts?: string[];
+  /** The formal systems the world runs on: magic, tech, rank, law, economy. */
+  worldRules?: string;
+  /** The texture of ordinary life in it. */
+  everydayLife?: string;
+  /** Who made it and how; notable development or production history. */
+  production?: string;
+  /** How it landed: reputation, awards, controversy, what it influenced. */
+  reception?: string;
   /** Famous setpieces and beats, kept clear of endings. */
   signatureMoments?: string[];
   /** Its sonic identity: score, instrumentation, signature sounds. */
@@ -180,7 +189,8 @@ export interface CodexData {
     characterDesign?: string;
   };
   characters?: CodexEntity[];
-  enemies?: CodexEntity[];
+  /** Who and what stands in opposition — people, groups, forces, creature types. */
+  antagonists?: CodexEntity[];
   factions?: CodexEntity[];
   locations?: CodexEntity[];
   items?: CodexEntity[];
@@ -194,6 +204,16 @@ export interface CodexData {
   sectionConfidence?: CodexSectionConfidence;
   notes?: string;
   sources?: string[];
+
+  /**
+   * Fields from dossiers compiled before the Codex became a reference work
+   * rather than a template. Still rendered so old entries do not go blank, but
+   * nothing asks for them any more.
+   */
+  /** @deprecated superseded by `antagonists`. */
+  enemies?: CodexEntity[];
+  /** @deprecated folded into `worldRules`. */
+  powerScale?: string;
 }
 
 export interface CodexRow {
@@ -261,13 +281,21 @@ function safeList(value: any): string[] {
 export const SECTION_LABEL: Record<string, string> = {
   identity: "which work this is",
   cast: "the cast",
-  threats: "the antagonists",
+  conflict: "conflicts & opposition",
   world: "places, factions & vocabulary",
-  things: "items & equipment",
-  craft: "style, sound & themes",
+  things: "notable objects",
+  craft: "style, production & themes",
 };
 
-/** Renders a Codex as the context block that gets embedded in other prompts. */
+/**
+ * Renders a Codex as the reference section other prompts read.
+ *
+ * Laid out as an encyclopedia entry — the work, then its world, its cast, its
+ * conflicts, its objects, its style — rather than as a set of lists a generator
+ * could pick from. That ordering is doing real work: a consumer that opens with
+ * "here is what is true about this thing" writes something new out of it, where
+ * one that opens with a graded roster of candidates just picks a row.
+ */
 export function codexPromptBlock(codex: CodexRow | null): string {
   const d = codex?.data;
   if (!d) return "";
@@ -280,6 +308,9 @@ export function codexPromptBlock(codex: CodexRow | null): string {
   if (identified?.title) {
     lines.push(`This dossier describes that exact work — not a same-named adaptation, remake or original.`);
   }
+  lines.push(
+    `It is a REFERENCE on the work, not a set of ready-made pieces. Nothing in it has been graded, ranked or reserved for any purpose. Build what you need out of these facts; do not lift an entry wholesale, and do not assume the order things appear in means anything.`,
+  );
   // Downstream generators need to know the scope, or an enemy written from a
   // season-1 dossier will reach for a villain the user has not met.
   if (identified?.season) {
@@ -288,9 +319,16 @@ export function codexPromptBlock(codex: CodexRow | null): string {
       `Do not invent or reference anything from a later season.`,
     );
   }
+
   const push = (label: string, value?: string) => {
     if (value && value.trim()) lines.push(`${label}: ${value.trim()}`);
   };
+  const section = (title: string) => lines.push("", `— ${title} —`);
+  const bullets = (label: string, values: any, limit: number) => {
+    const rows = list(values).filter(Boolean).slice(0, limit);
+    if (rows.length) lines.push(`${label}:`, ...rows.map((v: any) => `  - ${v}`));
+  };
+
   /** Where a thing first appears, rendered only when the research knew. */
   const introOf = (e: any): string => {
     const at = String(e.introducedAt || "").trim();
@@ -300,22 +338,20 @@ export function codexPromptBlock(codex: CodexRow | null): string {
   };
 
   // Limits are generous on purpose: the dossier is compiled once and read by
-  // everything, and a consumer that only needs the top of a list can ignore the
+  // everything, and a consumer that only needs part of a list can ignore the
   // rest far more easily than it can invent what was never researched.
   const pushEntities = (label: string, entries: any[], limit = 20) => {
     const rendered = entries
       .filter((e) => e && e.name)
       .slice(0, limit)
       .flatMap((e) => {
-        // The encounter level goes first: it is what the enemy forge filters on.
         const qualifier = [
-          e.level ? `Lv${e.level}` : "",
           e.role,
-          e.tier,
-          e.kind,
-          e.rarity,
+          e.prominence,
+          e.nature,
           e.affiliation,
           e.region ? `in ${e.region}` : "",
+          e.opposedTo ? `against ${e.opposedTo}` : "",
           e.opposes ? `opposes ${e.opposes}` : "",
           introOf(e),
         ].filter(Boolean).join(", ");
@@ -323,24 +359,22 @@ export function codexPromptBlock(codex: CodexRow | null): string {
         const head = `  - ${e.name}${aka.length ? ` (aka ${aka.join(", ")})` : ""}${qualifier ? ` [${qualifier}]` : ""}${e.description ? `: ${e.description}` : ""}`;
 
         // The specifics go on their own line so the headline stays scannable.
-        // These are what the creative tasks actually build from — an enemy needs
-        // the moveset, a loot icon needs the material, a taunt needs the voice.
         const detail = [
           e.appearance ? `looks: ${e.appearance}` : "",
           e.material ? `made of: ${e.material}` : "",
-          e.abilities ? `can: ${e.abilities}` : "",
-          e.howItFights ? `fights by: ${e.howItFights}` : "",
-          e.signatureAttack ? `signature: ${e.signatureAttack}` : "",
-          e.weakness ? `weakness: ${e.weakness}` : "",
-          e.arena ? `fought at: ${e.arena}` : "",
-          e.effect ? `does: ${e.effect}` : "",
-          e.owner ? `carried by: ${e.owner}` : "",
+          e.abilities ? `capable of: ${e.abilities}` : "",
+          e.methods ? `operates by: ${e.methods}` : "",
+          e.motivation ? `wants: ${e.motivation}` : "",
+          e.goal ? `wants: ${e.goal}` : "",
+          e.purpose ? `used for: ${e.purpose}` : "",
+          e.significance ? `matters because: ${e.significance}` : "",
+          e.owner ? `belongs to: ${e.owner}` : "",
           e.origin ? `origin: ${e.origin}` : "",
           e.personality ? `manner: ${e.personality}` : "",
+          e.relationships ? `connected to: ${e.relationships}` : "",
           e.status ? `status: ${e.status}` : "",
           e.atmosphere ? `feels: ${e.atmosphere}` : "",
-          e.whatHappensThere ? `used for: ${e.whatHappensThere}` : "",
-          e.goal ? `wants: ${e.goal}` : "",
+          e.whatHappensThere ? `where: ${e.whatHappensThere}` : "",
           e.symbol ? `emblem: ${e.symbol}` : "",
           e.colors ? `colours: ${e.colors}` : "",
           list(e.members).length ? `members: ${list(e.members).slice(0, 6).join(", ")}` : "",
@@ -351,31 +385,22 @@ export function codexPromptBlock(codex: CodexRow | null): string {
     if (rendered.length) lines.push(`${label}:`, ...rendered);
   };
 
+  section("THE WORK");
   push("Premise", d.premise);
   push("Overview", d.overview);
-  push("Setting", d.setting);
   push("Tone", d.tone);
-  push("What sets it apart", d.distinctive);
   push("Structure & pacing", d.structure);
-  push("Power scale", d.powerScale);
+  push("What sets it apart", d.distinctive);
   if (list(d.themes).length) push("Themes", list(d.themes).join(", "));
-  if (list(d.signatureMoments).length) {
-    lines.push("Signature moments:", ...list(d.signatureMoments).slice(0, 8).map((m: any) => `  - ${m}`));
-  }
-  push("Sound & music", d.soundAndMusic);
-  if (d.artStyle) {
-    const art = [
-      d.artStyle.summary, d.artStyle.medium, d.artStyle.palette,
-      d.artStyle.lighting, d.artStyle.linework, d.artStyle.composition,
-      d.artStyle.characterDesign, d.artStyle.iconography,
-    ].filter(Boolean).join(" | ");
-    push("Art style & visual identity", art);
-  }
-  pushEntities("Notable characters", list(d.characters));
-  pushEntities("Enemies, monsters & antagonists", list(d.enemies));
+  bullets("Signature moments", d.signatureMoments, 8);
+
+  section("THE WORLD");
+  push("Setting", d.setting);
+  // `powerScale` is what the old, template-shaped dossiers called this.
+  push("How it works", d.worldRules || d.powerScale);
+  push("Everyday life", d.everydayLife);
+  pushEntities("Places", list(d.locations), 16);
   pushEntities("Factions & organizations", list(d.factions), 12);
-  pushEntities("Locations", list(d.locations), 16);
-  pushEntities("Iconic items & equipment", list(d.items));
   const terms = list(d.terminology)
     .filter((t) => t && t.term)
     .slice(0, 20)
@@ -383,7 +408,38 @@ export function codexPromptBlock(codex: CodexRow | null): string {
       const qualifier = [t.category, introOf(t)].filter(Boolean).join(", ");
       return `  - ${t.term}${qualifier ? ` [${qualifier}]` : ""}: ${t.meaning || ""}`;
     });
-  if (terms.length) lines.push("In-universe terminology:", ...terms);
+  if (terms.length) lines.push("In-universe vocabulary:", ...terms);
+
+  section("THE CAST");
+  pushEntities("Characters", list(d.characters));
+
+  section("CONFLICT");
+  bullets("Central tensions", d.conflicts, 8);
+  // Old dossiers stored this as `enemies`, already graded; render it either way.
+  pushEntities("Who and what stands in opposition", list(d.antagonists?.length ? d.antagonists : d.enemies));
+
+  section("OBJECTS");
+  pushEntities("Notable objects", list(d.items));
+
+  section("STYLE");
+  if (d.artStyle) {
+    const art = [
+      d.artStyle.summary, d.artStyle.medium, d.artStyle.palette,
+      d.artStyle.lighting, d.artStyle.linework, d.artStyle.composition,
+      d.artStyle.characterDesign, d.artStyle.iconography,
+    ].filter(Boolean).join(" | ");
+    push("Visual identity", art);
+  }
+  push("Sound & music", d.soundAndMusic);
+
+  section("PRODUCTION & RECEPTION");
+  push("Creators", d.creators);
+  if (d.releaseYear) push("Released", String(d.releaseYear));
+  push("How it was made", d.production);
+  push("How it landed", d.reception);
+  if (list(d.relatedWorks).length) push("Related works", list(d.relatedWorks).slice(0, 8).join(" · "));
+
+  section("CLASSIFICATION");
   if (list(d.genres).length) push("Descriptive genres", list(d.genres).join(", "));
   if (list(d.tags).length) push("Descriptive tags", list(d.tags).join(", "));
   push("Audience", d.audience);
@@ -391,17 +447,16 @@ export function codexPromptBlock(codex: CodexRow | null): string {
   if (list(identified?.alsoKnownAs).length) {
     push("Also known as", list(identified!.alsoKnownAs).slice(0, 6).join(" · "));
   }
-  push("Creators", d.creators);
-  if (d.releaseYear) push("Released", String(d.releaseYear));
   if (d.confidence && d.confidence !== "high") {
     push("Research confidence", `${d.confidence}${d.notes ? ` — ${d.notes}` : ""}`);
     // Naming the weak sections stops one shaky lookup discrediting the rest: a
     // dossier can be certain about the cast and vague about the soundtrack.
     const weak = Object.entries(d.sectionConfidence || {})
       .filter(([, grade]) => grade && grade !== "high")
-      .map(([section, grade]) => `${SECTION_LABEL[section] || section} (${grade})`);
+      .map(([sec, grade]) => `${SECTION_LABEL[sec] || sec} (${grade})`);
     if (weak.length) push("Less certain about", weak.join(", "));
   }
+
   lines.push("=== END CODEX ===");
   return lines.join("\n");
 }

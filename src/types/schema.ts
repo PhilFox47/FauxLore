@@ -186,42 +186,41 @@ export interface WorldBoss {
  * (auto-tagging, enemy generation, item generation).
  */
 /**
- * One thing in a work: a person, a threat, a place, a group, an object. The
- * fields are a superset, and everything past `name` is absent when the research
- * did not support it.
+ * One thing in a work: a person, a group, a place, an object, an antagonist.
+ *
+ * Note what is not here: no difficulty level, no boss tier, no loot rarity. The
+ * Codex records what a work contains; deciding what makes a good level 4 this
+ * week belongs to the enemy forge, at the moment it knows the level and the
+ * history. Everything past `name` is absent when the research did not support it.
  */
 export interface CodexEntity {
   name: string;
-  /** Other names, titles, epithets and nicknames this goes by. */
   aliases?: string[];
   description?: string;
-  role?: string;
-  tier?: string;
-  /** What size of encounter this would make, on the game's own 1-5 scale. */
-  level?: number;
-  /** What it looks like, kept apart from what it is — for image prompts. */
   appearance?: string;
-  /** Which group, house, team or side it belongs to. */
   affiliation?: string;
 
   // People
+  role?: string;
+  /** How central this is TO THE WORK: central, major, recurring, minor. */
+  prominence?: string;
   abilities?: string;
   personality?: string;
+  relationships?: string;
   status?: string;
 
-  // Threats
-  howItFights?: string;
-  signatureAttack?: string;
-  weakness?: string;
-  arena?: string;
+  // Antagonists
+  nature?: string;
+  motivation?: string;
+  methods?: string;
+  opposedTo?: string;
 
   // Objects
-  kind?: string;
   material?: string;
-  effect?: string;
+  purpose?: string;
+  significance?: string;
   owner?: string;
   origin?: string;
-  rarity?: string;
 
   // Places
   region?: string;
@@ -251,7 +250,7 @@ export interface CodexTerm {
 
 /** How well-supported each part of the dossier is, section by section. */
 export type CodexSectionConfidence = Partial<
-  Record<'identity' | 'cast' | 'threats' | 'world' | 'things' | 'craft', string>
+  Record<'identity' | 'cast' | 'conflict' | 'world' | 'things' | 'craft', string>
 >;
 
 export interface CodexIdentification {
@@ -280,7 +279,17 @@ export interface CodexData {
   structure?: string;
   /** What separates it from the obvious comparisons. */
   distinctive?: string;
-  /** How strength, rank or threat is measured in this world, roughly ordered. */
+  /** The tensions that actually drive the work, and what is at stake in each. */
+  conflicts?: string[];
+  /** The formal systems the world runs on: magic, tech, rank, law, economy. */
+  worldRules?: string;
+  /** The texture of ordinary life in it. */
+  everydayLife?: string;
+  /** Who made it and how; notable development or production history. */
+  production?: string;
+  /** How it landed: reputation, awards, controversy, what it influenced. */
+  reception?: string;
+  /** @deprecated folded into `worldRules`. Still read from older dossiers. */
   powerScale?: string;
   /** Famous setpieces and beats, kept clear of endings. */
   signatureMoments?: string[];
@@ -306,6 +315,9 @@ export interface CodexData {
     characterDesign?: string;
   };
   characters?: CodexEntity[];
+  /** Who and what stands in opposition — people, groups, forces, creature types. */
+  antagonists?: CodexEntity[];
+  /** @deprecated superseded by `antagonists`. Still read from older dossiers. */
   enemies?: CodexEntity[];
   factions?: CodexEntity[];
   locations?: CodexEntity[];

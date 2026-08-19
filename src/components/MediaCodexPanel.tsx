@@ -22,10 +22,10 @@ import { useToast } from '../contexts/ToastContext';
 const SECTION_LABEL: Record<string, string> = {
   identity: 'which work this is',
   cast: 'the cast',
-  threats: 'the antagonists',
+  conflict: 'conflicts & opposition',
   world: 'places, factions & vocabulary',
-  things: 'items & equipment',
-  craft: 'style, sound & themes',
+  things: 'notable objects',
+  craft: 'style, production & themes',
 };
 
 function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
@@ -54,25 +54,25 @@ function EntityList({ entries, limit = 12, detailed }: { entries?: CodexEntity[]
   return (
     <div className="flex flex-col gap-2">
       {rows.map((e, i) => {
-        // The research grades each entity on the same 1-5 scale the enemy forge
-        // uses, so the badge doubles as an explanation of why a given name shows
-        // up as a level 5 boss and another as a level 1 nuisance.
-        const level = Number(e.level || 0);
         const intro = introOf(e);
         const qualifier = [
-          e.role || e.tier, e.kind, e.rarity, e.affiliation,
+          e.role, e.prominence, e.nature, e.affiliation,
           e.region ? `in ${e.region}` : '',
-          e.opposes ? `vs. ${e.opposes}` : '',
+          e.opposedTo ? `against ${e.opposedTo}` : '',
+          e.opposes ? `opposes ${e.opposes}` : '',
         ].filter(Boolean).join(' · ');
 
-        // The specifics are what the app actually builds from — the moveset for
-        // an enemy, the material for a loot icon, the manner for a taunt line.
+        // The specifics are what a reader actually wants from a reference entry,
+        // and what the generators build from — kept out of the headline so the
+        // list still scans.
         const detail: [string, string | undefined][] = [
-          ['Looks', e.appearance], ['Made of', e.material], ['Can', e.abilities],
-          ['Fights by', e.howItFights], ['Signature', e.signatureAttack], ['Weakness', e.weakness],
-          ['Fought at', e.arena], ['Does', e.effect], ['Carried by', e.owner], ['Origin', e.origin],
-          ['Manner', e.personality], ['Status', e.status], ['Feels', e.atmosphere],
-          ['Used for', e.whatHappensThere], ['Wants', e.goal], ['Emblem', e.symbol], ['Colours', e.colors],
+          ['Looks', e.appearance], ['Made of', e.material], ['Capable of', e.abilities],
+          ['Operates by', e.methods], ['Wants', e.motivation || e.goal],
+          ['Used for', e.purpose], ['Matters because', e.significance],
+          ['Belongs to', e.owner], ['Origin', e.origin],
+          ['Manner', e.personality], ['Connected to', e.relationships], ['Status', e.status],
+          ['Feels', e.atmosphere], ['Where', e.whatHappensThere],
+          ['Emblem', e.symbol], ['Colours', e.colors],
           ['Members', (e.members || []).slice(0, 6).join(', ') || undefined],
         ];
         const shown = detail.filter(([, v]) => v && String(v).trim());
@@ -80,11 +80,6 @@ function EntityList({ entries, limit = 12, detailed }: { entries?: CodexEntity[]
         return (
           <div key={`${e.name}-${i}`} className="text-sm leading-snug">
             <div>
-              {level >= 1 && level <= 5 && (
-                <span className="text-[9px] font-black tracking-widest text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1 py-0.5 mr-1.5 align-middle">
-                  LV{level}
-                </span>
-              )}
               <span className="font-bold text-zinc-200">{e.name}</span>
               {(e.aliases?.length || 0) > 0 && (
                 <span className="text-zinc-600 text-xs"> aka {e.aliases!.slice(0, 3).join(', ')}</span>
@@ -110,6 +105,29 @@ function EntityList({ entries, limit = 12, detailed }: { entries?: CodexEntity[]
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** A list of plain statements — conflicts, signature moments. */
+function Lines({ values, limit = 10 }: { values?: string[]; limit?: number }) {
+  const rows = (values || []).filter(Boolean).slice(0, limit);
+  if (rows.length === 0) return null;
+  return (
+    <ul className="flex flex-col gap-1">
+      {rows.map((v, i) => (
+        <li key={`${v}-${i}`} className="text-sm text-zinc-400 leading-snug pl-3 border-l border-white/10">{v}</li>
+      ))}
+    </ul>
+  );
+}
+
+/** A named division of the entry, the way a reference work would break it up. */
+function Chapter({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="pt-4 border-t border-white/5 space-y-4">
+      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500/60">{title}</h4>
+      {children}
     </div>
   );
 }
@@ -327,135 +345,184 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
             </div>
           )}
 
-          {artStyleLine && (
-            <Section icon={<Palette className="w-3 h-3" />} title="Art style">
-              <p className="text-sm text-zinc-400 leading-snug">{artStyleLine}</p>
-            </Section>
-          )}
-
+          {/* Collapsed, the entry shows what a reference entry opens with: what
+              the work is, who is in it, and what it is about. */}
           {(data.characters?.length || 0) > 0 && (
-            <Section icon={<Users className="w-3 h-3" />} title="Notable characters">
+            <Section icon={<Users className="w-3 h-3" />} title="Cast">
               <EntityList entries={data.characters} limit={expanded ? 24 : 5} detailed={expanded} />
             </Section>
           )}
 
-          {(data.enemies?.length || 0) > 0 && (
-            <Section icon={<Swords className="w-3 h-3" />} title="Enemies & antagonists">
-              <EntityList entries={data.enemies} limit={expanded ? 24 : 5} detailed={expanded} />
-            </Section>
-          )}
-
-          {(data.items?.length || 0) > 0 && (
-            <Section icon={<Gem className="w-3 h-3" />} title="Iconic items">
-              <EntityList entries={data.items} limit={expanded ? 24 : 5} detailed={expanded} />
+          {(data.conflicts?.length || 0) > 0 && (
+            <Section icon={<Swords className="w-3 h-3" />} title="Central tensions">
+              <Lines values={data.conflicts} limit={expanded ? 10 : 4} />
             </Section>
           )}
 
           {expanded && (
             <>
-              {(data.distinctive || data.structure) && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {data.distinctive && (
-                    <Section icon={<Sparkles className="w-3 h-3" />} title="What sets it apart">
-                      <p className="text-sm text-zinc-400 leading-snug">{data.distinctive}</p>
+              <Chapter title="The work">
+                {(data.distinctive || data.structure) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {data.distinctive && (
+                      <Section icon={<Sparkles className="w-3 h-3" />} title="What sets it apart">
+                        <p className="text-sm text-zinc-400 leading-snug">{data.distinctive}</p>
+                      </Section>
+                    )}
+                    {data.structure && (
+                      <Section icon={<BookOpen className="w-3 h-3" />} title="Structure & pacing">
+                        <p className="text-sm text-zinc-400 leading-snug">{data.structure}</p>
+                      </Section>
+                    )}
+                  </div>
+                )}
+                {(data.themes?.length || 0) > 0 && (
+                  <Section icon={<Sparkles className="w-3 h-3" />} title="Themes">
+                    <Chips values={data.themes} />
+                  </Section>
+                )}
+                {(data.signatureMoments?.length || 0) > 0 && (
+                  <Section icon={<Sparkles className="w-3 h-3" />} title="Signature moments">
+                    <Lines values={data.signatureMoments} />
+                  </Section>
+                )}
+              </Chapter>
+
+              <Chapter title="The world">
+                {(data.worldRules || data.powerScale) && (
+                  <Section icon={<Landmark className="w-3 h-3" />} title="How it works">
+                    <p className="text-sm text-zinc-400 leading-snug">{data.worldRules || data.powerScale}</p>
+                  </Section>
+                )}
+                {data.everydayLife && (
+                  <Section icon={<Users className="w-3 h-3" />} title="Everyday life">
+                    <p className="text-sm text-zinc-400 leading-snug">{data.everydayLife}</p>
+                  </Section>
+                )}
+                {(data.locations?.length || 0) > 0 && (
+                  <Section icon={<MapPin className="w-3 h-3" />} title="Places">
+                    <EntityList entries={data.locations} limit={24} detailed />
+                  </Section>
+                )}
+                {(data.factions?.length || 0) > 0 && (
+                  <Section icon={<Landmark className="w-3 h-3" />} title="Factions & organizations">
+                    <EntityList entries={data.factions} limit={24} detailed />
+                  </Section>
+                )}
+                {(data.terminology?.length || 0) > 0 && (
+                  <Section icon={<BookOpen className="w-3 h-3" />} title="In-universe vocabulary">
+                    <EntityList
+                      entries={(data.terminology || []).map((t) => ({
+                        name: t.term, description: t.meaning, role: t.category,
+                        introducedAt: t.introducedAt, introducedPct: t.introducedPct,
+                      }))}
+                      limit={24}
+                    />
+                  </Section>
+                )}
+              </Chapter>
+
+              {/* `enemies` is what dossiers compiled before this was a reference
+                  work called the same section. */}
+              {((data.antagonists?.length || data.enemies?.length || 0) > 0) && (
+                <Chapter title="Opposition">
+                  <Section icon={<Swords className="w-3 h-3" />} title="Who and what stands in the way">
+                    <EntityList
+                      entries={data.antagonists?.length ? data.antagonists : data.enemies}
+                      limit={24}
+                      detailed
+                    />
+                  </Section>
+                </Chapter>
+              )}
+
+              {(data.items?.length || 0) > 0 && (
+                <Chapter title="Objects">
+                  <Section icon={<Gem className="w-3 h-3" />} title="Notable objects">
+                    <EntityList entries={data.items} limit={24} detailed />
+                  </Section>
+                </Chapter>
+              )}
+
+              <Chapter title="Style">
+                {artStyleLine && (
+                  <Section icon={<Palette className="w-3 h-3" />} title="Visual identity">
+                    <p className="text-sm text-zinc-400 leading-snug">{artStyleLine}</p>
+                  </Section>
+                )}
+                {data.soundAndMusic && (
+                  <Section icon={<Music className="w-3 h-3" />} title="Sound & music">
+                    <p className="text-sm text-zinc-400 leading-snug">{data.soundAndMusic}</p>
+                  </Section>
+                )}
+              </Chapter>
+
+              {(data.production || data.reception || (data.relatedWorks?.length || 0) > 0) && (
+                <Chapter title="Production & reception">
+                  {data.production && (
+                    <Section icon={<Landmark className="w-3 h-3" />} title="How it was made">
+                      <p className="text-sm text-zinc-400 leading-snug">{data.production}</p>
                     </Section>
                   )}
-                  {data.structure && (
-                    <Section icon={<BookOpen className="w-3 h-3" />} title="Structure & pacing">
-                      <p className="text-sm text-zinc-400 leading-snug">{data.structure}</p>
+                  {data.reception && (
+                    <Section icon={<Sparkles className="w-3 h-3" />} title="How it landed">
+                      <p className="text-sm text-zinc-400 leading-snug">{data.reception}</p>
                     </Section>
                   )}
-                </div>
+                  {(data.relatedWorks?.length || 0) > 0 && (
+                    <Section icon={<Library className="w-3 h-3" />} title="Related works">
+                      <Chips values={data.relatedWorks} />
+                    </Section>
+                  )}
+                </Chapter>
               )}
-              {data.powerScale && (
-                <Section icon={<Swords className="w-3 h-3" />} title="Power scale">
-                  <p className="text-sm text-zinc-400 leading-snug">{data.powerScale}</p>
-                </Section>
-              )}
-              {(data.signatureMoments?.length || 0) > 0 && (
-                <Section icon={<Sparkles className="w-3 h-3" />} title="Signature moments">
-                  <ul className="flex flex-col gap-1">
-                    {(data.signatureMoments || []).slice(0, 10).map((m, i) => (
-                      <li key={`sm-${i}`} className="text-sm text-zinc-400 leading-snug pl-3 border-l border-white/10">{m}</li>
-                    ))}
-                  </ul>
-                </Section>
-              )}
-              {data.soundAndMusic && (
-                <Section icon={<Music className="w-3 h-3" />} title="Sound & music">
-                  <p className="text-sm text-zinc-400 leading-snug">{data.soundAndMusic}</p>
-                </Section>
-              )}
-              {(data.factions?.length || 0) > 0 && (
-                <Section icon={<Landmark className="w-3 h-3" />} title="Factions">
-                  <EntityList entries={data.factions} limit={24} detailed />
-                </Section>
-              )}
-              {(data.locations?.length || 0) > 0 && (
-                <Section icon={<MapPin className="w-3 h-3" />} title="Locations">
-                  <EntityList entries={data.locations} limit={24} detailed />
-                </Section>
-              )}
-              {(data.terminology?.length || 0) > 0 && (
-                <Section icon={<BookOpen className="w-3 h-3" />} title="Terminology">
-                  <EntityList
-                    entries={(data.terminology || []).map((t) => ({
-                      name: t.term, description: t.meaning, role: t.category,
-                      introducedAt: t.introducedAt, introducedPct: t.introducedPct,
-                    }))}
-                    limit={24}
-                  />
-                </Section>
-              )}
-              {(data.themes?.length || 0) > 0 && (
-                <Section icon={<Sparkles className="w-3 h-3" />} title="Themes">
-                  <Chips values={data.themes} />
-                </Section>
-              )}
-              {((data.genres?.length || 0) > 0 || (data.tags?.length || 0) > 0) && (
-                <Section icon={<ScrollText className="w-3 h-3" />} title="Descriptors the Codex suggests">
-                  <div className="flex flex-wrap gap-1.5">
-                    {(data.genres || []).map((g, i) => (
-                      <span key={`cg-${i}`} className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">{g}</span>
-                    ))}
-                    {(data.tags || []).map((t, i) => (
-                      <span key={`ct-${i}`} className="text-xs px-2 py-1 bg-orange-500/10 text-orange-400 rounded border border-orange-500/20">{t}</span>
-                    ))}
-                  </div>
-                </Section>
-              )}
-              {(data.audience || (data.contentWarnings?.length || 0) > 0) && (
-                <Section icon={<Users className="w-3 h-3" />} title="Audience & content notes">
-                  {data.audience && <p className="text-sm text-zinc-400 leading-snug mb-2">{data.audience}</p>}
-                  <Chips
-                    values={data.contentWarnings}
-                    className="text-xs px-2 py-1 bg-red-500/10 text-red-300 rounded border border-red-500/20"
-                  />
-                </Section>
-              )}
-              {(data.relatedWorks?.length || 0) > 0 && (
-                <Section icon={<Library className="w-3 h-3" />} title="Related works">
-                  <Chips values={data.relatedWorks} />
-                </Section>
-              )}
-              {weakSections.length > 0 && (
-                <Section icon={<AlertTriangle className="w-3 h-3" />} title="Less certain about">
-                  {/* Each area is researched by its own pass, so a shaky lookup
-                      is named rather than souring the whole dossier. */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {weakSections.map(([section, grade]) => (
-                      <span
-                        key={section}
-                        className="text-xs px-2 py-1 bg-amber-500/10 text-amber-300/80 rounded border border-amber-500/20"
-                      >
-                        {SECTION_LABEL[section] || section} · {grade}
-                      </span>
-                    ))}
-                  </div>
-                </Section>
-              )}
-              {data.notes && (
-                <p className="text-xs text-zinc-500 italic leading-snug">{data.notes}</p>
+
+              <Chapter title="Classification">
+                {((data.genres?.length || 0) > 0 || (data.tags?.length || 0) > 0) && (
+                  <Section icon={<ScrollText className="w-3 h-3" />} title="Descriptors the Codex suggests">
+                    <div className="flex flex-wrap gap-1.5">
+                      {(data.genres || []).map((g, i) => (
+                        <span key={`cg-${i}`} className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">{g}</span>
+                      ))}
+                      {(data.tags || []).map((t, i) => (
+                        <span key={`ct-${i}`} className="text-xs px-2 py-1 bg-orange-500/10 text-orange-400 rounded border border-orange-500/20">{t}</span>
+                      ))}
+                    </div>
+                  </Section>
+                )}
+                {(data.audience || (data.contentWarnings?.length || 0) > 0) && (
+                  <Section icon={<Users className="w-3 h-3" />} title="Audience & content notes">
+                    {data.audience && <p className="text-sm text-zinc-400 leading-snug mb-2">{data.audience}</p>}
+                    <Chips
+                      values={data.contentWarnings}
+                      className="text-xs px-2 py-1 bg-red-500/10 text-red-300 rounded border border-red-500/20"
+                    />
+                  </Section>
+                )}
+              </Chapter>
+
+              {(weakSections.length > 0 || data.notes) && (
+                <Chapter title="About this research">
+                  {weakSections.length > 0 && (
+                    <Section icon={<AlertTriangle className="w-3 h-3" />} title="Less certain about">
+                      {/* Each area is researched by its own pass, so a shaky lookup
+                          is named rather than souring the whole dossier. */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {weakSections.map(([section, grade]) => (
+                          <span
+                            key={section}
+                            className="text-xs px-2 py-1 bg-amber-500/10 text-amber-300/80 rounded border border-amber-500/20"
+                          >
+                            {SECTION_LABEL[section] || section} · {grade}
+                          </span>
+                        ))}
+                      </div>
+                    </Section>
+                  )}
+                  {data.notes && (
+                    <p className="text-xs text-zinc-500 italic leading-snug">{data.notes}</p>
+                  )}
+                </Chapter>
               )}
               {(data.sources?.length || 0) > 0 && (
                 <Section icon={<ExternalLink className="w-3 h-3" />} title="Sources consulted">

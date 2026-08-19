@@ -152,7 +152,7 @@ THE DROP (fixed by the game — honour it exactly):
 - Bonus: it grants a bonus to ${attrs.targetType}: "${attrs.targetValue}".
 
 HOW TO CHOOSE THE OBJECT:
-1. Reach into this specific world first. The Codex lists its iconic items, its equipment, its factions, its terminology and its materials — the best drop is usually one of those, or a variant of one that a character in this world would plausibly own.
+1. Reach into this specific world first. The Codex is a reference on the work — its objects, its factions, its vocabulary, its materials — and nothing in it has been sorted by rarity or reserved for any tier. The best drop is usually something it records, or a variant of one that a character in this world would plausibly own.
 2. If nothing there fits the slot or the rarity, invent one — but build it out of this work's own material culture: its technology level, its craft, its named organizations, its slang. A drop from a 90s office comedy is a laminated badge or a stapler, not an enchanted amulet. A drop from a hard sci-fi series is hardware, not a rune.
 3. Let rarity decide the stature of what you pick. Common is a genuinely mundane, everyday object from that world. Mythic is the artifact the entire plot revolves around.
 

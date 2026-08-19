@@ -121,7 +121,7 @@ export interface CodexIdentity {
   notes?: string;
 }
 
-export type Facet = "cast" | "threats" | "world" | "things" | "craft";
+export type Facet = "cast" | "conflict" | "world" | "things" | "craft";
 
 export interface FacetSpec {
   /** Appended to the title to form the search query line. */
@@ -142,17 +142,16 @@ export interface FacetSpec {
 }
 
 /**
- * The `level` scale, defined once. Characters and enemies are graded on it at
- * research time so the enemy forge picks from a shortlist that already fits the
- * level it was asked for, instead of inferring stature from prose.
+ * The line that keeps this a reference work rather than a props cupboard.
+ *
+ * Every facet gets it, because the failure it prevents is subtle. Asked for
+ * "enemies, with tiers and weaknesses", a researcher goes looking for things
+ * that would make good bosses instead of recording what is actually in the
+ * work — and where there is no combat at all it invents antagonism that was
+ * never there. The game's own vocabulary has to stay out of the research
+ * entirely, or it quietly decides what gets researched.
  */
-const LEVEL_SCALE = `"level" is the size of encounter this would make, on the game's 1-5 scale:
-  1 — a nuisance the fandom would find funny. A shopkeeper, a rat, a bureaucrat.
-  2 — a common obstacle. A regular grunt, a minor rival.
-  3 — a named, memorable fight. A mid-story antagonist or a serious challenge.
-  4 — a major setpiece. A lieutenant, a famous duel, a wall the story turns on.
-  5 — what the whole work builds towards. There should be very few of these.
-Grade every entry, and spread them across all five levels rather than clustering at 3 and 4 — the game needs candidates at every tier and will otherwise send the same handful of names over and over.`;
+const REFERENCE_NOT_TEMPLATE = `THIS IS A REFERENCE WORK, NOT A STOCK OF READY-MADE GAME PIECES. Record what is TRUE about this work, in the work's own terms and vocabulary. Do not grade anything on a difficulty scale, do not sort anything into rarities or boss tiers, and do not describe anything as though it were about to be fought or equipped. Other parts of the app invent encounters and rewards later, and they do that better reading facts than picking from a list someone already made for them. Your job is to be accurate and thorough, not useful.`;
 
 /**
  * Where a thing first turns up, so downstream features can be gated on how far
@@ -165,100 +164,106 @@ export const FACET_SPECS: Record<Facet, FacetSpec> = {
     query: "main characters full cast list who's who",
     brief: `Every named character of any importance: leads, supporting cast, mentors, rivals, recurring minor figures, memorable one-offs.
 For each one write a short paragraph covering:
-- who they are and what they do in the story
-- what they LOOK like — build, hair, eyes, clothing, distinguishing features, colours. Be specific; this is used to draw them.
-- what they can do: abilities, skills, powers, equipment, or simply what they are good at
+- who they are, what they do, and what part they play in the work
+- what they LOOK like — build, hair, eyes, clothing, distinguishing features, colours. Be specific; a reader should be able to picture them.
+- what they are capable of: skills, powers, training, expertise, or simply what they are good at
 - how they behave and how they speak — temperament, manner, verbal tics, catchphrases
-- who they are aligned with, and any other names, titles, epithets or nicknames they go by
-- where in the work they first appear, if you can tell
-- how dangerous or significant they are compared with the rest of the cast`,
+- who they are connected to, and how: family, rivals, mentors, partners, who they answer to
+- any other names, titles, epithets or nicknames they go by, and which organisation they belong to
+- how central they are to the work, and where in it they first appear`,
     nonFiction: `the cast is the real people: hosts, presenters, regular contestants, commentators, drivers, athletes, guests. Describe them as they actually are and actually look. Never dress a real person up as a fantasy creature.`,
     keys: ["characters"],
-    shape: `{"characters": [{"name": "", "aliases": [""], "role": "protagonist | antagonist | supporting | mentor | rival | minor | ...", "affiliation": "", "level": 3, "description": "who they are and what they do", "appearance": "what they look like, concretely", "abilities": "", "personality": "temperament, manner, how they speak", "status": "", "introducedAt": "", "introducedPct": 0}]}`,
-    structureNotes: `${LEVEL_SCALE}\n${INTRODUCED}`,
+    shape: `{"characters": [{"name": "", "aliases": [""], "role": "protagonist | antagonist | supporting | mentor | rival | comic relief | narrator | ...", "prominence": "central | major | recurring | minor", "affiliation": "", "relationships": "how they connect to the rest of the cast", "description": "who they are and what they do", "appearance": "what they look like, concretely", "abilities": "what they are capable of", "personality": "temperament, manner, how they speak", "status": "", "introducedAt": "", "introducedPct": 0}]}`,
+    structureNotes: `"prominence" is how central the character is TO THE WORK — a fact about the story, not a rating of anything. "central" is a lead, "minor" is someone who appears once or twice.\n${INTRODUCED}`,
   },
-  threats: {
-    query: "antagonists villains enemies monsters bestiary list",
-    brief: `Every antagonistic force in the work: villains, rivals, monsters, enemy types, factions in opposition, and — if it has no combat at all — its obstacles, pressures and thematic adversaries.
-For each one write a short paragraph covering:
-- what it is and what it wants
-- what it LOOKS like, concretely enough to draw
-- how it fights, presses or obstructs, and the specific move, tactic or trick it is known for
-- what beats it: its weakness, counter, or the way it is overcome
-- where it is encountered
-- how big a deal it is compared with the rest of the opposition
-Include the ordinary ranks and lesser threats, not only the headline villains.`,
-    nonFiction: `the opposition is real: rival competitors, rival teams, the reigning champion, the defending title-holder, the format's own difficulty, the clock, the weather, the conditions. Treat those as the threats.`,
-    keys: ["enemies"],
-    shape: `{"enemies": [{"name": "", "aliases": [""], "tier": "minion | elite | boss | final", "level": 4, "description": "what it is and what it wants", "appearance": "what it looks like, concretely", "howItFights": "", "signatureAttack": "", "weakness": "", "arena": "where it is encountered", "affiliation": "", "introducedAt": "", "introducedPct": 0}]}`,
-    structureNotes: `${LEVEL_SCALE}\n${INTRODUCED}\nIf the work has no combat, its obstacles and rivals still go in "enemies", graded the same way — the app must be able to build an opponent out of anything.`,
+  conflict: {
+    query: "central conflict antagonists rivalries what drives the story",
+    brief: `What this work is ABOUT, in terms of opposition and tension. Two parts.
+
+THE CONFLICTS: the tensions that actually drive it. Not a list of fights — the real pressures. A struggle against an empire, yes, but equally a rivalry, a deadline, a debt, an illness, a family expectation, a moral compromise, the weather, the passing of time. Name the ones a critic would name, and say what is at stake in each.
+
+WHO AND WHAT STANDS IN OPPOSITION: the antagonists — individuals, groups, institutions, forces of nature, or the recurring creature and enemy types the work has if it has any (name the classes as the work names them). For each: who or what it is, what it wants and why, how it operates and what it is capable of, who or what it is set against, and what it looks like.
+
+Where a work has no villain at all, that is a fact worth recording plainly — describe what actually creates its tension instead, and do not manufacture an adversary to fill the space.`,
+    nonFiction: `the opposition is real and usually not personal: rival competitors, rival teams, the reigning champion, the defending title-holder, the format's own difficulty, the clock, the weather, the conditions, the rules themselves.`,
+    keys: ["conflicts", "antagonists"],
+    shape: `{
+  "conflicts": ["4-8 lines, each naming a central tension and what is at stake in it"],
+  "antagonists": [{"name": "", "aliases": [""], "nature": "person | group | institution | creature type | force | circumstance", "motivation": "what it wants and why", "methods": "how it operates and what it is capable of", "opposedTo": "who or what it stands against", "description": "who or what it is", "appearance": "what it looks like, concretely", "affiliation": "", "introducedAt": "", "introducedPct": 0}]
+}`,
+    structureNotes: `Do not invent an antagonist the notes do not describe. A work whose "antagonists" list is short and whose "conflicts" list is long is being recorded correctly, not badly.\n${INTRODUCED}`,
   },
   world: {
-    query: "setting locations map factions organizations glossary terminology",
-    brief: `The furniture of the world, in three parts.
+    query: "setting worldbuilding locations factions organizations glossary terminology",
+    brief: `How this world works and what is in it. Five parts.
+
 PLACES: every named location of note — cities, regions, buildings, ships, realms, venues. For each: what it is, what it looks and feels like, what larger region it sits in, and what happens there.
-GROUPS: every faction, organisation, team, house, guild, corporation, network or recurring group. For each: what they are, what they want, who they stand against, who belongs to them, and their emblem, uniform or colours.
+GROUPS: every faction, organisation, team, house, guild, corporation, network or recurring group. For each: what they are, what they want, who they answer to, who belongs to them, and their emblem, uniform or colours.
 VOCABULARY: the in-universe terms — ranks, currencies, magic or tech systems, institutions, titles, laws, slang, catchphrases. For each: what it means and what kind of term it is.
-Where you can tell, note where in the work each of these first comes up.`,
-    nonFiction: `all three are real. Places are the actual venues — circuits, studios, arenas, the cities it is filmed or held in. Groups are the real teams, constructors, networks, production companies or recurring line-ups. Vocabulary is the genuine jargon of that world: DRS, the undercut, the rules of the game, scoring terms, in-show catchphrases.`,
-    keys: ["factions", "locations", "terminology"],
+HOW THE WORLD WORKS: the formal systems it runs on, described as systems — its magic or technology and what the rules and costs of using it are, its ranks or hierarchies and how someone moves through them, its economy, its law, its politics. Name them as the work names them. If the work has no such system, say so plainly rather than inventing one.
+EVERYDAY LIFE: the texture of it — what ordinary people do, eat, wear, believe and worry about, and how class, work and family are arranged.`,
+    nonFiction: `all of it is real. Places are the actual venues — circuits, studios, arenas, the cities it is filmed or held in. Groups are the real teams, constructors, networks, production companies or recurring line-ups. Vocabulary is the genuine jargon: DRS, the undercut, the rules of the game, scoring terms, in-show catchphrases. "How the world works" is the real format and regulations — the points system, the rules, the qualifying structure, the eligibility criteria.`,
+    keys: ["locations", "factions", "terminology", "worldRules", "everydayLife"],
     shape: `{
   "locations": [{"name": "", "region": "the larger place it sits in", "description": "what it is", "atmosphere": "what it looks and feels like", "whatHappensThere": "", "introducedAt": "", "introducedPct": 0}],
   "factions": [{"name": "", "goal": "what they want", "opposes": "who they stand against", "members": ["notable members"], "symbol": "emblem, uniform or insignia", "colors": "", "description": "what they are", "introducedAt": "", "introducedPct": 0}],
-  "terminology": [{"term": "", "meaning": "", "category": "rank | currency | magic or tech | institution | title | law | slang | catchphrase | other", "introducedAt": "", "introducedPct": 0}]
+  "terminology": [{"term": "", "meaning": "", "category": "rank | currency | magic or tech | institution | title | law | slang | catchphrase | other", "introducedAt": "", "introducedPct": 0}],
+  "worldRules": "the formal systems the world runs on and the rules and costs that govern them; empty string if it has none",
+  "everydayLife": "the texture of ordinary life in it"
 }`,
     structureNotes: INTRODUCED,
   },
   things: {
-    query: "iconic items weapons equipment artifacts gear list",
-    brief: `Every object that matters: weapons, armour, vehicles, tools, relics, consumables, keepsakes, trophies, documents, props.
+    query: "notable objects artifacts equipment props what characters carry",
+    brief: `The objects this work is associated with: things characters carry, wear, drive, treasure or fight over, and the ordinary props it is remembered for.
 For each one write a short paragraph covering:
-- what it is and why it matters to the story
+- plainly WHAT IT IS, in ordinary words. A sword is a sword; a cassette tape is a cassette tape; a laminated badge is a laminated badge.
 - what it LOOKS like and what it is made of — shape, materials, wear, markings, colour
-- what it does, grants or enables
-- who owns or wields it, and where it came from
-- how rare, prized or commonplace it is
-- where in the work it first turns up
-Include ordinary, everyday objects the work is associated with, not only legendary artifacts.`,
+- what it does, or what it is for
+- what it MEANS in the work: why it matters, what it represents, what turns on it
+- who owns or uses it, and where it came from
+Include the ordinary and the everyday, not only the legendary. A work's most memorable object is often mundane.`,
     nonFiction: `the objects are real equipment and paraphernalia: the cars, the trophy, the buzzer, the format's props, the signature gear, the kit.`,
     keys: ["items"],
-    shape: `{"items": [{"name": "", "kind": "weapon | armour | accessory | consumable | relic | vehicle | tool | document | other", "material": "what it is made of and how it reads", "appearance": "what it looks like, concretely", "effect": "what it does or grants", "owner": "", "origin": "", "rarity": "commonplace | uncommon | prized | one of a kind", "description": "what it is and why it matters", "introducedAt": "", "introducedPct": 0}]}`,
+    shape: `{"items": [{"name": "", "nature": "plainly what kind of object it is, in ordinary words", "material": "what it is made of", "appearance": "what it looks like, concretely", "purpose": "what it does or what it is for", "significance": "what it means in the work and why it matters", "owner": "", "origin": "", "description": "", "introducedAt": "", "introducedPct": 0}]}`,
     structureNotes: INTRODUCED,
   },
   craft: {
-    query: "premise plot summary themes art style visual design soundtrack tone reception",
-    brief: `What this work is like, as a made thing. Cover, in prose:
+    query: "premise plot summary themes art style visual design soundtrack production reception",
+    brief: `What this work is like as a made thing, and how it landed. Cover, in prose:
 - the premise in one spoiler-free line, then a fuller summary of what actually happens
 - the setting: where and when, how advanced, how it is governed, what daily life is like
 - the tone and register, and who it is for — how mature, and anything a newcomer should be warned about
 - its recurring themes and preoccupations
 - how it is structured and paced: arcs, routes, seasons, volumes, acts, episode or chapter counts, episodic or serialised
-- how strength, rank, threat or status is measured in this world, and the actual names of its tiers if it has them
-- what sets it apart from the obvious comparisons — the thing its fans name first
+- what sets it apart from the obvious comparisons — the thing its admirers name first
 - the setpieces, beats and images it is famous for, avoiding ending spoilers
 - its sound: score, composer, instrumentation, signature sounds or voices
-- its VISUAL identity in detail — the medium and technique it is rendered in, its palette, how it is lit and in what weather and time of day, its line quality and level of detail, how shots are framed, the design language of its people and creatures, and its recurring motifs, emblems and architecture. An adaptation does not look like its source; describe how THIS version looks.
+- its VISUAL identity in detail — the medium and technique it is rendered in, its palette, how it is lit and in what weather and time of day, its line quality and how much detail it resolves, how shots are framed, the design language of its people and creatures, and its recurring motifs, emblems and architecture. An adaptation does not look like its source; describe how THIS version looks.
+- how it was made: the studio, the authors, the notable production or development history, anything unusual about how it came to exist
+- how it was received: acclaim or dismissal, awards, controversy, its reputation now, what it influenced
 - the descriptive words that would classify it: its genres, and the subject matter, mechanics, structure, mood and audience terms that apply`,
-    nonFiction: `do not force it into a story it does not have and do not invent one. The setting is the real world it takes place in — the sport, the era, the calendar, the studio — the structure is its real format (rounds, race weekends, episode formats, seasons), the power scale is its real standings or ranking system, and the themes are what it is actually about. Say plainly that this is a non-fiction work.`,
+    nonFiction: `do not force it into a story it does not have and do not invent one. The setting is the real world it takes place in — the sport, the era, the calendar, the studio — the structure is its real format (rounds, race weekends, episode formats, seasons), and the themes are what it is actually about. Say plainly that this is a non-fiction work.`,
     keys: [
       "premise", "overview", "setting", "tone", "themes", "structure", "distinctive",
-      "powerScale", "signatureMoments", "soundAndMusic", "audience", "contentWarnings",
-      "relatedWorks", "artStyle", "genres", "tags",
+      "signatureMoments", "soundAndMusic", "audience", "contentWarnings",
+      "relatedWorks", "production", "reception", "artStyle", "genres", "tags",
     ],
     shape: `{
   "premise": "one spoiler-free sentence — the hook someone would be given before starting",
   "overview": "3-5 sentences on what it is and what happens in it",
-  "setting": "2-3 concrete sentences on the world, era and places — geography, technology level, social order",
+  "setting": "2-3 concrete sentences on the world, era and places — geography, technology, social order",
   "tone": "one line on mood and register",
   "themes": ["6-10 recurring themes or motifs"],
   "structure": "how it is organised and paced",
   "distinctive": "what separates it from the obvious comparisons",
-  "powerScale": "how strength, rank or threat is measured here, ordered, naming the real tiers if it has them",
   "signatureMoments": ["4-8 famous setpieces, beats or images. Avoid ending spoilers"],
   "soundAndMusic": "its sonic identity",
   "audience": "who it is for and how mature it is",
   "contentWarnings": ["anything worth knowing in advance; empty if nothing notable"],
   "relatedWorks": ["sequels, prequels, adaptations and other entries in the same franchise, with format and year"],
+  "production": "who made it and how; notable development or production history",
+  "reception": "how it was received, its reputation, awards or controversy, what it influenced",
   "artStyle": {
     "summary": "the visual style named precisely (cel-shaded anime key-art, gritty photoreal 3D, 16-bit pixel art, ligne claire ink, watercolour…)",
     "medium": "the medium or technique it is rendered in",
@@ -280,7 +285,7 @@ export const FACETS = Object.keys(FACET_SPECS) as Facet[];
 /** How many entries each list should carry before the research counts as thin. */
 export const FACET_FLOORS: Partial<Record<string, number>> = {
   characters: 8,
-  enemies: 8,
+  antagonists: 5,
   factions: 4,
   locations: 6,
   items: 8,
@@ -290,7 +295,7 @@ export const FACET_FLOORS: Partial<Record<string, number>> = {
 /** Which facet to re-run when a given list comes back short. */
 export const FACET_FOR_KEY: Record<string, Facet> = {
   characters: "cast",
-  enemies: "threats",
+  antagonists: "conflict",
   factions: "world",
   locations: "world",
   terminology: "world",
@@ -442,11 +447,14 @@ ${gapBlock}
 
 WRITE UP: ${spec.brief}
 
+${REFERENCE_NOT_TEMPLATE}
+
 How to answer:
 - Prose, not JSON, not a schema. Headings and bullets are fine. Length is not a problem — this is the one place the detail gets recorded, and everything the app later invents is built from it.
 - Name things. Never write "various characters", "several locations" or "a rich world" — those are worth nothing to the reader of this dossier.
 - BREADTH IS THE POINT. The obvious headline entries are the easy part; the value is in the long tail. Aim well past a dozen entries where the work supports it, and include the minor, the regional and the everyday.
 - Prefer widely known material. Avoid late-story twists and ending spoilers — the user may still be partway through.
+- Write it as an encyclopedia would: what is true, in the work's own vocabulary. Not a pitch, not a stat block, not a list of things someone could use.
 - If you genuinely cannot verify something, leave it out and say so at the end rather than inventing it. A short honest answer beats a padded one.
 - Finish with one line: CONFIDENCE: high | medium | low, and a few words on why.
 
@@ -476,6 +484,7 @@ Convert those notes into JSON. Rules:
 - BE EXHAUSTIVE. Every named entry in the notes gets a record. Do not summarise, do not select the interesting ones, do not stop at ten. Dropping entries is the one thing that ruins this step.
 - Fill every field the notes support. Leave a field out entirely when the notes do not cover it — never write "unknown", "N/A" or a guess.
 - Keep the notes' own wording where it is concrete. Descriptions should be one or two tight lines.
+- This is a reference record. Do not add difficulty ratings, rarities, tiers or any other grading the notes do not contain — if it is not in the notes it does not go in the record.
 ${spec.structureNotes ? `- ${spec.structureNotes}\n` : ""}
 Return ONLY a pure JSON object, no markdown fence, no commentary, in exactly this shape:
 ${spec.shape}
