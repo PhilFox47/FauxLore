@@ -224,7 +224,7 @@ export function Universes() {
 
         <div className="relative w-full h-[300px] sm:h-[400px] rounded-2xl overflow-hidden border border-white/5 bg-zinc-900">
           {currentFranchise.coverImageUrl ? (
-            <img src={currentFranchise.coverImageUrl} className="w-full h-full object-cover opacity-50" />
+            <img src={currentFranchise.coverImageUrl} className="w-full h-full object-cover opacity-50" referrerPolicy="no-referrer" />
           ) : (
             <div className="w-full h-full bg-gradient-to-tr from-zinc-800 to-zinc-900" />
           )}
@@ -527,7 +527,7 @@ export function Universes() {
             className="group relative h-48 rounded-2xl overflow-hidden cursor-pointer border border-white/5"
           >
             {franchise.coverImageUrl ? (
-              <img src={franchise.coverImageUrl} className="w-full h-full object-cover transition duration-500 group-hover:scale-110 opacity-60 group-hover:opacity-80" />
+              <img src={franchise.coverImageUrl} className="w-full h-full object-cover transition duration-500 group-hover:scale-110 opacity-60 group-hover:opacity-80" referrerPolicy="no-referrer" />
             ) : (
               <div className="w-full h-full bg-zinc-800 transition duration-500 group-hover:bg-zinc-700 flex items-center justify-center">
                 <Globe className="w-10 h-10 text-white/10" />

@@ -656,7 +656,15 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
 
         const coverRel = m.relationships.find((r: any) => r.type === "cover_art");
         const filename = coverRel?.attributes?.fileName;
-        const coverImageUrl = filename ? `https://uploads.mangadex.org/covers/${m.id}/${filename}` : "";
+        // MangaDex's bare cover path is the original upload — a full-resolution
+        // scan, frequently several megabytes. It also publishes 256px and 512px
+        // renditions, which is what a cover slot in this app actually needs.
+        //
+        // Note for whoever touches the display side: MangaDex answers any
+        // request whose Referer is neither a mangadex.org URL nor empty with a
+        // "read this at MangaDex" placeholder instead of the cover. Every <img>
+        // that shows cover art therefore needs referrerPolicy="no-referrer".
+        const coverImageUrl = filename ? `https://uploads.mangadex.org/covers/${m.id}/${filename}.512.jpg` : "";
 
         let totalChapters = attr.lastChapter ? Math.floor(parseFloat(attr.lastChapter)) : undefined;
         let totalIssues = attr.lastVolume ? Math.floor(parseFloat(attr.lastVolume)) : undefined;

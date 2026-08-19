@@ -1160,7 +1160,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                    #{i+1}
                  </div>
                  {r.item.coverImageUrl && (
-                   <img src={r.item.coverImageUrl} className="w-10 h-14 object-cover rounded-md shadow-lg shrink-0 border border-white/10" alt="" />
+                   <img src={r.item.coverImageUrl} className="w-10 h-14 object-cover rounded-md shadow-lg shrink-0 border border-white/10" alt="" referrerPolicy="no-referrer" />
                  )}
                  <div className="flex flex-col min-w-0">
                     <span className="font-bold text-white text-base truncate">{r.item.title}</span>
@@ -1616,7 +1616,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
         <div className="relative z-10 flex flex-col sm:flex-row items-center gap-8 p-5 md:p-12">
           <div className="w-40 h-56 md:w-48 md:h-72 rounded-2xl overflow-hidden border border-white/10 shadow-2xl shrink-0 bg-zinc-900">
             {m.coverImageUrl
-              ? <img src={m.coverImageUrl} className="w-full h-full object-cover" alt={m.title} />
+              ? <img src={m.coverImageUrl} className="w-full h-full object-cover" alt={m.title} referrerPolicy="no-referrer" />
               : <div className="w-full h-full flex items-center justify-center text-zinc-700"><Library className="w-12 h-12" /></div>}
           </div>
           <div className="flex-1 min-w-0 text-center sm:text-left">
@@ -2472,7 +2472,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                                 )}
                                 <div className="w-20 h-28 bg-zinc-800 rounded-2xl shrink-0 border border-white/10 overflow-hidden relative z-10 shadow-2xl">
                                    {m.coverImageUrl ? (
-                                     <img src={m.coverImageUrl} className="w-full h-full object-cover" alt="" />
+                                     <img src={m.coverImageUrl} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
                                    ) : (
                                      <div className="w-full h-full flex items-center justify-center text-zinc-600"><Library /></div>
                                    )}
@@ -2505,7 +2505,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                              {activeMedia.filter(m => m.status !== 'Completed' && m.status !== 'Extras').map(m => (
                                 <div key={m.id} className="group relative aspect-[3/4.5] rounded-2xl overflow-hidden border border-white/5 hover:border-white/20 transition-all shadow-xl">
                                    {m.coverImageUrl ? (
-                                     <img src={m.coverImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={m.title} />
+                                     <img src={m.coverImageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={m.title} referrerPolicy="no-referrer" />
                                    ) : (
                                      <div className="w-full h-full bg-zinc-900 flex items-center justify-center text-zinc-700"><Library /></div>
                                    )}
@@ -2536,7 +2536,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                              {droppedMedia.map(m => (
                                 <div key={m.id} className="group relative aspect-[3/4.5] rounded-2xl overflow-hidden border border-rose-900/30 hover:border-rose-500/50 transition-all shadow-xl">
                                    {m.coverImageUrl ? (
-                                     <img src={m.coverImageUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-700" alt={m.title} />
+                                     <img src={m.coverImageUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-700" alt={m.title} referrerPolicy="no-referrer" />
                                    ) : (
                                      <div className="w-full h-full bg-zinc-950 flex items-center justify-center text-zinc-800"><Skull /></div>
                                    )}

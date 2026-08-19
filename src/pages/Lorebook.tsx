@@ -212,7 +212,7 @@ export function Lorebook() {
                         <div className="shrink-0 flex items-start sm:items-center gap-3 w-full sm:w-48 border-b sm:border-b-0 sm:border-r border-white/5 pb-3 sm:pb-0 sm:pr-4">
                           {mediaItem.coverImageUrl ? (
                             <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 shadow-inner border border-white/10 bg-black">
-                              <img src={mediaItem.coverImageUrl} className="w-full h-full object-cover opacity-80" />
+                              <img src={mediaItem.coverImageUrl} className="w-full h-full object-cover opacity-80" referrerPolicy="no-referrer" />
                             </div>
                           ) : (
                             <div className={cn("w-10 h-10 rounded-lg shrink-0 border border-white/10 shadow-inner flex items-center justify-center bg-black/50")}>

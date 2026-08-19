@@ -114,7 +114,7 @@ export function ReleaseRadar() {
                 
                 {/* Large Hype Cover */}
                 <div className="w-full md:w-56 lg:w-72 shrink-0 rounded-2xl overflow-hidden shadow-2xl aspect-[2/3] relative group-hover:-translate-y-2 transition-transform duration-500">
-                  <img src={item.coverImageUrl || "https://images.unsplash.com/photo-1618519764611-bd0823006228?auto=format&fit=crop&q=80&w=400"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={item.title} />
+                  <img src={item.coverImageUrl || "https://images.unsplash.com/photo-1618519764611-bd0823006228?auto=format&fit=crop&q=80&w=400"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={item.title} referrerPolicy="no-referrer" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
                   <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
                     <span className="text-xs font-black uppercase tracking-[0.2em] bg-blue-500/20 text-blue-300 px-3 py-1.5 rounded-lg backdrop-blur-md border border-blue-500/30">
