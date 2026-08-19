@@ -20,6 +20,7 @@ import { createNotifications } from "./services/notifications";
 import { reportBrowserStatus } from "./integrations/gamestorylog";
 import { createBackupManager } from "./services/backup";
 import { createImageService } from "./services/images";
+import { createCoverCache } from "./services/coverCache";
 import { createWorldBossService } from "./services/worldBoss";
 import { createCodexService } from "./services/codex";
 import { createLootService } from "./services/loot";
@@ -67,8 +68,10 @@ async function startServer() {
   // Uploads Manager
   const uploadsDir = path.join(dataDir, "uploads");
   const aiImagesDir = path.join(uploadsDir, "ai-images");
+  const coversDir = path.join(uploadsDir, "covers");
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
   if (!fs.existsSync(aiImagesDir)) fs.mkdirSync(aiImagesDir);
+  if (!fs.existsSync(coversDir)) fs.mkdirSync(coversDir);
 
   // Schema + migrations must run before any startup query reads a table. Both are
   // idempotent and safe to run against an existing production database:
@@ -93,6 +96,7 @@ async function startServer() {
 
   const codex = createCodexService({ db });
   const { generateBossImageBackground, generateArtifactImageBackground } = createImageService({ db, aiImagesDir, codex });
+  const coverCache = createCoverCache({ coversDir });
   const { spawnWorldBoss, generateEnemy } = createWorldBossService({ db, generateBossImageBackground, codex });
   const { generateLoot } = createLootService({ db, codex });
   const autoTag = createAutoTagService({ db, codex });
@@ -144,6 +148,7 @@ async function startServer() {
   recalcTaxonomyUsageCounts(db);
 
   const ctx: ServerContext = {
+    coverCache,
     db,
     getAuthUser,
     normalizeMedia,

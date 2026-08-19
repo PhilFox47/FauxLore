@@ -183,6 +183,24 @@ export const IntegrationsService = {
   },
 
   /**
+   * Takes a local copy of every cover still hosted on someone else's server.
+   *
+   * MangaDex in particular answers a hotlinked cover with a "read this at
+   * MangaDex" banner, and the only reliable fix is to serve the file ourselves.
+   */
+  async cacheAllCovers(): Promise<{ checked: number; cached: number; skipped: { title: string; reason: string }[] }> {
+    const response = await fetch('/api/media/covers/cache', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('fauxlore_token')}` },
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => null);
+      throw new Error(err?.error || 'Caching covers failed');
+    }
+    return response.json();
+  },
+
+  /**
    * Search TMDB for Movies or Series
    */
   async searchTMDBMetadata(query: string, type: 'Movie' | 'Series'): Promise<MovieMetadata[] | SeriesMetadata[]> {

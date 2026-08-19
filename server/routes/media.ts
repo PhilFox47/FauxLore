@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
+import { isRemoteCover } from "../services/coverCache";
 
 /**
  * Genres and tags that keep a cover off the login page.
@@ -13,7 +14,7 @@ import type { ServerContext } from "../context";
 const ADULT_TERMS = new Set(["erotic", "nsfw", "eroge", "sexual content"]);
 
 export function registerMediaRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser, normalizeMedia, safeJsonParse, syncOngoingMediaInBackground, autoTag, activity } = ctx;
+  const { db, getAuthUser, normalizeMedia, safeJsonParse, syncOngoingMediaInBackground, autoTag, activity, coverCache } = ctx;
 
   app.get("/api/public/covers", (req, res) => {
     try {
@@ -100,11 +101,59 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/media", (req, res) => {
+  /**
+   * Takes a local copy of every cover still pointing at someone else's server.
+   *
+   * For libraries built before covers were cached. Entries whose cover cannot
+   * be fetched, or comes back the wrong shape, are left exactly as they are —
+   * so this is safe to run more than once and reports what it skipped.
+   */
+  app.post("/api/media/covers/cache", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      // A request per entry against whichever CDNs the library was built from.
+      if (!activity.requireActive(userId as string, res)) return;
+
+      const rows = db.prepare(
+        `SELECT id, title, coverImageUrl FROM media
+          WHERE userId = ? AND coverImageUrl IS NOT NULL AND coverImageUrl LIKE 'http%'`,
+      ).all(userId) as any[];
+
+      const update = db.prepare('UPDATE media SET coverImageUrl = ? WHERE id = ? AND userId = ?');
+      let cached = 0;
+      const skipped: { title: string; reason: string }[] = [];
+
+      for (const row of rows) {
+        const result = await coverCache.cacheCover(row.coverImageUrl);
+        if (result.cached) {
+          update.run(result.url, row.id, userId);
+          cached++;
+        } else {
+          skipped.push({ title: row.title, reason: result.reason || 'unknown' });
+        }
+      }
+
+      res.json({ checked: rows.length, cached, skipped });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/media", async (req, res) => {
     try {
       const item = req.body;
       const userId = getAuthUser(req, res);
       if (!userId) return;
+
+      // Take a local copy of the cover before the row is written, so the app
+      // never depends on someone else's CDN staying friendly. A cover that
+      // cannot be fetched — or that comes back the wrong shape, which is how a
+      // hotlink placeholder announces itself — keeps its remote URL and behaves
+      // exactly as it did before.
+      if (isRemoteCover(item.coverImageUrl)) {
+        const result = await coverCache.cacheCover(item.coverImageUrl);
+        if (result.cached) item.coverImageUrl = result.url;
+        else console.warn(`Could not cache cover for "${item.title}": ${result.reason}`);
+      }
 
       // Whether this is a brand-new entry decides if tagging gets queued below;
       // it has to be read before the upsert makes the row exist either way.

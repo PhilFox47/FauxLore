@@ -77,6 +77,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     questConfigs: {} as Record<string, any>
   });
   
+  const [isCachingCovers, setIsCachingCovers] = useState(false);
+  const [cacheMessage, setCacheMessage] = useState<{ type: 'success' | 'error'; text: string }>({ type: 'success', text: '' });
+
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -288,6 +291,26 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{success: boolean, message: string} | null>(null);
+
+  const handleCacheCovers = async () => {
+    setIsCachingCovers(true);
+    setCacheMessage({ type: 'success', text: '' });
+    try {
+      const result = await IntegrationsService.cacheAllCovers();
+      const failed = result.skipped?.length || 0;
+      setCacheMessage({
+        type: 'success',
+        text: result.checked === 0
+          ? 'Every cover is already stored locally.'
+          : `Stored ${result.cached} of ${result.checked} covers locally.${failed ? ` ${failed} could not be fetched and kept their original link.` : ''}`,
+      });
+      if (result.cached > 0) await refreshData();
+    } catch (e: any) {
+      setCacheMessage({ type: 'error', text: e.message || 'Caching covers failed.' });
+    } finally {
+      setIsCachingCovers(false);
+    }
+  };
 
   const handleTestConnection = async () => {
     if (!formData.nanoGptApiKey) {
@@ -1145,6 +1168,28 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     {coverMessage.text && (
                       <p className={`mt-3 text-sm font-medium ${coverMessage.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
                         {coverMessage.text}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="bg-zinc-900/50 border border-white/5 rounded-xl p-5 mt-4">
+                    <p className="text-sm text-zinc-400 mb-4">
+                      Some sources refuse to serve cover art to another site and send back their own logo instead —
+                      MangaDex does this. This downloads every cover still hosted elsewhere and serves it from
+                      FauxLore, which also means covers survive a source reorganising its CDN.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleCacheCovers}
+                      disabled={isCachingCovers}
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 font-bold text-sm rounded-lg transition-colors border border-emerald-500/30 disabled:opacity-50"
+                    >
+                      <ImageIcon className={`w-4 h-4 ${isCachingCovers ? 'animate-pulse' : ''}`} />
+                      {isCachingCovers ? 'Downloading covers...' : 'Store covers locally'}
+                    </button>
+                    {cacheMessage.text && (
+                      <p className={`mt-3 text-sm font-medium ${cacheMessage.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {cacheMessage.text}
                       </p>
                     )}
                   </div>
