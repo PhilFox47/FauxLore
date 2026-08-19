@@ -190,6 +190,14 @@ export interface CodexEntity {
   description?: string;
   role?: string;
   tier?: string;
+  /** What size of encounter this would make, on the game's own 1-5 scale. */
+  level?: number;
+  /** For items: weapon, armour, accessory, consumable, relic, vehicle, tool… */
+  kind?: string;
+  /** For items: what it is made of and how it reads — fuel for an icon prompt. */
+  material?: string;
+  /** For factions: who they stand against. */
+  opposes?: string;
 }
 
 export interface CodexIdentification {
@@ -206,15 +214,40 @@ export interface CodexIdentification {
 export interface CodexData {
   /** Which work the research settled on, so a wrong match can be spotted. */
   identifiedAs?: CodexIdentification;
+  /** The spoiler-free hook — what someone would be told before starting. */
+  premise?: string;
   overview?: string;
   setting?: string;
   tone?: string;
   themes?: string[];
+  /** How it is organised: arcs, routes, seasons, volumes, acts, chapters. */
+  structure?: string;
+  /** What separates it from the obvious comparisons. */
+  distinctive?: string;
+  /** How strength, rank or threat is measured in this world, roughly ordered. */
+  powerScale?: string;
+  /** Famous setpieces and beats, kept clear of endings. */
+  signatureMoments?: string[];
+  /** Its sonic identity: score, instrumentation, signature sounds. */
+  soundAndMusic?: string;
+  /** Who it is for, and what a reader should be warned about. */
+  audience?: string;
+  contentWarnings?: string[];
+  /** Sibling works — sequels, adaptations, entries in the same franchise. */
+  relatedWorks?: string[];
   artStyle?: {
     summary?: string;
     medium?: string;
     palette?: string;
     iconography?: string;
+    /** How it is lit, and in what weather and time of day it usually sits. */
+    lighting?: string;
+    /** Line quality, rendering, texture, resolution of detail. */
+    linework?: string;
+    /** How shots are framed and composed in this work. */
+    composition?: string;
+    /** The design language of its people and creatures. */
+    characterDesign?: string;
   };
   characters?: CodexEntity[];
   enemies?: CodexEntity[];

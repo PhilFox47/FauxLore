@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ScrollText, Sparkles, Palette, Users, Swords, Landmark, MapPin, Gem, BookOpen,
-  Loader2, RefreshCw, AlertTriangle, ExternalLink,
+  Loader2, RefreshCw, AlertTriangle, ExternalLink, Music, Library,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { CodexData, CodexEntity, MediaCodex } from '../types/schema';
@@ -34,15 +34,28 @@ function EntityList({ entries, limit = 12 }: { entries?: CodexEntity[]; limit?: 
   if (rows.length === 0) return null;
   return (
     <div className="flex flex-col gap-1.5">
-      {rows.map((e, i) => (
-        <div key={`${e.name}-${i}`} className="text-sm leading-snug">
-          <span className="font-bold text-zinc-200">{e.name}</span>
-          {(e.role || e.tier) && (
-            <span className="text-[10px] uppercase tracking-widest text-amber-500/70 font-black ml-2">{e.role || e.tier}</span>
-          )}
-          {e.description && <span className="text-zinc-400"> — {e.description}</span>}
-        </div>
-      ))}
+      {rows.map((e, i) => {
+        // The research grades each entity on the same 1-5 scale the enemy forge
+        // uses, so the badge doubles as an explanation of why a given name shows
+        // up as a level 5 boss and another as a level 1 nuisance.
+        const level = Number(e.level || 0);
+        const qualifier = [e.role || e.tier, e.kind, e.opposes ? `vs. ${e.opposes}` : '', e.material]
+          .filter(Boolean).join(' · ');
+        return (
+          <div key={`${e.name}-${i}`} className="text-sm leading-snug">
+            {level >= 1 && level <= 5 && (
+              <span className="text-[9px] font-black tracking-widest text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1 py-0.5 mr-1.5 align-middle">
+                LV{level}
+              </span>
+            )}
+            <span className="font-bold text-zinc-200">{e.name}</span>
+            {qualifier && (
+              <span className="text-[10px] uppercase tracking-widest text-amber-500/70 font-black ml-2">{qualifier}</span>
+            )}
+            {e.description && <span className="text-zinc-400"> — {e.description}</span>}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -160,6 +173,14 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
   const data = codex?.data;
   const isBusy = isCompiling || codex?.status === 'generating';
 
+  // The art style is researched in eight facets so an image prompt has something
+  // to work with; collapsed, only the four broad ones are worth the room.
+  const art = data?.artStyle;
+  const artStyleLine = [
+    art?.summary, art?.medium, art?.palette, art?.iconography,
+    ...(expanded ? [art?.lighting, art?.linework, art?.composition, art?.characterDesign] : []),
+  ].filter(Boolean).join(' · ');
+
   return (
     <div className="mb-8">
       <div className="flex items-center justify-between gap-3 mb-3">
@@ -224,6 +245,7 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
       {codex?.status === 'ready' && data && (
         <div className="rounded-2xl border border-white/10 bg-black/20 p-5 space-y-5">
           <IdentifiedAs data={data} mediaType={mediaType} year={year} season={season} />
+          {data.premise && <p className="text-sm text-zinc-200 leading-relaxed font-medium">{data.premise}</p>}
           {data.overview && <p className="text-sm text-zinc-300 leading-relaxed">{data.overview}</p>}
 
           {(data.setting || data.tone) && (
@@ -241,11 +263,9 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
             </div>
           )}
 
-          {data.artStyle && (data.artStyle.summary || data.artStyle.medium || data.artStyle.palette || data.artStyle.iconography) && (
+          {artStyleLine && (
             <Section icon={<Palette className="w-3 h-3" />} title="Art style">
-              <p className="text-sm text-zinc-400 leading-snug">
-                {[data.artStyle.summary, data.artStyle.medium, data.artStyle.palette, data.artStyle.iconography].filter(Boolean).join(' · ')}
-              </p>
+              <p className="text-sm text-zinc-400 leading-snug">{artStyleLine}</p>
             </Section>
           )}
 
@@ -269,19 +289,52 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
 
           {expanded && (
             <>
+              {(data.distinctive || data.structure) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {data.distinctive && (
+                    <Section icon={<Sparkles className="w-3 h-3" />} title="What sets it apart">
+                      <p className="text-sm text-zinc-400 leading-snug">{data.distinctive}</p>
+                    </Section>
+                  )}
+                  {data.structure && (
+                    <Section icon={<BookOpen className="w-3 h-3" />} title="Structure & pacing">
+                      <p className="text-sm text-zinc-400 leading-snug">{data.structure}</p>
+                    </Section>
+                  )}
+                </div>
+              )}
+              {data.powerScale && (
+                <Section icon={<Swords className="w-3 h-3" />} title="Power scale">
+                  <p className="text-sm text-zinc-400 leading-snug">{data.powerScale}</p>
+                </Section>
+              )}
+              {(data.signatureMoments?.length || 0) > 0 && (
+                <Section icon={<Sparkles className="w-3 h-3" />} title="Signature moments">
+                  <ul className="flex flex-col gap-1">
+                    {(data.signatureMoments || []).slice(0, 10).map((m, i) => (
+                      <li key={`sm-${i}`} className="text-sm text-zinc-400 leading-snug pl-3 border-l border-white/10">{m}</li>
+                    ))}
+                  </ul>
+                </Section>
+              )}
+              {data.soundAndMusic && (
+                <Section icon={<Music className="w-3 h-3" />} title="Sound & music">
+                  <p className="text-sm text-zinc-400 leading-snug">{data.soundAndMusic}</p>
+                </Section>
+              )}
               {(data.factions?.length || 0) > 0 && (
                 <Section icon={<Landmark className="w-3 h-3" />} title="Factions">
-                  <EntityList entries={data.factions} />
+                  <EntityList entries={data.factions} limit={20} />
                 </Section>
               )}
               {(data.locations?.length || 0) > 0 && (
                 <Section icon={<MapPin className="w-3 h-3" />} title="Locations">
-                  <EntityList entries={data.locations} />
+                  <EntityList entries={data.locations} limit={20} />
                 </Section>
               )}
               {(data.terminology?.length || 0) > 0 && (
                 <Section icon={<BookOpen className="w-3 h-3" />} title="Terminology">
-                  <EntityList entries={(data.terminology || []).map((t) => ({ name: t.term, description: t.meaning }))} />
+                  <EntityList entries={(data.terminology || []).map((t) => ({ name: t.term, description: t.meaning }))} limit={20} />
                 </Section>
               )}
               {(data.themes?.length || 0) > 0 && (
@@ -299,6 +352,20 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
                       <span key={`ct-${i}`} className="text-xs px-2 py-1 bg-orange-500/10 text-orange-400 rounded border border-orange-500/20">{t}</span>
                     ))}
                   </div>
+                </Section>
+              )}
+              {(data.audience || (data.contentWarnings?.length || 0) > 0) && (
+                <Section icon={<Users className="w-3 h-3" />} title="Audience & content notes">
+                  {data.audience && <p className="text-sm text-zinc-400 leading-snug mb-2">{data.audience}</p>}
+                  <Chips
+                    values={data.contentWarnings}
+                    className="text-xs px-2 py-1 bg-red-500/10 text-red-300 rounded border border-red-500/20"
+                  />
+                </Section>
+              )}
+              {(data.relatedWorks?.length || 0) > 0 && (
+                <Section icon={<Library className="w-3 h-3" />} title="Related works">
+                  <Chips values={data.relatedWorks} />
                 </Section>
               )}
               {data.notes && (

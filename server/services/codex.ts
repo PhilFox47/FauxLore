@@ -26,6 +26,20 @@ export interface CodexEntity {
   description?: string;
   role?: string;
   tier?: string;
+  /**
+   * What size of encounter this would make, on the game's own 1-5 scale.
+   *
+   * The enemy forge has to pick an opponent whose stature matches a given
+   * level, and was left inferring that from prose. Grading the cast at research
+   * time means the pick is made from a shortlist that already fits.
+   */
+  level?: number;
+  /** For items: weapon, armour, accessory, consumable, relic, vehicle, tool… */
+  kind?: string;
+  /** For items: what it is made of and how it reads — fuel for an icon prompt. */
+  material?: string;
+  /** For factions: who they stand against. */
+  opposes?: string;
 }
 
 /** What the research actually landed on, so a wrong match can be spotted. */
@@ -42,15 +56,40 @@ export interface CodexIdentification {
 
 export interface CodexData {
   identifiedAs?: CodexIdentification;
+  /** The spoiler-free hook — what someone would be told before starting. */
+  premise?: string;
   overview?: string;
   setting?: string;
   tone?: string;
   themes?: string[];
+  /** How it is organised: arcs, routes, seasons, volumes, acts, chapters. */
+  structure?: string;
+  /** What separates it from the obvious comparisons. Feeds tagging. */
+  distinctive?: string;
+  /** How strength, rank or threat is measured in this world, roughly ordered. */
+  powerScale?: string;
+  /** Famous setpieces and beats, kept clear of endings. */
+  signatureMoments?: string[];
+  /** Its sonic identity: score, instrumentation, signature sounds. */
+  soundAndMusic?: string;
+  /** Who it is for, and what a reader should be warned about. */
+  audience?: string;
+  contentWarnings?: string[];
+  /** Sibling works — sequels, adaptations, entries in the same franchise. */
+  relatedWorks?: string[];
   artStyle?: {
     summary?: string;
     medium?: string;
     palette?: string;
     iconography?: string;
+    /** How it is lit, and in what weather and time of day it usually sits. */
+    lighting?: string;
+    /** Line quality, rendering, texture, resolution of detail. */
+    linework?: string;
+    /** How shots are framed and composed in this work. */
+    composition?: string;
+    /** The design language of its people and creatures. */
+    characterDesign?: string;
   };
   characters?: CodexEntity[];
   enemies?: CodexEntity[];
@@ -152,39 +191,62 @@ export function codexPromptBlock(codex: CodexRow | null): string {
   const push = (label: string, value?: string) => {
     if (value && value.trim()) lines.push(`${label}: ${value.trim()}`);
   };
-  const pushEntities = (label: string, entries: any[], limit = 10) => {
+  // Limits are generous on purpose: the dossier is compiled once and read by
+  // everything, and a consumer that only needs the top of a list can ignore the
+  // rest far more easily than it can invent what was never researched.
+  const pushEntities = (label: string, entries: any[], limit = 16) => {
     const rendered = entries
       .filter((e) => e && e.name)
       .slice(0, limit)
       .map((e) => {
-        const qualifier = [e.role, e.tier].filter(Boolean).join(", ");
-        return `  - ${e.name}${qualifier ? ` (${qualifier})` : ""}${e.description ? `: ${e.description}` : ""}`;
+        // The encounter level goes first: it is what the enemy forge filters on.
+        const qualifier = [
+          e.level ? `Lv${e.level}` : "",
+          e.role,
+          e.tier,
+          e.kind,
+          e.opposes ? `opposes ${e.opposes}` : "",
+        ].filter(Boolean).join(", ");
+        const extra = e.material ? ` [${e.material}]` : "";
+        return `  - ${e.name}${qualifier ? ` (${qualifier})` : ""}${e.description ? `: ${e.description}` : ""}${extra}`;
       });
     if (rendered.length) lines.push(`${label}:`, ...rendered);
   };
 
+  push("Premise", d.premise);
   push("Overview", d.overview);
   push("Setting", d.setting);
   push("Tone", d.tone);
+  push("What sets it apart", d.distinctive);
+  push("Structure & pacing", d.structure);
+  push("Power scale", d.powerScale);
   if (list(d.themes).length) push("Themes", list(d.themes).join(", "));
+  if (list(d.signatureMoments).length) {
+    lines.push("Signature moments:", ...list(d.signatureMoments).slice(0, 8).map((m: any) => `  - ${m}`));
+  }
+  push("Sound & music", d.soundAndMusic);
   if (d.artStyle) {
-    const art = [d.artStyle.summary, d.artStyle.medium, d.artStyle.palette, d.artStyle.iconography]
-      .filter(Boolean)
-      .join(" | ");
+    const art = [
+      d.artStyle.summary, d.artStyle.medium, d.artStyle.palette,
+      d.artStyle.lighting, d.artStyle.linework, d.artStyle.composition,
+      d.artStyle.characterDesign, d.artStyle.iconography,
+    ].filter(Boolean).join(" | ");
     push("Art style & visual identity", art);
   }
   pushEntities("Notable characters", list(d.characters));
   pushEntities("Enemies, monsters & antagonists", list(d.enemies));
-  pushEntities("Factions & organizations", list(d.factions), 6);
-  pushEntities("Locations", list(d.locations), 6);
+  pushEntities("Factions & organizations", list(d.factions), 10);
+  pushEntities("Locations", list(d.locations), 12);
   pushEntities("Iconic items & equipment", list(d.items));
   const terms = list(d.terminology)
     .filter((t) => t && t.term)
-    .slice(0, 10)
+    .slice(0, 16)
     .map((t) => `  - ${t.term}: ${t.meaning || ""}`);
   if (terms.length) lines.push("In-universe terminology:", ...terms);
   if (list(d.genres).length) push("Descriptive genres", list(d.genres).join(", "));
   if (list(d.tags).length) push("Descriptive tags", list(d.tags).join(", "));
+  push("Audience", d.audience);
+  if (list(d.contentWarnings).length) push("Content notes", list(d.contentWarnings).join(", "));
   push("Creators", d.creators);
   if (d.releaseYear) push("Released", String(d.releaseYear));
   if (d.confidence && d.confidence !== "high") {
@@ -329,24 +391,37 @@ Return ONLY a pure JSON object, no markdown fence, no commentary, in exactly thi
     "why": "one sentence on how you know this is the right one and not a same-named work",
     "alternatives": ["same-named works you rejected, with their year and format"]
   },
-  "overview": "2-4 sentences: ${season ? `what season ${season} is about — its own arc and what distinguishes it from the seasons around it` : "what this work is, its premise and what makes it distinctive"}",
-  "setting": "${season ? `where and when season ${season} takes place` : "the world/era/place it takes place in"}",
+  "premise": "one spoiler-free sentence — the hook someone would be given before starting",
+  "overview": "3-5 sentences: ${season ? `what season ${season} is about — its own arc and what distinguishes it from the seasons around it` : "what this work is, what happens in it, and what makes it distinctive"}",
+  "setting": "2-3 sentences on ${season ? `where and when season ${season} takes place` : "the world, era and places it takes place in"} — be concrete about geography, technology level and social order",
   "tone": "one line on mood and register (e.g. bleak military sci-fi with black comedy)",
-  "themes": ["up to 6 recurring themes or motifs"],
+  "themes": ["6-10 recurring themes or motifs"],
+  "structure": "how it is organised and paced: arcs, routes, seasons, volumes, acts, chapter counts, whether it is episodic or serialised",
+  "distinctive": "what separates this from the obvious comparisons — the thing its fans would name first",
+  "powerScale": "how strength, rank, threat or status is measured in this world, roughly ordered from weakest to strongest, naming the actual tiers if it has them",
+  "signatureMoments": ["4-8 famous setpieces, beats or images this work is known for. Avoid ending spoilers"],
+  "soundAndMusic": "its sonic identity: score, instrumentation, signature sounds or voices",
+  "audience": "who it is for and how mature it is",
+  "contentWarnings": ["anything a reader should know about in advance; empty array if nothing notable"],
+  "relatedWorks": ["sequels, prequels, adaptations and other entries in the same franchise, each with its format and year"],
   "artStyle": {
     "summary": "the actual visual style of THIS work, named precisely (e.g. cel-shaded anime key-art, gritty photoreal 3D, 16-bit pixel art, ligne claire ink, watercolour picture-book). An adaptation does not look like its source — describe what this version looks like",
     "medium": "the medium/technique it is rendered in",
-    "palette": "its characteristic colours and lighting",
+    "palette": "its characteristic colours",
+    "lighting": "how it is lit, and the weather and time of day it usually sits in",
+    "linework": "line quality, rendering, texture, how much detail it resolves",
+    "composition": "how shots are framed and composed in this work",
+    "characterDesign": "the design language of its people and creatures — silhouettes, proportions, costume logic",
     "iconography": "recurring visual motifs, emblems, logos, insignia, costume or architecture cues"
   },
-  "characters": [{"name": "", "role": "protagonist | antagonist | supporting | ...", "description": "one line on who they are and how they look"}],
-  "enemies": [{"name": "", "tier": "minion | elite | boss | final", "description": "one line on what it is, how it fights and how it looks"}],
-  "factions": [{"name": "", "description": "one line"}],
-  "locations": [{"name": "", "description": "one line"}],
-  "items": [{"name": "", "description": "one line on the iconic weapons, tools, artifacts or objects of this work"}],
-  "terminology": [{"term": "", "meaning": "in-universe jargon, ranks, magic systems, currencies"}],
-  "genres": ["up to 5 genre terms that describe this work, most defining first"],
-  "tags": ["up to 15 descriptive tags: subject matter, mechanics, structure, mood, audience"],
+  "characters": [{"name": "", "role": "protagonist | antagonist | supporting | mentor | rival | ...", "level": 3, "description": "1-2 lines on who they are, what they can do, and how they look"}],
+  "enemies": [{"name": "", "tier": "minion | elite | boss | final", "level": 4, "description": "1-2 lines on what it is, how it fights and how it looks"}],
+  "factions": [{"name": "", "opposes": "who they stand against", "description": "one line on what they are and what they want"}],
+  "locations": [{"name": "", "description": "one line on what it is and what it looks like"}],
+  "items": [{"name": "", "kind": "weapon | armour | accessory | consumable | relic | vehicle | tool", "material": "what it is made of and how it reads", "description": "one line on what it is and why it matters"}],
+  "terminology": [{"term": "", "meaning": "in-universe jargon, ranks, magic systems, currencies, institutions"}],
+  "genres": ["3-6 genre terms that describe this work, most defining first"],
+  "tags": ["12-20 descriptive tags: subject matter, mechanics, structure, mood, audience"],
   "creators": "the studio, developer, author or director actually responsible",
   "releaseYear": ${year || 0},
   "confidence": "high | medium | low",
@@ -354,7 +429,24 @@ Return ONLY a pure JSON object, no markdown fence, no commentary, in exactly thi
   "sources": ["up to 4 URLs you actually consulted"]
 }
 
-Aim for up to 8 characters, 8 enemies, 5 factions, 5 locations, 8 items and 8 terminology entries — as many as the work genuinely supports. If the work has no combat at all, still fill "enemies" with its obstacles, rivals, antagonistic forces or thematic adversaries, because the app must be able to build an opponent out of it.
+DEPTH IS THE POINT. This dossier is compiled once, with web search, and then every other feature reads it for the life of this entry — so a thin one is a permanent handicap. Fill it out properly:
+- characters: 10-16
+- enemies: 10-16
+- factions: 5-10
+- locations: 8-12
+- items: 10-16
+- terminology: 10-16
+Only a genuinely small work should come in under those, and if you find yourself well short of them, search again before settling — you have almost certainly not looked hard enough. Breadth beats repetition: minor recurring characters, regional factions, everyday objects and ordinary places all belong here, not just the headline cast.
+
+THE "level" FIELD on characters and enemies is the size of encounter that entity would make, on a 1-5 scale the game uses:
+  1 — a nuisance the fandom would find funny. A shopkeeper, a rat, a bureaucrat.
+  2 — a common obstacle. A regular grunt, a minor rival.
+  3 — a named, memorable fight. A mid-story antagonist or a serious challenge.
+  4 — a major setpiece. A lieutenant, a famous duel, a wall the story turns on.
+  5 — what the whole work builds towards. There should be very few of these.
+Grade every character and enemy. Spread them across all five levels rather than clustering everything at 3 and 4; the game needs candidates at every tier and will otherwise send the same handful of names over and over.
+
+If the work has no combat at all, still fill "enemies" with its obstacles, rivals, antagonistic forces or thematic adversaries, graded the same way, because the app must be able to build an opponent out of it.
 
 IF THIS IS NOT FICTION — a reality or competition show, a documentary, a podcast, a sporting competition — do not force it into a story it does not have, and do not invent one. The fields still apply, they just mean real things:
 - "characters" are the real people: hosts, presenters, regular contestants, commentators, drivers, athletes. Describe them as they actually appear.
@@ -450,6 +542,119 @@ export function identificationProblem(data: CodexData, subject: CodexSubject): s
   }
 
   return null;
+}
+
+/**
+ * How many entries each list should really carry. The prompt asks for more than
+ * this; these are the floors below which a dossier is thin enough to hobble
+ * everything that reads it.
+ */
+export const DEPTH_FLOORS = {
+  characters: 8,
+  enemies: 8,
+  factions: 4,
+  locations: 6,
+  items: 8,
+  terminology: 8,
+} as const;
+
+export type DepthGap = { key: keyof typeof DEPTH_FLOORS; have: number; want: number };
+
+/** Which of the dossier's lists came back under their floor, and by how much. */
+export function depthGaps(data: CodexData): DepthGap[] {
+  return (Object.keys(DEPTH_FLOORS) as (keyof typeof DEPTH_FLOORS)[])
+    .map((key) => {
+      const rows = Array.isArray((data as any)?.[key]) ? (data as any)[key] : [];
+      const have = rows.filter((e: any) => e && (e.name || e.term)).length;
+      return { key, have, want: DEPTH_FLOORS[key] };
+    })
+    .filter((g) => g.have < g.want);
+}
+
+/**
+ * Whether a thin dossier is worth a second, targeted research pass.
+ *
+ * The web-search call is the most expensive thing the app does, so this is
+ * deliberately reluctant: a genuinely small work is allowed to be short. It
+ * fires when the shortfall is broad (three or more lists under floor) or when
+ * the two lists the enemy forge actually draws from came back less than half
+ * full — the cases where the dossier would keep sending the same few names.
+ */
+export function needsExpansion(gaps: DepthGap[]): boolean {
+  if (gaps.length >= 3) return true;
+  return gaps.some((g) => (g.key === "characters" || g.key === "enemies") && g.have * 2 < g.want);
+}
+
+const GAP_BRIEF: Record<keyof typeof DEPTH_FLOORS, string> = {
+  characters: `"characters": [{"name": "", "role": "", "level": 3, "description": "1-2 lines on who they are, what they can do, and how they look"}]`,
+  enemies: `"enemies": [{"name": "", "tier": "minion | elite | boss | final", "level": 4, "description": "1-2 lines on what it is, how it fights and how it looks"}]`,
+  factions: `"factions": [{"name": "", "opposes": "", "description": "one line on what they are and what they want"}]`,
+  locations: `"locations": [{"name": "", "description": "one line on what it is and what it looks like"}]`,
+  items: `"items": [{"name": "", "kind": "weapon | armour | accessory | consumable | relic | vehicle | tool", "material": "", "description": "one line on what it is and why it matters"}]`,
+  terminology: `"terminology": [{"term": "", "meaning": "in-universe jargon, ranks, systems, currencies, institutions"}]`,
+};
+
+/**
+ * A second pass that asks only for what was missed, with everything already
+ * found listed so it does not simply return the same names again.
+ */
+export function buildExpansionPrompt(subject: CodexSubject, data: CodexData, gaps: DepthGap[]): string {
+  const season = subjectSeason(subject);
+  const identified = data.identifiedAs || {};
+  const nameOf = (e: any) => String(e?.name || e?.term || "").trim();
+  const already = (key: keyof typeof DEPTH_FLOORS) =>
+    (Array.isArray((data as any)[key]) ? (data as any)[key] : []).map(nameOf).filter(Boolean);
+
+  const asks = gaps.map((g) => {
+    const have = already(g.key);
+    return `- ${g.key}: you found ${g.have}, we need at least ${g.want}. Already on file (do NOT repeat these): ${have.join(", ") || "nothing"}`;
+  }).join("\n");
+
+  return `You are the Codex Archivist of FauxLore. A dossier you compiled for "${identified.title || subject.title}"${identified.year ? ` (${identified.year})` : ""}${season ? `, season ${season}` : ""} — ${TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`} — came back thin in places. This is the same work you already identified; do not identify it again and do not describe a different one.
+
+WHAT IT IS: ${data.premise || data.overview || subject.title}
+${data.setting ? `SETTING: ${data.setting}` : ""}
+
+USE WEB SEARCH to fill the gaps below. Search for the specific thing that is missing — a cast list, a bestiary, a wiki's location or glossary index${season ? `, for season ${season} specifically` : ""} — rather than re-reading the plot summary.
+
+${asks}
+
+Rules:
+- Return ONLY entries that are NEW. Repeating a name already on file wastes the call.
+- Breadth is what is wanted: minor recurring characters, regional factions, everyday objects, ordinary places and background jargon all count.
+- "level" is the size of encounter an entity would make, 1 (a nuisance the fandom would find funny) to 5 (what the whole work builds towards). Spread the new entries across the low and middle of that scale; the headline names are already on file.${season ? `
+- SCOPE: season ${season} only, and nothing first revealed in season ${season + 1} or later.` : ""}
+- If the work genuinely has no more of something, return an empty array for it rather than inventing filler.
+
+Return ONLY a pure JSON object, no markdown fence, no commentary, containing exactly these keys:
+{
+  ${gaps.map((g) => GAP_BRIEF[g.key]).join(",\n  ")}
+}`;
+}
+
+/**
+ * Folds an expansion pass into the dossier: new names are appended, existing
+ * ones are left exactly as they were researched the first time.
+ */
+export function mergeExpansion(data: CodexData, extra: any, gaps: DepthGap[]): CodexData {
+  if (!extra || typeof extra !== "object") return data;
+  const merged: any = { ...data };
+  const nameOf = (e: any) => String(e?.name || e?.term || "").trim().toLowerCase();
+
+  for (const { key } of gaps) {
+    const incoming = Array.isArray(extra[key]) ? extra[key] : [];
+    if (!incoming.length) continue;
+    const current: any[] = Array.isArray((merged as any)[key]) ? (merged as any)[key] : [];
+    const seen = new Set(current.map(nameOf).filter(Boolean));
+    for (const row of incoming) {
+      const name = nameOf(row);
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      current.push(row);
+    }
+    merged[key] = current;
+  }
+  return merged;
 }
 
 /** Codex storage plus the on-demand generation the AI features call into. */
@@ -555,6 +760,27 @@ export function createCodexService({ db }: { db: Db }) {
           confidence: "low",
           notes: [`Could not confirm this is the right work: ${problem}`, data.notes].filter(Boolean).join(" "),
         };
+      } else {
+        // The dossier is read for the life of the entry, so a thin one is worth
+        // one more targeted pass — but only when it is thin enough to matter,
+        // and only when we are sure we researched the right work.
+        const gaps = depthGaps(data);
+        if (needsExpansion(gaps)) {
+          console.warn(
+            `Codex for "${subject.title}" came back thin (${gaps.map((g) => `${g.key} ${g.have}/${g.want}`).join(", ")}). Filling the gaps.`,
+          );
+          try {
+            const extraRaw = await nanoGenerateText(aiConfig, buildExpansionPrompt(subject, data, gaps), {
+              temperature: 0.3,
+              webSearch: true,
+            });
+            const extra = extraRaw ? parseJsonLoose<any>(extraRaw) : null;
+            if (extra) data = mergeExpansion(data, extra, gaps);
+          } catch (e) {
+            // A failed gap-fill leaves a short but valid dossier, which is fine.
+            console.error("Codex gap-fill failed; keeping the first pass", e);
+          }
+        }
       }
 
       db.prepare(
