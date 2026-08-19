@@ -1,6 +1,14 @@
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
+import {
+  FACETS, FACET_FLOORS, FACET_FOR_KEY, FACET_SPECS, TYPE_BRIEF,
+  buildFacetPrompt, buildIdentifyPrompt, buildStructurePrompt,
+  subjectSeason, subjectYear,
+  type CodexIdentity, type CodexSubject, type Facet, type ResearchContext,
+} from "./codexResearch";
+
+export { subjectSeason, subjectYear, type CodexSubject };
 
 /**
  * The Codex: one researched dossier per media entry, shared by every AI feature.
@@ -21,8 +29,18 @@ import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
  * saved) is adopted by that entry once it exists.
  */
 
+/**
+ * One thing in a work: a person, a threat, a place, a group, an object.
+ *
+ * The fields are a superset — a character has no `material` and an item has no
+ * `personality` — because everything that reads a Codex reads them the same way
+ * and a shared shape keeps that simple. Every field past `name` is optional and
+ * absent when the research did not support it.
+ */
 export interface CodexEntity {
   name: string;
+  /** Other names, titles, epithets and nicknames this goes by. */
+  aliases?: string[];
   description?: string;
   role?: string;
   tier?: string;
@@ -34,12 +52,67 @@ export interface CodexEntity {
    * time means the pick is made from a shortlist that already fits.
    */
   level?: number;
-  /** For items: weapon, armour, accessory, consumable, relic, vehicle, tool… */
+
+  /** What it looks like, kept apart from what it is — image prompts need this alone. */
+  appearance?: string;
+  /** Which group, house, team or side it belongs to. */
+  affiliation?: string;
+
+  // People
+  abilities?: string;
+  /** Temperament, manner, verbal tics — the voice to write it in. */
+  personality?: string;
+  status?: string;
+
+  // Threats
+  howItFights?: string;
+  /** The move or tactic it is known for. Boss flavour writes itself from this. */
+  signatureAttack?: string;
+  weakness?: string;
+  /** Where it is fought, ideally a name from the locations list. */
+  arena?: string;
+
+  // Objects
+  /** weapon, armour, accessory, consumable, relic, vehicle, tool… */
   kind?: string;
-  /** For items: what it is made of and how it reads — fuel for an icon prompt. */
+  /** What it is made of and how it reads — fuel for an icon prompt. */
   material?: string;
-  /** For factions: who they stand against. */
+  effect?: string;
+  owner?: string;
+  origin?: string;
+  rarity?: string;
+
+  // Places
+  /** The larger place this sits inside, giving the world a hierarchy. */
+  region?: string;
+  atmosphere?: string;
+  whatHappensThere?: string;
+
+  // Groups
+  /** Who they stand against. */
   opposes?: string;
+  goal?: string;
+  symbol?: string;
+  colors?: string;
+  members?: string[];
+
+  /**
+   * Where this first appears, in the work's own units, and as a rough
+   * percentage. Lets everything downstream be gated on how far the user has
+   * actually got rather than on the entry as a whole.
+   */
+  introducedAt?: string;
+  introducedPct?: number;
+}
+
+/** A piece of in-universe vocabulary. */
+export interface CodexTerm {
+  term: string;
+  meaning: string;
+  /** rank, currency, magic or tech, institution, title, law, slang, catchphrase… */
+  category?: string;
+  introducedAt?: string;
+  introducedPct?: number;
 }
 
 /** What the research actually landed on, so a wrong match can be spotted. */
@@ -52,7 +125,22 @@ export interface CodexIdentification {
   creator?: string;
   why?: string;
   alternatives?: string[];
+  /**
+   * Every other name the work goes by — original-language title, romanisation,
+   * regional titles, abbreviations, what its wiki files it under. The facet
+   * searches are keyed on these, which is how the detailed material gets found.
+   */
+  alsoKnownAs?: string[];
 }
+
+/**
+ * How well-supported each part of the dossier is.
+ *
+ * One global flag used to tar everything with the weakest section: research can
+ * be certain about the cast and vague about the soundtrack, and a consumer that
+ * only reads the cast should not be told the whole thing is shaky.
+ */
+export type CodexSectionConfidence = Partial<Record<"identity" | Facet, string>>;
 
 export interface CodexData {
   identifiedAs?: CodexIdentification;
@@ -96,12 +184,14 @@ export interface CodexData {
   factions?: CodexEntity[];
   locations?: CodexEntity[];
   items?: CodexEntity[];
-  terminology?: { term: string; meaning: string }[];
+  terminology?: CodexTerm[];
   genres?: string[];
   tags?: string[];
   creators?: string;
   releaseYear?: number | string;
   confidence?: string;
+  /** Per-section confidence, so one weak area does not discredit the rest. */
+  sectionConfidence?: CodexSectionConfidence;
   notes?: string;
   sources?: string[];
 }
@@ -167,6 +257,16 @@ function safeList(value: any): string[] {
   }
 }
 
+/** Human names for the research sections, used when reporting confidence. */
+export const SECTION_LABEL: Record<string, string> = {
+  identity: "which work this is",
+  cast: "the cast",
+  threats: "the antagonists",
+  world: "places, factions & vocabulary",
+  things: "items & equipment",
+  craft: "style, sound & themes",
+};
+
 /** Renders a Codex as the context block that gets embedded in other prompts. */
 export function codexPromptBlock(codex: CodexRow | null): string {
   const d = codex?.data;
@@ -191,24 +291,62 @@ export function codexPromptBlock(codex: CodexRow | null): string {
   const push = (label: string, value?: string) => {
     if (value && value.trim()) lines.push(`${label}: ${value.trim()}`);
   };
+  /** Where a thing first appears, rendered only when the research knew. */
+  const introOf = (e: any): string => {
+    const at = String(e.introducedAt || "").trim();
+    const pct = Number(e.introducedPct);
+    if (at) return `from ${at}${Number.isFinite(pct) && pct > 0 ? ` (~${Math.round(pct)}%)` : ""}`;
+    return Number.isFinite(pct) && pct > 0 ? `from ~${Math.round(pct)}% in` : "";
+  };
+
   // Limits are generous on purpose: the dossier is compiled once and read by
   // everything, and a consumer that only needs the top of a list can ignore the
   // rest far more easily than it can invent what was never researched.
-  const pushEntities = (label: string, entries: any[], limit = 16) => {
+  const pushEntities = (label: string, entries: any[], limit = 20) => {
     const rendered = entries
       .filter((e) => e && e.name)
       .slice(0, limit)
-      .map((e) => {
+      .flatMap((e) => {
         // The encounter level goes first: it is what the enemy forge filters on.
         const qualifier = [
           e.level ? `Lv${e.level}` : "",
           e.role,
           e.tier,
           e.kind,
+          e.rarity,
+          e.affiliation,
+          e.region ? `in ${e.region}` : "",
           e.opposes ? `opposes ${e.opposes}` : "",
+          introOf(e),
         ].filter(Boolean).join(", ");
-        const extra = e.material ? ` [${e.material}]` : "";
-        return `  - ${e.name}${qualifier ? ` (${qualifier})` : ""}${e.description ? `: ${e.description}` : ""}${extra}`;
+        const aka = list(e.aliases).filter(Boolean).slice(0, 4);
+        const head = `  - ${e.name}${aka.length ? ` (aka ${aka.join(", ")})` : ""}${qualifier ? ` [${qualifier}]` : ""}${e.description ? `: ${e.description}` : ""}`;
+
+        // The specifics go on their own line so the headline stays scannable.
+        // These are what the creative tasks actually build from — an enemy needs
+        // the moveset, a loot icon needs the material, a taunt needs the voice.
+        const detail = [
+          e.appearance ? `looks: ${e.appearance}` : "",
+          e.material ? `made of: ${e.material}` : "",
+          e.abilities ? `can: ${e.abilities}` : "",
+          e.howItFights ? `fights by: ${e.howItFights}` : "",
+          e.signatureAttack ? `signature: ${e.signatureAttack}` : "",
+          e.weakness ? `weakness: ${e.weakness}` : "",
+          e.arena ? `fought at: ${e.arena}` : "",
+          e.effect ? `does: ${e.effect}` : "",
+          e.owner ? `carried by: ${e.owner}` : "",
+          e.origin ? `origin: ${e.origin}` : "",
+          e.personality ? `manner: ${e.personality}` : "",
+          e.status ? `status: ${e.status}` : "",
+          e.atmosphere ? `feels: ${e.atmosphere}` : "",
+          e.whatHappensThere ? `used for: ${e.whatHappensThere}` : "",
+          e.goal ? `wants: ${e.goal}` : "",
+          e.symbol ? `emblem: ${e.symbol}` : "",
+          e.colors ? `colours: ${e.colors}` : "",
+          list(e.members).length ? `members: ${list(e.members).slice(0, 6).join(", ")}` : "",
+        ].filter(Boolean).join(" | ");
+
+        return detail ? [head, `      ${detail}`] : [head];
       });
     if (rendered.length) lines.push(`${label}:`, ...rendered);
   };
@@ -235,228 +373,37 @@ export function codexPromptBlock(codex: CodexRow | null): string {
   }
   pushEntities("Notable characters", list(d.characters));
   pushEntities("Enemies, monsters & antagonists", list(d.enemies));
-  pushEntities("Factions & organizations", list(d.factions), 10);
-  pushEntities("Locations", list(d.locations), 12);
+  pushEntities("Factions & organizations", list(d.factions), 12);
+  pushEntities("Locations", list(d.locations), 16);
   pushEntities("Iconic items & equipment", list(d.items));
   const terms = list(d.terminology)
     .filter((t) => t && t.term)
-    .slice(0, 16)
-    .map((t) => `  - ${t.term}: ${t.meaning || ""}`);
+    .slice(0, 20)
+    .map((t) => {
+      const qualifier = [t.category, introOf(t)].filter(Boolean).join(", ");
+      return `  - ${t.term}${qualifier ? ` [${qualifier}]` : ""}: ${t.meaning || ""}`;
+    });
   if (terms.length) lines.push("In-universe terminology:", ...terms);
   if (list(d.genres).length) push("Descriptive genres", list(d.genres).join(", "));
   if (list(d.tags).length) push("Descriptive tags", list(d.tags).join(", "));
   push("Audience", d.audience);
   if (list(d.contentWarnings).length) push("Content notes", list(d.contentWarnings).join(", "));
+  if (list(identified?.alsoKnownAs).length) {
+    push("Also known as", list(identified!.alsoKnownAs).slice(0, 6).join(" · "));
+  }
   push("Creators", d.creators);
   if (d.releaseYear) push("Released", String(d.releaseYear));
   if (d.confidence && d.confidence !== "high") {
     push("Research confidence", `${d.confidence}${d.notes ? ` — ${d.notes}` : ""}`);
+    // Naming the weak sections stops one shaky lookup discrediting the rest: a
+    // dossier can be certain about the cast and vague about the soundtrack.
+    const weak = Object.entries(d.sectionConfidence || {})
+      .filter(([, grade]) => grade && grade !== "high")
+      .map(([section, grade]) => `${SECTION_LABEL[section] || section} (${grade})`);
+    if (weak.length) push("Less certain about", weak.join(", "));
   }
   lines.push("=== END CODEX ===");
   return lines.join("\n");
-}
-
-/**
- * What each of the app's media types means as a *work*, so the search does not
- * wander into an adaptation. The most common failure is grabbing the famous
- * version of a name: the 2010 live-action film when asked for the 2026 animated
- * one, or the original cartoon when asked for the film.
- */
-const TYPE_BRIEF: Record<string, string> = {
-  Game: "a video game. NOT a film, series, book or comic adaptation of it",
-  "Visual Novel": "a visual novel / interactive fiction game. NOT its anime, manga or film adaptation",
-  Book: "a written book or novel. NOT a film, series or game adaptation of it",
-  Audiobook: "an audiobook OR a podcast. For an audiobook, describe the written work's own content and NOT a film or series adaptation. For a podcast — including a non-fiction one — describe the show itself: its hosts, format and subject matter. Do not go looking for a book that does not exist",
-  Manga: "a manga (Japanese comic). NOT its anime, film or live-action adaptation",
-  Comic: "a comic book or graphic novel. NOT its film or series adaptation",
-  Series: "an episodic television or streaming series. NOT a feature film, book or game of the same name. This is not only fiction: it also covers reality and competition shows (Game Changer, Taskmaster), documentary series, talk and panel shows, and recurring sporting competitions or seasons (Formula 1). Describe whichever of those it actually is",
-  Movie: "a single feature film. NOT a television series, book or game of the same name",
-};
-
-export interface CodexSubject {
-  title: string;
-  mediaType: string;
-  /** Which season of a series this entry is. Scopes the whole dossier. */
-  season?: number | null;
-  subtitle?: string;
-  creator?: string;
-  publisher?: string;
-  year?: number | null;
-  expectedReleaseDate?: string | null;
-  releaseStatus?: string | null;
-  description?: string;
-  franchises?: string[];
-  platforms?: string[];
-  language?: string | null;
-}
-
-/**
- * Which season the dossier is about.
- *
- * The season field is authoritative, but entries created from a season pick are
- * titled "Show - Season 2" and may carry nothing else, so the title and subtitle
- * are read as a fallback. Only series have seasons; asking anything else is
- * meaningless and returns null.
- */
-export function subjectSeason(subject: CodexSubject): number | null {
-  if (!/series/i.test(subject.mediaType || "")) return null;
-  const explicit = Number(subject.season);
-  if (Number.isFinite(explicit) && explicit > 0) return explicit;
-  for (const text of [subject.title, subject.subtitle]) {
-    const m = String(text || "").match(/\b(?:season|series|staffel|s)\s*\.?\s*(\d{1,2})\b/i);
-    if (m) {
-      const n = Number(m[1]);
-      if (n > 0) return n;
-    }
-  }
-  return null;
-}
-
-/** The release year we can hold the research to, from whichever field has one. */
-export function subjectYear(subject: CodexSubject): number | null {
-  if (subject.year) return Number(subject.year);
-  const expected = subject.expectedReleaseDate ? new Date(subject.expectedReleaseDate) : null;
-  if (expected && !Number.isNaN(expected.getTime())) return expected.getFullYear();
-  return null;
-}
-
-function buildCodexPrompt(subject: CodexSubject, correction?: string) {
-  const year = subjectYear(subject);
-  const season = subjectSeason(subject);
-  const typeBrief = TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`;
-
-  const known = [
-    season ? `Season: ${season} — this entry tracks SEASON ${season} only` : "",
-    subject.subtitle ? `Subtitle: ${subject.subtitle}` : "",
-    subject.creator ? `Creator / author / studio / director: ${subject.creator}` : "",
-    subject.publisher ? `Publisher: ${subject.publisher}` : "",
-    year ? `Release year: ${year}${subject.year ? "" : " (expected)"}` : "",
-    subject.releaseStatus ? `Release status: ${subject.releaseStatus}` : "",
-    subject.franchises?.length ? `Franchise: ${subject.franchises.join(", ")}` : "",
-    subject.platforms?.length ? `Platforms: ${subject.platforms.join(", ")}` : "",
-    subject.language ? `Language: ${subject.language}` : "",
-    subject.description ? `Synopsis on record: ${String(subject.description).slice(0, 700)}` : "",
-  ].filter(Boolean).join("\n");
-
-  // Every constraint the search must satisfy, stated as a rule rather than a hint.
-  const constraints = [
-    `- FORMAT: it must be ${typeBrief}.`,
-    year
-      ? `- YEAR: it was released in ${year}. A work of the same name from a different year is a DIFFERENT work — a remake, a reboot, a sequel or an adaptation. Do not describe the ${year < 2015 ? "newer" : "older"} one.`
-      : `- YEAR: unknown. If several works share this name, say so in "notes" and pick the one that best matches the other details.`,
-    subject.creator ? `- CREATOR: it is by ${subject.creator}. A same-named work by someone else is a different work.` : "",
-    subject.franchises?.length ? `- FRANCHISE: it belongs to ${subject.franchises.join(", ")}.` : "",
-    subject.description ? `- SYNOPSIS: it must match the synopsis on record above. If your candidate's plot or subject matter contradicts it, you have the wrong work.` : "",
-    season ? `- SEASON: the entry is SEASON ${season}. Identify the series first, then narrow to that one season. If the series has no season ${season}, say so in "notes" and set "confidence" to "low" rather than describing a different one.` : "",
-  ].filter(Boolean).join("\n");
-
-  const correctionBlock = correction
-    ? `\n\nPREVIOUS ATTEMPT WAS WRONG. ${correction}\nStart the identification again from scratch and satisfy every constraint above before writing anything else.\n`
-    : "";
-
-  return `You are the Codex Archivist of FauxLore, a media tracker with an RPG layer. You are compiling the permanent reference dossier for ONE piece of media. Everything the app later invents about it — its enemies, its loot, its classification — will be built from this dossier, so it must be accurate, specific and rich.
-
-SUBJECT: "${subject.title}" (${subject.mediaType})
-${known || "(No further details on record.)"}
-
-STEP 1 — IDENTIFY THE RIGHT WORK. This matters more than anything else in the dossier.
-Popular names are reused constantly: a cartoon and its live-action remake, a film and the series it was based on, a game and the show adapted from it. Describing the wrong one makes every later fact wrong too. Your candidate must satisfy ALL of these:
-${constraints}
-
-If more than one work carries this name, list the ones you rejected in "identifiedAs.alternatives" and say in "identifiedAs.why" what made you choose yours.
-If NOTHING matches the format and year, do not substitute the famous one. Say so in "notes", set "confidence" to "low", and fill in only what you can actually verify about the work that was asked for.${correctionBlock}
-
-${season ? `STEP 1b — NARROW TO SEASON ${season}. Every season of a series is tracked as its own entry here, so this dossier is about season ${season} and nothing else.
-- Describe season ${season}'s own arc, its own setting, its own tone. Not the series premise in general.
-- "characters" are the cast as they are IN season ${season}: who appears in it, and who they are at that point. A character who has not appeared yet does not belong. A character whose role changed in a later season belongs as they are in this one.
-- "enemies" are season ${season}'s antagonists and obstacles. Not the final villain of the whole show.
-- "items", "locations", "factions" and "terminology" are the ones season ${season} actually features or introduces.
-- HARD RULE ON SPOILERS: include nothing that is first revealed in season ${season + 1} or later. No later-season characters, no later-season twists, no "later becomes" or "is eventually revealed to be". The user is watching this season now. Earlier seasons are fair game, since they have already been seen.
-- If season ${season} is the first, that is simply the show's opening state — say so and describe it.
-
-` : ""}STEP 2 — RESEARCH IT.
-1. USE WEB SEARCH against the work you identified. Search with the year and format included, not the bare title.${season ? ` Search for season ${season} specifically — its episode list, its cast, its plot summary — not the series overview.` : ""}
-2. Fill in the dossier below with concrete, named specifics from that work. Never write filler like "various characters" or "a rich world" — name them.
-3. Prefer widely known material: the premise, the main cast, the marketed antagonists, the signature equipment. Avoid late-story twists and ending spoilers; the user may still be partway through.
-4. If you genuinely cannot verify something, leave that field empty or the array short rather than inventing it, and say so in "notes" with a lowered "confidence".
-
-Return ONLY a pure JSON object, no markdown fence, no commentary, in exactly this shape:
-{
-  "identifiedAs": {
-    "title": "the work's own full title as published",
-    "year": ${year || 0},
-    "type": "film | television series | reality or competition show | documentary series | sporting competition | video game | novel | manga | comic | visual novel | audiobook | podcast",${season ? `
-    "season": ${season},` : ""}
-    "creator": "studio, author, director or developer",
-    "why": "one sentence on how you know this is the right one and not a same-named work",
-    "alternatives": ["same-named works you rejected, with their year and format"]
-  },
-  "premise": "one spoiler-free sentence — the hook someone would be given before starting",
-  "overview": "3-5 sentences: ${season ? `what season ${season} is about — its own arc and what distinguishes it from the seasons around it` : "what this work is, what happens in it, and what makes it distinctive"}",
-  "setting": "2-3 sentences on ${season ? `where and when season ${season} takes place` : "the world, era and places it takes place in"} — be concrete about geography, technology level and social order",
-  "tone": "one line on mood and register (e.g. bleak military sci-fi with black comedy)",
-  "themes": ["6-10 recurring themes or motifs"],
-  "structure": "how it is organised and paced: arcs, routes, seasons, volumes, acts, chapter counts, whether it is episodic or serialised",
-  "distinctive": "what separates this from the obvious comparisons — the thing its fans would name first",
-  "powerScale": "how strength, rank, threat or status is measured in this world, roughly ordered from weakest to strongest, naming the actual tiers if it has them",
-  "signatureMoments": ["4-8 famous setpieces, beats or images this work is known for. Avoid ending spoilers"],
-  "soundAndMusic": "its sonic identity: score, instrumentation, signature sounds or voices",
-  "audience": "who it is for and how mature it is",
-  "contentWarnings": ["anything a reader should know about in advance; empty array if nothing notable"],
-  "relatedWorks": ["sequels, prequels, adaptations and other entries in the same franchise, each with its format and year"],
-  "artStyle": {
-    "summary": "the actual visual style of THIS work, named precisely (e.g. cel-shaded anime key-art, gritty photoreal 3D, 16-bit pixel art, ligne claire ink, watercolour picture-book). An adaptation does not look like its source — describe what this version looks like",
-    "medium": "the medium/technique it is rendered in",
-    "palette": "its characteristic colours",
-    "lighting": "how it is lit, and the weather and time of day it usually sits in",
-    "linework": "line quality, rendering, texture, how much detail it resolves",
-    "composition": "how shots are framed and composed in this work",
-    "characterDesign": "the design language of its people and creatures — silhouettes, proportions, costume logic",
-    "iconography": "recurring visual motifs, emblems, logos, insignia, costume or architecture cues"
-  },
-  "characters": [{"name": "", "role": "protagonist | antagonist | supporting | mentor | rival | ...", "level": 3, "description": "1-2 lines on who they are, what they can do, and how they look"}],
-  "enemies": [{"name": "", "tier": "minion | elite | boss | final", "level": 4, "description": "1-2 lines on what it is, how it fights and how it looks"}],
-  "factions": [{"name": "", "opposes": "who they stand against", "description": "one line on what they are and what they want"}],
-  "locations": [{"name": "", "description": "one line on what it is and what it looks like"}],
-  "items": [{"name": "", "kind": "weapon | armour | accessory | consumable | relic | vehicle | tool", "material": "what it is made of and how it reads", "description": "one line on what it is and why it matters"}],
-  "terminology": [{"term": "", "meaning": "in-universe jargon, ranks, magic systems, currencies, institutions"}],
-  "genres": ["3-6 genre terms that describe this work, most defining first"],
-  "tags": ["12-20 descriptive tags: subject matter, mechanics, structure, mood, audience"],
-  "creators": "the studio, developer, author or director actually responsible",
-  "releaseYear": ${year || 0},
-  "confidence": "high | medium | low",
-  "notes": "anything uncertain, ambiguous or worth flagging (empty string if all clear)",
-  "sources": ["up to 4 URLs you actually consulted"]
-}
-
-DEPTH IS THE POINT. This dossier is compiled once, with web search, and then every other feature reads it for the life of this entry — so a thin one is a permanent handicap. Fill it out properly:
-- characters: 10-16
-- enemies: 10-16
-- factions: 5-10
-- locations: 8-12
-- items: 10-16
-- terminology: 10-16
-Only a genuinely small work should come in under those, and if you find yourself well short of them, search again before settling — you have almost certainly not looked hard enough. Breadth beats repetition: minor recurring characters, regional factions, everyday objects and ordinary places all belong here, not just the headline cast.
-
-THE "level" FIELD on characters and enemies is the size of encounter that entity would make, on a 1-5 scale the game uses:
-  1 — a nuisance the fandom would find funny. A shopkeeper, a rat, a bureaucrat.
-  2 — a common obstacle. A regular grunt, a minor rival.
-  3 — a named, memorable fight. A mid-story antagonist or a serious challenge.
-  4 — a major setpiece. A lieutenant, a famous duel, a wall the story turns on.
-  5 — what the whole work builds towards. There should be very few of these.
-Grade every character and enemy. Spread them across all five levels rather than clustering everything at 3 and 4; the game needs candidates at every tier and will otherwise send the same handful of names over and over.
-
-If the work has no combat at all, still fill "enemies" with its obstacles, rivals, antagonistic forces or thematic adversaries, graded the same way, because the app must be able to build an opponent out of it.
-
-IF THIS IS NOT FICTION — a reality or competition show, a documentary, a podcast, a sporting competition — do not force it into a story it does not have, and do not invent one. The fields still apply, they just mean real things:
-- "characters" are the real people: hosts, presenters, regular contestants, commentators, drivers, athletes. Describe them as they actually appear.
-- "factions" are the teams, constructors, studios, networks or recurring groups.
-- "locations" are the real venues: circuits, studios, arenas, the places it is filmed or held.
-- "items" are the real equipment and paraphernalia: the cars, the trophy, the buzzer, the format's props, the signature gear.
-- "terminology" is the genuine jargon of that world: DRS, undercut, the rules of the game, scoring terms, in-show catchphrases.
-- "enemies" are the real opposition: rival competitors, rival teams, the reigning champion, the format's own difficulty, the clock, the conditions.
-- "setting" is the real world it takes place in — the sport, the era, the circuit calendar, the studio — and "themes" are what it is actually about.
-Say plainly in "notes" that this is a non-fiction work, and never dress a real person up as a fantasy creature.`;
 }
 
 /**
@@ -509,23 +456,22 @@ const OUR_FAMILY: Record<string, string> = {
  * Returns a correction to feed back into a second attempt, or null when it lines
  * up. This is the guard that catches "asked for the 2026 film, got the 2010 one".
  */
-export function identificationProblem(data: CodexData, subject: CodexSubject): string | null {
-  const identified = data?.identifiedAs || {};
+export function identificationProblem(identified: CodexIdentity, subject: CodexSubject): string | null {
   const wantYear = subjectYear(subject);
-  const gotYear = Number(identified.year || data?.releaseYear || 0);
+  const gotYear = Number(identified?.year || 0);
 
   if (wantYear && gotYear && Math.abs(gotYear - wantYear) > 1) {
-    return `You described "${identified.title || subject.title}" from ${gotYear}, but the entry is the ${wantYear} ${subject.mediaType}. Those are different works.`;
+    return `You named "${identified.title || subject.title}" from ${gotYear}, but the entry is the ${wantYear} ${subject.mediaType}. Those are different works.`;
   }
 
   const wantSeason = subjectSeason(subject);
-  const gotSeason = Number(identified.season || 0);
+  const gotSeason = Number(identified?.season || 0);
   if (wantSeason && gotSeason && gotSeason !== wantSeason) {
-    return `You described season ${gotSeason}, but the entry is season ${wantSeason}. Research season ${wantSeason} on its own and include nothing that is first revealed later.`;
+    return `You named season ${gotSeason}, but the entry is season ${wantSeason}. Identify season ${wantSeason}.`;
   }
 
   const wantFamily = OUR_FAMILY[subject.mediaType];
-  const gotFamily = typeFamily(String(identified.type || ""));
+  const gotFamily = typeFamily(String(identified?.type || ""));
   // Only complain when the model named a format we recognise and it is a
   // different one — an unrecognised label is not evidence of anything.
   if (wantFamily && gotFamily && gotFamily !== wantFamily) {
@@ -537,7 +483,7 @@ export function identificationProblem(data: CodexData, subject: CodexSubject): s
     if (!sameWork) {
       const wanted = RETRY_LABEL[subject.mediaType] || subject.mediaType.toLowerCase();
       const article = /^[aeiou]/i.test(wanted) ? "an" : "a";
-      return `You described a ${identified.type}, but the entry is ${article} ${wanted}. Find the ${wanted}${wantYear ? ` from ${wantYear}` : ""} of that name.${RETRY_HINT[subject.mediaType] || ""}`;
+      return `You named a ${identified.type}, but the entry is ${article} ${wanted}. Find the ${wanted}${wantYear ? ` from ${wantYear}` : ""} of that name.${RETRY_HINT[subject.mediaType] || ""}`;
     }
   }
 
@@ -545,103 +491,67 @@ export function identificationProblem(data: CodexData, subject: CodexSubject): s
 }
 
 /**
- * How many entries each list should really carry. The prompt asks for more than
- * this; these are the floors below which a dossier is thin enough to hobble
- * everything that reads it.
+ * How many entries each list should carry before the research counts as thin,
+ * and which facet to re-run when one of them does.
  */
-export const DEPTH_FLOORS = {
-  characters: 8,
-  enemies: 8,
-  factions: 4,
-  locations: 6,
-  items: 8,
-  terminology: 8,
-} as const;
+export const DEPTH_FLOORS = FACET_FLOORS;
 
-export type DepthGap = { key: keyof typeof DEPTH_FLOORS; have: number; want: number };
+export type DepthGap = { key: string; have: number; want: number; facet: Facet };
 
 /** Which of the dossier's lists came back under their floor, and by how much. */
 export function depthGaps(data: CodexData): DepthGap[] {
-  return (Object.keys(DEPTH_FLOORS) as (keyof typeof DEPTH_FLOORS)[])
+  return Object.keys(FACET_FLOORS)
     .map((key) => {
       const rows = Array.isArray((data as any)?.[key]) ? (data as any)[key] : [];
       const have = rows.filter((e: any) => e && (e.name || e.term)).length;
-      return { key, have, want: DEPTH_FLOORS[key] };
+      return { key, have, want: FACET_FLOORS[key] || 0, facet: FACET_FOR_KEY[key] };
     })
     .filter((g) => g.have < g.want);
 }
 
 /**
- * Whether a thin dossier is worth a second, targeted research pass.
+ * Whether a thin dossier is worth re-running the facets that came up short.
  *
- * The web-search call is the most expensive thing the app does, so this is
- * deliberately reluctant: a genuinely small work is allowed to be short. It
- * fires when the shortfall is broad (three or more lists under floor) or when
- * the two lists the enemy forge actually draws from came back less than half
- * full — the cases where the dossier would keep sending the same few names.
+ * Faceted research rarely comes back empty, so this is deliberately reluctant: a
+ * genuinely small work is allowed to be short. It fires when the shortfall is
+ * broad (three or more lists under floor) or when one of the two lists the enemy
+ * forge draws from came back less than half full.
  */
 export function needsExpansion(gaps: DepthGap[]): boolean {
   if (gaps.length >= 3) return true;
   return gaps.some((g) => (g.key === "characters" || g.key === "enemies") && g.have * 2 < g.want);
 }
 
-const GAP_BRIEF: Record<keyof typeof DEPTH_FLOORS, string> = {
-  characters: `"characters": [{"name": "", "role": "", "level": 3, "description": "1-2 lines on who they are, what they can do, and how they look"}]`,
-  enemies: `"enemies": [{"name": "", "tier": "minion | elite | boss | final", "level": 4, "description": "1-2 lines on what it is, how it fights and how it looks"}]`,
-  factions: `"factions": [{"name": "", "opposes": "", "description": "one line on what they are and what they want"}]`,
-  locations: `"locations": [{"name": "", "description": "one line on what it is and what it looks like"}]`,
-  items: `"items": [{"name": "", "kind": "weapon | armour | accessory | consumable | relic | vehicle | tool", "material": "", "description": "one line on what it is and why it matters"}]`,
-  terminology: `"terminology": [{"term": "", "meaning": "in-universe jargon, ranks, systems, currencies, institutions"}]`,
-};
-
-/**
- * A second pass that asks only for what was missed, with everything already
- * found listed so it does not simply return the same names again.
- */
-export function buildExpansionPrompt(subject: CodexSubject, data: CodexData, gaps: DepthGap[]): string {
-  const season = subjectSeason(subject);
-  const identified = data.identifiedAs || {};
-  const nameOf = (e: any) => String(e?.name || e?.term || "").trim();
-  const already = (key: keyof typeof DEPTH_FLOORS) =>
-    (Array.isArray((data as any)[key]) ? (data as any)[key] : []).map(nameOf).filter(Boolean);
-
-  const asks = gaps.map((g) => {
-    const have = already(g.key);
-    return `- ${g.key}: you found ${g.have}, we need at least ${g.want}. Already on file (do NOT repeat these): ${have.join(", ") || "nothing"}`;
-  }).join("\n");
-
-  return `You are the Codex Archivist of FauxLore. A dossier you compiled for "${identified.title || subject.title}"${identified.year ? ` (${identified.year})` : ""}${season ? `, season ${season}` : ""} — ${TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`} — came back thin in places. This is the same work you already identified; do not identify it again and do not describe a different one.
-
-WHAT IT IS: ${data.premise || data.overview || subject.title}
-${data.setting ? `SETTING: ${data.setting}` : ""}
-
-USE WEB SEARCH to fill the gaps below. Search for the specific thing that is missing — a cast list, a bestiary, a wiki's location or glossary index${season ? `, for season ${season} specifically` : ""} — rather than re-reading the plot summary.
-
-${asks}
-
-Rules:
-- Return ONLY entries that are NEW. Repeating a name already on file wastes the call.
-- Breadth is what is wanted: minor recurring characters, regional factions, everyday objects, ordinary places and background jargon all count.
-- "level" is the size of encounter an entity would make, 1 (a nuisance the fandom would find funny) to 5 (what the whole work builds towards). Spread the new entries across the low and middle of that scale; the headline names are already on file.${season ? `
-- SCOPE: season ${season} only, and nothing first revealed in season ${season + 1} or later.` : ""}
-- If the work genuinely has no more of something, return an empty array for it rather than inventing filler.
-
-Return ONLY a pure JSON object, no markdown fence, no commentary, containing exactly these keys:
-{
-  ${gaps.map((g) => GAP_BRIEF[g.key]).join(",\n  ")}
-}`;
+/** The facets to re-run for a set of gaps, each with what it already found. */
+export function expansionPlan(data: CodexData, gaps: DepthGap[]): { facet: Facet; alreadyFound: string[] }[] {
+  const byFacet = new Map<Facet, Set<string>>();
+  for (const gap of gaps) {
+    if (!gap.facet) continue;
+    const found = byFacet.get(gap.facet) || new Set<string>();
+    // A facet fills several lists, so re-running it must be told about all of
+    // them — otherwise it returns the locations it already found while hunting
+    // for the terminology it missed.
+    for (const key of FACET_SPECS[gap.facet].keys) {
+      for (const row of (Array.isArray((data as any)[key]) ? (data as any)[key] : [])) {
+        const name = String(row?.name || row?.term || "").trim();
+        if (name) found.add(name);
+      }
+    }
+    byFacet.set(gap.facet, found);
+  }
+  return [...byFacet].map(([facet, found]) => ({ facet, alreadyFound: [...found] }));
 }
 
 /**
  * Folds an expansion pass into the dossier: new names are appended, existing
  * ones are left exactly as they were researched the first time.
  */
-export function mergeExpansion(data: CodexData, extra: any, gaps: DepthGap[]): CodexData {
+export function mergeExpansion(data: CodexData, extra: any, keys: string[]): CodexData {
   if (!extra || typeof extra !== "object") return data;
   const merged: any = { ...data };
   const nameOf = (e: any) => String(e?.name || e?.term || "").trim().toLowerCase();
 
-  for (const { key } of gaps) {
+  for (const key of keys) {
     const incoming = Array.isArray(extra[key]) ? extra[key] : [];
     if (!incoming.length) continue;
     const current: any[] = Array.isArray((merged as any)[key]) ? (merged as any)[key] : [];
@@ -718,68 +628,118 @@ export function createCodexService({ db }: { db: Db }) {
     const id = (db.prepare("SELECT id FROM media_codex WHERE userId = ? AND titleKey = ?").get(userId, key) as any).id;
 
     try {
-      const research = async (correction?: string) => {
-        // The one web-search pass. Low temperature: this is research, not flavour.
-        const raw = await nanoGenerateText(aiConfig, buildCodexPrompt(subject, correction), {
-          temperature: 0.2,
+      // ROUND 1 — settle which work this is, and what else it is called.
+      // Short prompt on purpose: `:online` keys its search on the message, so a
+      // long one buries the only thing this call needs to find.
+      const identify = async (correction?: string): Promise<CodexIdentity> => {
+        const raw = await nanoGenerateText(aiConfig, buildIdentifyPrompt(subject, correction), {
+          temperature: 0.1,
           webSearch: true,
         });
-        if (!raw) throw new Error("The model returned an empty Codex.");
-        const parsed = parseJsonLoose<CodexData>(raw);
-        if (!parsed || typeof parsed !== "object") throw new Error("The Codex was not a JSON object.");
+        if (!raw) throw new Error("The model could not identify this work.");
+        const parsed = parseJsonLoose<CodexIdentity>(raw);
+        if (!parsed || typeof parsed !== "object") throw new Error("The identification was not a JSON object.");
         return parsed;
       };
 
-      let data = await research();
-
-      // Check the work it says it found against what the entry claims, and give
-      // it exactly one chance to correct itself. Without this a same-named film
-      // from another decade sails through and poisons every later generation.
-      let problem = identificationProblem(data, subject);
+      let identity = await identify();
+      let problem = identificationProblem(identity, subject);
       if (problem) {
+        // One correction. Cheap now that it is only the identification being
+        // redone rather than the whole dossier.
         console.warn(`Codex identified the wrong work for "${subject.title}": ${problem} Retrying.`);
         try {
-          const retry = await research(problem);
-          const stillWrong = identificationProblem(retry, subject);
-          if (!stillWrong) {
-            data = retry;
-            problem = null;
-          } else {
-            // Keep the better-informed second attempt but flag it clearly.
-            data = retry;
-            problem = stillWrong;
-          }
+          const retry = await identify(problem);
+          identity = retry;
+          problem = identificationProblem(retry, subject);
         } catch (e) {
-          console.error("Codex retry failed; keeping the first attempt", e);
+          console.error("Codex identification retry failed; keeping the first answer", e);
         }
       }
 
+      const ctx: ResearchContext = { subject, identity };
+
+      // ROUND 2 + 3 — research each subject area on its own query, then convert
+      // that prose to the dossier's shape without search, on the cheap model.
+      // Facets are independent, so the whole thing is two rounds of wall-clock.
+      const researchFacet = async (facet: Facet, alreadyFound?: string[]): Promise<string> => {
+        const prose = await nanoGenerateText(aiConfig, buildFacetPrompt(ctx, facet, alreadyFound), {
+          temperature: 0.2,
+          webSearch: true,
+        });
+        if (!prose) throw new Error(`The ${facet} research came back empty.`);
+        return prose;
+      };
+
+      const structureFacet = async (facet: Facet, prose: string): Promise<any> => {
+        const raw = await nanoGenerateText(aiConfig, buildStructurePrompt(ctx, facet, prose), {
+          temperature: 0.1,
+        });
+        if (!raw) throw new Error(`The ${facet} section could not be structured.`);
+        const parsed = parseJsonLoose<any>(raw);
+        if (!parsed || typeof parsed !== "object") throw new Error(`The ${facet} section was not a JSON object.`);
+        return parsed;
+      };
+
+      const runFacet = async (facet: Facet, alreadyFound?: string[]) =>
+        structureFacet(facet, await researchFacet(facet, alreadyFound));
+
+      const settled = await Promise.allSettled(FACETS.map((f) => runFacet(f)));
+
+      // A facet that fails costs its own section, not the dossier. Losing the
+      // cast list is bad; losing the whole Codex over a soundtrack lookup is worse.
+      let data: CodexData = { identifiedAs: identity, sources: identity.sources || [] };
+      const sectionConfidence: CodexSectionConfidence = { identity: identity.confidence };
+      const failed: string[] = [];
+
+      settled.forEach((result, i) => {
+        const facet = FACETS[i];
+        if (result.status !== "fulfilled") {
+          failed.push(facet);
+          sectionConfidence[facet] = "low";
+          console.error(`Codex facet "${facet}" failed for "${subject.title}"`, result.reason);
+          return;
+        }
+        sectionConfidence[facet] = result.value.confidence || "medium";
+        for (const key of FACET_SPECS[facet].keys) {
+          const value = result.value[key];
+          if (value !== undefined && value !== null && value !== "") (data as any)[key] = value;
+        }
+      });
+
+      if (failed.length === FACETS.length) throw new Error("Every research pass failed.");
+
+      data.creators = identity.creator || data.creators;
+      data.releaseYear = identity.year || subjectYear(subject) || undefined;
+      data.sectionConfidence = sectionConfidence;
+      data.notes = [identity.notes, failed.length ? `Research incomplete for: ${failed.join(", ")}.` : ""]
+        .filter(Boolean).join(" ") || undefined;
+
+      // The dossier's overall confidence is now the weakest thing in it, which is
+      // only fair because `sectionConfidence` says where the weakness actually is.
+      const grades = Object.values(sectionConfidence).filter(Boolean) as string[];
+      data.confidence = grades.includes("low") ? "low" : grades.includes("medium") ? "medium" : "high";
+
       if (problem) {
-        data = {
-          ...data,
-          confidence: "low",
-          notes: [`Could not confirm this is the right work: ${problem}`, data.notes].filter(Boolean).join(" "),
-        };
+        data.confidence = "low";
+        data.notes = [`Could not confirm this is the right work: ${problem}`, data.notes].filter(Boolean).join(" ");
       } else {
-        // The dossier is read for the life of the entry, so a thin one is worth
-        // one more targeted pass — but only when it is thin enough to matter,
-        // and only when we are sure we researched the right work.
+        // Faceted research rarely comes up short, but when it does the fix is to
+        // re-run only the facets that did, telling them what they already found.
         const gaps = depthGaps(data);
         if (needsExpansion(gaps)) {
+          const plan = expansionPlan(data, gaps);
           console.warn(
-            `Codex for "${subject.title}" came back thin (${gaps.map((g) => `${g.key} ${g.have}/${g.want}`).join(", ")}). Filling the gaps.`,
+            `Codex for "${subject.title}" came back thin (${gaps.map((g) => `${g.key} ${g.have}/${g.want}`).join(", ")}). Re-running: ${plan.map((p) => p.facet).join(", ")}.`,
           );
-          try {
-            const extraRaw = await nanoGenerateText(aiConfig, buildExpansionPrompt(subject, data, gaps), {
-              temperature: 0.3,
-              webSearch: true,
-            });
-            const extra = extraRaw ? parseJsonLoose<any>(extraRaw) : null;
-            if (extra) data = mergeExpansion(data, extra, gaps);
-          } catch (e) {
-            // A failed gap-fill leaves a short but valid dossier, which is fine.
-            console.error("Codex gap-fill failed; keeping the first pass", e);
-          }
+          const refills = await Promise.allSettled(plan.map((p) => runFacet(p.facet, p.alreadyFound)));
+          refills.forEach((result, i) => {
+            if (result.status !== "fulfilled") {
+              console.error(`Codex gap-fill for "${plan[i].facet}" failed; keeping the first pass`, result.reason);
+              return;
+            }
+            data = mergeExpansion(data, result.value, FACET_SPECS[plan[i].facet].keys);
+          });
         }
       }
 

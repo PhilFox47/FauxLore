@@ -1,0 +1,484 @@
+/**
+ * How the Codex is researched.
+ *
+ * The dossier used to be one call: identify the work, research everything about
+ * it, and emit a large JSON document — all at once, with web search on. That has
+ * two problems, and both cap quality no matter how much the schema is expanded.
+ *
+ * First, `:online` is retrieval, not an agent. The provider runs a search keyed
+ * on the message and injects the results before the model writes a word; the
+ * model cannot go and look again. So "search harder" instructions do nothing,
+ * and a 4,000-word prompt of JSON schema and rules is a terrible search query —
+ * the part that identifies the work is a dozen words buried in the middle.
+ *
+ * Second, one search had to serve every question the dossier asks. A result set
+ * good enough to describe the art style is not the one that lists the cast.
+ *
+ * So research is now split two ways:
+ *
+ *   IDENTIFY   one short, search-shaped call that settles which work this is and
+ *              what else it is called.
+ *   FACETS     one call per subject area, each with its own tight query, run in
+ *              parallel. These return prose, not JSON — the schema is not
+ *              competing with the research for the model's attention.
+ *   STRUCTURE  one cheap, non-web call per facet that turns that prose into the
+ *              dossier's shape. Reasoning over text already retrieved needs no
+ *              search and no expensive model.
+ *
+ * Wall-clock is three rounds instead of one. The search bill is a few cents,
+ * once, for the life of the entry.
+ */
+
+export interface CodexSubject {
+  title: string;
+  mediaType: string;
+  /** Which season of a series this entry is. Scopes the whole dossier. */
+  season?: number | null;
+  subtitle?: string;
+  creator?: string;
+  publisher?: string;
+  year?: number | null;
+  expectedReleaseDate?: string | null;
+  releaseStatus?: string | null;
+  description?: string;
+  franchises?: string[];
+  platforms?: string[];
+  language?: string | null;
+}
+
+/**
+ * Which season the dossier is about.
+ *
+ * The season field is authoritative, but entries created from a season pick are
+ * titled "Show - Season 2" and may carry nothing else, so the title and subtitle
+ * are read as a fallback. Only series have seasons; asking anything else is
+ * meaningless and returns null.
+ */
+export function subjectSeason(subject: CodexSubject): number | null {
+  if (!/series/i.test(subject.mediaType || "")) return null;
+  const explicit = Number(subject.season);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  for (const text of [subject.title, subject.subtitle]) {
+    const m = String(text || "").match(/\b(?:season|series|staffel|s)\s*\.?\s*(\d{1,2})\b/i);
+    if (m) {
+      const n = Number(m[1]);
+      if (n > 0) return n;
+    }
+  }
+  return null;
+}
+
+/** The release year we can hold the research to, from whichever field has one. */
+export function subjectYear(subject: CodexSubject): number | null {
+  if (subject.year) return Number(subject.year);
+  const expected = subject.expectedReleaseDate ? new Date(subject.expectedReleaseDate) : null;
+  if (expected && !Number.isNaN(expected.getTime())) return expected.getFullYear();
+  return null;
+}
+
+/**
+ * What each of the app's media types means as a *work*, so the search does not
+ * wander into an adaptation. The most common failure is grabbing the famous
+ * version of a name: the 2010 live-action film when asked for the 2026 animated
+ * one, or the original cartoon when asked for the film.
+ */
+export const TYPE_BRIEF: Record<string, string> = {
+  Game: "a video game. NOT a film, series, book or comic adaptation of it",
+  "Visual Novel": "a visual novel / interactive fiction game. NOT its anime, manga or film adaptation",
+  Book: "a written book or novel. NOT a film, series or game adaptation of it",
+  Audiobook: "an audiobook OR a podcast. For an audiobook, describe the written work's own content and NOT a film or series adaptation. For a podcast — including a non-fiction one — describe the show itself: its hosts, format and subject matter. Do not go looking for a book that does not exist",
+  Manga: "a manga (Japanese comic). NOT its anime, film or live-action adaptation",
+  Comic: "a comic book or graphic novel. NOT its film or series adaptation",
+  Series: "an episodic television or streaming series. NOT a feature film, book or game of the same name. This is not only fiction: it also covers reality and competition shows (Game Changer, Taskmaster), documentary series, talk and panel shows, and recurring sporting competitions or seasons (Formula 1). Describe whichever of those it actually is",
+  Movie: "a single feature film. NOT a television series, book or game of the same name",
+};
+
+/** The short format word used inside a search query line. */
+const TYPE_QUERY_WORD: Record<string, string> = {
+  Game: "video game",
+  "Visual Novel": "visual novel",
+  Book: "novel",
+  Audiobook: "audiobook podcast",
+  Manga: "manga",
+  Comic: "comic",
+  Series: "TV series",
+  Movie: "film",
+};
+
+/** What the identify pass settled on, carried into every later call. */
+export interface CodexIdentity {
+  title?: string;
+  year?: number | string;
+  season?: number | string;
+  type?: string;
+  creator?: string;
+  why?: string;
+  alternatives?: string[];
+  /** Every other name this work is published, romanised or known under. */
+  alsoKnownAs?: string[];
+  sources?: string[];
+  confidence?: string;
+  notes?: string;
+}
+
+export type Facet = "cast" | "threats" | "world" | "things" | "craft";
+
+export interface FacetSpec {
+  /** Appended to the title to form the search query line. */
+  query: string;
+  /** What prose the research pass should come back with. */
+  brief: string;
+  /** The JSON the structuring pass emits, and the keys it fills. */
+  keys: string[];
+  shape: string;
+  /** Extra rules for the structuring pass, on top of the shared ones. */
+  structureNotes?: string;
+  /**
+   * What this facet means when the work is not fiction. Series covers reality
+   * and competition shows and sporting seasons; Audiobook covers podcasts. The
+   * fields still apply to those — they just refer to real things.
+   */
+  nonFiction: string;
+}
+
+/**
+ * The `level` scale, defined once. Characters and enemies are graded on it at
+ * research time so the enemy forge picks from a shortlist that already fits the
+ * level it was asked for, instead of inferring stature from prose.
+ */
+const LEVEL_SCALE = `"level" is the size of encounter this would make, on the game's 1-5 scale:
+  1 — a nuisance the fandom would find funny. A shopkeeper, a rat, a bureaucrat.
+  2 — a common obstacle. A regular grunt, a minor rival.
+  3 — a named, memorable fight. A mid-story antagonist or a serious challenge.
+  4 — a major setpiece. A lieutenant, a famous duel, a wall the story turns on.
+  5 — what the whole work builds towards. There should be very few of these.
+Grade every entry, and spread them across all five levels rather than clustering at 3 and 4 — the game needs candidates at every tier and will otherwise send the same handful of names over and over.`;
+
+/**
+ * Where a thing first turns up, so downstream features can be gated on how far
+ * the user has actually got rather than on the entry as a whole.
+ */
+const INTRODUCED = `"introducedAt" is where this first appears, in the work's own units ("episode 3", "chapter 12", "act 2", "the second route"). "introducedPct" is that as a rough 0-100 percentage of the way through. Both are optional: omit them rather than guessing.`;
+
+export const FACET_SPECS: Record<Facet, FacetSpec> = {
+  cast: {
+    query: "main characters full cast list who's who",
+    brief: `Every named character of any importance: leads, supporting cast, mentors, rivals, recurring minor figures, memorable one-offs.
+For each one write a short paragraph covering:
+- who they are and what they do in the story
+- what they LOOK like — build, hair, eyes, clothing, distinguishing features, colours. Be specific; this is used to draw them.
+- what they can do: abilities, skills, powers, equipment, or simply what they are good at
+- how they behave and how they speak — temperament, manner, verbal tics, catchphrases
+- who they are aligned with, and any other names, titles, epithets or nicknames they go by
+- where in the work they first appear, if you can tell
+- how dangerous or significant they are compared with the rest of the cast`,
+    nonFiction: `the cast is the real people: hosts, presenters, regular contestants, commentators, drivers, athletes, guests. Describe them as they actually are and actually look. Never dress a real person up as a fantasy creature.`,
+    keys: ["characters"],
+    shape: `{"characters": [{"name": "", "aliases": [""], "role": "protagonist | antagonist | supporting | mentor | rival | minor | ...", "affiliation": "", "level": 3, "description": "who they are and what they do", "appearance": "what they look like, concretely", "abilities": "", "personality": "temperament, manner, how they speak", "status": "", "introducedAt": "", "introducedPct": 0}]}`,
+    structureNotes: `${LEVEL_SCALE}\n${INTRODUCED}`,
+  },
+  threats: {
+    query: "antagonists villains enemies monsters bestiary list",
+    brief: `Every antagonistic force in the work: villains, rivals, monsters, enemy types, factions in opposition, and — if it has no combat at all — its obstacles, pressures and thematic adversaries.
+For each one write a short paragraph covering:
+- what it is and what it wants
+- what it LOOKS like, concretely enough to draw
+- how it fights, presses or obstructs, and the specific move, tactic or trick it is known for
+- what beats it: its weakness, counter, or the way it is overcome
+- where it is encountered
+- how big a deal it is compared with the rest of the opposition
+Include the ordinary ranks and lesser threats, not only the headline villains.`,
+    nonFiction: `the opposition is real: rival competitors, rival teams, the reigning champion, the defending title-holder, the format's own difficulty, the clock, the weather, the conditions. Treat those as the threats.`,
+    keys: ["enemies"],
+    shape: `{"enemies": [{"name": "", "aliases": [""], "tier": "minion | elite | boss | final", "level": 4, "description": "what it is and what it wants", "appearance": "what it looks like, concretely", "howItFights": "", "signatureAttack": "", "weakness": "", "arena": "where it is encountered", "affiliation": "", "introducedAt": "", "introducedPct": 0}]}`,
+    structureNotes: `${LEVEL_SCALE}\n${INTRODUCED}\nIf the work has no combat, its obstacles and rivals still go in "enemies", graded the same way — the app must be able to build an opponent out of anything.`,
+  },
+  world: {
+    query: "setting locations map factions organizations glossary terminology",
+    brief: `The furniture of the world, in three parts.
+PLACES: every named location of note — cities, regions, buildings, ships, realms, venues. For each: what it is, what it looks and feels like, what larger region it sits in, and what happens there.
+GROUPS: every faction, organisation, team, house, guild, corporation, network or recurring group. For each: what they are, what they want, who they stand against, who belongs to them, and their emblem, uniform or colours.
+VOCABULARY: the in-universe terms — ranks, currencies, magic or tech systems, institutions, titles, laws, slang, catchphrases. For each: what it means and what kind of term it is.
+Where you can tell, note where in the work each of these first comes up.`,
+    nonFiction: `all three are real. Places are the actual venues — circuits, studios, arenas, the cities it is filmed or held in. Groups are the real teams, constructors, networks, production companies or recurring line-ups. Vocabulary is the genuine jargon of that world: DRS, the undercut, the rules of the game, scoring terms, in-show catchphrases.`,
+    keys: ["factions", "locations", "terminology"],
+    shape: `{
+  "locations": [{"name": "", "region": "the larger place it sits in", "description": "what it is", "atmosphere": "what it looks and feels like", "whatHappensThere": "", "introducedAt": "", "introducedPct": 0}],
+  "factions": [{"name": "", "goal": "what they want", "opposes": "who they stand against", "members": ["notable members"], "symbol": "emblem, uniform or insignia", "colors": "", "description": "what they are", "introducedAt": "", "introducedPct": 0}],
+  "terminology": [{"term": "", "meaning": "", "category": "rank | currency | magic or tech | institution | title | law | slang | catchphrase | other", "introducedAt": "", "introducedPct": 0}]
+}`,
+    structureNotes: INTRODUCED,
+  },
+  things: {
+    query: "iconic items weapons equipment artifacts gear list",
+    brief: `Every object that matters: weapons, armour, vehicles, tools, relics, consumables, keepsakes, trophies, documents, props.
+For each one write a short paragraph covering:
+- what it is and why it matters to the story
+- what it LOOKS like and what it is made of — shape, materials, wear, markings, colour
+- what it does, grants or enables
+- who owns or wields it, and where it came from
+- how rare, prized or commonplace it is
+- where in the work it first turns up
+Include ordinary, everyday objects the work is associated with, not only legendary artifacts.`,
+    nonFiction: `the objects are real equipment and paraphernalia: the cars, the trophy, the buzzer, the format's props, the signature gear, the kit.`,
+    keys: ["items"],
+    shape: `{"items": [{"name": "", "kind": "weapon | armour | accessory | consumable | relic | vehicle | tool | document | other", "material": "what it is made of and how it reads", "appearance": "what it looks like, concretely", "effect": "what it does or grants", "owner": "", "origin": "", "rarity": "commonplace | uncommon | prized | one of a kind", "description": "what it is and why it matters", "introducedAt": "", "introducedPct": 0}]}`,
+    structureNotes: INTRODUCED,
+  },
+  craft: {
+    query: "premise plot summary themes art style visual design soundtrack tone reception",
+    brief: `What this work is like, as a made thing. Cover, in prose:
+- the premise in one spoiler-free line, then a fuller summary of what actually happens
+- the setting: where and when, how advanced, how it is governed, what daily life is like
+- the tone and register, and who it is for — how mature, and anything a newcomer should be warned about
+- its recurring themes and preoccupations
+- how it is structured and paced: arcs, routes, seasons, volumes, acts, episode or chapter counts, episodic or serialised
+- how strength, rank, threat or status is measured in this world, and the actual names of its tiers if it has them
+- what sets it apart from the obvious comparisons — the thing its fans name first
+- the setpieces, beats and images it is famous for, avoiding ending spoilers
+- its sound: score, composer, instrumentation, signature sounds or voices
+- its VISUAL identity in detail — the medium and technique it is rendered in, its palette, how it is lit and in what weather and time of day, its line quality and level of detail, how shots are framed, the design language of its people and creatures, and its recurring motifs, emblems and architecture. An adaptation does not look like its source; describe how THIS version looks.
+- the descriptive words that would classify it: its genres, and the subject matter, mechanics, structure, mood and audience terms that apply`,
+    nonFiction: `do not force it into a story it does not have and do not invent one. The setting is the real world it takes place in — the sport, the era, the calendar, the studio — the structure is its real format (rounds, race weekends, episode formats, seasons), the power scale is its real standings or ranking system, and the themes are what it is actually about. Say plainly that this is a non-fiction work.`,
+    keys: [
+      "premise", "overview", "setting", "tone", "themes", "structure", "distinctive",
+      "powerScale", "signatureMoments", "soundAndMusic", "audience", "contentWarnings",
+      "relatedWorks", "artStyle", "genres", "tags",
+    ],
+    shape: `{
+  "premise": "one spoiler-free sentence — the hook someone would be given before starting",
+  "overview": "3-5 sentences on what it is and what happens in it",
+  "setting": "2-3 concrete sentences on the world, era and places — geography, technology level, social order",
+  "tone": "one line on mood and register",
+  "themes": ["6-10 recurring themes or motifs"],
+  "structure": "how it is organised and paced",
+  "distinctive": "what separates it from the obvious comparisons",
+  "powerScale": "how strength, rank or threat is measured here, ordered, naming the real tiers if it has them",
+  "signatureMoments": ["4-8 famous setpieces, beats or images. Avoid ending spoilers"],
+  "soundAndMusic": "its sonic identity",
+  "audience": "who it is for and how mature it is",
+  "contentWarnings": ["anything worth knowing in advance; empty if nothing notable"],
+  "relatedWorks": ["sequels, prequels, adaptations and other entries in the same franchise, with format and year"],
+  "artStyle": {
+    "summary": "the visual style named precisely (cel-shaded anime key-art, gritty photoreal 3D, 16-bit pixel art, ligne claire ink, watercolour…)",
+    "medium": "the medium or technique it is rendered in",
+    "palette": "its characteristic colours",
+    "lighting": "how it is lit, and the weather and time of day it sits in",
+    "linework": "line quality, rendering, texture, how much detail it resolves",
+    "composition": "how shots are framed and composed",
+    "characterDesign": "the design language of its people and creatures",
+    "iconography": "recurring motifs, emblems, logos, insignia, costume or architecture cues"
+  },
+  "genres": ["3-6 genre terms, most defining first"],
+  "tags": ["12-20 descriptive tags: subject matter, mechanics, structure, mood, audience"]
+}`,
+  },
+};
+
+export const FACETS = Object.keys(FACET_SPECS) as Facet[];
+
+/** How many entries each list should carry before the research counts as thin. */
+export const FACET_FLOORS: Partial<Record<string, number>> = {
+  characters: 8,
+  enemies: 8,
+  factions: 4,
+  locations: 6,
+  items: 8,
+  terminology: 8,
+};
+
+/** Which facet to re-run when a given list comes back short. */
+export const FACET_FOR_KEY: Record<string, Facet> = {
+  characters: "cast",
+  enemies: "threats",
+  factions: "world",
+  locations: "world",
+  terminology: "world",
+  items: "things",
+};
+
+/** Everything the later passes need to know about the work, settled up front. */
+export interface ResearchContext {
+  subject: CodexSubject;
+  identity: CodexIdentity;
+}
+
+function seasonScope(season: number | null): string {
+  if (!season) return "";
+  return `
+SCOPE — SEASON ${season} ONLY. Every season of this show is tracked as its own entry, so this is about season ${season} and nothing else.
+- Describe season ${season}'s own arc, cast, antagonists and vocabulary — not the series in general.
+- HARD RULE ON SPOILERS: include nothing first revealed in season ${season + 1} or later. No later-season characters, no later-season twists, no "later becomes" or "is eventually revealed to be". Earlier seasons are fair game; they have already been seen.`;
+}
+
+/**
+ * The line the retrieval provider keys its search on.
+ *
+ * `:online` derives its query from the message, so the first thing in the
+ * message should read like something a person would type into a search box —
+ * not like the opening of a system prompt.
+ */
+export function searchQueryLine(subject: CodexSubject, identity: CodexIdentity | null, suffix: string): string {
+  const season = subjectSeason(subject);
+  const year = identity?.year || subjectYear(subject) || "";
+  const parts = [
+    identity?.title || subject.title,
+    season ? `season ${season}` : "",
+    year ? String(year) : "",
+    TYPE_QUERY_WORD[subject.mediaType] || subject.mediaType.toLowerCase(),
+    suffix,
+  ];
+  return parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * PASS 1 — which work is this, and what else is it called?
+ *
+ * Short on purpose: it is the only call whose search query needs to be about the
+ * work's identity, and a long prompt would bury it. Its second job is finding
+ * the work's other names, which is what the facet searches are keyed on — a
+ * visual novel is far easier to find under its Japanese title, and a series
+ * under the name its wiki uses rather than its streaming label.
+ */
+export function buildIdentifyPrompt(subject: CodexSubject, correction?: string): string {
+  const year = subjectYear(subject);
+  const season = subjectSeason(subject);
+  const typeBrief = TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`;
+
+  const known = [
+    subject.subtitle ? `Also listed as: ${subject.subtitle}` : "",
+    subject.creator ? `Creator / author / studio / director: ${subject.creator}` : "",
+    subject.publisher ? `Publisher: ${subject.publisher}` : "",
+    year ? `Release year: ${year}${subject.year ? "" : " (expected)"}` : "",
+    subject.releaseStatus ? `Release status: ${subject.releaseStatus}` : "",
+    subject.franchises?.length ? `Franchise: ${subject.franchises.join(", ")}` : "",
+    subject.platforms?.length ? `Platforms: ${subject.platforms.join(", ")}` : "",
+    subject.language ? `Language: ${subject.language}` : "",
+    subject.description ? `Synopsis on record: ${String(subject.description).slice(0, 500)}` : "",
+  ].filter(Boolean).join("\n");
+
+  const constraints = [
+    `- FORMAT: it must be ${typeBrief}.`,
+    year
+      ? `- YEAR: it was released in ${year}. A work of the same name from a different year is a DIFFERENT work — a remake, a reboot, a sequel or an adaptation. Do not describe the ${year < 2015 ? "newer" : "older"} one.`
+      : `- YEAR: unknown. If several works share this name, say so in "notes" and pick the one that best matches the other details.`,
+    subject.creator ? `- CREATOR: it is by ${subject.creator}. A same-named work by someone else is a different work.` : "",
+    subject.franchises?.length ? `- FRANCHISE: it belongs to ${subject.franchises.join(", ")}.` : "",
+    subject.description ? `- SYNOPSIS: it must match the synopsis on record above. If your candidate's plot or subject matter contradicts it, you have the wrong work.` : "",
+    season ? `- SEASON: the entry is SEASON ${season}. Identify the series first, then confirm it has that season.` : "",
+  ].filter(Boolean).join("\n");
+
+  const correctionBlock = correction
+    ? `\n\nYOUR PREVIOUS ANSWER WAS WRONG. ${correction}\nStart again and satisfy every constraint above.\n`
+    : "";
+
+  return `${searchQueryLine(subject, null, `${subject.creator || ""} wiki release date`)}
+
+You are the Codex Archivist of FauxLore. Before anything is researched about this media entry, work out exactly which work it is.
+
+ENTRY: "${subject.title}" (${subject.mediaType})
+${known || "(No further details on record.)"}
+
+Your candidate must satisfy ALL of these:
+${constraints}
+
+Popular names are reused constantly — a cartoon and its live-action remake, a game and the show adapted from it, a novel and its film. Picking the wrong one makes every later fact wrong too.${correctionBlock}
+
+You also need every OTHER NAME this work goes by, because the research that follows will be searched under them. Look for:
+- its original-language title, and the romanisation of it
+- its English or localised title, if that differs
+- regional or alternate release titles
+- official abbreviations and the short forms fans actually use
+- the name its wiki, database entry or fan community files it under
+Do not limit yourself to the names given above — go and find the ones that are missing.
+
+Return ONLY a pure JSON object, no markdown fence, no commentary:
+{
+  "title": "the work's own full title as published",
+  "year": ${year || 0},
+  "type": "film | television series | reality or competition show | documentary series | sporting competition | video game | novel | manga | comic | visual novel | audiobook | podcast",${season ? `
+  "season": ${season},` : ""}
+  "creator": "studio, author, director or developer",
+  "alsoKnownAs": ["every other title, romanisation, abbreviation or fan name this is known by"],
+  "why": "one sentence on how you know this is the right one and not a same-named work",
+  "alternatives": ["same-named works you rejected, with their year and format"],
+  "sources": ["up to 4 URLs you actually consulted"],
+  "confidence": "high | medium | low",
+  "notes": "anything ambiguous (empty string if all clear)"
+}
+
+If NOTHING matches the format and year, do not substitute the famous one: say so in "notes", set "confidence" to "low", and answer for the work that was actually asked for.`;
+}
+
+/**
+ * PASS 2 — research one subject area, and write prose.
+ *
+ * No JSON here. Asking for a schema at the same time as the research makes the
+ * model spend its attention on shape instead of substance, and a truncated JSON
+ * array loses the tail of the cast. Prose can run as long as it needs to and is
+ * turned into the dossier's shape afterwards, for a fraction of the cost.
+ */
+export function buildFacetPrompt(ctx: ResearchContext, facet: Facet, alreadyFound?: string[]): string {
+  const spec = FACET_SPECS[facet];
+  const { subject, identity } = ctx;
+  const season = subjectSeason(subject);
+  const title = identity.title || subject.title;
+  const aka = (identity.alsoKnownAs || []).filter(Boolean).slice(0, 8);
+
+  const gapBlock = alreadyFound?.length
+    ? `
+THIS IS A SECOND PASS. The first one came back thin. These are already on file — do NOT write them up again, find the ones that are missing:
+${alreadyFound.slice(0, 60).join(", ")}
+Go after the ones a first look misses: the recurring minor names, the regional and the everyday, the things listed further down the page.`
+    : "";
+
+  return `${searchQueryLine(subject, identity, spec.query)}
+
+You are the Codex Archivist of FauxLore, researching ONE subject area of ONE work. The work has already been identified — do not question it, and do not describe a different one.
+
+THE WORK: "${title}"${identity.year ? ` (${identity.year})` : ""}${identity.creator ? `, by ${identity.creator}` : ""} — ${TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`}.
+${aka.length ? `ALSO KNOWN AS: ${aka.join(" · ")} — search under these too, especially the original-language title, where the detailed material usually is.` : ""}${seasonScope(season)}
+${gapBlock}
+
+WRITE UP: ${spec.brief}
+
+How to answer:
+- Prose, not JSON, not a schema. Headings and bullets are fine. Length is not a problem — this is the one place the detail gets recorded, and everything the app later invents is built from it.
+- Name things. Never write "various characters", "several locations" or "a rich world" — those are worth nothing to the reader of this dossier.
+- BREADTH IS THE POINT. The obvious headline entries are the easy part; the value is in the long tail. Aim well past a dozen entries where the work supports it, and include the minor, the regional and the everyday.
+- Prefer widely known material. Avoid late-story twists and ending spoilers — the user may still be partway through.
+- If you genuinely cannot verify something, leave it out and say so at the end rather than inventing it. A short honest answer beats a padded one.
+- Finish with one line: CONFIDENCE: high | medium | low, and a few words on why.
+
+IF THIS IS NOT FICTION — a reality or competition show, a documentary, a podcast, a sporting competition — the subject area still applies, it just means real things: ${spec.nonFiction}`;
+}
+
+/**
+ * PASS 3 — turn one facet's prose into the dossier's shape.
+ *
+ * No web search: everything it needs is in the prose above it. That means it can
+ * run on the cheap model, and it gets the whole context window to spend on
+ * getting the schema right rather than splitting it with retrieval.
+ */
+export function buildStructurePrompt(ctx: ResearchContext, facet: Facet, research: string): string {
+  const spec = FACET_SPECS[facet];
+  const { subject, identity } = ctx;
+  const season = subjectSeason(subject);
+
+  return `You are converting research notes into a structured record. The notes below were gathered about "${identity.title || subject.title}"${identity.year ? ` (${identity.year})` : ""}${season ? `, season ${season}` : ""}.
+
+=== RESEARCH NOTES ===
+${research}
+=== END NOTES ===
+
+Convert those notes into JSON. Rules:
+- Use ONLY what the notes contain. Do not add entries from your own knowledge, and do not correct them — if the notes are wrong, that is the researcher's problem, not yours.
+- BE EXHAUSTIVE. Every named entry in the notes gets a record. Do not summarise, do not select the interesting ones, do not stop at ten. Dropping entries is the one thing that ruins this step.
+- Fill every field the notes support. Leave a field out entirely when the notes do not cover it — never write "unknown", "N/A" or a guess.
+- Keep the notes' own wording where it is concrete. Descriptions should be one or two tight lines.
+${spec.structureNotes ? `- ${spec.structureNotes}\n` : ""}
+Return ONLY a pure JSON object, no markdown fence, no commentary, in exactly this shape:
+${spec.shape}
+
+Add one more key alongside the above: "confidence": "high | medium | low" — how much of this section the notes actually supported. Read the researcher's own confidence line if they left one.`;
+}

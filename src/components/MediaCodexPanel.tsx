@@ -18,6 +18,16 @@ import { useToast } from '../contexts/ToastContext';
  * answer to "why did it come up with that?".
  */
 
+/** Human names for the research passes that make up a dossier. */
+const SECTION_LABEL: Record<string, string> = {
+  identity: 'which work this is',
+  cast: 'the cast',
+  threats: 'the antagonists',
+  world: 'places, factions & vocabulary',
+  things: 'items & equipment',
+  craft: 'style, sound & themes',
+};
+
 function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
     <div>
@@ -29,30 +39,74 @@ function Section({ icon, title, children }: { icon: React.ReactNode; title: stri
   );
 }
 
-function EntityList({ entries, limit = 12 }: { entries?: CodexEntity[]; limit?: number }) {
+/** Where an entity first turns up, when the research knew. */
+function introOf(e: { introducedAt?: string; introducedPct?: number }): string {
+  const at = (e.introducedAt || '').trim();
+  const pct = Number(e.introducedPct);
+  const hasPct = Number.isFinite(pct) && pct > 0;
+  if (at) return hasPct ? `${at} · ~${Math.round(pct)}%` : at;
+  return hasPct ? `~${Math.round(pct)}% in` : '';
+}
+
+function EntityList({ entries, limit = 12, detailed }: { entries?: CodexEntity[]; limit?: number; detailed?: boolean }) {
   const rows = (entries || []).filter((e) => e && e.name).slice(0, limit);
   if (rows.length === 0) return null;
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       {rows.map((e, i) => {
         // The research grades each entity on the same 1-5 scale the enemy forge
         // uses, so the badge doubles as an explanation of why a given name shows
         // up as a level 5 boss and another as a level 1 nuisance.
         const level = Number(e.level || 0);
-        const qualifier = [e.role || e.tier, e.kind, e.opposes ? `vs. ${e.opposes}` : '', e.material]
-          .filter(Boolean).join(' · ');
+        const intro = introOf(e);
+        const qualifier = [
+          e.role || e.tier, e.kind, e.rarity, e.affiliation,
+          e.region ? `in ${e.region}` : '',
+          e.opposes ? `vs. ${e.opposes}` : '',
+        ].filter(Boolean).join(' · ');
+
+        // The specifics are what the app actually builds from — the moveset for
+        // an enemy, the material for a loot icon, the manner for a taunt line.
+        const detail: [string, string | undefined][] = [
+          ['Looks', e.appearance], ['Made of', e.material], ['Can', e.abilities],
+          ['Fights by', e.howItFights], ['Signature', e.signatureAttack], ['Weakness', e.weakness],
+          ['Fought at', e.arena], ['Does', e.effect], ['Carried by', e.owner], ['Origin', e.origin],
+          ['Manner', e.personality], ['Status', e.status], ['Feels', e.atmosphere],
+          ['Used for', e.whatHappensThere], ['Wants', e.goal], ['Emblem', e.symbol], ['Colours', e.colors],
+          ['Members', (e.members || []).slice(0, 6).join(', ') || undefined],
+        ];
+        const shown = detail.filter(([, v]) => v && String(v).trim());
+
         return (
           <div key={`${e.name}-${i}`} className="text-sm leading-snug">
-            {level >= 1 && level <= 5 && (
-              <span className="text-[9px] font-black tracking-widest text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1 py-0.5 mr-1.5 align-middle">
-                LV{level}
-              </span>
+            <div>
+              {level >= 1 && level <= 5 && (
+                <span className="text-[9px] font-black tracking-widest text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1 py-0.5 mr-1.5 align-middle">
+                  LV{level}
+                </span>
+              )}
+              <span className="font-bold text-zinc-200">{e.name}</span>
+              {(e.aliases?.length || 0) > 0 && (
+                <span className="text-zinc-600 text-xs"> aka {e.aliases!.slice(0, 3).join(', ')}</span>
+              )}
+              {qualifier && (
+                <span className="text-[10px] uppercase tracking-widest text-amber-500/70 font-black ml-2">{qualifier}</span>
+              )}
+              {intro && (
+                <span className="text-[10px] uppercase tracking-widest text-zinc-600 font-black ml-2">{intro}</span>
+              )}
+              {e.description && <span className="text-zinc-400"> — {e.description}</span>}
+            </div>
+            {detailed && shown.length > 0 && (
+              <div className="mt-1 pl-3 border-l border-white/10 flex flex-col gap-0.5">
+                {shown.map(([label, value]) => (
+                  <div key={label} className="text-xs text-zinc-500 leading-snug">
+                    <span className="text-zinc-600 font-bold uppercase tracking-wider text-[9px] mr-1.5">{label}</span>
+                    {value}
+                  </div>
+                ))}
+              </div>
             )}
-            <span className="font-bold text-zinc-200">{e.name}</span>
-            {qualifier && (
-              <span className="text-[10px] uppercase tracking-widest text-amber-500/70 font-black ml-2">{qualifier}</span>
-            )}
-            {e.description && <span className="text-zinc-400"> — {e.description}</span>}
           </div>
         );
       })}
@@ -111,6 +165,13 @@ function IdentifiedAs({ data, mediaType, year, season }: { data: CodexData; medi
             <div className="text-[11px] text-amber-200/80 mt-1.5 leading-snug">
               Your entry says {[season ? `season ${season}` : '', year].filter(Boolean).join(', ')} ({mediaType}).
               If this is the wrong one, re-research it.
+            </div>
+          )}
+          {(id.alsoKnownAs?.length || 0) > 0 && (
+            <div className="text-[10px] text-zinc-500 mt-1.5 leading-snug">
+              {/* These are what the detailed research was actually searched under. */}
+              <span className="font-black uppercase tracking-widest text-zinc-600 mr-1.5">Also known as</span>
+              {id.alsoKnownAs!.slice(0, 5).join(' · ')}
             </div>
           )}
           {id.why && !off && <p className="text-[11px] text-zinc-500 italic mt-1 leading-snug">{id.why}</p>}
@@ -172,6 +233,9 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
 
   const data = codex?.data;
   const isBusy = isCompiling || codex?.status === 'generating';
+
+  const weakSections = Object.entries(data?.sectionConfidence || {})
+    .filter(([, grade]) => grade && grade !== 'high') as [string, string][];
 
   // The art style is researched in eight facets so an image prompt has something
   // to work with; collapsed, only the four broad ones are worth the room.
@@ -271,19 +335,19 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
 
           {(data.characters?.length || 0) > 0 && (
             <Section icon={<Users className="w-3 h-3" />} title="Notable characters">
-              <EntityList entries={data.characters} limit={expanded ? 20 : 5} />
+              <EntityList entries={data.characters} limit={expanded ? 24 : 5} detailed={expanded} />
             </Section>
           )}
 
           {(data.enemies?.length || 0) > 0 && (
             <Section icon={<Swords className="w-3 h-3" />} title="Enemies & antagonists">
-              <EntityList entries={data.enemies} limit={expanded ? 20 : 5} />
+              <EntityList entries={data.enemies} limit={expanded ? 24 : 5} detailed={expanded} />
             </Section>
           )}
 
           {(data.items?.length || 0) > 0 && (
             <Section icon={<Gem className="w-3 h-3" />} title="Iconic items">
-              <EntityList entries={data.items} limit={expanded ? 20 : 5} />
+              <EntityList entries={data.items} limit={expanded ? 24 : 5} detailed={expanded} />
             </Section>
           )}
 
@@ -324,17 +388,23 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
               )}
               {(data.factions?.length || 0) > 0 && (
                 <Section icon={<Landmark className="w-3 h-3" />} title="Factions">
-                  <EntityList entries={data.factions} limit={20} />
+                  <EntityList entries={data.factions} limit={24} detailed />
                 </Section>
               )}
               {(data.locations?.length || 0) > 0 && (
                 <Section icon={<MapPin className="w-3 h-3" />} title="Locations">
-                  <EntityList entries={data.locations} limit={20} />
+                  <EntityList entries={data.locations} limit={24} detailed />
                 </Section>
               )}
               {(data.terminology?.length || 0) > 0 && (
                 <Section icon={<BookOpen className="w-3 h-3" />} title="Terminology">
-                  <EntityList entries={(data.terminology || []).map((t) => ({ name: t.term, description: t.meaning }))} limit={20} />
+                  <EntityList
+                    entries={(data.terminology || []).map((t) => ({
+                      name: t.term, description: t.meaning, role: t.category,
+                      introducedAt: t.introducedAt, introducedPct: t.introducedPct,
+                    }))}
+                    limit={24}
+                  />
                 </Section>
               )}
               {(data.themes?.length || 0) > 0 && (
@@ -366,6 +436,22 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
               {(data.relatedWorks?.length || 0) > 0 && (
                 <Section icon={<Library className="w-3 h-3" />} title="Related works">
                   <Chips values={data.relatedWorks} />
+                </Section>
+              )}
+              {weakSections.length > 0 && (
+                <Section icon={<AlertTriangle className="w-3 h-3" />} title="Less certain about">
+                  {/* Each area is researched by its own pass, so a shaky lookup
+                      is named rather than souring the whole dossier. */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {weakSections.map(([section, grade]) => (
+                      <span
+                        key={section}
+                        className="text-xs px-2 py-1 bg-amber-500/10 text-amber-300/80 rounded border border-amber-500/20"
+                      >
+                        {SECTION_LABEL[section] || section} · {grade}
+                      </span>
+                    ))}
+                  </div>
                 </Section>
               )}
               {data.notes && (

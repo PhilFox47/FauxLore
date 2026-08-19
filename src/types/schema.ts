@@ -185,20 +185,74 @@ export interface WorldBoss {
  * time any AI feature touches that media, and reused by all of them afterwards
  * (auto-tagging, enemy generation, item generation).
  */
+/**
+ * One thing in a work: a person, a threat, a place, a group, an object. The
+ * fields are a superset, and everything past `name` is absent when the research
+ * did not support it.
+ */
 export interface CodexEntity {
   name: string;
+  /** Other names, titles, epithets and nicknames this goes by. */
+  aliases?: string[];
   description?: string;
   role?: string;
   tier?: string;
   /** What size of encounter this would make, on the game's own 1-5 scale. */
   level?: number;
-  /** For items: weapon, armour, accessory, consumable, relic, vehicle, tool… */
+  /** What it looks like, kept apart from what it is — for image prompts. */
+  appearance?: string;
+  /** Which group, house, team or side it belongs to. */
+  affiliation?: string;
+
+  // People
+  abilities?: string;
+  personality?: string;
+  status?: string;
+
+  // Threats
+  howItFights?: string;
+  signatureAttack?: string;
+  weakness?: string;
+  arena?: string;
+
+  // Objects
   kind?: string;
-  /** For items: what it is made of and how it reads — fuel for an icon prompt. */
   material?: string;
-  /** For factions: who they stand against. */
+  effect?: string;
+  owner?: string;
+  origin?: string;
+  rarity?: string;
+
+  // Places
+  region?: string;
+  atmosphere?: string;
+  whatHappensThere?: string;
+
+  // Groups
   opposes?: string;
+  goal?: string;
+  symbol?: string;
+  colors?: string;
+  members?: string[];
+
+  /** Where this first appears, so features can gate on the user's progress. */
+  introducedAt?: string;
+  introducedPct?: number;
 }
+
+/** A piece of in-universe vocabulary. */
+export interface CodexTerm {
+  term: string;
+  meaning: string;
+  category?: string;
+  introducedAt?: string;
+  introducedPct?: number;
+}
+
+/** How well-supported each part of the dossier is, section by section. */
+export type CodexSectionConfidence = Partial<
+  Record<'identity' | 'cast' | 'threats' | 'world' | 'things' | 'craft', string>
+>;
 
 export interface CodexIdentification {
   title?: string;
@@ -209,6 +263,8 @@ export interface CodexIdentification {
   creator?: string;
   why?: string;
   alternatives?: string[];
+  /** Every other name the work goes by; the facet searches are keyed on these. */
+  alsoKnownAs?: string[];
 }
 
 export interface CodexData {
@@ -254,12 +310,14 @@ export interface CodexData {
   factions?: CodexEntity[];
   locations?: CodexEntity[];
   items?: CodexEntity[];
-  terminology?: { term: string; meaning: string }[];
+  terminology?: CodexTerm[];
   genres?: string[];
   tags?: string[];
   creators?: string;
   releaseYear?: number | string;
   confidence?: string;
+  /** Per-section confidence, so one weak area does not discredit the rest. */
+  sectionConfidence?: CodexSectionConfidence;
   notes?: string;
   sources?: string[];
 }
