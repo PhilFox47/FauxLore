@@ -37,6 +37,7 @@ import { DatabaseService } from "../services/db";
 import { buildTitleSystemPrompt, buildBatchTitlePrompt, buildMainTitlePrompt, getProgressionContext, levelBudget } from "../lib/lorekeeperTitles";
 import { GeneratedImage } from "../components/GeneratedImage";
 import { Loader2, Dices } from "lucide-react";
+import { creativeModel } from '../lib/aiModels';
 
 const FAUXLORE_CONTEXT = `\n\nCONTEXT ABOUT FAUXLORE:
 FauxLore is an RPG-themed media-tracking app where the user logs their time/pages/etc on Games, Books, Visual Novels, Manga, Series, Movies, Comics, and Audiobooks to earn "Master Pages" (XP) and level up.
@@ -252,7 +253,7 @@ export function Lorekeeper() {
       let titleRes = "";
       if (settings.nanoGptApiKey) {
         const apiKey = settings.nanoGptApiKey;
-        const model = settings.nanoGptModel || "gpt-4o-mini";
+        const model = creativeModel(settings);
         titleRes = await generateText(apiKey, model, systemPrompt, titlePrompt, 1.2);
       }
 
@@ -316,7 +317,7 @@ export function Lorekeeper() {
       const titleKey = `rpg_title_${rpgState.level}`;
       let titleRes = "";
       if (settings.nanoGptApiKey) {
-        titleRes = await generateText(settings.nanoGptApiKey, settings.nanoGptModel || "gpt-4o-mini", titleSystemPrompt, titlePrompt, 1.2);
+        titleRes = await generateText(settings.nanoGptApiKey, creativeModel(settings), titleSystemPrompt, titlePrompt, 1.2);
       }
 
       await saveAiText(titleKey, titleRes);
@@ -346,7 +347,7 @@ export function Lorekeeper() {
 
         if (settings.nanoGptApiKey) {
           const apiKey = settings.nanoGptApiKey;
-          const model = settings.nanoGptModel || "gpt-4o-mini";
+          const model = creativeModel(settings);
           qTitleRes = await generateText(apiKey, model, systemPrompt, tPrompt, 1.2);
           qDescRes = await generateText(apiKey, model, systemPrompt, dPrompt);
         }
@@ -1135,7 +1136,7 @@ function QuestCard({
 
           if (settings.nanoGptApiKey) {
             const apiKey = settings.nanoGptApiKey;
-            const model = settings.nanoGptModel || "chatgpt-4o-latest";
+            const model = creativeModel(settings);
             qTitleRes = await generateText(
               apiKey,
               model,
@@ -1204,7 +1205,7 @@ function QuestCard({
       let res = "";
       
       if (settings?.nanoGptApiKey) {
-        res = await generateText(settings.nanoGptApiKey, settings.nanoGptModel || "chatgpt-4o-latest", systemPrompt, prompt, type === 'title' ? 1.2 : 0.9);
+        res = await generateText(settings.nanoGptApiKey, creativeModel(settings), systemPrompt, prompt, type === 'title' ? 1.2 : 0.9);
       }
 
       await saveAiText(`quest_${type}_${quest.id}`, res);

@@ -7,6 +7,7 @@ import { DatabaseService } from '../services/db';
 import { generateText } from '../services/nanoGptService';
 import { MediaFormModal } from '../components/MediaFormModal';
 import { useToast } from '../contexts/ToastContext';
+import { analyticalModel } from '../lib/aiModels';
 
 export function Taxonomy() {
   const { taxonomies, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, media, saveMediaItem, deleteMediaItem, settings } = useMediaContext();
@@ -148,7 +149,7 @@ Legacy Context platforms: ${itemToTag.platforms?.join(', ') || 'N/A'}
 
 Return JSON only.`;
 
-      const aiResponseText = await generateText(settings.nanoGptApiKey, settings.nanoGptModel || 'gpt-4o-mini', gptSystem, gptUser);
+      const aiResponseText = await generateText(settings.nanoGptApiKey, analyticalModel(settings), gptSystem, gptUser);
       let parsed = null;
       try {
         parsed = JSON.parse(aiResponseText.replace(/```json/g, '').replace(/```/g, '').trim());

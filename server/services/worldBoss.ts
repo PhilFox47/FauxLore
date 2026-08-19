@@ -90,7 +90,7 @@ HOW TO WRITE IT:
 1. Choose the opponent yourself. Ideally it is a real character, creature, faction member or force from this work — the Codex above lists candidates — picked so its stature matches Level ${level}. A Level 1 should be something the fandom would laugh at; a Level 5 should be the kind of thing the whole work builds towards.${past.length ? " Check your choice against the ALREADY FOUGHT list before you commit to it." : ""}
 2. If nothing in the work fits that level, invent one — but build it out of this work's own material: its factions, its terminology, its creatures, its aesthetics. Never a generic fantasy monster.
 3. Give it an RPG epithet that suits the tier ("King of the Koopas", "Intern of the Seventh Circle"). Keep the name the entity's real name where one exists.
-4. Write 1-3 sentences of flavour text: what it is, how it fights or thwarts the player, in the voice and tone of the source work. Be specific and let its personality show. Wit is welcome at low levels; dread at high ones.
+4. Record what it is, factually — no flourish, no voice, no atmosphere. A writer takes this brief and turns it into flavour text afterwards, and they can only work with what you give them, so be concrete: how it actually fights or thwarts the player, what it looks like, how it carries itself and how it would speak. Say what is true about it; do not perform it.
 5. Art-direct its portrait yourself as a single ready-to-use text-to-image prompt.
 
 THE IMAGE PROMPT MUST:
@@ -108,30 +108,96 @@ THE IMAGE PROMPT MUST:
 Return ONLY a pure JSON object, no markdown fence, no commentary:
 {
   "name": "the entity's name, no epithet",
-  "title": "its RPG epithet, without the name",
-  "description": "1-3 sentences of flavour text",
+  "title": "a working RPG epithet, without the name",
+  "brief": "1-2 plain sentences on what it is and why it belongs at this level",
+  "howItFights": "concretely, how it fights or thwarts the player",
+  "look": "what it looks like and how it carries itself",
+  "manner": "its temperament and how it would speak",
   "imagePrompt": "the complete image prompt"
 }`;
 
-    try {
-      // No web search here: the Codex already did the research, so this call is
-      // pure creative writing and runs on the cheaper, faster model.
-      const raw = await nanoGenerateText(aiConfig, prompt, { temperature: 1.0 });
-      if (!raw) throw new Error("The model returned an empty enemy.");
-      const parsed = parseJsonLoose<any>(raw);
+    const clean = (v: any) => String(v || "").replace(/\*\*/g, "").replace(/^["']|["']$/g, "").trim();
 
-      const clean = (v: any) => String(v || "").replace(/\*\*/g, "").replace(/^["']|["']$/g, "").trim();
-      const name = clean(parsed.name);
+    try {
+      // STAGE 1 — analytical. Which opponent, at what level, looking like what.
+      // No web search: the Codex already did the research. This is the pass that
+      // must not invent, so it runs on the analytical model.
+      const raw = await nanoGenerateText(aiConfig, prompt, { temperature: 1.0, tier: "analytical" });
+      if (!raw) throw new Error("The model returned an empty enemy.");
+      const spec = parseJsonLoose<any>(raw);
+
+      const name = clean(spec.name);
       if (!name) throw new Error("The enemy has no name.");
+
+      // STAGE 2 — creative. The player only ever reads this sentence, and the
+      // model that is good at picking a faithful opponent is not the one that is
+      // good at giving it a voice.
+      const written = await writeEnemyFlavour(aiConfig, mediaItem, level, tier, spec, codexRow);
 
       return {
         name,
-        title: clean(parsed.title),
-        description: clean(parsed.description),
-        imagePrompt: String(parsed.imagePrompt || "").trim(),
+        // The brief's epithet is a working title; the writer's is the one that
+        // has to land. Fall back if the second pass failed.
+        title: clean(written?.title) || clean(spec.title),
+        description: clean(written?.description) || clean(spec.brief),
+        imagePrompt: String(spec.imagePrompt || "").trim(),
       };
     } catch (e) {
       console.error("Enemy generation failed", e);
+      return null;
+    }
+  }
+
+  /**
+   * Turns an enemy brief into the line the player actually reads.
+   *
+   * Deliberately given no Codex and no bestiary — only the brief. It cannot
+   * research, so it cannot contradict the research; its whole job is voice.
+   */
+  async function writeEnemyFlavour(
+    aiConfig: NonNullable<ReturnType<typeof getAiConfig>>,
+    mediaItem: any,
+    level: number,
+    tier: { word: string },
+    spec: any,
+    codexRow: any,
+  ): Promise<{ title: string; description: string } | null> {
+    const d = codexRow?.data;
+    const voice = [
+      d?.tone ? `Tone of the source: ${d.tone}` : "",
+      d?.premise ? `What the work is: ${d.premise}` : "",
+    ].filter(Boolean).join("\n");
+
+    const prompt = `You are the Enemy Forge of FauxLore, writing the card for one opponent. Another archivist has already researched it and handed you this brief. Your only job is to make it read well.
+
+THE SOURCE: "${mediaItem.title}" (${mediaItem.mediaType})
+${voice}
+
+THE BRIEF — every fact below is settled. Do not add to it, do not contradict it, do not invent abilities, allies or history it does not mention:
+- Name: ${spec.name}
+- Working epithet: ${spec.title || "(none suggested)"}
+- What it is: ${spec.brief || ""}
+- How it fights: ${spec.howItFights || ""}
+- How it looks: ${spec.look || ""}
+- Its manner: ${spec.manner || ""}
+- Encounter level: ${level} of 5 — it should read as ${tier.word}.
+
+WRITE:
+1. Its epithet: a short RPG title without the name ("King of the Koopas", "Intern of the Seventh Circle"). Improve on the working one if you can; keep it if it is already right.
+2. 1-3 sentences of flavour text, in the voice and tone of the source work. Say what it is and how it stands in the player's way. Let its personality show — wit at low levels, dread at high ones. Write it as the world would describe it, not as a stat block.
+
+Do not restate the brief as a list. Do not open with the name and a colon. No markdown, no quotation marks around the whole thing.
+
+Return ONLY a pure JSON object, no markdown fence, no commentary:
+{ "title": "the epithet, without the name", "description": "1-3 sentences" }`;
+
+    try {
+      const raw = await nanoGenerateText(aiConfig, prompt, { temperature: 1.05, tier: "creative" });
+      if (!raw) return null;
+      return parseJsonLoose<any>(raw);
+    } catch (e) {
+      // A flat enemy is better than no enemy: the caller falls back to the brief.
+      console.error("Enemy flavour pass failed; falling back to the brief", e);
       return null;
     }
   }

@@ -348,8 +348,12 @@ export interface Settings {
   tmdbApiKey?: string;
   googleBooksApiKey?: string;
   nanoGptApiKey?: string;
+  /** Analytical work: classifying, extracting, converting prose to JSON. */
   nanoGptModel?: string;
-  nanoGptWebModel?: string; // model used for tasks that need web search
+  /** The same analytical work, but over injected web-search results. */
+  nanoGptWebModel?: string;
+  /** User-facing prose: enemy and item flavour, titles, quests, recaps. */
+  nanoGptCreativeModel?: string;
   geminiApiKey?: string;
   // Image generation (system-wide; merged in from system_settings on the client)
   imageModel?: string;

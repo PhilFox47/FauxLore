@@ -154,7 +154,7 @@ THE PROMPT MUST:
 Return ONLY the final image prompt text, nothing else.`;
 
     // Web search only where the Codex could not supply the facts.
-    return nanoGenerateText(aiConfig, prompt, { temperature: 0.7, webSearch: !codexBlock });
+    return nanoGenerateText(aiConfig, prompt, { temperature: 0.7, webSearch: !codexBlock, tier: "analytical" });
   }
 
   /**
@@ -220,7 +220,7 @@ THE PROMPT MUST:
 
 Return ONLY the final image prompt text, nothing else.`;
 
-    return nanoGenerateText(aiConfig, prompt, { temperature: 0.7, webSearch: !codexBlock });
+    return nanoGenerateText(aiConfig, prompt, { temperature: 0.7, webSearch: !codexBlock, tier: "analytical" });
   }
 
   return {

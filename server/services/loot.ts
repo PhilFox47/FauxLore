@@ -158,7 +158,7 @@ HOW TO CHOOSE THE OBJECT:
 
 HOW TO WRITE IT:
 4. Name it in 4 words or fewer, in the naming style of this work — its language, its honorifics, its brand names, its jargon. Not generic fantasy unless the source is generic fantasy.
-5. Write 1-2 sentences of flavour text in the VOICE of this work: its tone, its humour or its dread, its vocabulary. Reference real specifics — a character who owned it, an event it survived, a place it came from — instead of vague mysticism. It must also hint, without stating outright, at the bonus to ${attrs.targetType}: "${attrs.targetValue}".
+5. Record what it is, factually — no voice, no atmosphere, no flourish. A writer takes this brief and turns it into flavour text afterwards, and can only use what you give them, so give them real specifics: who owned it, what it survived, where it came from, what it is made of and how worn it is. State the facts; do not perform them.
 6. Give it an RPG item type that fits both the object and the slot (Weapon, Armor, Helmet, Relic, Trinket, Consumable, Tool, Document, ...).
 7. Art-direct its inventory icon yourself, as ONE ready-to-use text-to-image prompt.
 
@@ -175,33 +175,91 @@ THE IMAGE PROMPT MUST:
 Return ONLY a pure JSON object, no markdown fence, no commentary:
 {
   "name": "the item name",
-  "description": "1-2 sentences of flavour text",
+  "brief": "1-2 plain sentences on what the object is and why it fits this rarity",
+  "provenance": "who owned it, what it survived, where it came from",
+  "look": "its materials, shape, markings and wear",
   "type": "the RPG item type",
   "imagePrompt": "the complete image prompt"
 }`;
 
     try {
-      // The Codex already did the research, so this is a pure creative call on
-      // the ordinary model — unless there is no Codex, in which case fall back to
-      // looking the title up here.
-      const raw = await nanoGenerateText(aiConfig, prompt, { temperature: 0.95, webSearch: !codexBlock });
+      // STAGE 1 — analytical. Which object, what it is made of, what it is for.
+      // The Codex already did the research, so no search is needed — unless there
+      // is no Codex, in which case fall back to looking the title up here.
+      const raw = await nanoGenerateText(aiConfig, prompt, {
+        temperature: 0.95,
+        webSearch: !codexBlock,
+        tier: "analytical",
+      });
       if (!raw) throw new Error("The model returned an empty item.");
-      const parsed = parseJsonLoose<any>(raw);
+      const spec = parseJsonLoose<any>(raw);
 
       const clean = (v: any) => String(v || "").replace(/\*\*/g, "").trim();
-      const name = clean(parsed.name);
+      const name = clean(spec.name);
       if (!name) throw new Error("The item has no name.");
+
+      // STAGE 2 — creative. The card in the Armory is one sentence long, and it
+      // is the only part of this the player ever reads.
+      const written = await writeLootFlavour(aiConfig, mediaItem, attrs, art, spec, codexRow);
 
       return {
         ...attrs,
         name,
-        description: clean(parsed.description) || "An item of unknown origin.",
-        type: clean(parsed.type) || "Trinket",
-        imagePrompt: String(parsed.imagePrompt || "").trim(),
+        description: clean(written) || clean(spec.brief) || "An item of unknown origin.",
+        type: clean(spec.type) || "Trinket",
+        imagePrompt: String(spec.imagePrompt || "").trim(),
       };
     } catch (e) {
       console.error("Loot generation failed", e);
       return null;
+    }
+  }
+
+  /**
+   * Turns an item brief into the line that shows on the card.
+   *
+   * Given the brief and nothing else — no Codex, no item list — so it cannot
+   * research and therefore cannot contradict the research. Its job is voice.
+   */
+  async function writeLootFlavour(
+    aiConfig: NonNullable<ReturnType<typeof getAiConfig>>,
+    mediaItem: any,
+    attrs: { rarity: string; slot: string; targetType: string; targetValue: string },
+    art: { grandeur: string },
+    spec: any,
+    codexRow: any,
+  ): Promise<string> {
+    const d = codexRow?.data;
+    const voice = [
+      d?.tone ? `Tone of the source: ${d.tone}` : "",
+      d?.premise ? `What the work is: ${d.premise}` : "",
+    ].filter(Boolean).join("\n");
+
+    const prompt = `You are the Loot Master of FauxLore, writing the card for one piece of loot. Another archivist has already chosen it and handed you this brief. Your only job is to make it read well.
+
+THE SOURCE: "${mediaItem.title}" (${mediaItem.mediaType})
+${voice}
+
+THE BRIEF — every fact below is settled. Do not add to it, do not contradict it, and do not invent owners, powers or history it does not mention:
+- Name: ${spec.name}
+- What it is: ${spec.brief || ""}
+- Where it came from: ${spec.provenance || ""}
+- What it looks like: ${spec.look || ""}
+- Rarity: ${attrs.rarity} — it should read as ${art.grandeur}.
+
+WRITE 1-2 sentences of flavour text in the VOICE of this work — its tone, its humour or its dread, its vocabulary. Use the real specifics from the brief rather than vague mysticism. It must also hint, without ever stating it outright, at a bonus to ${attrs.targetType}: "${attrs.targetValue}".
+
+Write it as the world would describe the object, not as a stat block. Do not restate the brief. Do not open with the name and a colon. No markdown, no surrounding quotation marks.
+
+Return ONLY the flavour text, nothing else.`;
+
+    try {
+      const raw = await nanoGenerateText(aiConfig, prompt, { temperature: 1.0, tier: "creative" });
+      return String(raw || "").replace(/^["']|["']$/g, "").trim();
+    } catch (e) {
+      // A plain description beats no drop: the caller falls back to the brief.
+      console.error("Loot flavour pass failed; falling back to the brief", e);
+      return "";
     }
   }
 

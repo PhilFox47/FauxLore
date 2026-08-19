@@ -9,6 +9,7 @@ import { generateText } from '../services/nanoGptService';
 import { AI_PERSONAS, getPersona, getPersonaDescription } from '../lib/personas';
 import { getProgressionContext, levelBudget, buildTitleSystemPrompt, buildMainTitlePrompt } from '../lib/lorekeeperTitles';
 import { UserManagement } from './UserManagement';
+import { creativeModel } from '../lib/aiModels';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -34,6 +35,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     nanoGptApiKey: '',
     nanoGptModel: '',
     nanoGptWebModel: '',
+    nanoGptCreativeModel: '',
     geminiApiKey: '',
     imageModel: 'z-image-turbo',
     imageSize: '1024x1024',
@@ -89,6 +91,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         nanoGptApiKey: settings.nanoGptApiKey || '',
         nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
         nanoGptWebModel: settings.nanoGptWebModel || '',
+        nanoGptCreativeModel: settings.nanoGptCreativeModel || '',
         geminiApiKey: settings.geminiApiKey || '',
         imageModel: settings.imageModel || 'z-image-turbo',
         imageSize: settings.imageSize || '1024x1024',
@@ -142,6 +145,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             nanoGptApiKey: settings.nanoGptApiKey || '',
             nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
             nanoGptWebModel: settings.nanoGptWebModel || '',
+            nanoGptCreativeModel: settings.nanoGptCreativeModel || '',
             geminiApiKey: settings.geminiApiKey || '',
             imageModel: settings.imageModel || 'z-image-turbo',
             imageSize: settings.imageSize || '1024x1024',
@@ -294,9 +298,29 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setTestResult(null);
     try {
       const apiKey = formData.nanoGptApiKey;
-      const model = formData.nanoGptModel || 'gpt-4o-mini';
-      await generateText(apiKey, model, 'You are a lively connection testing bot. Write exactly 2 words saying "Test Passed", nothing else.', 'Ping');
-      setTestResult({ success: true, message: "Connection successful! Model exists." });
+      // Every slot that is actually filled in gets pinged: a typo in the
+      // creative model used to surface much later, as a silently missing enemy
+      // description. Duplicates are collapsed so the common case is one call.
+      const slots: [string, string][] = [
+        ['Analytical', formData.nanoGptModel || 'gpt-4o-mini'],
+        ['Web search', formData.nanoGptWebModel],
+        ['Creative', formData.nanoGptCreativeModel],
+      ];
+      const seen = new Set<string>();
+      const toTest = slots.filter(([, m]) => m && !seen.has(m) && seen.add(m));
+      for (const [label, model] of toTest) {
+        try {
+          await generateText(apiKey, model, 'You are a lively connection testing bot. Write exactly 2 words saying "Test Passed", nothing else.', 'Ping');
+        } catch (e: any) {
+          throw new Error(`${label} model "${model}" failed: ${e.message}`);
+        }
+      }
+      setTestResult({
+        success: true,
+        message: toTest.length > 1
+          ? `Connection successful! All ${toTest.length} models exist.`
+          : 'Connection successful! Model exists.',
+      });
     } catch (e: any) {
       setTestResult({ success: false, message: e.message || "Connection failed" });
     } finally {
@@ -321,7 +345,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       // Must save settings first to ensure model/API key are fresh internally?
       // Actually we can pass formData.nanoGptApiKey and formData.nanoGptModel directly.
       const apiKey = formData.nanoGptApiKey;
-      const model = formData.nanoGptModel || 'gpt-4o-mini';
+      // Titles and quest copy are what the user reads, so they take the
+      // creative slot — using the unsaved form values, since this runs before
+      // the settings are written.
+      const model = creativeModel(formData);
 
       const rpgState = calculateRPGState(media, logs, settings, [], artifacts);
       const systemPrompt = "You are FauxLore, a helpful and natural media tracking assistant. Keep your tone conversational, friendly, and grounded. No epic RPG or fantasy roleplay unless explicitly asked.";
@@ -403,6 +430,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         nanoGptApiKey: formData.nanoGptApiKey,
         nanoGptModel: formData.nanoGptModel,
         nanoGptWebModel: formData.nanoGptWebModel,
+        nanoGptCreativeModel: formData.nanoGptCreativeModel,
         geminiApiKey: formData.geminiApiKey,
         imageModel: formData.imageModel,
         imageSize: formData.imageSize,
@@ -957,8 +985,18 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       placeholder="..."
                     />
                   </div>
+                  <div className="sm:col-span-2 -mb-1">
+                    <p className="text-xs text-zinc-500">
+                      FauxLore splits its AI work in two, because no single model is good at both halves.
+                      An <span className="text-zinc-300 font-semibold">analytical</span> model classifies, extracts
+                      and converts research into structured data — it must invent nothing. A{' '}
+                      <span className="text-zinc-300 font-semibold">creative</span> model writes the prose you
+                      actually read. Enemies and items use both in turn: analytical picks and specs them, creative
+                      gives them a voice.
+                    </p>
+                  </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Nano-GPT Model (Standard)</label>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Analytical Model</label>
                     <input
                       type="text"
                       name="nanoGptModel"
@@ -967,10 +1005,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       className="input-field"
                       placeholder="gpt-4o-mini"
                     />
-                    <p className="text-[10px] text-zinc-500 mt-1">Used for titles, quest flavour text and recaps.</p>
+                    <p className="text-[10px] text-zinc-500 mt-1">Structuring the Codex, auto-tagging, taxonomy suggestions, image prompts, and the enemy / item briefs. Wants strict schema adherence over flair.</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-400 mb-1">Nano-GPT Model (Web Search)</label>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Analytical Model (Web Search)</label>
                     <input
                       type="text"
                       name="nanoGptWebModel"
@@ -979,7 +1017,19 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       className="input-field"
                       placeholder="gpt-4o-mini"
                     />
-                    <p className="text-[10px] text-zinc-500 mt-1">Used for auto-tagging, loot and enemy generation. FauxLore appends <code>:online</code> to enable Nano-GPT web search, so leave that suffix off. Falls back to the standard model when blank.</p>
+                    <p className="text-[10px] text-zinc-500 mt-1">Codex research — the only calls that search the web. A large context window helps, since the results are injected into the prompt. FauxLore appends <code>:online</code> itself, so leave that suffix off. Falls back to the analytical model when blank.</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Creative Model</label>
+                    <input
+                      type="text"
+                      name="nanoGptCreativeModel"
+                      value={formData.nanoGptCreativeModel}
+                      onChange={handleChange}
+                      className="input-field"
+                      placeholder="gpt-4o-mini"
+                    />
+                    <p className="text-[10px] text-zinc-500 mt-1">Everything you read as prose: enemy and item flavour text, level and quest titles, recap writing, Roulette blurbs. A roleplay-tuned model is a good fit here. Falls back to the analytical model when blank.</p>
                   </div>
                 </div>
 

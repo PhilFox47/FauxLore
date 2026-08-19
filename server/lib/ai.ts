@@ -3,10 +3,23 @@ import type { Db } from "../context";
 /**
  * Server-side text generation via NanoGPT's OpenAI-compatible endpoint.
  *
- * Two models are configurable per user (falling back to the system settings):
- * `nanoGptModel` for ordinary generation and `nanoGptWebModel` for tasks that
- * need to look something up. NanoGPT enables web search by appending `:online`
- * to the model name, which is what `webSearch` does here.
+ * THREE models are configurable per user (falling back to the system settings),
+ * because the app asks for three genuinely different things and no single model
+ * is good at all of them:
+ *
+ *   ANALYTICAL  `nanoGptModel` — classify, extract, convert prose to JSON, draft
+ *               a spec. Wants schema adherence and a refusal to invent.
+ *   WEB         `nanoGptWebModel` — the same analytical work, but over injected
+ *               search results. Split out because retrieval rewards a large
+ *               context window, and because NanoGPT enables search by appending
+ *               `:online` to the model name.
+ *   CREATIVE    `nanoGptCreativeModel` — the text the user actually reads: enemy
+ *               and item flavour, level titles, quest copy, recap prose. Wants
+ *               voice, and a roleplay-tuned model is genuinely better at it.
+ *
+ * The split matters in both directions. A model tuned to invent nothing writes
+ * flat enemies; a model tuned for persona and improvisation invents characters
+ * that were never in the work, and for the Codex that error is permanent.
  */
 const NANO_GPT_CHAT_URL = "https://nano-gpt.com/api/v1/chat/completions";
 
@@ -14,37 +27,49 @@ export interface AiConfig {
   apiKey: string;
   model: string;
   webModel: string;
+  creativeModel: string;
 }
+
+/** Which job a call is doing, and therefore which model it should land on. */
+export type AiTier = "analytical" | "creative";
 
 /** Reads the NanoGPT key/models for a user, falling back to the system-wide settings. */
 export function getAiConfig(db: Db, userId: string): AiConfig | null {
+  const cols = "nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel";
   const userSettings: any = db
-    .prepare("SELECT nanoGptApiKey, nanoGptModel, nanoGptWebModel FROM settings WHERE userId = ?")
+    .prepare(`SELECT ${cols} FROM settings WHERE userId = ?`)
     .get(userId);
   const sysSettings: any = db
-    .prepare("SELECT nanoGptApiKey, nanoGptModel, nanoGptWebModel FROM system_settings WHERE id = 'system'")
+    .prepare(`SELECT ${cols} FROM system_settings WHERE id = 'system'`)
     .get();
 
   const apiKey = userSettings?.nanoGptApiKey || sysSettings?.nanoGptApiKey || process.env.NANO_GPT_API_KEY;
   if (!apiKey) return null;
 
+  // Both specialised slots fall back to the analytical model, so an install that
+  // never fills them in behaves exactly as it did before.
   const model = userSettings?.nanoGptModel || sysSettings?.nanoGptModel || "gpt-4o-mini";
   const webModel = userSettings?.nanoGptWebModel || sysSettings?.nanoGptWebModel || model;
-  return { apiKey, model, webModel };
+  const creativeModel = userSettings?.nanoGptCreativeModel || sysSettings?.nanoGptCreativeModel || model;
+  return { apiKey, model, webModel, creativeModel };
 }
 
-function resolveModel(config: AiConfig, webSearch: boolean): string {
-  const base = (webSearch ? config.webModel : config.model).trim();
-  if (!webSearch) return base;
-  // Don't double-suffix if the configured name already opts in.
-  return /:online\b/.test(base) ? base : `${base}:online`;
+export function resolveModel(config: AiConfig, webSearch: boolean, tier: AiTier = "analytical"): string {
+  // Search wins over tier: a creative call that still needs to look something up
+  // has to run on the model the search results are being injected into.
+  if (webSearch) {
+    const base = config.webModel.trim();
+    // Don't double-suffix if the configured name already opts in.
+    return /:online\b/.test(base) ? base : `${base}:online`;
+  }
+  return (tier === "creative" ? config.creativeModel : config.model).trim();
 }
 
 /** Single-turn completion. Returns the trimmed assistant message, or "" on failure. */
 export async function nanoGenerateText(
   config: AiConfig,
   prompt: string,
-  opts: { temperature?: number; webSearch?: boolean; systemPrompt?: string } = {},
+  opts: { temperature?: number; webSearch?: boolean; systemPrompt?: string; tier?: AiTier } = {},
 ): Promise<string> {
   const messages: { role: string; content: string }[] = [];
   if (opts.systemPrompt) messages.push({ role: "system", content: opts.systemPrompt });
@@ -57,7 +82,7 @@ export async function nanoGenerateText(
       Authorization: `Bearer ${config.apiKey}`,
     },
     body: JSON.stringify({
-      model: resolveModel(config, !!opts.webSearch),
+      model: resolveModel(config, !!opts.webSearch, opts.tier),
       temperature: opts.temperature ?? 0.9,
       messages,
     }),

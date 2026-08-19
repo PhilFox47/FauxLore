@@ -635,6 +635,7 @@ export function createCodexService({ db }: { db: Db }) {
         const raw = await nanoGenerateText(aiConfig, buildIdentifyPrompt(subject, correction), {
           temperature: 0.1,
           webSearch: true,
+          tier: "analytical",
         });
         if (!raw) throw new Error("The model could not identify this work.");
         const parsed = parseJsonLoose<CodexIdentity>(raw);
@@ -666,6 +667,7 @@ export function createCodexService({ db }: { db: Db }) {
         const prose = await nanoGenerateText(aiConfig, buildFacetPrompt(ctx, facet, alreadyFound), {
           temperature: 0.2,
           webSearch: true,
+          tier: "analytical",
         });
         if (!prose) throw new Error(`The ${facet} research came back empty.`);
         return prose;
@@ -674,6 +676,7 @@ export function createCodexService({ db }: { db: Db }) {
       const structureFacet = async (facet: Facet, prose: string): Promise<any> => {
         const raw = await nanoGenerateText(aiConfig, buildStructurePrompt(ctx, facet, prose), {
           temperature: 0.1,
+          tier: "analytical",
         });
         if (!raw) throw new Error(`The ${facet} section could not be structured.`);
         const parsed = parseJsonLoose<any>(raw);

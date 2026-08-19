@@ -335,6 +335,8 @@ Platforms: ${parse(media.platforms).join(", ") || "N/A"}${codexBlock ? `\n\n${co
       // With a Codex in hand the facts are settled, so this is plain
       // classification. Without one, fall back to searching the web here.
       const raw = await nanoGenerateText(aiConfig, userPrompt, {
+        // Classifying into a fixed taxonomy: analytical, and never creative.
+        tier: "analytical",
         temperature: 0.1,
         webSearch: !codexBlock,
         systemPrompt,

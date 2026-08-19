@@ -32,15 +32,15 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
       const userRec: any = db.prepare('SELECT role FROM users WHERE id = ?').get(userId);
       const isAdmin = userRec?.role === 'Admin';
       
-      const oldSettings: any = db.prepare('SELECT enemyDifficulty, mediaDifficulty, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, geminiApiKey, googleBooksApiKey FROM settings WHERE userId = ?').get(userId);
+      const oldSettings: any = db.prepare('SELECT enemyDifficulty, mediaDifficulty, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, geminiApiKey, googleBooksApiKey FROM settings WHERE userId = ?').get(userId);
       const oldDifficulty = oldSettings?.enemyDifficulty ?? 1.0;
       const newDifficulty = settings.enemyDifficulty ?? 1.0;
       const oldMediaDifficulty = oldSettings?.mediaDifficulty || null;
       const newMediaDifficulty = settings.mediaDifficulty ? JSON.stringify(settings.mediaDifficulty) : null;
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs, disableAutoDrop)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs, @disableAutoDrop)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs, disableAutoDrop)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs, @disableAutoDrop)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -49,6 +49,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
           nanoGptApiKey=excluded.nanoGptApiKey,
           nanoGptModel=excluded.nanoGptModel,
           nanoGptWebModel=excluded.nanoGptWebModel,
+          nanoGptCreativeModel=excluded.nanoGptCreativeModel,
           geminiApiKey=excluded.geminiApiKey,
           googleBooksApiKey=excluded.googleBooksApiKey,
           timezone=excluded.timezone,
@@ -71,6 +72,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
         nanoGptApiKey: isAdmin ? (settings.nanoGptApiKey || null) : (oldSettings?.nanoGptApiKey || null),
         nanoGptModel: isAdmin ? (settings.nanoGptModel || null) : (oldSettings?.nanoGptModel || null),
         nanoGptWebModel: isAdmin ? (settings.nanoGptWebModel || null) : (oldSettings?.nanoGptWebModel || null),
+        nanoGptCreativeModel: isAdmin ? (settings.nanoGptCreativeModel || null) : (oldSettings?.nanoGptCreativeModel || null),
         geminiApiKey: isAdmin ? (settings.geminiApiKey || null) : (oldSettings?.geminiApiKey || null),
         googleBooksApiKey: isAdmin ? (settings.googleBooksApiKey || null) : (oldSettings?.googleBooksApiKey || null),
         timezone: settings.timezone || null,

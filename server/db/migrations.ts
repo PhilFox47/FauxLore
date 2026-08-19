@@ -128,6 +128,9 @@ export function runMigrations(db: Db) {
   // web search.
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptWebModel TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN nanoGptWebModel TEXT").run(); } catch (e) {}
+  // The creative slot: user-facing prose, kept apart from the analytical work.
+  try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptCreativeModel TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE system_settings ADD COLUMN nanoGptCreativeModel TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN geminiApiKey TEXT").run(); console.log("Migration: Added geminiApiKey"); } catch (e) {}
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN googleBooksApiKey TEXT").run(); } catch(e) {}
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN imageModel TEXT").run(); } catch(e) {}

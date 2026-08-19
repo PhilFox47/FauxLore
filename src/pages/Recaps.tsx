@@ -31,6 +31,7 @@ import { AwardsShelf, LookAhead, RecapDek, RecapNarrative, readRecap } from '../
 import { generateStructuredRecap } from '../services/recapAi';
 import { groupLogsIntoSessions } from '../lib/sessions';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, AreaChart, Area, Legend } from 'recharts';
+import { creativeModel } from '../lib/aiModels';
 
 type Timeframe = 'week' | 'month' | 'year';
 
@@ -648,7 +649,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
 
       const recap = await generateStructuredRecap({
         apiKey: settings.nanoGptApiKey,
-        model: settings.nanoGptModel || 'gpt-4o-mini',
+        model: creativeModel(settings),
         persona: settings.aiPersona,
         timeframe,
         intervalLabel: formatIntervalLabel(),

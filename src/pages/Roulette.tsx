@@ -9,6 +9,7 @@ import { recommendBacklog, resumableStale, Recommendation } from '../lib/recomme
 import { isWaitingOnRelease } from '../lib/onHold';
 import { cn } from '../lib/utils';
 import Markdown from 'react-markdown';
+import { creativeModel } from '../lib/aiModels';
 
 type TimeMood = 'any' | 'quick' | 'epic';
 
@@ -68,7 +69,7 @@ export function Roulette() {
       const personaDesc = getPersonaDescription(settings.aiPersona);
       const aiText = await generateText(
         settings.nanoGptApiKey,
-        settings.nanoGptModel || 'gpt-4o-mini',
+        creativeModel(settings),
         `You are the recommendation assistant inside a media tracker. ${personaDesc} Recommend EXACTLY ONE item from the user's BACKLOG and justify it based on their recent consumption. Make the tone match your persona. Keep it to 2-3 sentences.`,
         promptContext,
       );

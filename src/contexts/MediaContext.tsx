@@ -5,6 +5,7 @@ import { calculateRPGState } from '../lib/rpgSystem';
 import { generateText, getPersonaDescription } from '../services/nanoGptService';
 import { getProgressionContext, levelBudget, buildTitleSystemPrompt, buildTitlePrompt } from '../lib/lorekeeperTitles';
 import { useAuth } from './AuthContext';
+import { creativeModel } from '../lib/aiModels';
 
 interface MediaContextType {
   media: MediaItem[];
@@ -186,7 +187,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       const codexBlocks = Object.values(await DatabaseService.getCodexPromptBlocks(ctx.anchors.map((a) => a.id)));
       const text = await generateText(
         settings.nanoGptApiKey as string,
-        settings.nanoGptModel || 'gpt-4o-mini',
+        creativeModel(settings),
         buildTitleSystemPrompt(getPersonaDescription(settings.aiPersona)),
         buildTitlePrompt({ level, context: ctx.text, anchors: ctx.anchors, codexBlocks, mediaType }),
         1.2,
