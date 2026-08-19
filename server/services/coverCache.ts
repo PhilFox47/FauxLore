@@ -29,14 +29,24 @@ const MAX_BYTES = 8 * 1024 * 1024;
 const MIN_BYTES = 1024;
 
 /**
- * Cover art is portrait. Every source this app talks to returns something
- * between a squat paperback and a tall poster, so anything outside that range is
- * not a cover.
+ * MangaDex's hotlink placeholder is SQUARE. Cover art never is.
  *
- * This is a cheap first line and nothing more. It catches a wide banner or a
- * square logo, but MangaDex does not publish what its hotlink placeholder looks
- * like, and a CDN that renders one at the size that was asked for would walk
- * straight through it. The check that actually holds is `isCannedResponse`.
+ * That one fact is what catches the placeholder on the very first fetch, before
+ * there is anything to compare it against, and it holds no matter what size the
+ * CDN renders it at. It is checked separately from the ratio band below rather
+ * than left to fall out of it, because it is a specific known signal and should
+ * survive anyone widening those bounds later — a square cover would otherwise
+ * start being cached again with nothing to say it had.
+ */
+const SQUARE_TOLERANCE = 0.03;
+
+/**
+ * Cover art is portrait. Every source this app talks to returns something
+ * between a squat paperback and a tall poster.
+ *
+ * Broader than the square rule and doing a different job: this catches a banner,
+ * an error graphic or a letterboxed screenshot from any provider. Neither check
+ * can catch a portrait placeholder, which is what `isCannedResponse` is for.
  */
 const MIN_RATIO = 0.45;
 const MAX_RATIO = 0.95;
@@ -65,7 +75,14 @@ export function looksLikeCover(buf: Buffer): { ok: boolean; reason?: string } {
   const size = imageSize(buf);
   if (!size) return { ok: false, reason: "unrecognised image format" };
   if (size.width < MIN_WIDTH) return { ok: false, reason: `too small (${size.width}px wide)` };
+
   const ratio = size.width / size.height;
+  if (Math.abs(ratio - 1) <= SQUARE_TOLERANCE) {
+    return {
+      ok: false,
+      reason: `square (${size.width}x${size.height}) — cover art is not, so this is a hotlink placeholder`,
+    };
+  }
   if (ratio < MIN_RATIO || ratio > MAX_RATIO) {
     return { ok: false, reason: `not cover-shaped (${size.width}x${size.height})` };
   }
@@ -84,16 +101,17 @@ function headersFor(url: string): Record<string, string> {
 }
 
 /**
- * The index that makes placeholders detectable without knowing what they are.
+ * The backstop, for a placeholder that is not square.
  *
- * A cover is unique: no two manga share one. A hotlink placeholder is the
- * opposite — the same bytes come back for every URL that asks. So the moment two
- * different source URLs hand us identical content, that content is not cover art
- * whatever it depicts, and every copy of it already on disk is wrong too.
+ * MangaDex's is, and the shape check gets it on the first fetch. Another
+ * provider's — or a changed one — might not be, so there is a second rule that
+ * needs no knowledge of what the thing looks like: a cover is unique, and a
+ * canned response is not. The moment two different source URLs hand us identical
+ * content, that content is not cover art whatever it depicts, and every copy of
+ * it already on disk is wrong too.
  *
- * Recording the hash of what we stored is therefore enough to catch a
- * placeholder we have never seen, in any shape, from any provider — and once
- * caught, the hash is remembered so it is refused outright next time.
+ * Recording the hash of what we stored is enough to catch that, and once caught
+ * the hash is remembered so it is refused outright next time.
  */
 interface CoverIndex {
   /** Content hashes known to be canned responses rather than cover art. */
