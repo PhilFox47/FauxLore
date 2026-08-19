@@ -102,6 +102,23 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
   });
 
   /**
+   * Undoes covers that a later fetch proved were placeholders.
+   *
+   * The first copy of a canned response looks like a perfectly good cover — it
+   * only gives itself away when a second entry is handed the same bytes. By then
+   * the file is on disk and rows point at it, so those rows go back to their
+   * remote URL and the file is already gone.
+   */
+  function revertEvicted(evicted: { localPath: string; sourceUrl: string }[] | undefined) {
+    if (!evicted?.length) return;
+    const revert = db.prepare('UPDATE media SET coverImageUrl = ? WHERE coverImageUrl = ?');
+    for (const e of evicted) {
+      const changed = revert.run(e.sourceUrl, e.localPath).changes;
+      console.warn(`Cover placeholder detected; reverted ${changed} entr${changed === 1 ? 'y' : 'ies'} to ${e.sourceUrl}`);
+    }
+  }
+
+  /**
    * Takes a local copy of every cover still pointing at someone else's server.
    *
    * For libraries built before covers were cached. Entries whose cover cannot
@@ -126,6 +143,10 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
 
       for (const row of rows) {
         const result = await coverCache.cacheCover(row.coverImageUrl);
+        // An eviction can undo a cover stored earlier in this very loop, so it
+        // is applied before the count is reported.
+        revertEvicted(result.evicted);
+        if (result.evicted?.length) cached -= result.evicted.length;
         if (result.cached) {
           update.run(result.url, row.id, userId);
           cached++;
@@ -134,7 +155,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
         }
       }
 
-      res.json({ checked: rows.length, cached, skipped });
+      res.json({ checked: rows.length, cached: Math.max(0, cached), skipped });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -151,6 +172,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
       // exactly as it did before.
       if (isRemoteCover(item.coverImageUrl)) {
         const result = await coverCache.cacheCover(item.coverImageUrl);
+        revertEvicted(result.evicted);
         if (result.cached) item.coverImageUrl = result.url;
         else console.warn(`Could not cache cover for "${item.title}": ${result.reason}`);
       }

@@ -31,9 +31,12 @@ const MIN_BYTES = 1024;
 /**
  * Cover art is portrait. Every source this app talks to returns something
  * between a squat paperback and a tall poster, so anything outside that range is
- * not a cover — which is exactly how the MangaDex placeholder is caught, since
- * it is a wide banner. Rejecting it matters more than it sounds: without this
- * check the first fix would cache the banner permanently.
+ * not a cover.
+ *
+ * This is a cheap first line and nothing more. It catches a wide banner or a
+ * square logo, but MangaDex does not publish what its hotlink placeholder looks
+ * like, and a CDN that renders one at the size that was asked for would walk
+ * straight through it. The check that actually holds is `isCannedResponse`.
  */
 const MIN_RATIO = 0.45;
 const MAX_RATIO = 0.95;
@@ -44,6 +47,12 @@ export interface CoverCacheResult {
   url: string;
   cached: boolean;
   reason?: string;
+  /**
+   * Covers already on disk that this fetch proved were placeholders. The caller
+   * must put these entries back to their remote URL — they were cached before
+   * there was a second sample to compare against.
+   */
+  evicted?: { localPath: string; sourceUrl: string }[];
 }
 
 /** Whether a URL is something we could take a local copy of. */
@@ -74,22 +83,88 @@ function headersFor(url: string): Record<string, string> {
   return headers;
 }
 
+/**
+ * The index that makes placeholders detectable without knowing what they are.
+ *
+ * A cover is unique: no two manga share one. A hotlink placeholder is the
+ * opposite — the same bytes come back for every URL that asks. So the moment two
+ * different source URLs hand us identical content, that content is not cover art
+ * whatever it depicts, and every copy of it already on disk is wrong too.
+ *
+ * Recording the hash of what we stored is therefore enough to catch a
+ * placeholder we have never seen, in any shape, from any provider — and once
+ * caught, the hash is remembered so it is refused outright next time.
+ */
+interface CoverIndex {
+  /** Content hashes known to be canned responses rather than cover art. */
+  banned: string[];
+  /** sha1(sourceUrl) -> what we stored for it. */
+  urls: Record<string, { content: string; src: string; ext: string }>;
+}
+
 const EXT_BY_TYPE: Record<string, string> = {
   jpeg: ".jpg", jpg: ".jpg", png: ".png", gif: ".gif", webp: ".webp",
 };
 
 export function createCoverCache({ coversDir }: { coversDir: string }) {
-  /** Same URL, same file — so re-saving an entry costs nothing. */
-  function fileNameFor(url: string, ext: string): string {
-    return crypto.createHash("sha1").update(url).digest("hex") + ext;
+  const indexPath = path.join(coversDir, "index.json");
+
+  function readIndex(): CoverIndex {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(indexPath, "utf8"));
+      return { banned: parsed.banned || [], urls: parsed.urls || {} };
+    } catch {
+      return { banned: [], urls: {} };
+    }
   }
 
-  function existingCopy(url: string): string | null {
-    for (const ext of [".jpg", ".png", ".webp", ".gif"]) {
-      const name = fileNameFor(url, ext);
-      if (fs.existsSync(path.join(coversDir, name))) return `/uploads/covers/${name}`;
+  function writeIndex(index: CoverIndex) {
+    try {
+      fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
+    } catch (e) {
+      console.error("Could not write the cover index", e);
     }
-    return null;
+  }
+
+  const hash = (v: string | Buffer) => crypto.createHash("sha1").update(v).digest("hex");
+  const localPath = (content: string, ext: string) => `/uploads/covers/${content}${ext}`;
+
+  function existingCopy(url: string): string | null {
+    const entry = readIndex().urls[hash(url)];
+    if (!entry) return null;
+    return fs.existsSync(path.join(coversDir, entry.content + entry.ext))
+      ? localPath(entry.content, entry.ext)
+      : null;
+  }
+
+  /**
+   * Whether this body is a canned response rather than a cover, judged only by
+   * having seen it before under a different URL.
+   *
+   * Returns everything that has to be undone: the file is deleted, the hash is
+   * banned so no future fetch can reintroduce it, and every entry that already
+   * points at it is handed back for the caller to reset.
+   */
+  function isCannedResponse(index: CoverIndex, urlKey: string, content: string): {
+    canned: boolean;
+    evicted: { localPath: string; sourceUrl: string }[];
+  } {
+    if (index.banned.includes(content)) return { canned: true, evicted: [] };
+
+    const clashes = Object.entries(index.urls).filter(
+      ([key, entry]) => entry.content === content && key !== urlKey,
+    );
+    if (!clashes.length) return { canned: false, evicted: [] };
+
+    // Two different works cannot share a cover. Everything holding these bytes
+    // is wrong, including whatever we wrote the first time.
+    index.banned.push(content);
+    const evicted = clashes.map(([key, entry]) => {
+      delete index.urls[key];
+      try { fs.unlinkSync(path.join(coversDir, entry.content + entry.ext)); } catch { /* already gone */ }
+      return { localPath: localPath(entry.content, entry.ext), sourceUrl: entry.src };
+    });
+    return { canned: true, evicted };
   }
 
   /**
@@ -128,10 +203,26 @@ export function createCoverCache({ coversDir }: { coversDir: string }) {
       const shape = looksLikeCover(buf);
       if (!shape.ok) return { url, cached: false, reason: shape.reason };
 
+      const index = readIndex();
+      const urlKey = hash(url);
+      const content = hash(buf);
+
+      const canned = isCannedResponse(index, urlKey, content);
+      if (canned.canned) {
+        writeIndex(index);
+        return {
+          url,
+          cached: false,
+          reason: "the same image is being served for other covers too — this looks like a hotlink placeholder",
+          evicted: canned.evicted,
+        };
+      }
+
       const ext = EXT_BY_TYPE[(imageSize(buf)?.type || "").toLowerCase()] || ".jpg";
-      const name = fileNameFor(url, ext);
-      fs.writeFileSync(path.join(coversDir, name), buf);
-      return { url: `/uploads/covers/${name}`, cached: true };
+      fs.writeFileSync(path.join(coversDir, content + ext), buf);
+      index.urls[urlKey] = { content, src: url, ext };
+      writeIndex(index);
+      return { url: localPath(content, ext), cached: true };
     } catch (e: any) {
       return { url, cached: false, reason: String(e?.message || e) };
     }
