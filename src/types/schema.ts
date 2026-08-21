@@ -355,6 +355,12 @@ export interface Settings {
   userId: string;
   /** Opt out of inactivity aging: no decay visuals, no automatic drop. */
   disableAutoDrop?: boolean;
+  /** Whether this account wants push at all; devices are registered separately. */
+  pushEnabled?: boolean;
+  /** Which notification types reach the phone. Absent means all of them. */
+  pushTypes?: string[];
+  /** Quiet days before the inactivity nudge fires. 0 turns it off. */
+  inactivityReminderDays?: number;
   igdbClientId?: string;
   igdbClientSecret?: string;
   tmdbApiKey?: string;

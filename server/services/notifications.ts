@@ -18,7 +18,8 @@ export type NotificationType =
   | "media_update"
   | "media_released"
   | "recap_ready"
-  | "boss_expiring";
+  | "boss_expiring"
+  | "inactivity";
 
 export interface NewNotification {
   type: NotificationType;
@@ -29,7 +30,7 @@ export interface NewNotification {
   dedupeKey: string;
 }
 
-export function createNotifications(db: Db) {
+export function createNotifications(db: Db, onNew?: (userId: string, n: NewNotification) => void) {
   /** Records a notification. Returns true only when it was genuinely new. */
   const notify = (userId: string, n: NewNotification): boolean => {
     try {
@@ -50,7 +51,14 @@ export function createNotifications(db: Db) {
           n.dedupeKey,
           new Date().toISOString(),
         );
-      return res.changes > 0;
+      // Only a genuinely new row is worth delivering. The dedupe key is what
+      // makes that judgement, so hanging the push here means a nightly sweep
+      // cannot re-announce the same event to a phone every morning.
+      if (res.changes > 0) {
+        try { onNew?.(userId, n); } catch (e) { console.error("[notifications] push hook failed", e); }
+        return true;
+      }
+      return false;
     } catch (e) {
       console.error("[notifications] Failed to record notification", e);
       return false;
@@ -212,6 +220,57 @@ export function createNotifications(db: Db) {
     return created;
   };
 
+  /**
+   * Nothing logged for a while.
+   *
+   * Deliberately NOT gated on the account being active — that gate exists to stop
+   * dormant accounts burning AI tokens, and this is the one job whose entire
+   * audience is dormant. A push costs nothing and is exactly what should wake
+   * someone who has drifted off.
+   *
+   * The key is bucketed by how many whole periods have elapsed, so a long silence
+   * produces a reminder per period rather than one per night or a single one
+   * forever.
+   */
+  const checkInactivity = (userId: string, now = new Date()): number => {
+    try {
+      const settings: any = db
+        .prepare("SELECT inactivityReminderDays FROM settings WHERE userId = ?")
+        .get(userId);
+      const days = Number(settings?.inactivityReminderDays ?? 7);
+      // 0 or less is how a user turns this off.
+      if (!Number.isFinite(days) || days <= 0) return 0;
+
+      // Same definition of "activity" the freeze uses, so the reminder and the
+      // freeze can never disagree about whether someone has been away.
+      const last: any = db
+        .prepare(
+          `SELECT MAX(COALESCE(createdAt, timestamp)) AS t
+             FROM logs
+            WHERE userId = ? AND metricType != 'statusChange'`,
+        )
+        .get(userId);
+      if (!last?.t) return 0; // never logged anything: nothing to be reminded of
+
+      const silentMs = now.getTime() - new Date(last.t).getTime();
+      const periodMs = days * 86_400_000;
+      if (!Number.isFinite(silentMs) || silentMs < periodMs) return 0;
+
+      const periods = Math.floor(silentMs / periodMs);
+      const silentDays = Math.floor(silentMs / 86_400_000);
+      return notify(userId, {
+        type: "inactivity",
+        title: silentDays >= 30 ? "Your library misses you" : "Nothing tracked in a while",
+        body: `It has been ${silentDays} days since your last log. Pick something back up whenever you like.`,
+        link: "/",
+        dedupeKey: `inactivity:${userId}:${periods}`,
+      }) ? 1 : 0;
+    } catch (e) {
+      console.error("[notifications] Inactivity check failed", e);
+      return 0;
+    }
+  };
+
   /** Runs every producer for one user. */
   const runAllChecks = (userId: string): number =>
     checkReleases(userId) + checkRecapsReady(userId) + checkExpiringBosses(userId);
@@ -224,5 +283,5 @@ export function createNotifications(db: Db) {
     }
   };
 
-  return { notify, checkReleases, checkRecapsReady, checkExpiringBosses, runAllChecks, runForAllUsers };
+  return { notify, checkReleases, checkRecapsReady, checkExpiringBosses, checkInactivity, runAllChecks, runForAllUsers };
 }

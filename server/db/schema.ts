@@ -279,5 +279,25 @@ export function initSchema(db: Db) {
     );
     CREATE INDEX IF NOT EXISTS idx_notifications_user
       ON notifications(userId, readAt, createdAt DESC);
+
+    -- One row per browser or phone that has granted permission. A single user
+    -- can have several: the endpoint is what the push service issued, so it is
+    -- the identity rather than the user.
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      userAgent TEXT,
+      createdAt TEXT NOT NULL,
+      lastSuccessAt TEXT,
+      -- Push services answer 404 or 410 once a subscription is dead. That is the
+      -- only reliable signal it will never work again, so it is recorded and the
+      -- row dropped rather than retried forever.
+      failureCount INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
+      ON push_subscriptions(userId);
   `);
 }

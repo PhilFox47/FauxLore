@@ -40,6 +40,8 @@ import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerBossRoutes } from "./routes/bosses";
 import { registerFranchiseRoutes } from "./routes/franchises";
 import { registerSystemRoutes } from "./routes/system";
+import { registerPushRoutes } from "./routes/push";
+import { createPushService } from "./services/push";
 import { registerTaxonomyRoutes } from "./routes/taxonomy";
 import { registerSearchRoutes } from "./routes/search";
 import { registerLocationRoutes } from "./routes/locations";
@@ -106,7 +108,11 @@ async function startServer() {
 
   // Daily metadata refresh: re-check tracked media (Active / On Hold) against their
   // source for new versions. Runs early and off-peak.
-  const { notify, runAllChecks } = createNotifications(db);
+  // Push is wired into the notification writer rather than into each producer,
+  // so anything that records a notification reaches the phone for free — and the
+  // dedupe key that stops the bell repeating itself stops the phone repeating too.
+  const push = createPushService(db);
+  const { notify, runAllChecks, checkInactivity } = createNotifications(db, (userId, n) => push.deliver(userId, n));
   const { refreshTrackedMedia } = createMetadataRefresh(db, notify);
   cron.schedule("30 4 * * *", () => {
     const users = activity.activeUserIds();
@@ -120,6 +126,16 @@ async function startServer() {
   // that came due while the server was down.
   cron.schedule("0 6 * * *", () => activity.activeUserIds().forEach((id) => runAllChecks(id)));
   setTimeout(() => activity.activeUserIds().forEach((id) => runAllChecks(id)), 10_000);
+
+  // The inactivity reminder is the one producer that must run for dormant
+  // accounts: they are its entire audience. The freeze exists to stop them
+  // spending AI tokens, and a reminder spends none.
+  const remindInactive = () => {
+    const users = db.prepare("SELECT id FROM users").all() as { id: string }[];
+    for (const u of users) checkInactivity(u.id);
+  };
+  cron.schedule("0 18 * * *", remindInactive);
+  setTimeout(remindInactive, 15_000);
 
   // Weekly boss spawn (Mondays)
   cron.schedule("0 5 * * 1", () => {
@@ -148,6 +164,7 @@ async function startServer() {
   recalcTaxonomyUsageCounts(db);
 
   const ctx: ServerContext = {
+    push,
     coverCache,
     db,
     getAuthUser,
@@ -182,6 +199,7 @@ async function startServer() {
   registerBossRoutes(app, ctx);
   registerFranchiseRoutes(app, ctx);
   registerSystemRoutes(app, ctx);
+  registerPushRoutes(app, ctx);
   registerTaxonomyRoutes(app, ctx);
   registerSearchRoutes(app, ctx);
   registerLocationRoutes(app, ctx);

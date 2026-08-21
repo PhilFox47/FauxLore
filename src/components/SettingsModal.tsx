@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Sparkles, RefreshCw, UserCircle, Settings as SettingsIcon, Shield, Database, Users, Target, Image as ImageIcon } from 'lucide-react';
+import { X, Save, Sparkles, RefreshCw, UserCircle, Settings as SettingsIcon, Shield, Database, Users, Target, Image as ImageIcon, Bell } from 'lucide-react';
 import { DatabaseService } from '../services/db';
 import { IntegrationsService } from '../services/integrations';
 import { useMediaContext } from '../contexts/MediaContext';
@@ -10,6 +10,20 @@ import { AI_PERSONAS, getPersona, getPersonaDescription } from '../lib/personas'
 import { getProgressionContext, levelBudget, buildTitleSystemPrompt, buildMainTitlePrompt } from '../lib/lorekeeperTitles';
 import { UserManagement } from './UserManagement';
 import { creativeModel } from '../lib/aiModels';
+import { cn } from '../lib/utils';
+import {
+  pushSupport, enablePush, disablePush, isThisDeviceSubscribed, pushStatus, sendTestPush,
+  type PushSupport,
+} from '../services/push';
+
+/** What can be pushed, in the order it makes sense to read. */
+const PUSH_EVENTS: { id: string; label: string; hint: string }[] = [
+  { id: 'media_update', label: 'New updates', hint: 'A tracked title has a new version or chapter.' },
+  { id: 'media_released', label: 'Releases', hint: 'Something on your Release Radar is out.' },
+  { id: 'boss_expiring', label: 'Enemies expiring', hint: 'An active enemy is about to run out of time.' },
+  { id: 'recap_ready', label: 'Recaps ready', hint: 'A week, month or year has finished and can be recapped.' },
+  { id: 'inactivity', label: 'Inactivity nudge', hint: 'You have not logged anything for a while.' },
+];
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -45,6 +59,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     timezone: '',
     aiPersona: 'witty',
     disableAutoDrop: false,
+    pushTypes: PUSH_EVENTS.map(e => e.id),
+    inactivityReminderDays: 7,
     enemyDifficulty: 1.0,
     mediaDifficulty: {
       'Game': 1.0,
@@ -77,6 +93,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     questConfigs: {} as Record<string, any>
   });
   
+  const [pushBlocker, setPushBlocker] = useState<PushSupport>({ blocker: 'ok' });
+  const [thisDeviceOn, setThisDeviceOn] = useState(false);
+  const [pushDevices, setPushDevices] = useState(0);
+  const [isPushBusy, setIsPushBusy] = useState(false);
+  const [pushMessage, setPushMessage] = useState<{ type: 'success' | 'error'; text: string }>({ type: 'success', text: '' });
+
   const [isCachingCovers, setIsCachingCovers] = useState(false);
   const [cacheMessage, setCacheMessage] = useState<{ type: 'success' | 'error'; text: string }>({ type: 'success', text: '' });
 
@@ -104,6 +126,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
         aiPersona: settings.aiPersona || 'witty',
         disableAutoDrop: !!settings.disableAutoDrop,
+        pushTypes: settings.pushTypes || PUSH_EVENTS.map(e => e.id),
+        inactivityReminderDays: settings.inactivityReminderDays ?? 7,
         enemyDifficulty: settings.enemyDifficulty ?? 1.0,
         mediaDifficulty: {
           'Game': settings.mediaDifficulty?.['Game'] ?? 1.0,
@@ -158,6 +182,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
             aiPersona: settings.aiPersona || 'witty',
             disableAutoDrop: !!settings.disableAutoDrop,
+            pushTypes: settings.pushTypes || PUSH_EVENTS.map(e => e.id),
+            inactivityReminderDays: settings.inactivityReminderDays ?? 7,
             enemyDifficulty: settings.enemyDifficulty ?? 1.0,
             mediaDifficulty: {
               'Game': settings.mediaDifficulty?.['Game'] ?? 1.0,
@@ -291,6 +317,59 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{success: boolean, message: string} | null>(null);
+
+  // What this browser can actually do is only knowable at runtime, so the
+  // section reports it rather than offering a button that cannot work.
+  useEffect(() => {
+    setPushBlocker(pushSupport());
+    isThisDeviceSubscribed().then(setThisDeviceOn).catch(() => setThisDeviceOn(false));
+    pushStatus().then(s => setPushDevices(s.devices)).catch(() => {});
+  }, []);
+
+  const handleEnablePush = async () => {
+    setIsPushBusy(true);
+    setPushMessage({ type: 'success', text: '' });
+    try {
+      const { devices } = await enablePush();
+      setThisDeviceOn(true);
+      setPushDevices(devices);
+      setPushMessage({ type: 'success', text: 'This device will now receive notifications.' });
+    } catch (e: any) {
+      setPushMessage({ type: 'error', text: e.message || 'Could not enable push.' });
+    } finally {
+      setIsPushBusy(false);
+    }
+  };
+
+  const handleDisablePush = async () => {
+    setIsPushBusy(true);
+    setPushMessage({ type: 'success', text: '' });
+    try {
+      const { devices } = await disablePush();
+      setThisDeviceOn(false);
+      setPushDevices(devices);
+      setPushMessage({ type: 'success', text: 'This device will no longer receive notifications.' });
+    } catch (e: any) {
+      setPushMessage({ type: 'error', text: e.message || 'Could not turn push off.' });
+    } finally {
+      setIsPushBusy(false);
+    }
+  };
+
+  const handleTestPush = async () => {
+    setIsPushBusy(true);
+    setPushMessage({ type: 'success', text: '' });
+    try {
+      const { sent, failed } = await sendTestPush();
+      setPushMessage(sent > 0
+        ? { type: 'success', text: `Sent to ${sent} device${sent === 1 ? '' : 's'}. It should arrive in a moment.` }
+        : { type: 'error', text: `Nothing was delivered (${failed} failed). Try turning push off and on again.` });
+    } catch (e: any) {
+      setPushMessage({ type: 'error', text: e.message || 'The test push failed.' });
+    } finally {
+      setIsPushBusy(false);
+    }
+  };
 
   const handleCacheCovers = async () => {
     setIsCachingCovers(true);
@@ -463,6 +542,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         timezone: formData.timezone,
         aiPersona: formData.aiPersona,
         disableAutoDrop: formData.disableAutoDrop,
+        pushTypes: formData.pushTypes,
+        inactivityReminderDays: formData.inactivityReminderDays,
         enemyDifficulty: formData.enemyDifficulty,
         mediaDifficulty: formData.mediaDifficulty,
         masterPageConfig: {
@@ -651,6 +732,107 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                           </span>
                         </span>
                       </label>
+                    </div>
+
+                    <div className="pt-2 space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                        <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">Push Notifications</h3>
+                      </div>
+                      <p className="text-xs text-zinc-500">
+                        Sends releases, expiring enemies, finished recaps and an inactivity nudge to your phone,
+                        even when FauxLore is closed. Each device is registered separately, so turn it on once per
+                        phone or browser.
+                      </p>
+
+                      {pushBlocker.blocker !== 'ok' ? (
+                        <div className="flex items-start gap-2 p-4 bg-amber-500/[0.06] border border-amber-500/20 rounded-xl">
+                          <Bell className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <p className="text-xs text-amber-200/80 leading-relaxed">{pushBlocker.message}</p>
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-zinc-900/50 border border-white/5 rounded-xl space-y-3">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={thisDeviceOn ? handleDisablePush : handleEnablePush}
+                              disabled={isPushBusy}
+                              className={cn(
+                                'flex items-center gap-2 px-4 py-2 font-bold text-sm rounded-lg transition-colors border disabled:opacity-50',
+                                thisDeviceOn
+                                  ? 'bg-white/5 hover:bg-white/10 text-zinc-300 border-white/10'
+                                  : 'bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 border-orange-500/30',
+                              )}
+                            >
+                              <Bell className={`w-4 h-4 ${isPushBusy ? 'animate-pulse' : ''}`} />
+                              {isPushBusy ? 'Working...' : thisDeviceOn ? 'Turn off on this device' : 'Enable on this device'}
+                            </button>
+                            {thisDeviceOn && (
+                              <button
+                                type="button"
+                                onClick={handleTestPush}
+                                disabled={isPushBusy}
+                                className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-lg transition-colors border border-white/10 disabled:opacity-50"
+                              >
+                                Send a test
+                              </button>
+                            )}
+                            <span className="text-[11px] text-zinc-500">
+                              {pushDevices === 0
+                                ? 'No devices registered'
+                                : `${pushDevices} device${pushDevices === 1 ? '' : 's'} registered`}
+                            </span>
+                          </div>
+                          {pushMessage.text && (
+                            <p className={`text-sm font-medium ${pushMessage.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {pushMessage.text}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {PUSH_EVENTS.map(({ id, label, hint }) => (
+                          <label
+                            key={id}
+                            htmlFor={`push-${id}`}
+                            className="flex items-start gap-3 p-3 bg-zinc-900/50 border border-white/5 rounded-xl cursor-pointer hover:border-white/10 transition-colors"
+                          >
+                            <input
+                              type="checkbox"
+                              id={`push-${id}`}
+                              checked={formData.pushTypes.includes(id)}
+                              onChange={(e) => setFormData(p => ({
+                                ...p,
+                                pushTypes: e.target.checked
+                                  ? [...p.pushTypes, id]
+                                  : p.pushTypes.filter(t => t !== id),
+                              }))}
+                              className="mt-0.5 w-4 h-4 shrink-0 accent-orange-500 cursor-pointer"
+                            />
+                            <span>
+                              <span className="block text-sm font-medium text-zinc-200">{label}</span>
+                              <span className="block text-[11px] text-zinc-500 mt-0.5 leading-relaxed">{hint}</span>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-400 mb-1">Remind me after this many quiet days</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="365"
+                          name="inactivityReminderDays"
+                          value={formData.inactivityReminderDays}
+                          onChange={(e) => setFormData(p => ({ ...p, inactivityReminderDays: Number(e.target.value) }))}
+                          className="input-field max-w-[10rem]"
+                        />
+                        <p className="text-[10px] text-zinc-500 mt-1">
+                          Counted from your last progress log. Repeats once per period while you stay away. Set it
+                          to 0 to never be reminded.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}

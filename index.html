@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FauxLore</title>
     <link rel="icon" type="image/png" href="https://i.imgur.com/0MMNszX.png" />
+    <!-- Web Push on iOS only works once the site has been added to the home
+         screen, and that needs a manifest and an apple-touch-icon. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="theme-color" content="#f97316" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="FauxLore" />
   </head>
   <body>
     <div id="root"></div>

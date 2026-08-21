@@ -128,6 +128,15 @@ export function runMigrations(db: Db) {
   // web search.
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptWebModel TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN nanoGptWebModel TEXT").run(); } catch (e) {}
+  // Push notifications: VAPID keys live in system_settings, per-user delivery
+  // preferences in settings.
+  try { db.prepare("ALTER TABLE system_settings ADD COLUMN vapidPublicKey TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE system_settings ADD COLUMN vapidPrivateKey TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE system_settings ADD COLUMN vapidSubject TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE settings ADD COLUMN pushEnabled INTEGER DEFAULT 1").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE settings ADD COLUMN pushTypes TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE settings ADD COLUMN inactivityReminderDays INTEGER DEFAULT 7").run(); } catch (e) {}
+
   // The creative slot: user-facing prose, kept apart from the analytical work.
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptCreativeModel TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN nanoGptCreativeModel TEXT").run(); } catch (e) {}

@@ -18,7 +18,10 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
         questOffsets: row.questOffsets ? JSON.parse(row.questOffsets) : undefined,
         questRerollsUsed: row.questRerollsUsed ? JSON.parse(row.questRerollsUsed) : undefined,
         questConfigs: row.questConfigs ? JSON.parse(row.questConfigs) : undefined,
-        disableAutoDrop: row.disableAutoDrop === 1
+        disableAutoDrop: row.disableAutoDrop === 1,
+        pushEnabled: row.pushEnabled !== 0,
+        pushTypes: row.pushTypes ? JSON.parse(row.pushTypes) : undefined,
+        inactivityReminderDays: row.inactivityReminderDays ?? 7,
       });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -39,8 +42,8 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
       const newMediaDifficulty = settings.mediaDifficulty ? JSON.stringify(settings.mediaDifficulty) : null;
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs, disableAutoDrop)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs, @disableAutoDrop)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs, disableAutoDrop, pushEnabled, pushTypes, inactivityReminderDays)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs, @disableAutoDrop, @pushEnabled, @pushTypes, @inactivityReminderDays)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -62,7 +65,10 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
           questOffsets=excluded.questOffsets,
           questRerollsUsed=excluded.questRerollsUsed,
           questConfigs=excluded.questConfigs,
-          disableAutoDrop=excluded.disableAutoDrop
+          disableAutoDrop=excluded.disableAutoDrop,
+          pushEnabled=excluded.pushEnabled,
+          pushTypes=excluded.pushTypes,
+          inactivityReminderDays=excluded.inactivityReminderDays
       `).run({
         userId: userId,
         igdbClientId: isAdmin ? (settings.igdbClientId || null) : (oldSettings?.igdbClientId || null),
@@ -85,7 +91,12 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
         questOffsets: settings.questOffsets ? JSON.stringify(settings.questOffsets) : null,
         questRerollsUsed: settings.questRerollsUsed ? JSON.stringify(settings.questRerollsUsed) : null,
         questConfigs: settings.questConfigs ? JSON.stringify(settings.questConfigs) : null,
-        disableAutoDrop: settings.disableAutoDrop ? 1 : 0
+        disableAutoDrop: settings.disableAutoDrop ? 1 : 0,
+        pushEnabled: settings.pushEnabled === false ? 0 : 1,
+        pushTypes: settings.pushTypes ? JSON.stringify(settings.pushTypes) : null,
+        // Clamped rather than trusted: a negative period would make every sweep
+        // think the user has been away forever.
+        inactivityReminderDays: Math.max(0, Math.min(365, Number(settings.inactivityReminderDays ?? 7) || 0))
       });
 
       // Update active bosses if difficulty changed

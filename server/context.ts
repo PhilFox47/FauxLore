@@ -3,6 +3,7 @@ import type { CodexService } from "./services/codex";
 import type { AutoTagService } from "./services/autoTag";
 import type { ActivityService } from "./services/activity";
 import type { CoverCache } from "./services/coverCache";
+import type { PushService } from "./services/push";
 import type { GeneratedEnemy } from "./services/worldBoss";
 import type { GeneratedLoot } from "./services/loot";
 
@@ -36,6 +37,7 @@ export interface ServerContext {
   /** Whether an account is dormant; gates every scheduled job and AI endpoint. */
   activity: ActivityService;
   coverCache: CoverCache;
+  push: PushService;
   hltbSearch: (query: string) => Promise<any[]>;
   getIgdbToken: (clientId: string, clientSecret: string) => Promise<string>;
 }
