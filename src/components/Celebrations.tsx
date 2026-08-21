@@ -136,19 +136,22 @@ export function Celebrations() {
   }, [isLoading, worldBosses, toast]);
 
   // New upstream versions for things you're actively playing or have shelved.
-  // Fires once per item, when the flag first appears in this session.
+  //
+  // Only announces a flag that appears WHILE the app is open. `updateAvailable`
+  // lives in the database until the update is acknowledged, but this ref does
+  // not survive a reload — so announcing the pending set on startup re-toasted
+  // every outstanding update on every single load, and marking the notification
+  // read did nothing because these toasts never read the notifications table.
+  //
+  // The backlog is not lost: each of these already writes a persistent
+  // notification, which is what the bell and the phone are for. A toast is for
+  // something that just happened in front of you.
   useEffect(() => {
     if (isLoading) return;
     const pending = media.filter(
       (m) => m.updateAvailable && (m.status === 'Active' || m.status === 'On Hold' || m.status === 'Caught Up'),
     );
     if (seenUpdates.current === null) {
-      // Announce whatever was waiting when the app opened, then track it.
-      pending.forEach((m) =>
-        toast.info(
-          `\u2b06\ufe0f Update available for ${m.title}${m.sourceVersion ? ` (${m.sourceVersion})` : ''}`,
-        ),
-      );
       seenUpdates.current = new Set(pending.map((m) => m.id));
       return;
     }
