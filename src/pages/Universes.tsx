@@ -128,7 +128,7 @@ export function Universes() {
   // per-media progression chart but summed over the whole franchise. Each log is
   // scaled against its own media item, since scaling is media-type dependent.
   const universeProgress = useMemo(() => {
-    if (!currentFranchise) return { cumulative: [], daily: [], dailyTypes: [] as string[] };
+    if (!currentFranchise) return { cumulative: [], daily: [], dailyTypes: [] as string[], masterPagesByType: {} as Record<string, number> };
     const ids = new Set(currentFranchise.items.map((i: MediaItem) => i.id));
     const byId = new Map(currentFranchise.items.map((i: MediaItem) => [i.id, i]));
 
@@ -185,17 +185,31 @@ export function Universes() {
     perDay.forEach((bucket) => Object.entries(bucket).forEach(([t, v]) => { totals[t] = (totals[t] || 0) + v; }));
     const dailyTypes = Array.from(typesSeen).sort((a, b) => (totals[b] || 0) - (totals[a] || 0));
 
-    return { cumulative: cumulativeSeries, daily: dailySeries, dailyTypes };
+    return { cumulative: cumulativeSeries, daily: dailySeries, dailyTypes, masterPagesByType: totals };
   }, [currentFranchise, logs, settings]);
 
+  /**
+   * What this universe is actually made of, weighted by master pages rather than
+   * by how many entries there are.
+   *
+   * Counting entries said a forty-hour game and a single short film were the
+   * same size. Master pages are the unit everything else in the app is measured
+   * in — levels, quests, recaps — so the wheel now agrees with them.
+   *
+   * It reuses the totals the timeline already computed instead of re-filtering
+   * the logs. That is deliberate: the two charts sit side by side, and a second
+   * copy of the filter is how they would quietly drift apart. In particular it
+   * inherits the exclusion of historic and status-change logs, which is what the
+   * EXP system does too — a backfilled log grants no level, so it should not
+   * inflate a slice either.
+   */
   const typeDistribution = useMemo(() => {
-    if (!currentFranchise) return [];
-    const dist: Record<string, number> = {};
-    currentFranchise.items.forEach(i => {
-      dist[i.mediaType] = (dist[i.mediaType] || 0) + 1;
-    });
-    return Object.entries(dist).map(([name, value]) => ({ name, value }));
-  }, [currentFranchise]);
+    const byType = universeProgress.masterPagesByType || {};
+    return Object.entries(byType)
+      .map(([name, value]) => ({ name, value: Math.round(value as number) }))
+      .filter((d) => d.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [universeProgress]);
 
   if (currentFranchise) {
     const totalItems = currentFranchise.items.length;
@@ -323,13 +337,21 @@ export function Universes() {
                       <Cell key={`cell-${index}`} fill={MEDIA_HEX[entry.name as keyof typeof MEDIA_HEX]?.base || COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.5rem', fontSize: '10px' }}
+                    // The slice is master pages, so say so and give the share —
+                    // a bare number here reads like a count, which is exactly
+                    // what this chart used to be and no longer is.
+                    formatter={(value: any, name: any) => {
+                      const total = typeDistribution.reduce((acc, d) => acc + d.value, 0);
+                      const share = total > 0 ? Math.round((Number(value) / total) * 100) : 0;
+                      return [`${Number(value).toLocaleString()} MP (${share}%)`, name];
+                    }}
                   />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="text-xs text-zinc-500 font-medium uppercase tracking-widest mt-1">Media Types</div>
+            <div className="text-xs text-zinc-500 font-medium uppercase tracking-widest mt-1">By Master Pages</div>
           </div>
         </div>
 
