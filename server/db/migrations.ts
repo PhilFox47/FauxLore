@@ -128,6 +128,11 @@ export function runMigrations(db: Db) {
   // web search.
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptWebModel TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN nanoGptWebModel TEXT").run(); } catch (e) {}
+  // The AI persona was only ever form state: no column, no upsert, so every
+  // restart reverted it to the default. It is a per-profile choice, not a
+  // system one — two users on the same install can want different voices.
+  try { db.prepare("ALTER TABLE settings ADD COLUMN aiPersona TEXT").run(); } catch (e) {}
+
   // Push notifications: VAPID keys live in system_settings, per-user delivery
   // preferences in settings.
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN vapidPublicKey TEXT").run(); } catch (e) {}

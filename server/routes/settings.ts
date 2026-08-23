@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
+import { AI_PERSONAS } from "../../src/lib/personas";
 
 export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser } = ctx;
@@ -35,15 +36,15 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
       const userRec: any = db.prepare('SELECT role FROM users WHERE id = ?').get(userId);
       const isAdmin = userRec?.role === 'Admin';
       
-      const oldSettings: any = db.prepare('SELECT enemyDifficulty, mediaDifficulty, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, geminiApiKey, googleBooksApiKey FROM settings WHERE userId = ?').get(userId);
+      const oldSettings: any = db.prepare('SELECT aiPersona, enemyDifficulty, mediaDifficulty, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, geminiApiKey, googleBooksApiKey FROM settings WHERE userId = ?').get(userId);
       const oldDifficulty = oldSettings?.enemyDifficulty ?? 1.0;
       const newDifficulty = settings.enemyDifficulty ?? 1.0;
       const oldMediaDifficulty = oldSettings?.mediaDifficulty || null;
       const newMediaDifficulty = settings.mediaDifficulty ? JSON.stringify(settings.mediaDifficulty) : null;
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs, disableAutoDrop, pushEnabled, pushTypes, inactivityReminderDays)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs, @disableAutoDrop, @pushEnabled, @pushTypes, @inactivityReminderDays)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, geminiApiKey, googleBooksApiKey, timezone, aiPersona, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs, disableAutoDrop, pushEnabled, pushTypes, inactivityReminderDays)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @geminiApiKey, @googleBooksApiKey, @timezone, @aiPersona, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs, @disableAutoDrop, @pushEnabled, @pushTypes, @inactivityReminderDays)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -56,6 +57,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
           geminiApiKey=excluded.geminiApiKey,
           googleBooksApiKey=excluded.googleBooksApiKey,
           timezone=excluded.timezone,
+          aiPersona=excluded.aiPersona,
           masterPageConfig=excluded.masterPageConfig,
           yearlyGoals=excluded.yearlyGoals,
           lastActiveDate=excluded.lastActiveDate,
@@ -82,6 +84,15 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
         geminiApiKey: isAdmin ? (settings.geminiApiKey || null) : (oldSettings?.geminiApiKey || null),
         googleBooksApiKey: isAdmin ? (settings.googleBooksApiKey || null) : (oldSettings?.googleBooksApiKey || null),
         timezone: settings.timezone || null,
+        // Keep what is stored unless a recognised persona arrives. This is an
+        // upsert of the whole row, so a caller that saves settings without
+        // mentioning the persona — the quest re-roll does exactly that — would
+        // otherwise wipe it, which looks identical to "it never saved".
+        // An unrecognised id is refused for the same reason: it would fall back
+        // at read time and appear not to have saved.
+        aiPersona: AI_PERSONAS.some((p) => p.id === settings.aiPersona)
+          ? settings.aiPersona
+          : (oldSettings?.aiPersona || null),
         masterPageConfig: settings.masterPageConfig ? JSON.stringify(settings.masterPageConfig) : null,
         yearlyGoals: settings.yearlyGoals ? JSON.stringify(settings.yearlyGoals) : null,
         lastActiveDate: settings.lastActiveDate || null,

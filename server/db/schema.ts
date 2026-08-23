@@ -132,6 +132,7 @@ export function initSchema(db: Db) {
       geminiApiKey TEXT,
       googleBooksApiKey TEXT,
       timezone TEXT,
+      aiPersona TEXT,
       masterPageConfig TEXT,
       yearlyGoals TEXT,
       lastActiveDate TEXT,
