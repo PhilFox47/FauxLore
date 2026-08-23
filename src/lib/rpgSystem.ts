@@ -102,26 +102,87 @@ export interface RPGState {
 export const ENRAGE_TARGET_MULTIPLIER = 1.25;
 export const ENRAGE_REWARD_MULTIPLIER = 1.2;
 
-export function getLevelForExp(exp: number): number {
+/**
+ * The level curve: a ramp that flattens.
+ *
+ * It used to be purely quadratic, so each level cost 2,000 more than the last
+ * forever. That reads fine for the first handful and then stops meaning
+ * anything — level 50 wanted 2.4 million master pages, roughly two hundred
+ * thousand hours, so the top two thirds of the scale were decoration.
+ *
+ * Now the cost per level grows by a flat amount until level 20 and then holds.
+ * Past that point every level costs the same, which keeps the ladder climbable
+ * for as long as someone keeps tracking rather than quietly ending around 10.
+ *
+ * The ramp is deliberately sized so it lands exactly on the cap: BASE * FLAT_FROM
+ * equals CAP for both curves, which is what makes the step at level 20 continuous
+ * instead of jumping. Change one of the three and the other two have to follow.
+ */
+const EXP_STEP_BASE = 1000;
+const EXP_STEP_CAP = 20000;
+const MEDIA_EXP_STEP_BASE = 250;
+const MEDIA_EXP_STEP_CAP = 5000;
+/** The level from which the cost per level stops growing. */
+const EXP_FLAT_FROM_LEVEL = 20;
+export const MAX_LEVEL = 100;
+
+/** What it costs to go from `level` to the next one. */
+function stepFor(level: number, base: number, cap: number): number {
+  return Math.min(base * Math.max(1, level), cap);
+}
+
+/** Total EXP needed to BE at `level`, i.e. the sum of every step below it. */
+function totalForLevel(level: number, base: number, cap: number): number {
+  if (level <= 1) return 0;
+  // Steps 1..(level-1), of which the first (FLAT_FROM - 1) still grow.
+  const ramped = Math.min(level - 1, EXP_FLAT_FROM_LEVEL - 1);
+  const flat = level - 1 - ramped;
+  return (base * ramped * (ramped + 1)) / 2 + flat * cap;
+}
+
+/**
+ * The level a given EXP total sits at.
+ *
+ * Derived by walking rather than by inverting the piecewise sum: the closed form
+ * needs a square root that can land a hair under an exact threshold and report
+ * the level below. The loop is bounded by MAX_LEVEL and exact by construction.
+ */
+function levelForTotal(exp: number, base: number, cap: number): number {
   if (exp <= 0) return 1;
-  let level = Math.floor(Math.sqrt(exp / 1000)) + 1;
-  return Math.min(level, 100);
+  // Start from the flat region when we are clearly past the ramp, so the walk is
+  // short no matter how large the total gets.
+  const rampTotal = totalForLevel(EXP_FLAT_FROM_LEVEL, base, cap);
+  let level = exp >= rampTotal
+    ? Math.min(MAX_LEVEL, EXP_FLAT_FROM_LEVEL + Math.floor((exp - rampTotal) / cap))
+    : 1;
+  while (level < MAX_LEVEL && totalForLevel(level + 1, base, cap) <= exp) level++;
+  while (level > 1 && totalForLevel(level, base, cap) > exp) level--;
+  return level;
+}
+
+export function getLevelForExp(exp: number): number {
+  return levelForTotal(exp, EXP_STEP_BASE, EXP_STEP_CAP);
 }
 
 export function getExpForLevel(level: number): number {
-  if (level <= 1) return 0;
-  return 1000 * Math.pow(level - 1, 2);
+  return totalForLevel(level, EXP_STEP_BASE, EXP_STEP_CAP);
+}
+
+/** What the next level costs from here, for anything that wants to show it. */
+export function getExpStepForLevel(level: number): number {
+  return stepFor(level, EXP_STEP_BASE, EXP_STEP_CAP);
 }
 
 export function getLevelForMediaExp(exp: number): number {
-  if (exp <= 0) return 1;
-  let level = Math.floor(Math.sqrt(exp / 250)) + 1;
-  return Math.min(level, 100);
+  return levelForTotal(exp, MEDIA_EXP_STEP_BASE, MEDIA_EXP_STEP_CAP);
 }
 
 export function getExpForMediaLevel(level: number): number {
-  if (level <= 1) return 0;
-  return 250 * Math.pow(level - 1, 2);
+  return totalForLevel(level, MEDIA_EXP_STEP_BASE, MEDIA_EXP_STEP_CAP);
+}
+
+export function getMediaExpStepForLevel(level: number): number {
+  return stepFor(level, MEDIA_EXP_STEP_BASE, MEDIA_EXP_STEP_CAP);
 }
 
 // Seeded PRNG
