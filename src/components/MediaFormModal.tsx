@@ -349,6 +349,39 @@ export function MediaFormModal({
     }
   };
 
+/**
+ * The release timing a search result carries, and what it implies.
+ *
+ * These were arriving from the server and being dropped here, because the two
+ * apply functions copy an explicit field list and nobody added them to it.
+ *
+ * Setting the status matters as much as the date. Something dated in the future
+ * is Unreleased by definition, and waiting for the nightly sweep to notice would
+ * mean a Codex gets compiled first — for a title that does not exist yet, which
+ * is exactly what should not happen. An explicitly chosen status is left alone;
+ * only the form's default is overridden.
+ */
+function releaseFieldsFromMatch(
+  match: any,
+  currentStatus: string | undefined,
+  fallbackDate?: string,
+): Record<string, unknown> {
+  const date = match?.expectedReleaseDate || fallbackDate || undefined;
+  const fields: Record<string, unknown> = {
+    expectedReleaseDate: date,
+    releaseDateLabel: match?.releaseDateLabel,
+    nextReleaseAt: match?.nextReleaseAt,
+    nextReleaseLabel: match?.nextReleaseLabel,
+  };
+
+  const due = date ? Date.parse(date) : NaN;
+  const inFuture = Number.isFinite(due) && due > Date.now();
+  if (inFuture && (!currentStatus || currentStatus === 'Active')) {
+    fields.status = 'Unreleased';
+  }
+  return fields;
+}
+
   const applySearchResult = (match: any) => {
     if (
       formData.mediaType === "Series" &&
@@ -390,6 +423,7 @@ export function MediaFormModal({
       runtimeMinutes: match.runtimeMinutes,
       coverImageUrl: match.coverImageUrl,
       originalMediaId: match.id,
+      ...releaseFieldsFromMatch(match, prev.status),
       // Remember where this came from so it can be re-checked for updates later.
       ...(match.metadataSource
         ? {
@@ -446,6 +480,8 @@ export function MediaFormModal({
       runtimeMinutes: series.runtimeMinutes,
       coverImageUrl: season.posterPath || series.coverImageUrl,
       season: season.seasonNumber,
+      // A season has its own air date, which is not the series' first one.
+      ...releaseFieldsFromMatch(series, prev.status, season.airDate),
       // A season inherits its parent series' provenance so it links back correctly.
       ...(series.metadataSource
         ? {
