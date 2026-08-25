@@ -94,6 +94,12 @@ export function createMetadataRefresh(
   db: Db,
   /** Optional sink so a detected update also becomes a persistent notification. */
   notify?: (userId: string, n: NewNotification) => boolean,
+  /**
+   * Called when an entry stops being unreleased. Research is deliberately not
+   * done for something that does not exist yet, so the release is what finally
+   * earns it — this is where that debt is paid.
+   */
+  onReleased?: (userId: string, mediaId: string) => void,
 ) {
   /**
    * Writes what a source said about dates and instalments, and moves the status
@@ -146,6 +152,13 @@ export function createMetadataRefresh(
 
     if (decision) {
       console.log(`[metadataRefresh] "${row.title}": ${row.status} -> ${decision.status} (${decision.reason})`);
+
+      // Now that it exists, it can be researched. Only entries actually parked
+      // for that reason are picked up, so this never re-tags something the user
+      // has already curated.
+      if (row.status === "Unreleased" && decision.status !== "Unreleased" && row.autoTagStatus === "deferred") {
+        try { onReleased?.(userId, row.id); } catch (e) { console.error("[metadataRefresh] release hook failed", e); }
+      }
       notify?.(userId, {
         type: decision.status === "Active" ? "media_update" : "media_released",
         title: `${row.title} is now ${decision.status}`,
@@ -172,7 +185,7 @@ export function createMetadataRefresh(
       const placeholders = TRACKED_STATUSES.map(() => "?").join(", ");
       const rows: any[] = db
         .prepare(
-          `SELECT id, title, mediaType, status, season, language, episodesWatched, chaptersRead,
+          `SELECT id, title, mediaType, status, season, language, episodesWatched, chaptersRead, autoTagStatus,
                   expectedReleaseDate, nextReleaseAt, availableUnits,
                   metadataSource, metadataSourceId, sourceVersion, installedVersion, sourceUpdatedAt, lastSyncAt
              FROM media

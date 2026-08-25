@@ -348,7 +348,13 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
       // work until it logs something. The entry is parked as 'deferred' and the
       // first log picks it up, so nothing is silently lost.
       if (isNewEntry && (item.genres || []).length === 0 && (item.tags || []).length === 0) {
-        if (activity.isFrozen(userId as string)) {
+        // Something that does not exist yet cannot be researched. A Codex for an
+        // unreleased title would be written from a marketing page and a guess,
+        // and it is compiled once and read for the life of the entry — so it is
+        // parked exactly like dormant-account work is, and the release picks it
+        // up. Tagging and the Codex travel together here: autoTagMedia compiles
+        // the Codex as its first step.
+        if (item.status === 'Unreleased' || activity.isFrozen(userId as string)) {
           db.prepare("UPDATE media SET autoTagStatus = 'deferred' WHERE id = ?").run(item.id);
         } else {
           autoTag.queueAutoTag(userId as string, item.id);

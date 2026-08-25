@@ -91,7 +91,9 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
       if (wasFrozen) {
         try {
           const parked = db
-            .prepare("SELECT id FROM media WHERE userId = ? AND autoTagStatus = 'deferred'")
+            // Still-unreleased entries stay parked: they were deferred because
+            // there is nothing to research yet, not because the account was cold.
+            .prepare("SELECT id FROM media WHERE userId = ? AND autoTagStatus = 'deferred' AND status != 'Unreleased'")
             .all(userId) as { id: string }[];
           if (parked.length) {
             console.log(`[activity] ${userId} is back; tagging ${parked.length} entry(s) added while dormant`);

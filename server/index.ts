@@ -113,7 +113,12 @@ async function startServer() {
   // dedupe key that stops the bell repeating itself stops the phone repeating too.
   const push = createPushService(db);
   const { notify, runAllChecks, checkInactivity } = createNotifications(db, (userId, n) => push.deliver(userId, n));
-  const { refreshTrackedMedia } = createMetadataRefresh(db, notify);
+  const { refreshTrackedMedia } = createMetadataRefresh(db, notify, (userId, mediaId) => {
+    // A released entry finally has something to research. Dormant accounts stay
+    // parked: the freeze is about AI spend, and this is the expensive part.
+    if (activity.isFrozen(userId)) return;
+    autoTag.queueAutoTag(userId, mediaId);
+  });
   cron.schedule("30 4 * * *", () => {
     const users = activity.activeUserIds();
     console.log(`Running daily metadata refresh for ${users.length} active user(s)...`);
