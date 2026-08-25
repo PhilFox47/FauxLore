@@ -4,6 +4,45 @@ import { searchGames, getGameDetails, diagnose as gslDiagnose } from "../integra
 import { LOW_RES_WIDTH, bestCoverForVolume } from "../integrations/bookCovers";
 import { VNDB_TITLE_FIELDS, vndbNames } from "../integrations/vndb";
 
+/**
+ * The year out of whatever VNDB answered.
+ *
+ * Its `released` is YYYY-MM-DD, YYYY-MM, YYYY, "TBA", "unknown" or "today".
+ * Handing any of those to `new Date()` and asking for the year gives NaN for the
+ * word forms, which then travels as a year.
+ */
+function vndbYear(released?: string): number | undefined {
+  const m = /^(\d{4})/.exec((released || '').trim());
+  if (!m) return undefined;
+  const year = Number(m[1]);
+  return Number.isFinite(year) ? year : undefined;
+}
+
+/**
+ * IGDB's release date, honest about how precise it is.
+ *
+ * `release_dates[].category` grades it: 0 is an exact day, 1 a month, 2 a year,
+ * 3-6 a quarter, 7 undecided. Only category 0 becomes a real date; anything
+ * coarser keeps IGDB's own human wording ("Q4 2026") so nothing downstream can
+ * mistake a placeholder for a day.
+ */
+const IGDB_EXACT_DAY = 0;
+function igdbRelease(game: any): { expectedReleaseDate?: string; releaseDateLabel?: string } {
+  const stamp = game?.first_release_date;
+  if (!stamp) return {};
+
+  // The entry whose date matches the game's headline date is the one that
+  // produced it, so its category is the one that describes it.
+  const dates: any[] = Array.isArray(game.release_dates) ? game.release_dates : [];
+  const match = dates.find((d) => d?.date === stamp) || dates[0];
+  const iso = new Date(stamp * 1000).toISOString();
+
+  // No release_dates at all: IGDB has given us nothing to judge precision with,
+  // so the timestamp is taken at face value rather than thrown away.
+  if (!match || match.category === IGDB_EXACT_DAY) return { expectedReleaseDate: iso };
+  return { releaseDateLabel: String(match.human || "").trim() || undefined };
+}
+
 export function registerSearchRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, hltbSearch, getIgdbToken, activity } = ctx;
 
@@ -27,7 +66,7 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
       // We grab standard fields + involved companies (for developers/publishers)
       const body = `
         search "${query}";
-        fields name, summary, url, cover.image_id, first_release_date, total_rating, total_rating_count, category, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, platforms.name, franchises.name;
+        fields name, summary, url, cover.image_id, first_release_date, release_dates.date, release_dates.human, release_dates.category, total_rating, total_rating_count, category, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, platforms.name, franchises.name;
         limit 50;
       `;
 
@@ -106,7 +145,12 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           description: game.summary,
           coverImageUrl: game.cover?.image_id ? `https://images.igdb.com/igdb/image/upload/t_cover_big/${game.cover.image_id}.jpg` : "",
           year: game.first_release_date ? new Date(game.first_release_date * 1000).getFullYear() : undefined,
-          expectedReleaseDate: game.first_release_date ? new Date(game.first_release_date * 1000).toISOString() : undefined,
+          // `first_release_date` is a timestamp even when IGDB only knows the
+          // quarter — "Q4 2026" arrives as the first of October. Showing that as
+          // an exact date claims a precision the source never had, so the date is
+          // only kept when IGDB says it is exact, and its own wording is carried
+          // alongside for everything else.
+          ...igdbRelease(game),
           reviewScore: game.total_rating ? Math.round(game.total_rating / 10) / 2 : undefined,
           averagePlaytime: hltbMainExtra || hltbMain || 0,
           hltbMain,
@@ -215,6 +259,11 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           airDate: s.air_date
         })) : [];
 
+        // TMDB dates are plain YYYY-MM-DD. Normalising to midday UTC keeps a
+        // date from sliding a day backwards for anyone west of Greenwich once it
+        // is parsed and re-serialised.
+        const firstAired = ((type === 'movie' ? detail.release_date : detail.first_air_date) || '').trim();
+
         // Parse runtime
         let runtimeMinutes: number | undefined = undefined;
         if (type === 'movie' && detail.runtime) {
@@ -235,6 +284,13 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           description: detail.overview,
           coverImageUrl: detail.poster_path ? `https://image.tmdb.org/t/p/w500${detail.poster_path}` : "",
           year: type === 'movie' ? (detail.release_date ? new Date(detail.release_date).getFullYear() : undefined) : (detail.first_air_date ? new Date(detail.first_air_date).getFullYear() : undefined),
+          // The exact date, not just the year it falls in. Everything that has to
+          // decide "is this out yet" needs the day.
+          expectedReleaseDate: firstAired || undefined,
+          nextReleaseAt: detail.next_episode_to_air?.air_date || undefined,
+          nextReleaseLabel: detail.next_episode_to_air
+            ? `S${detail.next_episode_to_air.season_number}E${detail.next_episode_to_air.episode_number}`
+            : undefined,
           reviewScore: detail.vote_average ? Math.round(detail.vote_average) / 2 : undefined, // 0-10 -> 0-5
           // Genres and tags are deliberately absent. Every source names them
           // differently — IGDB themes, TMDB keywords, MangaDex tags,
@@ -295,7 +351,12 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           description: vn.description,
           coverImageUrl: vn.image?.url || "",
           developer: developer,
-          year: vn.released ? new Date(vn.released).getFullYear() : undefined,
+          // VNDB answers with YYYY-MM-DD, YYYY-MM, YYYY, "TBA", "unknown" or
+          // "today". Only a full date is a date; the rest is kept as a label so
+          // nothing downstream mistakes "2026" for the first of January.
+          year: vndbYear(vn.released),
+          expectedReleaseDate: /^\d{4}-\d{2}-\d{2}$/.test(vn.released || '') ? vn.released : undefined,
+          releaseDateLabel: vn.released && !/^\d{4}-\d{2}-\d{2}$/.test(vn.released) ? vn.released : undefined,
           reviewScore: vn.rating ? Math.round(vn.rating / 10) / 2 : undefined, // Convert 1-100 to 0-5
           averagePlaytime: vn.length_minutes ? Math.round(vn.length_minutes / 60) : undefined,
           // Genres and tags are deliberately absent. Every source names them

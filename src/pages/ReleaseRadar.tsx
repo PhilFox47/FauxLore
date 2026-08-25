@@ -54,12 +54,29 @@ export function ReleaseRadar() {
   const [editingItem, setEditingItem] = useState<MediaItem | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
+  /**
+   * Everything the user is waiting on, not just everything unreleased.
+   *
+   * A series you are caught up on is waiting exactly as much as a game that has
+   * not shipped — the only difference is that the thing being awaited is one
+   * episode rather than the whole work. Caught Up entries therefore belong here
+   * too, but only once the source has actually named a date: without one there
+   * is nothing to count down to and the row would just be a title with a shrug.
+   */
   const radarItems = useMemo(() => {
-    return media.filter(m => m.status === 'Unreleased').sort((a, b) => {
-      const dateA = a.expectedReleaseDate ? new Date(a.expectedReleaseDate).getTime() : 9999999999999;
-      const dateB = b.expectedReleaseDate ? new Date(b.expectedReleaseDate).getTime() : 9999999999999;
-      return dateA - dateB;
-    });
+    const waiting = media.filter(
+      (m) =>
+        m.status === 'Unreleased' ||
+        ((m.status === 'Caught Up' || m.status === 'On Hold') && !!m.nextReleaseAt),
+    );
+    const due = (m: MediaItem) => {
+      const at = m.status === 'Unreleased' ? m.expectedReleaseDate : (m.nextReleaseAt || m.expectedReleaseDate);
+      const t = at ? new Date(at).getTime() : NaN;
+      // Undated entries sort last rather than being dropped: an announced game
+      // with no date is still something you are waiting for.
+      return Number.isFinite(t) ? t : Number.MAX_SAFE_INTEGER;
+    };
+    return [...waiting].sort((a, b) => due(a) - due(b));
   }, [media]);
 
   if (radarItems.length === 0) {
@@ -70,7 +87,7 @@ export function ReleaseRadar() {
         </div>
         <h2 className="text-2xl font-black text-white mb-2 tracking-tight">No Upcoming Releases</h2>
         <p className="text-zinc-500 max-w-sm mb-6 text-sm">
-          You don't have any unreleased media tracked. Add some upcoming games or movies to build the hype!
+          Nothing unreleased, and nothing you are caught up on has a date announced yet.
         </p>
       </div>
     );
@@ -81,15 +98,22 @@ export function ReleaseRadar() {
       <div className="flex justify-between items-end mb-8 mt-4">
         <div>
           <h1 className="text-4xl sm:text-5xl font-black px-1 tracking-tight bg-gradient-to-br from-blue-400 via-blue-200 to-indigo-400 bg-clip-text text-transparent drop-shadow-sm">Release Radar</h1>
-          <p className="text-blue-300/60 mt-2 px-2 font-medium tracking-wide">Upcoming drops and launches.</p>
+          <p className="text-blue-300/60 mt-2 px-2 font-medium tracking-wide">Everything you are waiting on — launches, and the next episode of what you are caught up with.</p>
         </div>
       </div>
 
       <div className="relative space-y-12 pb-10">
         {radarItems.map((item, index) => {
-          const hasDate = !!item.expectedReleaseDate;
-          const releaseDate = hasDate ? new Date(item.expectedReleaseDate!) : null;
-          let label = "TBD";
+          // What this row is actually waiting for. For an unreleased entry that
+          // is the work itself; for one you are caught up on it is the next
+          // episode or chapter, which is a different date and a different noun.
+          const awaitingNext = item.status !== 'Unreleased' && !!item.nextReleaseAt;
+          const awaitedAt = awaitingNext ? item.nextReleaseAt! : item.expectedReleaseDate;
+          const hasDate = !!awaitedAt;
+          const releaseDate = hasDate ? new Date(awaitedAt!) : null;
+          // When the source could only manage "Q4 2026", say that rather than
+          // inventing a day it never committed to.
+          let label = item.releaseDateLabel || "TBD";
           let labelColor = "text-zinc-500";
           let cardGlow = "";
 
@@ -102,7 +126,9 @@ export function ReleaseRadar() {
               label = `Released on ${format(releaseDate!, 'MMM do, yyyy')}`;
               labelColor = "text-emerald-500/70";
             } else {
-              label = format(releaseDate!, 'MMMM do, yyyy, h:mm a');
+              label = awaitingNext
+                ? `${item.nextReleaseLabel || 'Next'} on ${format(releaseDate!, 'MMMM do, yyyy')}`
+                : format(releaseDate!, 'MMMM do, yyyy');
               labelColor = "text-blue-300 drop-shadow-[0_0_5px_rgba(147,197,253,0.5)]";
               cardGlow = "hover:border-blue-500/50 hover:shadow-[0_0_40px_rgba(59,130,246,0.15)]";
             }
@@ -120,6 +146,11 @@ export function ReleaseRadar() {
                     <span className="text-xs font-black uppercase tracking-[0.2em] bg-blue-500/20 text-blue-300 px-3 py-1.5 rounded-lg backdrop-blur-md border border-blue-500/30">
                       {item.mediaType}
                     </span>
+                    {awaitingNext && (
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-amber-500/20 text-amber-300 px-2.5 py-1.5 rounded-lg backdrop-blur-md border border-amber-500/30">
+                        Caught up
+                      </span>
+                    )}
                   </div>
                 </div>
                 
@@ -151,7 +182,7 @@ export function ReleaseRadar() {
                   
                   {/* Countdown Zone */}
                   {hasDate && !isPast(releaseDate!) && (
-                     <Countdown targetDate={item.expectedReleaseDate!} />
+                     <Countdown targetDate={awaitedAt!} />
                   )}
                 </div>
               </div>

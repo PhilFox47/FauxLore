@@ -210,7 +210,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           status, userRating, userReview, dropReason, genres, tags, tropes, platforms, franchises,
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
-          issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, language, isOngoing, noEnemies, isHighPriority, noAutoDrop, storyHeavyModifier, route, releaseStatus, lastSyncAt, createdAt, updatedAt,
+          issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, releaseDateLabel, nextReleaseAt, nextReleaseLabel, availableUnits, language, isOngoing, noEnemies, isHighPriority, noAutoDrop, storyHeavyModifier, route, releaseStatus, lastSyncAt, createdAt, updatedAt,
           subtitle, maturityRating,
           metadataSource, metadataSourceId, sourceUrl, sourceVersion, installedVersion, sourceVersions, sourceUpdatedAt, updateAvailable, updateSeenAt
         ) VALUES (
@@ -219,7 +219,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           @status, @userRating, @userReview, @dropReason, @genres, @tags, @tropes, @platforms, @franchises,
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
-          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @language, @isOngoing, @noEnemies, @isHighPriority, @noAutoDrop, @storyHeavyModifier, @route, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
+          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @releaseDateLabel, @nextReleaseAt, @nextReleaseLabel, @availableUnits, @language, @isOngoing, @noEnemies, @isHighPriority, @noAutoDrop, @storyHeavyModifier, @route, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
           @subtitle, @maturityRating,
           @metadataSource, @metadataSourceId, @sourceUrl, @sourceVersion, @installedVersion, @sourceVersions, @sourceUpdatedAt, @updateAvailable, @updateSeenAt
         )
@@ -235,7 +235,8 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           totalChapters=excluded.totalChapters, season=excluded.season, episodesWatched=excluded.episodesWatched,
           totalEpisodes=excluded.totalEpisodes, watched=excluded.watched, watchCount=excluded.watchCount,
           runtimeMinutes=excluded.runtimeMinutes, issuesRead=excluded.issuesRead, totalIssues=excluded.totalIssues,
-          isReRun=excluded.isReRun, originalMediaId=excluded.originalMediaId, expectedReleaseDate=excluded.expectedReleaseDate,
+          isReRun=excluded.isReRun, originalMediaId=excluded.originalMediaId, expectedReleaseDate=excluded.expectedReleaseDate, releaseDateLabel=excluded.releaseDateLabel,
+          nextReleaseAt=excluded.nextReleaseAt, nextReleaseLabel=excluded.nextReleaseLabel, availableUnits=excluded.availableUnits,
           language=excluded.language, isOngoing=excluded.isOngoing, noEnemies=excluded.noEnemies, isHighPriority=excluded.isHighPriority, noAutoDrop=excluded.noAutoDrop, storyHeavyModifier=excluded.storyHeavyModifier, route=excluded.route,
           releaseStatus=excluded.releaseStatus, lastSyncAt=excluded.lastSyncAt,
           subtitle=excluded.subtitle, maturityRating=excluded.maturityRating,
@@ -293,6 +294,10 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
         isReRun: item.isReRun ? 1 : 0,
         originalMediaId: item.originalMediaId || null,
         expectedReleaseDate: item.expectedReleaseDate || null,
+        releaseDateLabel: item.releaseDateLabel || null,
+        nextReleaseAt: item.nextReleaseAt || null,
+        nextReleaseLabel: item.nextReleaseLabel || null,
+        availableUnits: Number.isFinite(Number(item.availableUnits)) ? Number(item.availableUnits) : null,
         language: item.language || null,
         subtitle: item.subtitle || null,
         maturityRating: item.maturityRating || null,

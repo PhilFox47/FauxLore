@@ -85,6 +85,15 @@ export interface MediaItem {
   sourceUpdatedAt?: string;    // last-updated date reported by the source
   updateAvailable?: boolean;   // set when a refresh detects a newer version
   updateSeenAt?: string;       // when the user acknowledged the update
+
+  // What the source says about release timing. A date alone is not enough for
+  // anything episodic: a series that is airing has a date for its NEXT episode,
+  // and that is what decides whether there is anything to watch tonight.
+  releaseDateLabel?: string;   // "Q4 2026", when the source is not precise
+  nextReleaseAt?: string;      // ISO date of the next episode / chapter
+  nextReleaseLabel?: string;   // "S2E5", "Chapter 143"
+  availableUnits?: number;     // episodes aired / chapters published so far
+  autoStatusAt?: string;       // when the app last moved the status by itself
   
   // Book
   pagesRead?: number;

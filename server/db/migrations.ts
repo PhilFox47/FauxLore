@@ -128,6 +128,18 @@ export function runMigrations(db: Db) {
   // web search.
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptWebModel TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN nanoGptWebModel TEXT").run(); } catch (e) {}
+  // Release tracking. A release date alone is not enough for anything episodic:
+  // a series that is airing has a date for its NEXT episode, and that — together
+  // with how many have actually aired — is what decides whether the entry is
+  // waiting on the world or has something to watch tonight.
+  try { db.prepare("ALTER TABLE media ADD COLUMN releaseDateLabel TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN nextReleaseAt TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN nextReleaseLabel TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE media ADD COLUMN availableUnits INTEGER").run(); } catch (e) {}
+  // Stamped whenever the app moves the status by itself, so a later change can
+  // tell its own work from the user's.
+  try { db.prepare("ALTER TABLE media ADD COLUMN autoStatusAt TEXT").run(); } catch (e) {}
+
   // The AI persona was only ever form state: no column, no upsert, so every
   // restart reverted it to the default. It is a per-profile choice, not a
   // system one — two users on the same install can want different voices.
