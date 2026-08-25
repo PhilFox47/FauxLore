@@ -126,9 +126,12 @@ export function ReleaseRadar() {
               label = `Released on ${format(releaseDate!, 'MMM do, yyyy')}`;
               labelColor = "text-emerald-500/70";
             } else {
+              // The two now travel together for an imprecise date: the estimate
+              // so the countdown has something to work with, the wording so the
+              // headline does not promise a day the source never gave.
               label = awaitingNext
                 ? `${item.nextReleaseLabel || 'Next'} on ${format(releaseDate!, 'MMMM do, yyyy')}`
-                : format(releaseDate!, 'MMMM do, yyyy');
+                : (item.releaseDateLabel || format(releaseDate!, 'MMMM do, yyyy'));
               labelColor = "text-blue-300 drop-shadow-[0_0_5px_rgba(147,197,253,0.5)]";
               cardGlow = "hover:border-blue-500/50 hover:shadow-[0_0_40px_rgba(59,130,246,0.15)]";
             }

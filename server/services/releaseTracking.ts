@@ -139,10 +139,12 @@ export function decideStatus(
 export function releaseFieldsFor(upstream: ReleaseState): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   if (upstream.releaseDate) fields.expectedReleaseDate = upstream.releaseDate;
-  // A label and a date are mutually exclusive: once a source becomes precise,
-  // the old "Q4 2026" must not linger next to the real day.
-  if (upstream.releaseDate) fields.releaseDateLabel = null;
-  else if (upstream.releaseDateLabel) fields.releaseDateLabel = upstream.releaseDateLabel;
+  // The two travel together for an imprecise date: the timestamp so the app can
+  // reason about it, the wording so nothing shows a day the source never gave.
+  // A date arriving WITHOUT wording is the source having become precise, and
+  // that is the one case where an old "Q4 2026" has to be cleared.
+  if (upstream.releaseDateLabel) fields.releaseDateLabel = upstream.releaseDateLabel;
+  else if (upstream.releaseDate) fields.releaseDateLabel = null;
   if (upstream.nextReleaseAt !== undefined) fields.nextReleaseAt = upstream.nextReleaseAt ?? null;
   if (upstream.nextReleaseLabel !== undefined) fields.nextReleaseLabel = upstream.nextReleaseLabel ?? null;
   if (typeof upstream.availableUnits === "number") fields.availableUnits = upstream.availableUnits;

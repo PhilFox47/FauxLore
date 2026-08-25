@@ -153,8 +153,13 @@ export async function igdbRelease(
   const iso = new Date(stamp * 1000).toISOString().slice(0, 10);
 
   if (!match || match.category === IGDB_EXACT_DAY) return { releaseDate: iso };
-  if (match.category === IGDB_TBD) return { releaseDateLabel: String(match.human || "TBD") };
-  return { releaseDateLabel: String(match.human || "").trim() || iso };
+  // Keep the estimate as well as the wording. A quarter is still enough to know
+  // the thing is not out yet, which is the question the status logic asks.
+  if (match.category === IGDB_TBD) {
+    // Undecided is different: there is no estimate to keep, only a placeholder.
+    return { releaseDateLabel: String(match.human || "TBD") };
+  }
+  return { releaseDate: iso, releaseDateLabel: String(match.human || "").trim() || undefined };
 }
 
 /**

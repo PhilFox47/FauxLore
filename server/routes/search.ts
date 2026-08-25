@@ -37,10 +37,16 @@ function igdbRelease(game: any): { expectedReleaseDate?: string; releaseDateLabe
   const match = dates.find((d) => d?.date === stamp) || dates[0];
   const iso = new Date(stamp * 1000).toISOString();
 
-  // No release_dates at all: IGDB has given us nothing to judge precision with,
-  // so the timestamp is taken at face value rather than thrown away.
+  // Both, always. Dropping the timestamp for an imprecise date was the wrong
+  // correction: it left "out next month" with no date at all, so nothing could
+  // tell it was unreleased and the user had to type the date in by hand. The
+  // timestamp is IGDB's own best estimate and belongs in the date field; the
+  // wording rides alongside so nothing DISPLAYS a day IGDB never promised.
   if (!match || match.category === IGDB_EXACT_DAY) return { expectedReleaseDate: iso };
-  return { releaseDateLabel: String(match.human || "").trim() || undefined };
+  return {
+    expectedReleaseDate: iso,
+    releaseDateLabel: String(match.human || "").trim() || undefined,
+  };
 }
 
 export function registerSearchRoutes(app: Express, ctx: ServerContext) {
