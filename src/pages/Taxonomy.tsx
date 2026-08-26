@@ -28,9 +28,21 @@ export function Taxonomy() {
   const isAdmin = user?.role === 'Admin';
 
   // Media missing tags and/or a franchise — surfaced so gaps are easy to find & fix.
+  //
+  // Missing tags is only a gap once the thing exists. An unreleased entry has no
+  // Codex yet, deliberately: there is nothing to research, so auto-tagging is
+  // parked until release and fills them in then. Listing it here would be asking
+  // the user to do by hand the one job the app is waiting to do for them.
+  //
+  // A missing franchise is a gap either way — that is set by hand, and whether
+  // something belongs to a series is knowable long before it ships.
   const mediaMissingInfo = useMemo(() => {
     return media
-      .map(m => ({ item: m, noTags: !m.tags || m.tags.length === 0, noFranchise: !m.franchises || m.franchises.length === 0 }))
+      .map(m => ({
+        item: m,
+        noTags: m.status !== 'Unreleased' && (!m.tags || m.tags.length === 0),
+        noFranchise: !m.franchises || m.franchises.length === 0,
+      }))
       .filter(x => x.noTags || x.noFranchise)
       .filter(x => missingFilter === 'any' ? true : missingFilter === 'tags' ? x.noTags : x.noFranchise);
   }, [media, missingFilter]);
@@ -342,7 +354,7 @@ Return JSON only.`;
               <AlertTriangle className="w-5 h-5" />
               <h2 className="font-bold">Needs Attention <span className="text-zinc-500 font-normal text-sm">({mediaMissingInfo.length})</span></h2>
             </div>
-            <p className="text-xs text-zinc-400 mb-3">Entries with no tags and/or no franchise assigned.</p>
+            <p className="text-xs text-zinc-400 mb-3">Entries with no tags and/or no franchise assigned. Unreleased entries are only listed for a missing franchise — their tags arrive with the Codex once they are out.</p>
             <div className="flex gap-1 mb-3">
               {(['any', 'tags', 'franchise'] as const).map(f => (
                 <button
