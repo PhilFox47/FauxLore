@@ -23,7 +23,21 @@ import { cn } from '../lib/utils';
  * is either compressed into the single strip at the top or moved below the
  * grid, so the active media is the first — and largest — thing on the page.
  */
-export function Dashboard() {
+/**
+ * The overview, in two flavours.
+ *
+ * Time Travel entries belong to a chronological watch-through: dozens of series
+ * on the go at once, each touched rarely. On the main dashboard they would bury
+ * the handful of things actually being worked through, so they get their own
+ * page — but it is the same page, filtered, rather than a copy that drifts.
+ *
+ * The RPG furniture is left off there deliberately. The level strip and the
+ * per-format levels are global, so they would show the same numbers on both and
+ * say nothing about the chronology; and the boss panel would always be empty,
+ * because Time Travel entries never spawn enemies.
+ */
+export function Dashboard({ variant = 'main' }: { variant?: 'main' | 'timeTravel' } = {}) {
+  const isTimeTravel = variant === 'timeTravel';
   const { media, logs, settings, rpgState, saveMediaItem, addLog, deleteMediaItem, aiTextCache, worldBosses, artifacts, rerollBoss } = useMediaContext();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -35,6 +49,12 @@ export function Dashboard() {
   const [isProgressOpen, setIsProgressOpen] = useState(false);
   const [progressItem, setProgressItem] = useState<MediaItem | null>(null);
 
+  // Each view owns one side of the split, so nothing appears on both.
+  const scopedMedia = useMemo(
+    () => media.filter((m) => !!m.timeTravel === isTimeTravel),
+    [media, isTimeTravel],
+  );
+
   const {
     statusFilters,
     setStatusFilters,
@@ -43,7 +63,7 @@ export function Dashboard() {
     searchQuery,
     setSearchQuery,
     filteredAndSortedMedia: rawActiveMedia,
-  } = useMediaFilterSort(media, ['Active', 'Extras']);
+  } = useMediaFilterSort(scopedMedia, ['Active', 'Extras']);
 
   const activeMedia = useMemo(() => {
     return [...rawActiveMedia].sort((a, b) => {
@@ -70,7 +90,9 @@ export function Dashboard() {
     if (settings?.disableAutoDrop) return;
     const itemsToDrop = media.filter(item => {
       if (item.status !== 'Active') return false;
-      if (item.noAutoDrop) return false; // User opted this media out of automatic dropping
+      // Time Travel implies noAutoDrop: a chronology sits untouched for months
+      // between passes, which is exactly what decay is designed to punish.
+      if (item.noAutoDrop || item.timeTravel) return false;
       const mediaLogs = logs.filter(l => l.mediaId === item.id);
 
       // Get the absolute latest timestamp among ALL logs, including statusChange and historic ones
@@ -114,7 +136,9 @@ export function Dashboard() {
   return (
     <>
       {/* Status strip: the whole RPG state in one line, so it never competes
-          with the library grid for attention. */}
+          with the library grid for attention. Global by nature, so it is left
+          off the Time Travel view where it would say nothing new. */}
+      {!isTimeTravel && (
       <div className="mb-6 bg-gradient-to-br from-[#121214] to-[#0A0A0C] border border-white/5 border-t-white/10 rounded-[1.75rem] p-4 sm:p-5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)] flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6">
         <Link to="/lorekeeper" className="min-w-0 flex items-center gap-3 group shrink-0">
           <div className="w-10 h-10 shrink-0 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
@@ -165,11 +189,15 @@ export function Dashboard() {
         </div>
       </div>
 
+      )}
+
       <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4 relative z-20">
         <div>
-          <h2 className="text-2xl font-semibold mb-1">Overview</h2>
+          <h2 className="text-2xl font-semibold mb-1">{isTimeTravel ? 'Time Travel' : 'Overview'}</h2>
           <p className="text-zinc-500 text-sm">
-            {activeMedia.length} {activeMedia.length === 1 ? 'title' : 'titles'} you are working through right now
+            {isTimeTravel
+              ? `${activeMedia.length} ${activeMedia.length === 1 ? 'title' : 'titles'} in your chronological run`
+              : `${activeMedia.length} ${activeMedia.length === 1 ? 'title' : 'titles'} you are working through right now`}
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
@@ -223,6 +251,7 @@ export function Dashboard() {
       )}
 
       {/* Supporting detail, deliberately below the library. */}
+      {!isTimeTravel && (
       <section id="progress" className="mt-10 scroll-mt-6">
         <div className="flex items-center gap-3 mb-4">
           <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] font-display">Your progress</h3>
@@ -362,6 +391,7 @@ export function Dashboard() {
           </div>
         </div>
       </section>
+      )}
 
       {/* Modals */}
       <MediaDetailModal

@@ -27,6 +27,7 @@
       noEnemies: row.noEnemies === 1,
       isHighPriority: row.isHighPriority === 1,
       noAutoDrop: row.noAutoDrop === 1,
+      timeTravel: row.timeTravel === 1,
       expectedReleaseDate: row.expectedReleaseDate || null,
       route: row.route || null,
       releaseStatus: row.releaseStatus || null,

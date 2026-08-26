@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useToast } from '../contexts/ToastContext';
-import { X, Plus, Edit2, ExternalLink, GitBranch, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame, Ghost, Target, Anchor, Library, BrainCircuit } from 'lucide-react';
+import { X, Plus, Edit2, ExternalLink, GitBranch, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame, Ghost, Target, Anchor, Library, BrainCircuit, History } from 'lucide-react';
 import { calculateScaledDelta } from '../lib/scaling';
 import { buildStatusTimeline, getItemPace, STATUS_HEX } from '../lib/history';
 import { getSourceUrl, getSourceLabel } from '../lib/sourceLinks';
@@ -495,6 +495,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
               {item.noEnemies && <span className="px-3 py-1 bg-orange-500/20 text-orange-200 border border-orange-500/30 rounded-md text-xs font-medium backdrop-blur-sm shadow-sm flex items-center gap-1"><Ghost className="w-3 h-3"/> No Enemies</span>}
               {item.isHighPriority && <span className="px-3 py-1 bg-rose-500/20 text-rose-200 border border-rose-500/30 rounded-md text-xs font-medium backdrop-blur-sm shadow-sm flex items-center gap-1"><Target className="w-3 h-3"/> High Priority</span>}
               {item.noAutoDrop && <span className="px-3 py-1 bg-sky-500/20 text-sky-200 border border-sky-500/30 rounded-md text-xs font-medium backdrop-blur-sm shadow-sm flex items-center gap-1"><Anchor className="w-3 h-3"/> No Auto-Drop</span>}
+              {item.timeTravel && <span className="px-3 py-1 bg-violet-500/20 text-violet-200 border border-violet-500/30 rounded-md text-xs font-medium backdrop-blur-sm shadow-sm flex items-center gap-1"><History className="w-3 h-3"/> Time Travel</span>}
             </div>
 
             <div className="flex flex-col gap-3 w-full">

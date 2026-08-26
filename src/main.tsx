@@ -16,6 +16,7 @@ const MediaLibrary = lazy(() => named(import('./pages/MediaLibrary'), 'MediaLibr
 const Statistics = lazy(() => named(import('./pages/Statistics'), 'Statistics'));
 const Atlas = lazy(() => named(import('./pages/Atlas'), 'Atlas'));
 const Recaps = lazy(() => named(import('./pages/Recaps'), 'Recaps'));
+const TimeTravel = lazy(() => named(import('./pages/TimeTravel'), 'TimeTravel'));
 const Lorebook = lazy(() => named(import('./pages/Lorebook'), 'Lorebook'));
 const Lorekeeper = lazy(() => named(import('./pages/Lorekeeper'), 'Lorekeeper'));
 const Roulette = lazy(() => named(import('./pages/Roulette'), 'Roulette'));
@@ -55,6 +56,7 @@ createRoot(document.getElementById('root')!).render(
                   <Route path="stats" element={<Statistics />} />
                   <Route path="atlas" element={<Atlas />} />
                   <Route path="recaps" element={<Recaps />} />
+                  <Route path="time-travel" element={<TimeTravel />} />
                   <Route path="lorebook" element={<Lorebook />} />
                   <Route path="lorekeeper" element={<Lorekeeper />} />
                   <Route path="roulette" element={<Roulette />} />

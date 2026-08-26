@@ -128,6 +128,11 @@ export function runMigrations(db: Db) {
   // web search.
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptWebModel TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN nanoGptWebModel TEXT").run(); } catch (e) {}
+  // Time Travel: entries belonging to a chronological watch-through, kept off
+  // the main dashboard so a dozen simultaneous series do not bury the handful
+  // of things actually being worked through.
+  try { db.prepare("ALTER TABLE media ADD COLUMN timeTravel INTEGER DEFAULT 0").run(); } catch (e) {}
+
   // Release tracking. A release date alone is not enough for anything episodic:
   // a series that is airing has a date for its NEXT episode, and that — together
   // with how many have actually aired — is what decides whether the entry is

@@ -69,6 +69,14 @@ export interface MediaItem {
   autoTagStatus?: 'pending' | 'done' | 'failed' | null;
   isHighPriority?: boolean;
   noAutoDrop?: boolean;
+  /**
+   * Part of a chronological watch-through, tracked on its own dashboard.
+   *
+   * Implies noAutoDrop and noEnemies: a chronology is worked through over
+   * months with long gaps per title, so decay and weekly enemies both fight
+   * the way it is actually used.
+   */
+  timeTravel?: boolean;
   storyHeavyModifier?: number; // 0.5x to 1.5x
   route?: string; // Optional: which route/path this playthrough follows (VNs)
   releaseStatus?: string;

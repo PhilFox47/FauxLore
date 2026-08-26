@@ -1066,6 +1066,29 @@ function releaseFieldsFromMatch(
             </label>
           </div>
 
+          <div className="flex items-center gap-2 mb-4 bg-violet-500/5 border border-violet-500/10 p-3 rounded-xl">
+            <input
+              type="checkbox"
+              id="timeTravel"
+              name="timeTravel"
+              checked={formData.timeTravel || false}
+              onChange={(e) =>
+                setFormData((p) => ({
+                  ...p,
+                  timeTravel: e.target.checked,
+                }))
+              }
+              className="w-4 h-4 rounded bg-zinc-800 border-zinc-700 text-violet-500 focus:ring-violet-500 cursor-pointer"
+            />
+            <label htmlFor="timeTravel" className="text-xs font-semibold text-violet-200 cursor-pointer select-none">
+              Time Travel
+              <span className="block text-[10px] font-normal text-zinc-500 mt-0.5">
+                Part of a chronological run. Moves this off the main dashboard onto Time Travel, and
+                covers No Automatic Drop and Disable Enemy Generation without ticking them too.
+              </span>
+            </label>
+          </div>
+
           {(formData.mediaType === 'Game' || formData.mediaType === 'Visual Novel') && (
             <div className="mb-4 bg-white/5 border border-white/10 p-4 rounded-xl">
               <label className="block text-sm font-medium text-purple-400 mb-1">

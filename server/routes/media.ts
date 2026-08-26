@@ -210,7 +210,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           status, userRating, userReview, dropReason, genres, tags, tropes, platforms, franchises,
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
-          issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, releaseDateLabel, nextReleaseAt, nextReleaseLabel, availableUnits, language, isOngoing, noEnemies, isHighPriority, noAutoDrop, storyHeavyModifier, route, releaseStatus, lastSyncAt, createdAt, updatedAt,
+          issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, releaseDateLabel, nextReleaseAt, nextReleaseLabel, availableUnits, language, isOngoing, noEnemies, isHighPriority, noAutoDrop, timeTravel, storyHeavyModifier, route, releaseStatus, lastSyncAt, createdAt, updatedAt,
           subtitle, maturityRating,
           metadataSource, metadataSourceId, sourceUrl, sourceVersion, installedVersion, sourceVersions, sourceUpdatedAt, updateAvailable, updateSeenAt
         ) VALUES (
@@ -219,7 +219,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           @status, @userRating, @userReview, @dropReason, @genres, @tags, @tropes, @platforms, @franchises,
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
-          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @releaseDateLabel, @nextReleaseAt, @nextReleaseLabel, @availableUnits, @language, @isOngoing, @noEnemies, @isHighPriority, @noAutoDrop, @storyHeavyModifier, @route, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
+          @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @releaseDateLabel, @nextReleaseAt, @nextReleaseLabel, @availableUnits, @language, @isOngoing, @noEnemies, @isHighPriority, @noAutoDrop, @timeTravel, @storyHeavyModifier, @route, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
           @subtitle, @maturityRating,
           @metadataSource, @metadataSourceId, @sourceUrl, @sourceVersion, @installedVersion, @sourceVersions, @sourceUpdatedAt, @updateAvailable, @updateSeenAt
         )
@@ -237,7 +237,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           runtimeMinutes=excluded.runtimeMinutes, issuesRead=excluded.issuesRead, totalIssues=excluded.totalIssues,
           isReRun=excluded.isReRun, originalMediaId=excluded.originalMediaId, expectedReleaseDate=excluded.expectedReleaseDate, releaseDateLabel=excluded.releaseDateLabel,
           nextReleaseAt=excluded.nextReleaseAt, nextReleaseLabel=excluded.nextReleaseLabel, availableUnits=excluded.availableUnits,
-          language=excluded.language, isOngoing=excluded.isOngoing, noEnemies=excluded.noEnemies, isHighPriority=excluded.isHighPriority, noAutoDrop=excluded.noAutoDrop, storyHeavyModifier=excluded.storyHeavyModifier, route=excluded.route,
+          language=excluded.language, isOngoing=excluded.isOngoing, noEnemies=excluded.noEnemies, isHighPriority=excluded.isHighPriority, noAutoDrop=excluded.noAutoDrop, timeTravel=excluded.timeTravel, storyHeavyModifier=excluded.storyHeavyModifier, route=excluded.route,
           releaseStatus=excluded.releaseStatus, lastSyncAt=excluded.lastSyncAt,
           subtitle=excluded.subtitle, maturityRating=excluded.maturityRating,
           -- COALESCE so a client that doesn't send provenance (older UI, partial save)
@@ -304,6 +304,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
         isOngoing: item.isOngoing ? 1 : 0,
         noEnemies: item.noEnemies ? 1 : 0,
         isHighPriority: item.isHighPriority ? 1 : 0,
+        timeTravel: item.timeTravel ? 1 : 0,
         noAutoDrop: item.noAutoDrop ? 1 : 0,
         storyHeavyModifier: item.storyHeavyModifier ?? null,
         route: item.route || null,

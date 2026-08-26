@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, Settings, X, Presentation, BookOpen, Dice5, Shield, Flame, Gem, Globe, Skull, CalendarClock, LogOut, Gamepad2, Book, Headphones, MessagesSquare, Library, Tv, Clapperboard, BookImage, Trophy, MapPin } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Settings, X, Presentation, BookOpen, Dice5, Shield, Flame, Gem, Globe, Skull, CalendarClock, LogOut, Gamepad2, Book, Headphones, MessagesSquare, Library, Tv, Clapperboard, BookImage, Trophy, MapPin, History } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -24,6 +24,7 @@ export function Sidebar({ onCloseMobile, onOpenSettings }: { onCloseMobile?: () 
     { name: 'Roulette', path: '/roulette', icon: Dice5 },
     { name: 'Statistics', path: '/stats', icon: BarChart3 },
     { name: 'Recaps', path: '/recaps', icon: Presentation },
+    { name: 'Time Travel', path: '/time-travel', icon: History },
   ];
 
   const exploreItems = [

@@ -26,8 +26,7 @@ import {
   AlertTriangle,
   Target,
   Anchor,
-  GitBranch
-} from 'lucide-react';
+  GitBranch, History } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMediaContext } from '../contexts/MediaContext';
 import { calculateStreak } from '../lib/streak';
@@ -62,7 +61,10 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
   // Inactivity aging visuals are skipped when auto-dropping is off, whether that
   // was set for this entry or turned off library-wide in Preferences. The decay
   // is the warning that a drop is coming, so it makes no sense without one.
-  if (!item.noAutoDrop && !settings?.disableAutoDrop) {
+  // Time Travel implies noAutoDrop, and that covers the ageing visuals too —
+  // otherwise a chronology entry sits there greyed out and captioned "Drops in
+  // 0d", which is both discouraging and untrue.
+  if (!item.noAutoDrop && !item.timeTravel && !settings?.disableAutoDrop) {
     if (daysSinceActive > 7 && daysSinceActive <= 21) {
       grayscale = ((daysSinceActive - 7) / 14) * 100;
     } else if (daysSinceActive > 21) {
@@ -199,6 +201,10 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
   if (item.updateAvailable) badges.push({
     key: 'update', title: `New version available${item.sourceVersion ? `: ${item.sourceVersion}` : ''}`,
     node: <><Sparkles className="w-3 h-3 text-emerald-400" /><span className="text-emerald-300">Update</span></>,
+  });
+  if (item.timeTravel) badges.push({
+    key: 'timeTravel', title: 'Part of a chronological run — no decay, no enemies',
+    node: <><History className="w-3 h-3 text-violet-400" /><span className="text-violet-300">Time Travel</span></>,
   });
   if (item.isReRun) badges.push({
     key: 'rerun', title: item.route ? `Re-run - ${item.route}` : 'Re-run',

@@ -209,7 +209,10 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
       // with enemies disabled and media that already has an active enemy.
       const typeFilter = (targetMediaType && targetMediaType !== 'All' && targetMediaType !== 'All Media Types') ? targetMediaType : null;
       const queryExt = typeFilter ? " AND mediaType = ?" : "";
-      const eligibleWhere = `userId = ? AND (noEnemies = 0 OR noEnemies IS NULL) AND ((mediaType != 'Movie' AND status = 'Active') OR (mediaType = 'Movie' AND status IN ('Active', 'Planning')))`;
+      // Time Travel implies noEnemies without the user having to tick both: a
+      // chronology is worked through in long passes, and a weekly enemy on one
+      // of forty parallel entries is noise rather than a target.
+      const eligibleWhere = `userId = ? AND (noEnemies = 0 OR noEnemies IS NULL) AND (timeTravel = 0 OR timeTravel IS NULL) AND ((mediaType != 'Movie' AND status = 'Active') OR (mediaType = 'Movie' AND status IN ('Active', 'Planning')))`;
 
       const anyParams: any[] = typeFilter ? [userId, typeFilter] : [userId];
       const anyEligible = db.prepare(`SELECT id FROM media WHERE ${eligibleWhere}${queryExt}`).all(...anyParams) as any[];
