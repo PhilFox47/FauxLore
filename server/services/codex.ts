@@ -163,6 +163,40 @@ export const MAX_MEDIUM_FLAVOR_TEXTS = 2;
 /** A header line has to fit on a line. Anything longer is a paragraph, not a quote. */
 const MAX_FLAVOR_LENGTH = 240;
 
+/** Words that stay lowercase inside a title and so say nothing about its case. */
+const MINOR_WORDS = new Set([
+  "a", "an", "the", "of", "in", "on", "and", "or", "to", "for", "at", "by", "from", "with", "vs",
+]);
+
+/**
+ * A label, not a line.
+ *
+ * The characteristic way this research fails is by handing back the NAME of a
+ * thing where a quotation was asked for — "Crimson Chronovium", "The Waiting
+ * Room", "The 35 GB DLC". They look like findings and are useless: nobody says
+ * them, so they cannot be quoted, and printed under a library title they read as
+ * a glossary headword with the quotation marks put on by mistake.
+ *
+ * The tell is Title Case with nothing to end it. Everything that legitimately
+ * survives is excluded first, and each exclusion is a real entry in the starter
+ * set: a single word is fine ("Hodor.", "SNIKT"), terminal punctuation means
+ * somebody said it ("Just Monika.", "Plus Ultra!"), an arrow or ellipsis is the
+ * page itself speaking ("To Be Continued →", "MEANWHILE…"), and full caps is text
+ * on a screen ("YOU DIED"). A lowercase word in the middle almost always means a
+ * verb, which means a sentence — "Winter is coming" survives without a full stop.
+ */
+export function isBareLabel(text: string): boolean {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length < 2) return false;
+  if (/[.!?…。！？]$/.test(text)) return false;
+  if (/[→←↑↓~—-]$/.test(text)) return false;
+  if (text === text.toUpperCase()) return false;
+
+  const significant = words.filter((w) => !MINOR_WORDS.has(w.toLowerCase().replace(/[^\w']/g, "")));
+  if (significant.length < 2) return false;
+  return significant.every((w) => /^[^a-z]*[A-Z0-9]/.test(w));
+}
+
 /**
  * What survives of the research's answer.
  *
@@ -184,6 +218,12 @@ export function normalizeFlavorTexts(value: any): CodexFlavorText[] {
     // UI is about to add around it.
     const text = String(raw ?? "").trim().replace(/^["'“”„«»]+|["'“”„«»]+$/g, "").trim();
     if (!text || text.length > MAX_FLAVOR_LENGTH) continue;
+    if (isBareLabel(text)) {
+      // Logged rather than dropped in silence: a run that keeps producing these
+      // is the prompt losing its grip, and that is worth being able to see.
+      console.warn(`[codex] Dropped a flavor text that is a name, not a line: "${text}"`);
+      continue;
+    }
 
     const key = text.toLowerCase();
     if (seen.has(key)) continue;

@@ -319,35 +319,60 @@ Include the ordinary and the everyday, not only the legendary. A work's most mem
 }`,
   },
   lore: {
-    // Named narrowly so retrieval fetches pages about THIS version. A bare
-    // "famous quotes" query on a seasonal title returns the franchise's
-    // greatest hits, which is precisely the material that must not be used.
-    query: "memorable quotes new voice lines catchphrases community reaction running jokes",
-    brief: `The handful of lines this work is actually KNOWN BY — what someone who loves it would say to another person who loves it, and be understood.
+    // Named narrowly so retrieval fetches pages about THIS version, and about
+    // what people SAID. A bare "famous quotes" query on a seasonal title returns
+    // the franchise's greatest hits and a glossary of its patch notes, which is
+    // precisely the material that must not be used.
+    query: "memorable quotes new voice lines what fans kept saying community reaction running jokes",
+    brief: `The handful of lines this work is actually KNOWN BY.
+
+START HERE, BECAUSE EVERYTHING ELSE FOLLOWS FROM IT: you are collecting things people SAY, not things the work HAS. An utterance, not a label. A person types it into a chat with another person who loves the same thing, unprompted, and is understood — that is the entire test, and it is the only one that matters.
+
+The failure this instruction exists to prevent looks like research and is worthless:
+
+  WRONG   "Crimson Chronovium"   — the name of a material
+  WRONG   "The 50th Hero"        — the name of a milestone
+  WRONG   "The Waiting Room"     — the name of a meme
+  WRONG   "The 35 GB DLC"        — the name of a complaint
+
+Those are glossary headwords. Nobody says them. Each is a topic someone might discuss, dressed up as a quotation. Now the same material done right — the joke IN the line, not underneath it:
+
+  RIGHT   "Two hundred chapters of waiting and he arrives in a mid-season patch."
+  RIGHT   "Uninstalled the texture pack. Got thirty-five gigabytes and a blurry Hulk."
+
+THE DISQUALIFIER: if the line needs its "why" field to land, it is the wrong line. The "why" is a note for an archivist, not the setup for the punchline. Move the meaning into the text or drop the entry.
 
 Three kinds count, and a good answer mixes them:
 
-QUOTES — lines actually spoken or written in the work, that people repeat. Word for word. The exact wording is the whole value of a quote; an approximation is worthless.
-REFERENCES — things the work is recognised by that are not a line: a sound, a screen, a gesture, a visual signature, a piece of its own vocabulary, a fact about how it was made that its audience all know.
-INSIDE JOKES — what the fandom says about it rather than what the work says: the running gag, the affectionate complaint, the thing everyone who finished it brings up.
+QUOTES — words actually spoken or written in the work, that people repeat. Word for word: the exact wording is the whole value of a quote and an approximation is worthless. Marketing copy is not a quote. A logline is not a quote. If it sounds like it came off a trailer, it did, and it does not belong here.
 
-THE BAR IS RECOGNITION, NOT QUALITY. Not the most beautiful sentence in it — the one that gets quoted. A line nobody outside the work would recognise does not belong here, however good it is.
+REFERENCES — words the audience has READ WITH THEIR OWN EYES so often that they work as quotation even though no character says them. Text on a screen, a sound written on a page, a stock caption, an interface string: YOU DIED. MEANWHILE… To Be Continued →. SNIKT. It is still a piece of TEXT the audience has seen. The name of a mechanic, an item, an event or a patch is NOT a reference, however specific it is.
 
-IT MUST BELONG TO THIS VERSION. This is the trap on everything that comes in seasons, updates, remakes and re-releases, and it is worth being blunt about: a famous line from the wider franchise or from the base game is NOT a line from the season, update or edition being described. Asked about one season of a hero shooter, "HULK SMASH" is the wrong answer — Hulk was there before it and will be there after; it says nothing about this season and would read identically under any other. Ask instead: would someone who played ONLY this version recognise it, and would someone who played every version EXCEPT this one not? What qualifies is what this version introduced or is remembered for — the new character's line, the event's own catchphrase, the bug or the balance decision this update became notorious for, the name the community gave it. If the honest answer is that this version has no lines of its own yet, say so and return fewer, or none.
+INSIDE JOKES — what the fandom says about it rather than what the work says: the running gag, the affectionate complaint, the thing everyone who finished it brings up. Written out as they would actually say it, in one complete sentence.
 
-BETWEEN THREE AND SIX. Not more. A work with two genuinely famous lines gets two; a beloved one with a deep well of them still gets six, the six best. Nothing is gained by padding this out.
+HOW THEY SHOULD READ, all three kinds. A quote is reproduced exactly and needs no help. Everything you write yourself — every reference gloss, every inside joke — is dry, specific and complete. ONE concrete detail: a number, an object, a moment, a small defeat. Never a summary, never a topic, never a category. Twelve words is a good length and twenty is too many. Rueful rather than funny; a line that is trying to be a joke usually is not one.
+
+THE BAR IS REPEATABILITY, NOT NOTABILITY. Not the most significant thing about it — the thing that gets said. "This season added the fiftieth hero" is a fact. "The fiftieth hero is a dinosaur and he is perfect" is a line. Only one of them belongs here.
+
+IT MUST BELONG TO THIS VERSION. This is the trap on everything that comes in seasons, updates, remakes and re-releases, and it is worth being blunt about: a famous line from the wider franchise or from the base game is NOT a line from the season, update or edition being described. Asked about one season of a hero shooter, "HULK SMASH" is the wrong answer — Hulk was there before it and will be there after; it says nothing about this season and would read identically under any other. Ask instead: would someone who experienced ONLY this version recognise it, and would someone who experienced every version EXCEPT this one not? What qualifies is what this version introduced or is remembered for — the new character's line, the event's own catchphrase, the bug or the balance decision this update became notorious for, the thing the community would not stop saying while it ran.
+
+BETWEEN THREE AND SIX. Not more. A work with two genuinely quotable lines gets two; a beloved one with a deep well of them still gets six, the six best. Nothing is gained by padding this out, and a padded list is worse than a short one because the weak entries are the ones the user will see.
 
 AT MOST TWO OF THOSE MAY BE ABOUT THE FORMAT RATHER THAN THE WORK. Mark those "scope": "medium"; everything else is "scope": "work". A format line is about the EXPERIENCE of consuming this kind of thing, of the specific sort this work puts people through — "The bookmark has not moved since March." "Saved before the boss. Saved after the boss. Saved between the two, just in case." "The scanlation group went quiet at chapter 214." "A guide is open in the other window. It has been since hour one."
 
-Those are the rules for one: no proper nouns, no title, no character — it must still read true for someone who has never touched this work. ONE concrete detail, not a general observation: a number, an object, a moment, a small specific defeat. Dry and rueful, never a punchline and never enthusiastic. Twelve words is a good length and twenty is too many. And it must be a real habit of the format, not an observation you constructed to fill the slot — if nothing about this work points at one, return none, which is much the more common case.
+Those are the extra rules for one: no proper nouns, no title, no character — it must still read true for someone who has never touched this work. And it must be a real habit of the format, not an observation you constructed to fill the slot; if nothing about this work points at one, return none, which is much the more common case.
 
-If a work simply has none — a quiet novel, a small game, something too recent or too obscure to have entered anyone's vocabulary — say so plainly and return nothing. An empty answer here is a correct answer and costs nothing. A fabricated quote is the single worst thing this research can produce, because it will be shown to the user as a real line from something they finished.
+RETURNING NOTHING IS A CORRECT ANSWER. A quiet novel, a small game, a season too recent to have entered anyone's vocabulary — plenty of things have no lines of their own, and an empty answer costs nothing. Four honest entries beat six with two labels in them. A fabricated quote is the single worst thing this research can produce, because it will be shown to the user as a real line from something they finished.
 
 Avoid anything that only lands if you know the ending, and avoid the crude and the sexual — these get printed above a library page.`,
-    nonFiction: `the lines are the real ones: the presenter's catchphrase, the format's stock phrase, the commentator's famous call, the jargon its audience has adopted, the running joke about the show that its viewers all share.`,
+    nonFiction: `the lines are the real ones: the presenter's catchphrase, the format's stock phrase, the commentator's famous call, the running joke about the show that its viewers all share. Not the name of a segment, a rule or a trophy — what people actually say about it.`,
     keys: ["flavorTexts"],
-    shape: `{"flavorTexts": [{"text": "", "kind": "quote | reference | joke", "scope": "work | medium", "attribution": "who says it, or where it appears", "why": "one short line on what makes it recognisable"}]}`,
-    structureNotes: `Between three and six entries, or an empty array. NEVER invent one to reach three. Reproduce a quote exactly as the notes give it — do not tidy the grammar, translate it, or trim it. "attribution" is optional and omitted when the notes do not name a speaker. "scope" is "work" unless the notes marked the line as being about the format rather than the work; a "medium" line names no title and no character, and never carries an attribution.`,
+    shape: `{"flavorTexts": [{"text": "the line itself, complete and quotable on its own", "kind": "quote | reference | joke", "scope": "work | medium", "attribution": "who says it, or where it appears", "why": "at most eight words of context for an archivist — NOT an explanation of the line"}]}`,
+    structureNotes: `Between three and six entries, or an empty array. NEVER invent one to reach three.
+"text" must be a complete utterance — something a person says. A bare noun phrase is a glossary headword, not a line: if an entry reads like the title of a topic ("The Waiting Room", "Crimson Chronovium", "The 35 GB DLC"), either the notes contain the actual line and you should use that instead, or they do not and the entry must be dropped.
+If "text" only makes sense once "why" is read, the entry is wrong. Fix it or drop it.
+Reproduce a quote exactly as the notes give it — do not tidy the grammar, translate it, or trim it.
+"attribution" is optional and omitted when the notes do not name a speaker. "scope" is "work" unless the notes marked the line as being about the format rather than the work; a "medium" line names no title and no character, and never carries an attribution.`,
   },
 };
 
