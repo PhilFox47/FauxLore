@@ -390,9 +390,13 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
       }
 
       db.prepare('DELETE FROM media WHERE id = ? AND userId = ?').run(req.params.id, userId);
-      // SQLite CASCADE will handle deleting the logs attached to this mediaId, 
+      // SQLite CASCADE will handle deleting the logs attached to this mediaId,
       // but just incase PRAGMA is off, we manually delete:
       db.prepare('DELETE FROM logs WHERE mediaId = ? AND userId = ?').run(req.params.id, userId);
+      // The lines this entry earned go with it. The read already hides them once
+      // the media row is gone, but leaving orphans to accumulate is untidy.
+      try { ctx.flavorLibrary.forgetMedia(userId as string, req.params.id); }
+      catch (e) { console.error('Failed to drop this entry\'s flavor texts', e); }
       res.json({ success: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });

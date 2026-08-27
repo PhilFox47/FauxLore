@@ -728,7 +728,32 @@ export function mergeExpansion(data: CodexData, extra: any, keys: string[]): Cod
 }
 
 /** Codex storage plus the on-demand generation the AI features call into. */
-export function createCodexService({ db }: { db: Db }) {
+export function createCodexService({ db, onFlavorTexts }: {
+  db: Db;
+  /**
+   * Where a dossier's researched lines go so the library can serve them.
+   *
+   * A callback rather than an import, so this service stays unaware of the
+   * flavor library entirely — it researches, and something else decides what to
+   * do with the result. It fires only once a real media row exists, which is why
+   * adoption calls it too: a Codex compiled from the Add Media form has no entry
+   * to hang lines off yet.
+   */
+  onFlavorTexts?: (userId: string, mediaId: string, mediaType: string, title: string, texts: CodexFlavorText[]) => void;
+}) {
+  function publishFlavorTexts(userId: string, row: any) {
+    if (!onFlavorTexts || !row?.mediaId || !row?.data) return;
+    try {
+      const data = typeof row.data === "string" ? JSON.parse(row.data) : row.data;
+      const texts = normalizeFlavorTexts(data?.flavorTexts);
+      if (!texts.length) return;
+      const media: any = db.prepare("SELECT title, mediaType FROM media WHERE id = ? AND userId = ?").get(row.mediaId, userId);
+      if (!media) return;
+      onFlavorTexts(userId, row.mediaId, media.mediaType, media.title, texts);
+    } catch (e) {
+      console.error("[codex] Could not publish flavor texts", e);
+    }
+  }
   // De-dupes concurrent generation of the same Codex: the Monday boss spawn and a
   // user hitting "Auto Tag" can land on the same title at the same moment.
   const inFlight = new Map<string, Promise<CodexRow | null>>();
@@ -748,6 +773,8 @@ export function createCodexService({ db }: { db: Db }) {
           db.prepare("UPDATE media_codex SET mediaId = ?, updatedAt = ? WHERE id = ?")
             .run(opts.mediaId, new Date().toISOString(), byTitle.id);
           byTitle.mediaId = opts.mediaId;
+          // Its lines had nowhere to go until this moment.
+          publishFlavorTexts(userId, byTitle);
         }
         return hydrate(byTitle);
       }
@@ -919,7 +946,11 @@ export function createCodexService({ db }: { db: Db }) {
         .run(String(e?.message || e).slice(0, 500), new Date().toISOString(), id);
     }
 
-    return hydrate(db.prepare("SELECT * FROM media_codex WHERE id = ?").get(id));
+    const finished: any = db.prepare("SELECT * FROM media_codex WHERE id = ?").get(id);
+    // Re-research replaces the entry's lines rather than adding to them, which is
+    // handled on the other side of this callback.
+    publishFlavorTexts(userId, finished);
+    return hydrate(finished);
   }
 
   /**

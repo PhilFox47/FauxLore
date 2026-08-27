@@ -1,5 +1,6 @@
 import type DatabaseConstructor from "better-sqlite3";
 import type { CodexService } from "./services/codex";
+import type { FlavorLibrary } from "./services/flavorLibrary";
 import type { AutoTagService } from "./services/autoTag";
 import type { ActivityService } from "./services/activity";
 import type { CoverCache } from "./services/coverCache";
@@ -33,6 +34,8 @@ export interface ServerContext {
   generateBossImageBackground: (userId: string, bossId: string) => Promise<void>;
   generateArtifactImageBackground: (userId: string, artifactId: string) => Promise<void>;
   codex: CodexService;
+  /** The lines under a library title: global starters plus this user's earned ones. */
+  flavorLibrary: FlavorLibrary;
   autoTag: AutoTagService;
   /** Whether an account is dormant; gates every scheduled job and AI endpoint. */
   activity: ActivityService;

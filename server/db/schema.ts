@@ -238,6 +238,43 @@ export function initSchema(db: Db) {
     );
     CREATE INDEX IF NOT EXISTS idx_media_codex_media ON media_codex(userId, mediaId);
 
+    -- The lines that appear under a library title.
+    --
+    -- Two pools, one table, because they are the same kind of thing and want the
+    -- same handling. A row with userId NULL is a STARTER: seeded from
+    -- server/data/starterFlavorTexts.ts, shared by every account, the floor a new
+    -- library stands on. A row with a userId was EARNED — Codex research on a work
+    -- that user actually consumed — and belongs to them alone. User X finishing a
+    -- book must never put a line in user Y's library, and the userId column is
+    -- what makes that structural rather than a filter someone can forget.
+    --
+    -- The origin column records where a row came from and never changes; retired
+    -- hides a row without deleting it, so re-seeding cannot bring back something
+    -- that was dismissed.
+    CREATE TABLE IF NOT EXISTS flavor_texts (
+      id TEXT PRIMARY KEY,
+      userId TEXT,                          -- NULL = a global starter line
+      mediaType TEXT NOT NULL,
+      text TEXT NOT NULL,
+      source TEXT,                          -- the work; NULL for a house line
+      kind TEXT NOT NULL DEFAULT 'quote',   -- quote | reference | joke
+      scope TEXT NOT NULL DEFAULT 'work',   -- work | medium
+      attribution TEXT,
+      why TEXT,
+      mediaId TEXT,                         -- the entry that earned it
+      origin TEXT NOT NULL DEFAULT 'starter', -- starter | codex
+      retired INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL
+    );
+    -- Two partial indexes rather than one over (userId, mediaType, text): SQLite
+    -- treats NULLs as distinct in a unique index, so the global rows would not be
+    -- de-duplicated by a single index and every restart would seed them again.
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_flavor_global
+      ON flavor_texts(mediaType, text) WHERE userId IS NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_flavor_user
+      ON flavor_texts(userId, mediaType, text) WHERE userId IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_flavor_media ON flavor_texts(userId, mediaId);
+
     -- Locations are free text on each log. A group is a label laid over them —
     -- "Cinema", "Home", "Travelling" — that says which places belong together
     -- without rewriting a single log, which is what merging does instead.

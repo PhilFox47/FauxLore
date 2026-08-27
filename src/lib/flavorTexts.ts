@@ -1,25 +1,16 @@
 /**
  * The line under each library's title.
  *
- * This used to be a scraped "best of everything" — seven thousand entries, most
- * of them a sentence someone once said in a game you have never played. Volume
- * was the whole problem: at that size the odds of the line meaning anything to
- * the person reading it were close to nil, and a shrug is worse than silence.
+ * The lines themselves are no longer here. They live in the `flavor_texts`
+ * table and arrive over the API already merged: the global STARTER set every
+ * account has (seeded from `server/data/starterFlavorTexts.ts`), and the ones
+ * this user's own Codexes EARNED from works they actually consumed. That is
+ * what makes them manageable per user — and what makes it structural, rather
+ * than a filter someone could forget, that finishing a book adds a line to your
+ * library and to nobody else's.
  *
- * What is left is deliberately small: the lines a person who cares about the
- * medium would actually recognise. Three kinds are mixed on purpose —
- *
- *   quote      something said in a work
- *   reference  a thing the medium is known for, rather than a line from it
- *   joke       what the people who consume it say to each other about it
- *
- * — because a library header wants personality, not an epigraph.
- *
- * This set is the floor, not the ceiling. Codex research adds a handful of these
- * per work, and those surface here once the entry has actually been consumed
- * (see `server/routes/flavorTexts.ts`), so the pool grows into a record of what
- * this particular user has read, watched and played. The built-ins are what a
- * new library shows before it has earned anything of its own.
+ * What is left here is the choosing, which is a rendering decision and belongs
+ * on the client: which of the two pools a given page load draws from.
  */
 
 export type FlavorKind = "quote" | "reference" | "joke";
@@ -27,442 +18,53 @@ export type FlavorKind = "quote" | "reference" | "joke";
 export interface FlavorText {
   /** The line itself. */
   quote: string;
-  /** The work it belongs to. Absent for jokes about the medium at large. */
+  /** The work it belongs to. Absent for a house line about the medium. */
   source?: string;
   kind?: FlavorKind;
-  /** Who says it, or where in the work it appears. Only earned texts carry one. */
+  /** Who says it, or where in the work it appears. Only earned lines carry one. */
   attribution?: string;
-  /** True when this came out of the user's own library rather than this file. */
+  /** True when this came from the user's own library rather than the starter set. */
   earned?: boolean;
-  /** The entry that earned it, so the header can link back to it. */
+  /** The entry that earned it. */
   mediaId?: string;
 }
 
-/** Kept for callers written against the old shape, which allowed bare strings. */
-export type FlavorTextEntry = string | FlavorText;
-
-export const MEDIA_FLAVOR_TEXTS: Record<string, FlavorText[]> = {
-  Game: [
-    { quote: "The right man in the wrong place can make all the difference.", source: "Half-Life 2", kind: "quote" },
-    { quote: "Wake up, Mr. Freeman. Wake up and smell the ashes.", source: "Half-Life 2", kind: "quote" },
-    { quote: "The cake is a lie.", source: "Portal", kind: "quote" },
-    { quote: "This was a triumph. I'm making a note here: huge success.", source: "Portal", kind: "quote" },
-    { quote: "A man chooses, a slave obeys.", source: "BioShock", kind: "quote" },
-    { quote: "Would you kindly?", source: "BioShock", kind: "quote" },
-    { quote: "War. War never changes.", source: "Fallout", kind: "quote" },
-    { quote: "Another settlement needs your help. I'll mark it on your map.", source: "Fallout 4", kind: "joke" },
-    { quote: "It's dangerous to go alone! Take this.", source: "The Legend of Zelda", kind: "quote" },
-    { quote: "Hey! Listen!", source: "The Legend of Zelda: Ocarina of Time", kind: "quote" },
-    { quote: "Thank you Mario! But our princess is in another castle!", source: "Super Mario Bros.", kind: "quote" },
-    { quote: "It's-a me, Mario!", source: "Super Mario 64", kind: "quote" },
-    { quote: "YOU DIED", source: "Dark Souls", kind: "reference" },
-    { quote: "Praise the sun.", source: "Dark Souls", kind: "quote" },
-    { quote: "Git gud.", source: "Dark Souls", kind: "joke" },
-    { quote: "I used to be an adventurer like you, then I took an arrow in the knee.", source: "The Elder Scrolls V: Skyrim", kind: "quote" },
-    { quote: "Hey, you. You're finally awake.", source: "The Elder Scrolls V: Skyrim", kind: "quote" },
-    { quote: "Do you get to the Cloud District very often? Oh, what am I saying, of course you don't.", source: "The Elder Scrolls V: Skyrim", kind: "quote" },
-    { quote: "Stay awhile and listen.", source: "Diablo", kind: "quote" },
-    { quote: "Snake? Snake?! SNAAAAKE!", source: "Metal Gear Solid", kind: "quote" },
-    { quote: "Kept you waiting, huh?", source: "Metal Gear Solid V: The Phantom Pain", kind: "quote" },
-    { quote: "Nothing is true, everything is permitted.", source: "Assassin's Creed", kind: "quote" },
-    { quote: "Get over here!", source: "Mortal Kombat", kind: "quote" },
-    { quote: "Objection!", source: "Phoenix Wright: Ace Attorney", kind: "quote" },
-    { quote: "You must construct additional pylons.", source: "StarCraft", kind: "quote" },
-    { quote: "Reticulating splines.", source: "SimCity", kind: "reference" },
-    { quote: "Rip and tear, until it is done.", source: "Doom", kind: "quote" },
-    { quote: "It's time to kick ass and chew bubblegum — and I'm all outta gum.", source: "Duke Nukem 3D", kind: "quote" },
-    { quote: "I never asked for this.", source: "Deus Ex: Human Revolution", kind: "quote" },
-    { quote: "Endure and survive.", source: "The Last of Us", kind: "quote" },
-    { quote: "Ah shit, here we go again.", source: "Grand Theft Auto: San Andreas", kind: "quote" },
-    { quote: "All we had to do was follow the damn train, CJ.", source: "Grand Theft Auto: San Andreas", kind: "joke" },
-    { quote: "Leeeeeroy Jenkins!", source: "World of Warcraft", kind: "joke" },
-    { quote: "Wind's howling.", source: "The Witcher 3: Wild Hunt", kind: "joke" },
-    { quote: "All your base are belong to us.", source: "Zero Wing", kind: "joke" },
-    { quote: "A winner is you.", source: "Pro Wrestling", kind: "joke" },
-    { quote: "Up, up, down, down, left, right, left, right, B, A.", source: "Contra", kind: "reference" },
-    { quote: "Hadouken!", source: "Street Fighter II", kind: "quote" },
-    { quote: "It's super effective!", source: "Pokémon Red and Blue", kind: "quote" },
-    { quote: "Press F to pay respects.", source: "Call of Duty: Advanced Warfare", kind: "joke" },
-    { quote: "Just one more turn.", kind: "joke" },
-    { quote: "Bought in the sale, installed, never launched.", kind: "joke" },
-    { quote: "The character creator took ninety minutes. The helmet covers the face.", kind: "joke" },
-    { quote: "Saved before the boss. Saved after the boss. Saved between the two, just in case.", kind: "joke" },
-    { quote: "The side quest was better than the main one, and everybody knows it.", kind: "joke" },
-    { quote: "Forty hours in, still carrying an item you will never use.", kind: "joke" },
-    { quote: "The difficulty was chosen out of pride and regretted within the hour.", kind: "joke" },
-    { quote: "Fast travel unlocked, and the world got smaller.", kind: "joke" },
-    { quote: "Started a new run rather than finish the old one.", kind: "joke" },
-    { quote: "Every barrel, every crate, every drawer. Just in case.", kind: "joke" },
-  ],
-
-  Book: [
-    { quote: "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.", source: "Pride and Prejudice", kind: "quote" },
-    { quote: "Call me Ishmael.", source: "Moby-Dick", kind: "quote" },
-    { quote: "It was the best of times, it was the worst of times.", source: "A Tale of Two Cities", kind: "quote" },
-    { quote: "It was a bright cold day in April, and the clocks were striking thirteen.", source: "Nineteen Eighty-Four", kind: "quote" },
-    { quote: "Big Brother is watching you.", source: "Nineteen Eighty-Four", kind: "quote" },
-    { quote: "All animals are equal, but some animals are more equal than others.", source: "Animal Farm", kind: "quote" },
-    { quote: "In a hole in the ground there lived a hobbit.", source: "The Hobbit", kind: "quote" },
-    { quote: "Not all those who wander are lost.", source: "The Lord of the Rings", kind: "quote" },
-    { quote: "Second breakfast.", source: "The Lord of the Rings", kind: "joke" },
-    { quote: "So it goes.", source: "Slaughterhouse-Five", kind: "quote" },
-    { quote: "Don't Panic.", source: "The Hitchhiker's Guide to the Galaxy", kind: "quote" },
-    { quote: "Forty-two.", source: "The Hitchhiker's Guide to the Galaxy", kind: "reference" },
-    { quote: "Fear is the mind-killer.", source: "Dune", kind: "quote" },
-    { quote: "The spice must flow.", source: "Dune", kind: "reference" },
-    { quote: "Winter is coming.", source: "A Song of Ice and Fire", kind: "quote" },
-    { quote: "A Lannister always pays his debts.", source: "A Song of Ice and Fire", kind: "quote" },
-    { quote: "Hodor.", source: "A Song of Ice and Fire", kind: "joke" },
-    { quote: "Mr. and Mrs. Dursley, of number four, Privet Drive, were proud to say that they were perfectly normal, thank you very much.", source: "Harry Potter and the Philosopher's Stone", kind: "quote" },
-    { quote: "It does not do to dwell on dreams and forget to live.", source: "Harry Potter and the Philosopher's Stone", kind: "quote" },
-    { quote: "The man in black fled across the desert, and the gunslinger followed.", source: "The Dark Tower: The Gunslinger", kind: "quote" },
-    { quote: "It was a pleasure to burn.", source: "Fahrenheit 451", kind: "quote" },
-    { quote: "All happy families are alike; each unhappy family is unhappy in its own way.", source: "Anna Karenina", kind: "quote" },
-    { quote: "So we beat on, boats against the current, borne back ceaselessly into the past.", source: "The Great Gatsby", kind: "quote" },
-    { quote: "You never really understand a person until you consider things from his point of view.", source: "To Kill a Mockingbird", kind: "quote" },
-    { quote: "Reader, I married him.", source: "Jane Eyre", kind: "quote" },
-    { quote: "Whatever our souls are made of, his and mine are the same.", source: "Wuthering Heights", kind: "quote" },
-    { quote: "Beware; for I am fearless, and therefore powerful.", source: "Frankenstein", kind: "quote" },
-    { quote: "Stay gold, Ponyboy.", source: "The Outsiders", kind: "quote" },
-    { quote: "Please, sir, I want some more.", source: "Oliver Twist", kind: "quote" },
-    { quote: "Bah! Humbug!", source: "A Christmas Carol", kind: "quote" },
-    { quote: "Off with their heads!", source: "Alice's Adventures in Wonderland", kind: "quote" },
-    { quote: "Nevermore.", source: "The Raven", kind: "quote" },
-    { quote: "To be, or not to be, that is the question.", source: "Hamlet", kind: "quote" },
-    { quote: "Abandon all hope, ye who enter here.", source: "Inferno", kind: "quote" },
-    { quote: "The game is afoot.", source: "The Adventure of the Abbey Grange", kind: "quote" },
-    { quote: "Elementary, my dear Watson — a line Holmes never says in any of the stories.", source: "Sherlock Holmes", kind: "joke" },
-    { quote: "It was a dark and stormy night.", source: "Paul Clifford", kind: "reference" },
-    { quote: "If a gun is on the wall in act one, it must go off by act three.", kind: "reference" },
-    { quote: "The to-be-read pile grows faster than it shrinks.", kind: "joke" },
-    { quote: "One more chapter. It is always one more chapter.", kind: "joke" },
-    { quote: "The bookmark has not moved since March.", kind: "joke" },
-    { quote: "Read the same paragraph four times and took in none of it.", kind: "joke" },
-    { quote: "Everybody underlines in the first fifty pages and nowhere after.", kind: "joke" },
-    { quote: "Bought for the cover. Kept for the cover.", kind: "joke" },
-    { quote: "The map at the front gets consulted exactly twice.", kind: "joke" },
-    { quote: "Skipped the poem. Everybody skips the poem.", kind: "joke" },
-    { quote: "Lent it to someone in 2019. It is not coming back.", kind: "joke" },
-    { quote: "The sequel is out and every name has gone.", kind: "joke" },
-    { quote: "Four hundred pages, and the last ten are the whole reason.", kind: "joke" },
-    { quote: "Three books going at once, none of them finished.", kind: "joke" },
-  ],
-
-  Audiobook: [
-    { quote: "Don't Panic.", source: "The Hitchhiker's Guide to the Galaxy", kind: "quote" },
-    { quote: "The Hitchhiker's Guide to the Galaxy was a radio series two years before it was ever a book.", source: "The Hitchhiker's Guide to the Galaxy", kind: "reference" },
-    { quote: "In 1938 Orson Welles read The War of the Worlds out as a news bulletin, and the papers wrote about it for weeks.", source: "The War of the Worlds", kind: "reference" },
-    { quote: "Roy Dotrice holds the record for the most voices in one audiobook: two hundred and twenty-four of them.", source: "A Game of Thrones", kind: "reference" },
-    { quote: "Jim Dale gave a hundred and thirty-four characters their own voice, and never lost track of one.", source: "Harry Potter", kind: "reference" },
-    { quote: "Andy Serkis read The Hobbit aloud in a single twelve-hour sitting.", source: "The Hobbit", kind: "reference" },
-    { quote: "Neil Gaiman reads his own work, which is frankly unfair to everyone else.", kind: "reference" },
-    { quote: "Stephen Fry could narrate a phone directory and you would finish it.", kind: "joke" },
-    { quote: "Call me Ishmael.", source: "Moby-Dick", kind: "quote" },
-    { quote: "So it goes.", source: "Slaughterhouse-Five", kind: "quote" },
-    { quote: "Fear is the mind-killer.", source: "Dune", kind: "quote" },
-    { quote: "It was a pleasure to burn.", source: "Fahrenheit 451", kind: "quote" },
-    { quote: "The man in black fled across the desert, and the gunslinger followed.", source: "The Dark Tower: The Gunslinger", kind: "quote" },
-    { quote: "It was a bright cold day in April, and the clocks were striking thirteen.", source: "Nineteen Eighty-Four", kind: "quote" },
-    { quote: "Not all those who wander are lost.", source: "The Lord of the Rings", kind: "quote" },
-    { quote: "A full-cast recording ruins you for single narrators.", kind: "joke" },
-    { quote: "1.5x is the new 1x.", kind: "joke" },
-    { quote: "Rewound twice, because the good bit went past while you were parking.", kind: "joke" },
-    { quote: "The sleep timer is the only feature that matters.", kind: "joke" },
-    { quote: "Woke up four chapters later with no idea who died.", kind: "joke" },
-    { quote: "Suddenly you want the drive to be longer.", kind: "joke" },
-    { quote: "The narrator does a voice for the dog. You are not prepared.", kind: "joke" },
-    { quote: "Owning the book and the audiobook is not a redundancy. It is a system.", kind: "joke" },
-    { quote: "Doing the washing-up has never been this productive.", kind: "joke" },
-    { quote: "Nobody has ever finished an audiobook and gone straight back to silence.", kind: "joke" },
-    { quote: "A bad narrator can end a good book in ten minutes.", kind: "joke" },
-    { quote: "The credit arrives on the first of the month and is gone by the second.", kind: "joke" },
-    { quote: "Chapter one. Again. You were not listening the first time.", kind: "joke" },
-    { quote: "Started it in the car park and sat there until the chapter ended.", kind: "joke" },
-    { quote: "Walked an extra mile to get to the end of it.", kind: "joke" },
-    { quote: "Someone spoke to you and you nodded through four paragraphs.", kind: "joke" },
-    { quote: "The narrator changed for book two, and nothing was ever right again.", kind: "joke" },
-    { quote: "Twenty-nine hours is not a commitment, it is a relationship.", kind: "joke" },
-    { quote: "The voice is the character now. The film got it wrong.", kind: "joke" },
-    { quote: "Bookmarked a line you will never find again.", kind: "joke" },
-    { quote: "A month at double speed, and now real people talk too slowly.", kind: "joke" },
-  ],
-
-  "Visual Novel": [
-    { quote: "El Psy Kongroo.", source: "Steins;Gate", kind: "quote" },
-    { quote: "This is the choice of Steins Gate.", source: "Steins;Gate", kind: "quote" },
-    { quote: "Tuturu!", source: "Steins;Gate", kind: "quote" },
-    { quote: "People die when they are killed.", source: "Fate/stay night", kind: "joke" },
-    { quote: "I am the bone of my sword.", source: "Fate/stay night", kind: "quote" },
-    { quote: "Just Monika.", source: "Doki Doki Literature Club!", kind: "reference" },
-    { quote: "Delete monika.chr.", source: "Doki Doki Literature Club!", kind: "reference" },
-    { quote: "Puhuhuhu.", source: "Danganronpa: Trigger Happy Havoc", kind: "quote" },
-    { quote: "Ultimate Despair.", source: "Danganronpa: Trigger Happy Havoc", kind: "reference" },
-    { quote: "Without love, it cannot be seen.", source: "Umineko no Naku Koro ni", kind: "quote" },
-    { quote: "Repeated in red, it is the truth.", source: "Umineko no Naku Koro ni", kind: "reference" },
-    { quote: "Nipah~", source: "Higurashi no Naku Koro ni", kind: "quote" },
-    { quote: "Clannad is life. After Story is real life.", source: "Clannad", kind: "joke" },
-    { quote: "Dango, dango, dango, dango, dango daikazoku.", source: "Clannad", kind: "quote" },
-    { quote: "999's best twist only works because you are holding a Nintendo DS.", source: "Nine Hours, Nine Persons, Nine Doors", kind: "reference" },
-    { quote: "Nice boat.", source: "School Days", kind: "joke" },
-    { quote: "Tsukihime has no anime adaptation. There has never been one.", source: "Tsukihime", kind: "joke" },
-    { quote: "Read Extra first. Yes, all of it. Trust us.", source: "Muv-Luv", kind: "joke" },
-    { quote: "Katawa Shoujo began as a sketch on an imageboard and ended up making grown adults cry.", source: "Katawa Shoujo", kind: "reference" },
-    { quote: "Your boyfriend is a pigeon. This is not a metaphor.", source: "Hatoful Boyfriend", kind: "reference" },
-    { quote: "Go in blind. That is the entire recommendation.", source: "Ever17: The Out of Infinity", kind: "joke" },
-    { quote: "Saving before every choice, just in case.", kind: "joke" },
-    { quote: "Ctrl to skip read text. Held down for forty minutes.", kind: "joke" },
-    { quote: "The true ending is locked behind all the other endings.", kind: "joke" },
-    { quote: "The common route is long. Endure it.", kind: "joke" },
-    { quote: "Re-reading a route you know by heart for the one line that changes.", kind: "joke" },
-    { quote: "The best girl discourse has been running for fifteen years and has not moved an inch.", kind: "joke" },
-    { quote: "Twelve hours in and the plot has not started yet. This is normal.", kind: "joke" },
-    { quote: "One bad choice on hour thirty, and the autosave was overwritten.", kind: "joke" },
-    { quote: "The soundtrack is better than it has any right to be.", kind: "joke" },
-    { quote: "Four endings in and you still have not met the one you started for.", kind: "joke" },
-    { quote: "A guide is open in the other window. It has been since hour one.", kind: "joke" },
-    { quote: "The choice that mattered was made six hours before you knew it mattered.", kind: "joke" },
-    { quote: "Nothing happened for three hours and you would not cut a minute of it.", kind: "joke" },
-    { quote: "You know the sprite is about to move. It still gets you.", kind: "joke" },
-    { quote: "One track from the soundtrack now owns a whole month of your life.", kind: "joke" },
-    { quote: "There is a flowchart. There has to be a flowchart.", kind: "joke" },
-    { quote: "Fifty hours, no combat, and it still wrecked you.", kind: "joke" },
-    { quote: "The route you liked least is the one that explains everything.", kind: "joke" },
-    { quote: "Skipped a scene by accident and spent ten minutes finding it again.", kind: "joke" },
-  ],
-
-  Movie: [
-    { quote: "I'm going to make him an offer he can't refuse.", source: "The Godfather", kind: "quote" },
-    { quote: "Keep your friends close, but your enemies closer.", source: "The Godfather Part II", kind: "quote" },
-    { quote: "May the Force be with you.", source: "Star Wars", kind: "quote" },
-    { quote: "No. I am your father.", source: "The Empire Strikes Back", kind: "quote" },
-    { quote: "Here's looking at you, kid.", source: "Casablanca", kind: "quote" },
-    { quote: "Play it again, Sam — a line said by nobody, in a film everyone has quoted.", source: "Casablanca", kind: "joke" },
-    { quote: "You talkin' to me?", source: "Taxi Driver", kind: "quote" },
-    { quote: "I'll be back.", source: "The Terminator", kind: "quote" },
-    { quote: "Say hello to my little friend!", source: "Scarface", kind: "quote" },
-    { quote: "Life is like a box of chocolates. You never know what you're gonna get.", source: "Forrest Gump", kind: "quote" },
-    { quote: "There's no place like home.", source: "The Wizard of Oz", kind: "quote" },
-    { quote: "Frankly, my dear, I don't give a damn.", source: "Gone with the Wind", kind: "quote" },
-    { quote: "You can't handle the truth!", source: "A Few Good Men", kind: "quote" },
-    { quote: "Nobody puts Baby in a corner.", source: "Dirty Dancing", kind: "quote" },
-    { quote: "Roads? Where we're going, we don't need roads.", source: "Back to the Future", kind: "quote" },
-    { quote: "One does not simply walk into Mordor.", source: "The Lord of the Rings: The Fellowship of the Ring", kind: "quote" },
-    { quote: "You shall not pass!", source: "The Lord of the Rings: The Fellowship of the Ring", kind: "quote" },
-    { quote: "My precious.", source: "The Lord of the Rings: The Two Towers", kind: "quote" },
-    { quote: "I see dead people.", source: "The Sixth Sense", kind: "quote" },
-    { quote: "Houston, we have a problem.", source: "Apollo 13", kind: "quote" },
-    { quote: "They may take our lives, but they'll never take our freedom!", source: "Braveheart", kind: "quote" },
-    { quote: "Carpe diem. Seize the day, boys.", source: "Dead Poets Society", kind: "quote" },
-    { quote: "To infinity and beyond!", source: "Toy Story", kind: "quote" },
-    { quote: "Just keep swimming.", source: "Finding Nemo", kind: "quote" },
-    { quote: "Hakuna matata.", source: "The Lion King", kind: "quote" },
-    { quote: "Why so serious?", source: "The Dark Knight", kind: "quote" },
-    { quote: "There is no spoon.", source: "The Matrix", kind: "quote" },
-    { quote: "I know kung fu.", source: "The Matrix", kind: "quote" },
-    { quote: "Get busy living, or get busy dying.", source: "The Shawshank Redemption", kind: "quote" },
-    { quote: "You're gonna need a bigger boat.", source: "Jaws", kind: "quote" },
-    { quote: "I love the smell of napalm in the morning.", source: "Apocalypse Now", kind: "quote" },
-    { quote: "Here's Johnny!", source: "The Shining", kind: "quote" },
-    { quote: "Rosebud.", source: "Citizen Kane", kind: "quote" },
-    { quote: "The first rule of Fight Club is: you do not talk about Fight Club.", source: "Fight Club", kind: "quote" },
-    { quote: "My name is Inigo Montoya. You killed my father. Prepare to die.", source: "The Princess Bride", kind: "quote" },
-    { quote: "Inconceivable!", source: "The Princess Bride", kind: "quote" },
-    { quote: "E.T. phone home.", source: "E.T. the Extra-Terrestrial", kind: "quote" },
-    { quote: "Bond. James Bond.", source: "Dr. No", kind: "quote" },
-    { quote: "Wax on, wax off.", source: "The Karate Kid", kind: "quote" },
-    { quote: "The same recorded scream has been falling off the same cliff since 1951.", kind: "reference" },
-    { quote: "Nobody leaves before the credits any more, just in case.", kind: "joke" },
-    { quote: "Two hours is a film. Three hours is a statement.", kind: "joke" },
-    { quote: "The trailer showed the three best jokes. All of them.", kind: "joke" },
-    { quote: "Based on a true story, generously interpreted.", kind: "joke" },
-    { quote: "Subtitles on, for a film in your own language, and never off again.", kind: "joke" },
-    { quote: "Everyone in the room has now looked up the same actor.", kind: "joke" },
-    { quote: "Paused it twice to make tea and never quite got back in.", kind: "joke" },
-    { quote: "Scrolled for forty minutes and rewatched something you knew.", kind: "joke" },
-    { quote: "You do not remember the plot. You remember one shot.", kind: "joke" },
-    { quote: "Three hours, one interval's worth of bladder, no interval.", kind: "joke" },
-  ],
-
-  Series: [
-    { quote: "I am the one who knocks.", source: "Breaking Bad", kind: "quote" },
-    { quote: "Say my name.", source: "Breaking Bad", kind: "quote" },
-    { quote: "Dracarys.", source: "Game of Thrones", kind: "quote" },
-    { quote: "I drink and I know things.", source: "Game of Thrones", kind: "quote" },
-    { quote: "How you doin'?", source: "Friends", kind: "quote" },
-    { quote: "We were on a break!", source: "Friends", kind: "quote" },
-    { quote: "That's what she said.", source: "The Office", kind: "quote" },
-    { quote: "Bears. Beets. Battlestar Galactica.", source: "The Office", kind: "quote" },
-    { quote: "Legen — wait for it — dary.", source: "How I Met Your Mother", kind: "quote" },
-    { quote: "D'oh!", source: "The Simpsons", kind: "quote" },
-    { quote: "Steamed hams.", source: "The Simpsons", kind: "joke" },
-    { quote: "The truth is out there.", source: "The X-Files", kind: "quote" },
-    { quote: "Live long and prosper.", source: "Star Trek", kind: "quote" },
-    { quote: "Space: the final frontier.", source: "Star Trek", kind: "quote" },
-    { quote: "Beam me up, Scotty — never once said in the entire series.", source: "Star Trek", kind: "joke" },
-    { quote: "Exterminate!", source: "Doctor Who", kind: "quote" },
-    { quote: "Wibbly-wobbly, timey-wimey.", source: "Doctor Who", kind: "quote" },
-    { quote: "Have you tried turning it off and on again?", source: "The IT Crowd", kind: "quote" },
-    { quote: "Yada, yada, yada.", source: "Seinfeld", kind: "quote" },
-    { quote: "No soup for you!", source: "Seinfeld", kind: "quote" },
-    { quote: "Wubba lubba dub dub.", source: "Rick and Morty", kind: "quote" },
-    { quote: "Treat yo self.", source: "Parks and Recreation", kind: "quote" },
-    { quote: "Cool cool cool cool cool. No doubt no doubt no doubt.", source: "Brooklyn Nine-Nine", kind: "quote" },
-    { quote: "Noice.", source: "Brooklyn Nine-Nine", kind: "quote" },
-    { quote: "I've made a huge mistake.", source: "Arrested Development", kind: "quote" },
-    { quote: "There's always money in the banana stand.", source: "Arrested Development", kind: "quote" },
-    { quote: "Not great, Bob.", source: "Mad Men", kind: "quote" },
-    { quote: "You come at the king, you best not miss.", source: "The Wire", kind: "quote" },
-    { quote: "Omar comin'.", source: "The Wire", kind: "quote" },
-    { quote: "This is the way.", source: "The Mandalorian", kind: "quote" },
-    { quote: "Cut to black, mid-sentence, and an argument that has lasted since 2007.", source: "The Sopranos", kind: "reference" },
-    { quote: "Clear eyes, full hearts, can't lose.", source: "Friday Night Lights", kind: "quote" },
-    { quote: "Bazinga.", source: "The Big Bang Theory", kind: "quote" },
-    { quote: "Directed by Robert B. Weide.", source: "Curb Your Enthusiasm", kind: "joke" },
-    { quote: "Are you still watching? Yes. Obviously. Leave it alone.", kind: "joke" },
-    { quote: "Cancelled after one season. On a cliffhanger.", kind: "joke" },
-    { quote: "Season one was a masterpiece. We do not discuss the finale.", kind: "joke" },
-    { quote: "Everyone says it gets good after episode six.", kind: "joke" },
-    { quote: "Skip intro. Every time. Except this one.", kind: "joke" },
-    { quote: "Six episodes is a series now. That is a film with gaps.", kind: "joke" },
-    { quote: "Three episodes tonight. It is a school night.", kind: "joke" },
-    { quote: "The showrunner left after season two and you can tell exactly where.", kind: "joke" },
-    { quote: "A year between seasons, and no recap that helps.", kind: "joke" },
-    { quote: "You have watched the pilot four times and the finale never.", kind: "joke" },
-    { quote: "Renewed two years ago. Still 'in production'.", kind: "joke" },
-    { quote: "The theme tune is forty seconds and you have never once skipped it.", kind: "joke" },
-    { quote: "Started it for one actor and stayed for someone else entirely.", kind: "joke" },
-    { quote: "Someone spoiled it in a thumbnail.", kind: "joke" },
-    { quote: "Rewatching it while doing something else, which is its own kind of watching.", kind: "joke" },
-    { quote: "The episode order and the airing order disagree, and the internet has opinions.", kind: "joke" },
-  ],
-
-  Manga: [
-    { quote: "I'm gonna be King of the Pirates!", source: "One Piece", kind: "quote" },
-    { quote: "People's dreams never end!", source: "One Piece", kind: "quote" },
-    { quote: "Zoro is lost again. He was standing right there.", source: "One Piece", kind: "joke" },
-    { quote: "I never go back on my word. That's my ninja way.", source: "Naruto", kind: "quote" },
-    { quote: "Believe it — three syllables of dub that outlived the show.", source: "Naruto", kind: "joke" },
-    { quote: "Kamehameha!", source: "Dragon Ball", kind: "quote" },
-    { quote: "It's over nine thousand!", source: "Dragon Ball Z", kind: "joke" },
-    { quote: "Yare yare daze.", source: "JoJo's Bizarre Adventure", kind: "quote" },
-    { quote: "Ora ora ora ora ora!", source: "JoJo's Bizarre Adventure", kind: "quote" },
-    { quote: "To Be Continued →", source: "JoJo's Bizarre Adventure", kind: "reference" },
-    { quote: "Humankind cannot gain anything without first giving something in return.", source: "Fullmetal Alchemist", kind: "quote" },
-    { quote: "I'll take a potato chip… and eat it!", source: "Death Note", kind: "quote" },
-    { quote: "Ryuk likes apples.", source: "Death Note", kind: "reference" },
-    { quote: "Just according to keikaku. (Translator's note: keikaku means plan.)", source: "Death Note", kind: "joke" },
-    { quote: "Plus Ultra!", source: "My Hero Academia", kind: "quote" },
-    { quote: "Shinzou wo sasageyo — devote your hearts.", source: "Attack on Titan", kind: "quote" },
-    { quote: "Tatakae. Fight.", source: "Attack on Titan", kind: "quote" },
-    { quote: "Bankai.", source: "Bleach", kind: "quote" },
-    { quote: "Omae wa mou shindeiru. You are already dead.", source: "Fist of the North Star", kind: "quote" },
-    { quote: "Nani?!", source: "Fist of the North Star", kind: "joke" },
-    { quote: "Guts. The Black Swordsman.", source: "Berserk", kind: "reference" },
-    { quote: "Struggler.", source: "Berserk", kind: "reference" },
-    { quote: "Togashi is on hiatus again.", source: "Hunter × Hunter", kind: "joke" },
-    { quote: "I have no enemies.", source: "Vinland Saga", kind: "quote" },
-    { quote: "A true warrior needs no sword.", source: "Vinland Saga", kind: "quote" },
-    { quote: "Denji wants a normal life and jam on bread. That's it. That's the dream.", source: "Chainsaw Man", kind: "reference" },
-    { quote: "You're reading it backwards. Start at the other end.", kind: "joke" },
-    { quote: "Right to left, top to bottom, and it takes about four pages to stop thinking about it.", kind: "joke" },
-    { quote: "The volume you own is three arcs behind the internet.", kind: "joke" },
-    { quote: "Cliffhanger, colour spread, two-week break.", kind: "joke" },
-    { quote: "One chapter a week is a cruel and unusual punishment.", kind: "joke" },
-    { quote: "The anime caught up. Now nobody is happy.", kind: "joke" },
-    { quote: "Forty volumes in and the tournament arc has not finished.", kind: "joke" },
-    { quote: "A two-page spread is worth a whole episode.", kind: "joke" },
-    { quote: "The author's margin notes are about their cat. Every time.", kind: "joke" },
-    { quote: "The scanlation group went quiet at chapter 214.", kind: "joke" },
-    { quote: "Two hundred chapters in and you still cannot pronounce the lead's name.", kind: "joke" },
-    { quote: "Read it in one night and regretted only the next morning.", kind: "joke" },
-    { quote: "The shelf is out of order because two volumes are still shipping.", kind: "joke" },
-    { quote: "The colour pages go on the wall. The rest gets read.", kind: "joke" },
-    { quote: "Bought volume one to support it and read the rest online anyway.", kind: "joke" },
-    { quote: "An author's note apologising for the delay, drawn as a chibi.", kind: "joke" },
-    { quote: "Nine panels of one fist, and it still reads as a single punch.", kind: "joke" },
-    { quote: "It ended on a page you had to turn back and look at again.", kind: "joke" },
-    { quote: "Sound effects left untranslated, and somehow you learned them anyway.", kind: "joke" },
-  ],
-
-  Comic: [
-    { quote: "With great power there must also come great responsibility.", source: "Amazing Fantasy #15", kind: "quote" },
-    { quote: "Excelsior!", source: "Stan Lee's Soapbox", kind: "quote" },
-    { quote: "'Nuff said.", source: "Marvel Comics", kind: "reference" },
-    { quote: "Look! Up in the sky! It's a bird! It's a plane! It's Superman!", source: "Superman", kind: "quote" },
-    { quote: "Criminals are a superstitious, cowardly lot.", source: "Detective Comics #33", kind: "quote" },
-    { quote: "Avengers assemble!", source: "The Avengers", kind: "quote" },
-    { quote: "It's clobberin' time!", source: "Fantastic Four", kind: "quote" },
-    { quote: "Hulk smash!", source: "The Incredible Hulk", kind: "quote" },
-    { quote: "I'm the best there is at what I do, but what I do best isn't very nice.", source: "Wolverine", kind: "quote" },
-    { quote: "SNIKT.", source: "Wolverine", kind: "reference" },
-    { quote: "THWIP.", source: "The Amazing Spider-Man", kind: "reference" },
-    { quote: "In brightest day, in blackest night, no evil shall escape my sight.", source: "Green Lantern", kind: "quote" },
-    { quote: "Who watches the watchmen?", source: "Watchmen", kind: "quote" },
-    { quote: "I'm not locked in here with you. You're locked in here with me.", source: "Watchmen", kind: "quote" },
-    { quote: "Remember, remember, the fifth of November.", source: "V for Vendetta", kind: "quote" },
-    { quote: "Ideas are bulletproof.", source: "V for Vendetta", kind: "quote" },
-    { quote: "You get what anybody gets. You get a lifetime.", source: "The Sandman", kind: "quote" },
-    { quote: "I am the law.", source: "Judge Dredd", kind: "quote" },
-    { quote: "Aw, crap.", source: "Hellboy", kind: "quote" },
-    { quote: "These Romans are crazy!", source: "Asterix", kind: "quote" },
-    { quote: "Blistering barnacles!", source: "The Adventures of Tintin", kind: "quote" },
-    { quote: "Good grief!", source: "Peanuts", kind: "quote" },
-    { quote: "The football will not be there, Charlie Brown. It has never once been there.", source: "Peanuts", kind: "joke" },
-    { quote: "Let's go exploring.", source: "Calvin and Hobbes", kind: "quote" },
-    { quote: "MEANWHILE…", kind: "reference" },
-    { quote: "KRAKKA-THOOM. The sound effect is doing half the work and it knows it.", kind: "reference" },
-    { quote: "Nobody stays dead except Uncle Ben, Bucky and Jason Todd — and two of those came back.", kind: "joke" },
-    { quote: "The retcon giveth, and the retcon taketh away.", kind: "joke" },
-    { quote: "Another Crisis. Another renumbering. Another issue #1.", kind: "joke" },
-    { quote: "Wait for the trade.", kind: "joke" },
-    { quote: "One More Day happened. We do not talk about One More Day.", kind: "joke" },
-    { quote: "Every reader is one issue away from a crossover they did not ask for.", kind: "joke" },
-    { quote: "Twenty-two pages, and six of them are an advert.", kind: "joke" },
-    { quote: "Bagged, boarded, and never read again.", kind: "joke" },
-    { quote: "The variant cover costs four times as much and has the same words in it.", kind: "joke" },
-    { quote: "The artist changed mid-arc and nobody acknowledged it.", kind: "joke" },
-    { quote: "Started at issue 47, because that is what the shop had.", kind: "joke" },
-    { quote: "Continued in a title you do not collect.", kind: "joke" },
-    { quote: "The letters page was the best part and they took it away.", kind: "joke" },
-    { quote: "Reading-order charts exist because publishing does not.", kind: "joke" },
-    { quote: "Longbox in the cupboard, spreadsheet on the laptop.", kind: "joke" },
-    { quote: "The origin has been retold six times and you have read all six.", kind: "joke" },
-    { quote: "One page, one image, and it is the reason you still buy these.", kind: "joke" },
-    { quote: "Everyone's favourite run is out of print.", kind: "joke" },
-    { quote: "The cover promises a fight that does not happen.", kind: "joke" },
-  ],
-};
-
+/** Shown only if the API gave nothing at all — a blank header is worse. */
 const FALLBACK: FlavorText = { quote: "A shelf is a kind of autobiography.", kind: "joke" };
 
 /**
  * How often a library that has earned lines of its own shows one.
  *
- * Not one, deliberately. A line from something you actually finished should
- * dominate — that is the point of the rebuild — but a library with a single
- * completed entry has only three to six of them, and showing nothing else would
- * make the header repeat itself within a week. The remaining share keeps the
- * built-in set in play, which matters most exactly when the earned pool is
- * smallest, and fades to noise once it is large.
+ * Not always, deliberately. A line from something you actually finished should
+ * dominate — that is the point of the whole feature — but a library with a
+ * single completed entry has only three to six of them, and showing nothing else
+ * would make the header repeat itself within a week. The rest keeps the starter
+ * set in play, which matters most exactly when the earned pool is smallest and
+ * fades to seasoning once it is large.
  */
 const EARNED_SHARE = 0.7;
 
 const pick = <T,>(list: T[]): T => list[Math.floor(Math.random() * list.length)];
 
 /**
- * One line for a library header.
+ * One line for a library header, from everything this user may see.
  *
- * `earned` are the lines this user's own Codexes have produced, from works they
- * have actually consumed. A format line among them arrives with no source, the
- * same as a built-in one — so it is de-duplicated against the built-in set,
- * which is the one way the two pools can collide.
+ * `lines` is one media type's worth of `/api/flavor-texts`: starter rows and
+ * earned rows together, the earned ones flagged. They are split here rather than
+ * fetched separately because the weighting is the only reason the difference
+ * matters to the client at all.
+ *
+ * Earned lines are de-duplicated against the starters by text. A house line
+ * researched from one of the user's own works can legitimately coincide with a
+ * starter — both are about the medium and name nothing — and without this the
+ * coincidence would quietly double that line's odds.
  */
-export function getRandomFlavorText(type: string, earned: FlavorText[] = []): FlavorText {
-  const texts = MEDIA_FLAVOR_TEXTS[type] || [];
-  const builtIn = new Set(texts.map((t) => t.quote.toLowerCase()));
-  const own = earned.filter((t) => t && t.quote && !builtIn.has(t.quote.toLowerCase()));
+export function getRandomFlavorText(lines: FlavorText[] = []): FlavorText {
+  const starters = lines.filter((t) => t && t.quote && !t.earned);
+  const known = new Set(starters.map((t) => t.quote.toLowerCase()));
+  const earned = lines.filter((t) => t && t.quote && t.earned && !known.has(t.quote.toLowerCase()));
 
-  if (own.length && (!texts.length || Math.random() < EARNED_SHARE)) return pick(own);
-  if (!texts.length) return FALLBACK;
-  return pick(texts);
+  if (earned.length && (!starters.length || Math.random() < EARNED_SHARE)) return pick(earned);
+  if (!starters.length) return earned.length ? pick(earned) : FALLBACK;
+  return pick(starters);
 }

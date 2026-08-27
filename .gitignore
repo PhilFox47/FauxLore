@@ -7,10 +7,12 @@ coverage/
 .env*
 !.env.example
 
-# Runtime data (created at runtime under DATA_DIR / cwd)
-data/
-uploads/
-backups/
+# Runtime data (created at runtime under DATA_DIR / cwd).
+# Anchored to the repo root: an unanchored "data/" also matches source
+# directories like server/data, and silently drops them from a commit.
+/data/
+/uploads/
+/backups/
 *.db
 *.db-journal
 *.db-wal

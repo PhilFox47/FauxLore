@@ -23,6 +23,7 @@ import { createImageService } from "./services/images";
 import { createCoverCache } from "./services/coverCache";
 import { createWorldBossService } from "./services/worldBoss";
 import { createCodexService } from "./services/codex";
+import { createFlavorLibrary } from "./services/flavorLibrary";
 import { createLootService } from "./services/loot";
 import { createAutoTagService } from "./services/autoTag";
 import { createActivityService, INACTIVITY_DAYS } from "./services/activity";
@@ -97,7 +98,27 @@ async function startServer() {
   // logged anything in a week.
   const activity = createActivityService(db);
 
-  const codex = createCodexService({ db });
+  // The library of lines that appear under a library title. Built before the
+  // Codex so research can hand its findings straight over.
+  const flavorLibrary = createFlavorLibrary({ db });
+  try {
+    const seeded = flavorLibrary.seedStarters();
+    if (seeded) console.log(`Seeded ${seeded} starter flavor texts`);
+    // Everything researched before this table existed lives in Codex JSON, and
+    // would otherwise vanish from the libraries the moment the read switched over.
+    const moved = flavorLibrary.backfillFromCodexes();
+    if (moved) console.log(`Migrated ${moved} earned flavor texts out of Codex documents`);
+  } catch (e) {
+    console.error("Flavor library seed failed:", e);
+  }
+
+  const codex = createCodexService({
+    db,
+    onFlavorTexts: (userId, mediaId, mediaType, title, texts) => {
+      try { flavorLibrary.writeEarned(userId, mediaId, mediaType, title, texts); }
+      catch (e) { console.error("[flavorLibrary] Could not record researched lines", e); }
+    },
+  });
   const { generateBossImageBackground, generateArtifactImageBackground } = createImageService({ db, aiImagesDir, codex });
   const coverCache = createCoverCache({ coversDir });
   const { spawnWorldBoss, generateEnemy } = createWorldBossService({ db, generateBossImageBackground, codex });
@@ -184,6 +205,7 @@ async function startServer() {
     generateBossImageBackground,
     generateArtifactImageBackground,
     codex,
+    flavorLibrary,
     autoTag,
     activity,
     hltbSearch,

@@ -38,26 +38,21 @@ export function MediaLibrary() {
   /**
    * The line under the title.
    *
-   * Anything this library has earned — Codex-researched lines from works the
-   * user has actually finished — wins over the built-in set, which is only
-   * there so a library that has earned nothing yet still has something to say.
-   * Loading is not awaited before rendering: the built-in line shows first and
-   * an earned one replaces it a moment later, which is a better trade than a
-   * blank header while the request is in flight.
+   * Both pools come from the server in one call — the global starter lines and
+   * whatever this library has earned — because they now live in the same table.
+   * Nothing renders until they arrive, which is a change: the lines are no
+   * longer in the bundle, so there is nothing to show in the meantime.
    */
-  const [earned, setEarned] = useState<FlavorText[]>([]);
+  const [flavorPool, setFlavorPool] = useState<FlavorText[]>([]);
   useEffect(() => {
     let live = true;
-    DatabaseService.getEarnedFlavorTexts()
-      .then((byType) => { if (live) setEarned(byType[decodedMediaType] || []); })
+    DatabaseService.getFlavorTexts()
+      .then((byType) => { if (live) setFlavorPool(byType[decodedMediaType] || []); })
       .catch(() => {});
     return () => { live = false; };
   }, [decodedMediaType]);
 
-  const flavorText = useMemo(
-    () => getRandomFlavorText(decodedMediaType, earned),
-    [decodedMediaType, earned],
-  );
+  const flavorText = useMemo(() => getRandomFlavorText(flavorPool), [flavorPool]);
   
   const totalAccumulated = useMemo(() => {
     const metric = getMetricForType(decodedMediaType);
@@ -121,6 +116,10 @@ export function MediaLibrary() {
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 font-display">Library</span>
             </div>
             <h2 className="text-4xl sm:text-5xl font-black text-white font-display tracking-tight leading-none mb-2">{decodedMediaType}s</h2>
+            {/* Held back until the pool arrives. A one-render flash of a
+                placeholder line, replaced a moment later, reads worse than the
+                header simply settling. */}
+            {flavorPool.length > 0 && (
             <div className="relative group w-fit">
               <p className="text-zinc-400 font-medium italic cursor-help">
                 "{flavorText.quote}"
@@ -138,6 +137,7 @@ export function MediaLibrary() {
                 )}
               </div>
             </div>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-6 sm:gap-10 mt-2 lg:mt-0 pt-6 lg:pt-0 border-t lg:border-t-0 border-white/5 shrink-0">

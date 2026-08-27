@@ -311,14 +311,15 @@ export const DatabaseService = {
   },
 
   /**
-   * The lines this library has earned — Codex-researched quotes, references and
-   * inside jokes from works the user has actually consumed, keyed by media type.
+   * Every line this user may see under a library title, keyed by media type:
+   * the global starter set plus whatever their own Codexes have earned, with the
+   * earned ones flagged.
    *
    * Cached briefly rather than per-session: it changes only when something is
    * finished or a Codex is compiled, so re-fetching on every library visit is
    * waste, but never re-fetching would hide a work the user just completed.
    */
-  async getEarnedFlavorTexts(): Promise<Record<string, FlavorText[]>> {
+  async getFlavorTexts(): Promise<Record<string, FlavorText[]>> {
     const now = Date.now();
     if (flavorCache && now - flavorCache.at < FLAVOR_TTL_MS) return flavorCache.value;
     try {
