@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ScrollText, Sparkles, Palette, Users, Swords, Landmark, MapPin, Gem, BookOpen,
-  Loader2, RefreshCw, AlertTriangle, ExternalLink, Music, Library,
+  Loader2, RefreshCw, AlertTriangle, ExternalLink, Music, Library, Quote,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { CodexData, CodexEntity, MediaCodex } from '../types/schema';
+import { CodexData, CodexEntity, CodexFlavorText, MediaCodex } from '../types/schema';
 import { DatabaseService } from '../services/db';
 import { cn } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
@@ -26,7 +26,38 @@ const SECTION_LABEL: Record<string, string> = {
   world: 'places, factions & vocabulary',
   things: 'notable objects',
   craft: 'style, production & themes',
+  lore: 'quotes & references',
 };
+
+/**
+ * The lines the work is known by.
+ *
+ * Shown here in full — kind, speaker and why it is memorable — because this is
+ * the panel that explains where the app's material comes from. The library
+ * header shows the same lines with all of that stripped away.
+ */
+function FlavorTexts({ entries }: { entries?: CodexFlavorText[] }) {
+  const rows = (entries || []).filter((t) => t && t.text);
+  if (!rows.length) return null;
+  const KIND_LABEL: Record<string, string> = { quote: 'quote', reference: 'reference', joke: 'inside joke' };
+
+  return (
+    <div className="space-y-2.5">
+      {rows.map((t, i) => (
+        <div key={i} className="border-l-2 border-white/10 pl-3">
+          <p className="text-sm text-zinc-300 italic leading-snug">"{t.text}"</p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+            <span className="text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600">
+              {KIND_LABEL[t.kind || 'quote'] || t.kind}
+            </span>
+            {t.attribution && <span className="text-[11px] text-zinc-500">{t.attribution}</span>}
+            {t.why && <span className="text-[11px] text-zinc-600">· {t.why}</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
@@ -356,6 +387,14 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
           {(data.conflicts?.length || 0) > 0 && (
             <Section icon={<Swords className="w-3 h-3" />} title="Central tensions">
               <Lines values={data.conflicts} limit={expanded ? 10 : 4} />
+            </Section>
+          )}
+
+          {/* Kept in the collapsed view, where almost nothing else is: these are
+              short, and they are what shows up under the library title later. */}
+          {(data.flavorTexts?.length || 0) > 0 && (
+            <Section icon={<Quote className="w-3 h-3" />} title="Known by">
+              <FlavorTexts entries={expanded ? data.flavorTexts : (data.flavorTexts || []).slice(0, 3)} />
             </Section>
           )}
 

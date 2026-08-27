@@ -1,5 +1,10 @@
 import { MediaItem, ProgressLog, MetricType, MediaType, Artifact, MediaCodex } from '../types/schema';
+import type { FlavorText } from '../lib/flavorTexts';
 import { v4 as uuidv4 } from 'uuid';
+
+/** See `getEarnedFlavorTexts`. Short enough that finishing something shows up. */
+const FLAVOR_TTL_MS = 60_000;
+let flavorCache: { at: number; value: Record<string, FlavorText[]> } | null = null;
 
 export async function apiFetch(url: string, options: RequestInit = {}) {
   const token = localStorage.getItem('fauxlore_token');
@@ -303,6 +308,29 @@ export const DatabaseService = {
       throw new Error(data.error || 'Failed to compile the Codex');
     }
     return res.json();
+  },
+
+  /**
+   * The lines this library has earned — Codex-researched quotes, references and
+   * inside jokes from works the user has actually consumed, keyed by media type.
+   *
+   * Cached briefly rather than per-session: it changes only when something is
+   * finished or a Codex is compiled, so re-fetching on every library visit is
+   * waste, but never re-fetching would hide a work the user just completed.
+   */
+  async getEarnedFlavorTexts(): Promise<Record<string, FlavorText[]>> {
+    const now = Date.now();
+    if (flavorCache && now - flavorCache.at < FLAVOR_TTL_MS) return flavorCache.value;
+    try {
+      const res = await apiFetch('/api/flavor-texts');
+      if (!res.ok) return flavorCache?.value || {};
+      const value = await res.json();
+      flavorCache = { at: now, value: value || {} };
+      return flavorCache.value;
+    } catch (e) {
+      console.error(e);
+      return flavorCache?.value || {};
+    }
   },
 
   async getArtifacts(): Promise<Artifact[]> {

@@ -283,6 +283,21 @@ export interface CodexIdentification {
   alsoKnownAs?: string[];
 }
 
+/**
+ * A line the work is actually known by — not the best line in it, the one that
+ * gets repeated. A `quote` is said in the work, a `reference` is something it is
+ * recognised by that is not a line, and a `joke` is what its audience says about
+ * it. These surface under the library title once the work has been consumed.
+ */
+export interface CodexFlavorText {
+  text: string;
+  kind?: 'quote' | 'reference' | 'joke';
+  /** Who says it, or where it appears. */
+  attribution?: string;
+  /** What makes it recognisable. */
+  why?: string;
+}
+
 export interface CodexData {
   /** Which work the research settled on, so a wrong match can be spotted. */
   identifiedAs?: CodexIdentification;
@@ -340,6 +355,12 @@ export interface CodexData {
   locations?: CodexEntity[];
   items?: CodexEntity[];
   terminology?: CodexTerm[];
+  /**
+   * The three to six lines this work is known by. Absent on dossiers compiled
+   * before this existed — those are not backfilled, and pick them up whenever
+   * they are next re-researched.
+   */
+  flavorTexts?: CodexFlavorText[];
   genres?: string[];
   tags?: string[];
   creators?: string;

@@ -121,7 +121,7 @@ export interface CodexIdentity {
   notes?: string;
 }
 
-export type Facet = "cast" | "conflict" | "world" | "things" | "craft";
+export type Facet = "cast" | "conflict" | "world" | "things" | "craft" | "lore";
 
 export interface FacetSpec {
   /** Appended to the title to form the search query line. */
@@ -277,6 +277,28 @@ Include the ordinary and the everyday, not only the legendary. A work's most mem
   "genres": ["3-6 genre terms, most defining first"],
   "tags": ["12-20 descriptive tags: subject matter, mechanics, structure, mood, audience"]
 }`,
+  },
+  lore: {
+    query: "famous quotes memorable lines catchphrases running jokes what fans always say",
+    brief: `The handful of lines this work is actually KNOWN BY — what someone who loves it would say to another person who loves it, and be understood.
+
+Three kinds count, and a good answer mixes them:
+
+QUOTES — lines actually spoken or written in the work, that people repeat. Word for word. The exact wording is the whole value of a quote; an approximation is worthless.
+REFERENCES — things the work is recognised by that are not a line: a sound, a screen, a gesture, a visual signature, a piece of its own vocabulary, a fact about how it was made that its audience all know.
+INSIDE JOKES — what the fandom says about it rather than what the work says: the running gag, the affectionate complaint, the thing everyone who finished it brings up.
+
+THE BAR IS RECOGNITION, NOT QUALITY. Not the most beautiful sentence in it — the one that gets quoted. A line nobody outside the work would recognise does not belong here, however good it is.
+
+BETWEEN THREE AND SIX. Not more. A work with two genuinely famous lines gets two; a beloved one with a deep well of them still gets six, the six best. Nothing is gained by padding this out.
+
+If a work simply has none — a quiet novel, a small game, something too recent or too obscure to have entered anyone's vocabulary — say so plainly and return nothing. An empty answer here is a correct answer and costs nothing. A fabricated quote is the single worst thing this research can produce, because it will be shown to the user as a real line from something they finished.
+
+Avoid anything that only lands if you know the ending, and avoid the crude and the sexual — these get printed above a library page.`,
+    nonFiction: `the lines are the real ones: the presenter's catchphrase, the format's stock phrase, the commentator's famous call, the jargon its audience has adopted, the running joke about the show that its viewers all share.`,
+    keys: ["flavorTexts"],
+    shape: `{"flavorTexts": [{"text": "", "kind": "quote | reference | joke", "attribution": "who says it, or where it appears", "why": "one short line on what makes it recognisable"}]}`,
+    structureNotes: `Between three and six entries, or an empty array. NEVER invent one to reach three. Reproduce a quote exactly as the notes give it — do not tidy the grammar, translate it, or trim it. "attribution" is optional and omitted when the notes do not name a speaker.`,
   },
 };
 

@@ -116,6 +116,72 @@ export interface CodexTerm {
   introducedPct?: number;
 }
 
+/**
+ * A line the work is actually known by.
+ *
+ * Not the best line in it — the one that gets repeated. Three kinds share the
+ * shape because a library header shows them the same way: a `quote` is said in
+ * the work, a `reference` is something it is recognised by that is not a line,
+ * and a `joke` is what its audience says about it rather than what it says.
+ */
+export interface CodexFlavorText {
+  text: string;
+  kind?: FlavorKind;
+  /** Who says it, or where it appears. Absent when nobody in particular does. */
+  attribution?: string;
+  /** What makes it recognisable. Shown in the Codex, not in the library header. */
+  why?: string;
+}
+
+export type FlavorKind = "quote" | "reference" | "joke";
+
+/** The ceiling the research is told to respect, enforced rather than trusted. */
+export const MAX_FLAVOR_TEXTS = 6;
+
+/** A header line has to fit on a line. Anything longer is a paragraph, not a quote. */
+const MAX_FLAVOR_LENGTH = 240;
+
+/**
+ * What survives of the research's answer.
+ *
+ * Every rule here exists because this is the one Codex field shown to the user
+ * verbatim, as a real line from something they finished — so a padded list, a
+ * quote wrapped in stray punctuation or a paragraph masquerading as a catchphrase
+ * is worse than nothing. The research is asked for three to six; this is what
+ * makes six actually mean six.
+ */
+export function normalizeFlavorTexts(value: any): CodexFlavorText[] {
+  if (!Array.isArray(value)) return [];
+  const out: CodexFlavorText[] = [];
+  const seen = new Set<string>();
+
+  for (const row of value) {
+    const raw = typeof row === "string" ? row : row?.text ?? row?.quote;
+    // Models like to hand back a quote already wrapped in the quotation marks the
+    // UI is about to add around it.
+    const text = String(raw ?? "").trim().replace(/^["'“”„«»]+|["'“”„«»]+$/g, "").trim();
+    if (!text || text.length > MAX_FLAVOR_LENGTH) continue;
+
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    // "inside joke", "running joke" and "joke" are all the same kind.
+    const said = String(row?.kind ?? "").toLowerCase();
+    const kind: FlavorKind = said.includes("joke") ? "joke" : said.includes("refer") ? "reference" : "quote";
+
+    const entry: CodexFlavorText = { text, kind };
+    const attribution = String(row?.attribution ?? "").trim();
+    const why = String(row?.why ?? "").trim();
+    if (attribution && !/^(unknown|n\/?a|none)$/i.test(attribution)) entry.attribution = attribution;
+    if (why && !/^(unknown|n\/?a|none)$/i.test(why)) entry.why = why;
+
+    out.push(entry);
+    if (out.length >= MAX_FLAVOR_TEXTS) break;
+  }
+  return out;
+}
+
 /** What the research actually landed on, so a wrong match can be spotted. */
 export interface CodexIdentification {
   title?: string;
@@ -195,6 +261,14 @@ export interface CodexData {
   locations?: CodexEntity[];
   items?: CodexEntity[];
   terminology?: CodexTerm[];
+  /**
+   * The three to six lines this work is known by.
+   *
+   * Absent on every dossier compiled before this existed, and deliberately not
+   * backfilled — the library falls back to its built-in set for those, and they
+   * pick these up whenever they are next re-researched.
+   */
+  flavorTexts?: CodexFlavorText[];
   genres?: string[];
   tags?: string[];
   creators?: string;
@@ -766,6 +840,10 @@ export function createCodexService({ db }: { db: Db }) {
       });
 
       if (failed.length === FACETS.length) throw new Error("Every research pass failed.");
+
+      // The one field shown to the user word for word, so the three-to-six rule
+      // is enforced here rather than left to the prompt's good manners.
+      if (data.flavorTexts) data.flavorTexts = normalizeFlavorTexts(data.flavorTexts);
 
       data.creators = identity.creator || data.creators;
       data.releaseYear = identity.year || subjectYear(subject) || undefined;

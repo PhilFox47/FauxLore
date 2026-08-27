@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMediaContext } from '../contexts/MediaContext';
 import { MediaCard } from '../components/MediaCard';
@@ -9,7 +9,8 @@ import { FilterSortBar } from '../components/FilterSortBar';
 import { useMediaFilterSort } from '../hooks/useMediaFilterSort';
 import { MediaItem, MediaType, MEDIA_HEX, getMetricForType } from '../types/schema';
 import { NATIVE_UNIT_LABELS, calculateRPGState } from '../lib/rpgSystem';
-import { getRandomFlavorText } from '../lib/flavorTexts';
+import { getRandomFlavorText, type FlavorText } from '../lib/flavorTexts';
+import { DatabaseService } from '../services/db';
 import { Plus, Search, CheckCircle2, TrendingUp, Pickaxe } from 'lucide-react';
 
 export function MediaLibrary() {
@@ -34,7 +35,29 @@ export function MediaLibrary() {
 
   const vaultLevel = rpgState.mediaLevels[decodedMediaType] || { level: 1, exp: 0, nextLevelExp: 100, currentLevelExp: 0, expProgress: 0, title: 'Novice' };
   const vaultTitle = aiTextCache[`rpg_title_${decodedMediaType}_${vaultLevel.level}`] || vaultLevel.title;
-  const flavorText = useMemo(() => getRandomFlavorText(decodedMediaType), [decodedMediaType]);
+  /**
+   * The line under the title.
+   *
+   * Anything this library has earned — Codex-researched lines from works the
+   * user has actually finished — wins over the built-in set, which is only
+   * there so a library that has earned nothing yet still has something to say.
+   * Loading is not awaited before rendering: the built-in line shows first and
+   * an earned one replaces it a moment later, which is a better trade than a
+   * blank header while the request is in flight.
+   */
+  const [earned, setEarned] = useState<FlavorText[]>([]);
+  useEffect(() => {
+    let live = true;
+    DatabaseService.getEarnedFlavorTexts()
+      .then((byType) => { if (live) setEarned(byType[decodedMediaType] || []); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [decodedMediaType]);
+
+  const flavorText = useMemo(
+    () => getRandomFlavorText(decodedMediaType, earned),
+    [decodedMediaType, earned],
+  );
   
   const totalAccumulated = useMemo(() => {
     const metric = getMetricForType(decodedMediaType);
@@ -103,7 +126,16 @@ export function MediaLibrary() {
                 "{flavorText.quote}"
               </p>
               <div className="absolute left-0 top-full mt-2 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0 whitespace-nowrap bg-zinc-800 border border-white/10 text-zinc-200 text-xs px-3 py-1.5 rounded-md shadow-xl pointer-events-none z-50 font-sans tracking-wide">
-                {flavorText.source || 'Unknown Origin'}
+                {/* A line with no source is one about the medium itself, not one
+                    whose origin was lost — so it says so rather than shrugging. */}
+                {[flavorText.source || 'Common knowledge', flavorText.attribution]
+                  .filter(Boolean)
+                  .join(' — ')}
+                {flavorText.earned && (
+                  <span className="ml-2 text-[10px] uppercase tracking-[0.15em] text-[var(--accent)] font-bold">
+                    From your library
+                  </span>
+                )}
               </div>
             </div>
           </div>

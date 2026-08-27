@@ -36,6 +36,7 @@ import { registerSettingsRoutes } from "./routes/settings";
 import { registerRecapRoutes } from "./routes/recaps";
 import { registerAiRoutes } from "./routes/ai";
 import { registerCodexRoutes } from "./routes/codex";
+import { registerFlavorTextRoutes } from "./routes/flavorTexts";
 import { registerArtifactRoutes } from "./routes/artifacts";
 import { registerBossRoutes } from "./routes/bosses";
 import { registerFranchiseRoutes } from "./routes/franchises";
@@ -200,6 +201,7 @@ async function startServer() {
   registerRecapRoutes(app, ctx);
   registerAiRoutes(app, ctx);
   registerCodexRoutes(app, ctx);
+  registerFlavorTextRoutes(app, ctx);
   registerArtifactRoutes(app, ctx);
   registerBossRoutes(app, ctx);
   registerFranchiseRoutes(app, ctx);
