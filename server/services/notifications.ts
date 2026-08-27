@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
+import { releaseMomentLabel } from "./releaseTracking";
 
 /**
  * Persistent notifications.
@@ -91,7 +92,7 @@ export function createNotifications(db: Db, onNew?: (userId: string, n: NewNotif
           notify(userId, {
             type: "media_released",
             title: `${row.title} is out`,
-            body: `This ${String(row.mediaType).toLowerCase()} was expected on ${day}. Move it out of Unreleased when you pick it up.`,
+            body: `This ${String(row.mediaType).toLowerCase()} was expected on ${releaseMomentLabel(row.expectedReleaseDate)}. Move it out of Unreleased when you pick it up.`,
             mediaId: row.id,
             link: `/library/${encodeURIComponent(row.mediaType)}`,
             dedupeKey: `released:${row.id}:${day}`,

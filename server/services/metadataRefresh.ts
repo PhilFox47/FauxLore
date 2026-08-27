@@ -110,7 +110,7 @@ export function createMetadataRefresh(
    * columns it actually has an opinion about.
    */
   function applyRelease(userId: string, row: any, release: ReleaseState) {
-    const fields = releaseFieldsFor(release);
+    const fields = releaseFieldsFor(release, { expectedReleaseDate: row.expectedReleaseDate });
 
     // A date moving is news in itself — a delay is not something the user did.
     const movedTo = fields.expectedReleaseDate as string | undefined;

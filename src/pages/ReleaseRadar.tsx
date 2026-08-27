@@ -118,13 +118,21 @@ export function ReleaseRadar() {
           let cardGlow = "";
 
           if (hasDate) {
-            if (isToday(releaseDate!)) {
-              label = "OUT TODAY!";
-              labelColor = "text-green-400 font-bold drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]";
+            // Whether the moment has passed is asked BEFORE whether the day has,
+            // because a 21:00 premiere is not out at breakfast. Announcing "OUT
+            // TODAY" above a countdown still ticking down to this evening was the
+            // headline disagreeing with the clock directly beneath it.
+            if (isPast(releaseDate!)) {
+              label = isToday(releaseDate!) ? "OUT TODAY!" : `Released on ${format(releaseDate!, 'MMM do, yyyy')}`;
+              labelColor = isToday(releaseDate!)
+                ? "text-green-400 font-bold drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]"
+                : "text-emerald-500/70";
+              if (isToday(releaseDate!)) cardGlow = "hover:border-green-500/50 shadow-[0_0_30px_rgba(74,222,128,0.1)]";
+            } else if (isToday(releaseDate!)) {
+              // Today, but not yet. The hour is the whole story on a day like this.
+              label = `Today at ${format(releaseDate!, 'HH:mm')}`;
+              labelColor = "text-green-300 font-bold drop-shadow-[0_0_5px_rgba(74,222,128,0.6)]";
               cardGlow = "hover:border-green-500/50 shadow-[0_0_30px_rgba(74,222,128,0.1)]";
-            } else if (isPast(releaseDate!)) {
-              label = `Released on ${format(releaseDate!, 'MMM do, yyyy')}`;
-              labelColor = "text-emerald-500/70";
             } else {
               // The two now travel together for an imprecise date: the estimate
               // so the countdown has something to work with, the wording so the

@@ -34,10 +34,23 @@ const isoDay = (v?: string | null): string | undefined => {
   return /^\d{4}-\d{2}-\d{2}/.test(t) ? t.slice(0, 10) : undefined;
 };
 
-/** A day is "out" once that calendar day has started, judged in UTC. */
-export function hasLanded(day: string | undefined, now = new Date()): boolean {
-  if (!day) return false;
-  const t = Date.parse(`${day}T00:00:00Z`);
+/**
+ * Whether a release moment has passed.
+ *
+ * Two shapes arrive here and they do not mean the same thing. A bare
+ * `YYYY-MM-DD` is all most sources can give — a TMDB air date, an IGDB day —
+ * and means "some time that day", so it counts as out once the day has started,
+ * judged in UTC. A full timestamp is someone having been specific: a user typing
+ * a 21:00 premiere, a MangaDex `publishAt`. Truncating that to its day would
+ * declare the thing released the previous midnight, hours early, which is
+ * exactly the mistake this distinction exists to prevent.
+ */
+export function hasLanded(when: string | undefined, now = new Date()): boolean {
+  const value = (when || "").trim();
+  if (!value) return false;
+  const t = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? Date.parse(`${value}T00:00:00Z`)
+    : Date.parse(value);
   return Number.isFinite(t) && t <= now.getTime();
 }
 

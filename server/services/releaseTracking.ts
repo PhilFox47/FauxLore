@@ -42,6 +42,53 @@ export interface StatusDecision {
 /** Statuses the app is allowed to move away from. */
 const MOVABLE = new Set(["Planning", "Active", "Caught Up", "Unreleased"]);
 
+const DAY_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Which of two readings of the same release to believe.
+ *
+ * Sources deal in days: TMDB gives `2026-08-27`, IGDB a timestamp it has already
+ * rounded to one. A user typing "21:00" is saying something the source never
+ * could, so when the two name the SAME day the stored value wins — otherwise
+ * every refresh would quietly round an evening premiere back to midnight and
+ * release it early. A source naming a different day is genuine news and always
+ * wins, because that is a delay or a pull-forward.
+ */
+export function preferPrecise(
+  fromSource?: string | null,
+  stored?: string | null,
+): string | undefined {
+  const source = (fromSource || "").trim();
+  const mine = (stored || "").trim();
+  if (!source) return mine || undefined;
+  if (!mine) return source;
+  const sameDay = source.slice(0, 10) === mine.slice(0, 10);
+  return sameDay && DAY_ONLY.test(source) && !DAY_ONLY.test(mine) ? mine : source;
+}
+
+/**
+ * A release moment as the user should read it back.
+ *
+ * The time is only shown when there is one to show. A date-only value has no
+ * hour to report, and a timestamp that lands on local midnight is almost always
+ * a day that picked up a time on its way through a form rather than a genuine
+ * midnight release, so both read as a plain day.
+ */
+export function releaseMomentLabel(value?: string | null): string {
+  const raw = (value || "").trim();
+  if (!raw) return "";
+  // A day the source gave as a day is repeated verbatim. Reading it as a moment
+  // and formatting it back would shift it by a timezone it never carried.
+  if (DAY_ONLY.test(raw)) return raw;
+  const at = new Date(raw);
+  if (isNaN(at.getTime())) return raw.slice(0, 10);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const day = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
+  return at.getHours() === 0 && at.getMinutes() === 0
+    ? day
+    : `${day} at ${pad(at.getHours())}:${pad(at.getMinutes())}`;
+}
+
 /** Only these types have instalments worth being level with. */
 const EPISODIC = new Set(["Series", "Manga"]);
 
@@ -81,8 +128,10 @@ export function decideStatus(
 ): StatusDecision | null {
   if (!MOVABLE.has(entry.status)) return null;
 
-  const releaseDate = upstream.releaseDate || entry.expectedReleaseDate || undefined;
-  const released = releaseDate ? hasLanded(String(releaseDate).slice(0, 10), now) : undefined;
+  // Judged at full precision. A stored 21:00 is not out at breakfast, and the
+  // Radar's countdown has been saying so all along.
+  const releaseDate = preferPrecise(upstream.releaseDate, entry.expectedReleaseDate);
+  const released = releaseDate ? hasLanded(releaseDate, now) : undefined;
 
   // 1. Nothing of this exists yet.
   //
@@ -93,7 +142,7 @@ export function decideStatus(
     if (entry.status === "Unreleased") return null;
     return {
       status: "Unreleased",
-      reason: `Not out until ${String(releaseDate).slice(0, 10)}`,
+      reason: `Not out until ${releaseMomentLabel(releaseDate)}`,
     };
   }
 
@@ -135,10 +184,25 @@ export function decideStatus(
   return null;
 }
 
-/** Which of our columns the source's answer should be written into. */
-export function releaseFieldsFor(upstream: ReleaseState): Record<string, unknown> {
+/**
+ * Which of our columns the source's answer should be written into.
+ *
+ * `current` is what we already hold, and it is passed so a source that only
+ * deals in days cannot silently flatten a time the user set by hand. Nothing is
+ * written at all when the two agree, which keeps the "date moved" notification
+ * honest as well.
+ */
+export function releaseFieldsFor(
+  upstream: ReleaseState,
+  current: { expectedReleaseDate?: string | null } = {},
+): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
-  if (upstream.releaseDate) fields.expectedReleaseDate = upstream.releaseDate;
+  if (upstream.releaseDate) {
+    const keep = preferPrecise(upstream.releaseDate, current.expectedReleaseDate);
+    if (keep && keep !== (current.expectedReleaseDate || "").trim()) {
+      fields.expectedReleaseDate = keep;
+    }
+  }
   // The two travel together for an imprecise date: the timestamp so the app can
   // reason about it, the wording so nothing shows a day the source never gave.
   // A date arriving WITHOUT wording is the source having become precise, and
