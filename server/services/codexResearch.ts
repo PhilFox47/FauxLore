@@ -51,19 +51,59 @@ export interface CodexSubject {
  *
  * The season field is authoritative, but entries created from a season pick are
  * titled "Show - Season 2" and may carry nothing else, so the title and subtitle
- * are read as a fallback. Only series have seasons; asking anything else is
- * meaningless and returns null.
+ * are read as a fallback.
+ *
+ * Not only series. A live-service game runs numbered seasons that are as
+ * distinct from each other as a show's are — different heroes, different maps,
+ * different events — and a dossier for "Marvel Rivals - Season 7" that describes
+ * Marvel Rivals in general is describing the wrong thing, and will happily reach
+ * into a season that has not happened yet.
+ *
+ * The pattern is stricter off Series, though. The bare "S2" shorthand is safe on
+ * a show and disastrous elsewhere: "The Sims 4" would read as season 4.
  */
+const SEASON_IN_SERIES_TITLE = /\b(?:season|series|staffel|saison|s)\s*\.?\s*(\d{1,2})\b/i;
+const SEASON_IN_ANY_TITLE = /\b(?:season|staffel|saison)\s*\.?\s*(\d{1,2})\b/i;
+
 export function subjectSeason(subject: CodexSubject): number | null {
-  if (!/series/i.test(subject.mediaType || "")) return null;
   const explicit = Number(subject.season);
   if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  const isSeries = /series/i.test(subject.mediaType || "");
+  const pattern = isSeries ? SEASON_IN_SERIES_TITLE : SEASON_IN_ANY_TITLE;
   for (const text of [subject.title, subject.subtitle]) {
-    const m = String(text || "").match(/\b(?:season|series|staffel|s)\s*\.?\s*(\d{1,2})\b/i);
+    const m = String(text || "").match(pattern);
     if (m) {
       const n = Number(m[1]);
       if (n > 0) return n;
     }
+  }
+  return null;
+}
+
+/**
+ * Which VERSION of a work this entry is, when the difference is not a number.
+ *
+ * A season is the common case but far from the only one. A remake is not its
+ * original, a Director's Cut is not the theatrical release, a remaster is not
+ * the game people played twenty years ago, and a dossier that quietly merges the
+ * two is wrong about the cast, the art style and half the facts in it.
+ *
+ * Read from the title the user actually typed, because that is where they said
+ * which one they meant.
+ */
+const EDITION_WORDS = [
+  "remake", "remaster(?:ed|s)?", "reboot", "redux", "definitive edition",
+  "director'?s cut", "extended (?:edition|cut)", "final cut", "uncut",
+  "anniversary edition", "complete edition", "game of the year edition",
+  "goty edition", "special edition", "ultimate edition", "deluxe edition",
+  "enhanced edition", "hd remaster", "hd edition", "reforged", "rewind",
+];
+const EDITION_PATTERN = new RegExp(`\\b(${EDITION_WORDS.join("|")})\\b`, "i");
+
+export function subjectEdition(subject: CodexSubject): string | null {
+  for (const text of [subject.title, subject.subtitle]) {
+    const m = String(text || "").match(EDITION_PATTERN);
+    if (m) return m[1];
   }
   return null;
 }
@@ -279,7 +319,10 @@ Include the ordinary and the everyday, not only the legendary. A work's most mem
 }`,
   },
   lore: {
-    query: "famous quotes memorable lines catchphrases running jokes what fans always say",
+    // Named narrowly so retrieval fetches pages about THIS version. A bare
+    // "famous quotes" query on a seasonal title returns the franchise's
+    // greatest hits, which is precisely the material that must not be used.
+    query: "memorable quotes new voice lines catchphrases community reaction running jokes",
     brief: `The handful of lines this work is actually KNOWN BY — what someone who loves it would say to another person who loves it, and be understood.
 
 Three kinds count, and a good answer mixes them:
@@ -289,6 +332,8 @@ REFERENCES — things the work is recognised by that are not a line: a sound, a 
 INSIDE JOKES — what the fandom says about it rather than what the work says: the running gag, the affectionate complaint, the thing everyone who finished it brings up.
 
 THE BAR IS RECOGNITION, NOT QUALITY. Not the most beautiful sentence in it — the one that gets quoted. A line nobody outside the work would recognise does not belong here, however good it is.
+
+IT MUST BELONG TO THIS VERSION. This is the trap on everything that comes in seasons, updates, remakes and re-releases, and it is worth being blunt about: a famous line from the wider franchise or from the base game is NOT a line from the season, update or edition being described. Asked about one season of a hero shooter, "HULK SMASH" is the wrong answer — Hulk was there before it and will be there after; it says nothing about this season and would read identically under any other. Ask instead: would someone who played ONLY this version recognise it, and would someone who played every version EXCEPT this one not? What qualifies is what this version introduced or is remembered for — the new character's line, the event's own catchphrase, the bug or the balance decision this update became notorious for, the name the community gave it. If the honest answer is that this version has no lines of its own yet, say so and return fewer, or none.
 
 BETWEEN THREE AND SIX. Not more. A work with two genuinely famous lines gets two; a beloved one with a deep well of them still gets six, the six best. Nothing is gained by padding this out.
 
@@ -334,12 +379,37 @@ export interface ResearchContext {
   identity: CodexIdentity;
 }
 
-function seasonScope(season: number | null): string {
-  if (!season) return "";
-  return `
-SCOPE — SEASON ${season} ONLY. Every season of this show is tracked as its own entry, so this is about season ${season} and nothing else.
-- Describe season ${season}'s own arc, cast, antagonists and vocabulary — not the series in general.
-- HARD RULE ON SPOILERS: include nothing first revealed in season ${season + 1} or later. No later-season characters, no later-season twists, no "later becomes" or "is eventually revealed to be". Earlier seasons are fair game; they have already been seen.`;
+/**
+ * The block that pins the research to ONE version of a title.
+ *
+ * The failure it prevents is quiet and constant: asked about a season, an
+ * update or a remake, research drifts to the thing as a whole — the franchise's
+ * famous lines, the base game's roster, the original film's cast — and, worse,
+ * reaches forward into versions that have not happened yet from the point of
+ * view of the entry. Both make the dossier wrong about the one thing the user
+ * actually chose.
+ */
+function versionScope(subject: CodexSubject): string {
+  const season = subjectSeason(subject);
+  const edition = subjectEdition(subject);
+  if (!season && !edition) return "";
+
+  const lines = [
+    `
+SCOPE — THIS VERSION ONLY. The entry is "${subject.title}". A title is tracked one version at a time, and this dossier is about that version and no other.`,
+  ];
+
+  if (season) {
+    lines.push(`- SEASON ${season}. Describe season ${season}'s own content: what it added, who arrived in it, what happened in it, what it was called. Not the show or game in general, and not what was already there before it.
+- A point release inside it (${season}.5 and the like) IS part of season ${season} and belongs here.
+- HARD RULE: nothing from season ${season + 1} or later. No character, event, mode, map or item that first appeared after this season ended — that is both a spoiler and, for anything live-service, simply not part of what the user is tracking. Earlier seasons are fair game as background; they have already been seen.`);
+  }
+
+  if (edition) {
+    lines.push(`- THIS IS THE ${edition.toUpperCase()}. It is not the original, and the two differ in ways that matter: cast, art, content, sometimes the ending. Where they differ, describe THIS one. Where a fact belongs only to the original, leave it out or say plainly that it is inherited.`);
+  }
+
+  return lines.join("\n");
 }
 
 /**
@@ -352,9 +422,11 @@ SCOPE — SEASON ${season} ONLY. Every season of this show is tracked as its own
 export function searchQueryLine(subject: CodexSubject, identity: CodexIdentity | null, suffix: string): string {
   const season = subjectSeason(subject);
   const year = identity?.year || subjectYear(subject) || "";
+  const edition = subjectEdition(subject);
   const parts = [
     identity?.title || subject.title,
     season ? `season ${season}` : "",
+    edition || "",
     year ? String(year) : "",
     TYPE_QUERY_WORD[subject.mediaType] || subject.mediaType.toLowerCase(),
     suffix,
@@ -396,7 +468,8 @@ export function buildIdentifyPrompt(subject: CodexSubject, correction?: string):
     subject.creator ? `- CREATOR: it is by ${subject.creator}. A same-named work by someone else is a different work.` : "",
     subject.franchises?.length ? `- FRANCHISE: it belongs to ${subject.franchises.join(", ")}.` : "",
     subject.description ? `- SYNOPSIS: it must match the synopsis on record above. If your candidate's plot or subject matter contradicts it, you have the wrong work.` : "",
-    season ? `- SEASON: the entry is SEASON ${season}. Identify the series first, then confirm it has that season.` : "",
+    season ? `- SEASON: the entry is SEASON ${season}. Identify the title first, then confirm it has that season. Seasons are not only a television thing — a live-service game's numbered seasons count, and each is its own entry.` : "",
+    subjectEdition(subject) ? `- VERSION: the entry is the ${subjectEdition(subject)}, NOT the original release. Confirm that this version exists and identify it specifically.` : "",
   ].filter(Boolean).join("\n");
 
   const correctionBlock = correction
@@ -468,7 +541,7 @@ Go after the ones a first look misses: the recurring minor names, the regional a
 You are the Codex Archivist of FauxLore, researching ONE subject area of ONE work. The work has already been identified — do not question it, and do not describe a different one.
 
 THE WORK: "${title}"${identity.year ? ` (${identity.year})` : ""}${identity.creator ? `, by ${identity.creator}` : ""} — ${TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`}.
-${aka.length ? `ALSO KNOWN AS: ${aka.join(" · ")} — search under these too, especially the original-language title, where the detailed material usually is.` : ""}${seasonScope(season)}
+${aka.length ? `ALSO KNOWN AS: ${aka.join(" · ")} — search under these too, especially the original-language title, where the detailed material usually is.` : ""}${versionScope(subject)}
 ${gapBlock}
 
 WRITE UP: ${spec.brief}
@@ -499,7 +572,7 @@ export function buildStructurePrompt(ctx: ResearchContext, facet: Facet, researc
   const { subject, identity } = ctx;
   const season = subjectSeason(subject);
 
-  return `You are converting research notes into a structured record. The notes below were gathered about "${identity.title || subject.title}"${identity.year ? ` (${identity.year})` : ""}${season ? `, season ${season}` : ""}.
+  return `You are converting research notes into a structured record. The notes below were gathered about "${identity.title || subject.title}"${identity.year ? ` (${identity.year})` : ""}${season ? `, season ${season}` : ""}${subjectEdition(subject) ? ` (${subjectEdition(subject)})` : ""}.
 
 === RESEARCH NOTES ===
 ${research}
