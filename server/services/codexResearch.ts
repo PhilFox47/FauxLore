@@ -292,13 +292,17 @@ THE BAR IS RECOGNITION, NOT QUALITY. Not the most beautiful sentence in it — t
 
 BETWEEN THREE AND SIX. Not more. A work with two genuinely famous lines gets two; a beloved one with a deep well of them still gets six, the six best. Nothing is gained by padding this out.
 
+AT MOST TWO OF THOSE MAY BE ABOUT THE FORMAT RATHER THAN THE WORK. Mark those "scope": "medium"; everything else is "scope": "work". A format line is about the EXPERIENCE of consuming this kind of thing, of the specific sort this work puts people through — "The bookmark has not moved since March." "Saved before the boss. Saved after the boss. Saved between the two, just in case." "The scanlation group went quiet at chapter 214." "A guide is open in the other window. It has been since hour one."
+
+Those are the rules for one: no proper nouns, no title, no character — it must still read true for someone who has never touched this work. ONE concrete detail, not a general observation: a number, an object, a moment, a small specific defeat. Dry and rueful, never a punchline and never enthusiastic. Twelve words is a good length and twenty is too many. And it must be a real habit of the format, not an observation you constructed to fill the slot — if nothing about this work points at one, return none, which is much the more common case.
+
 If a work simply has none — a quiet novel, a small game, something too recent or too obscure to have entered anyone's vocabulary — say so plainly and return nothing. An empty answer here is a correct answer and costs nothing. A fabricated quote is the single worst thing this research can produce, because it will be shown to the user as a real line from something they finished.
 
 Avoid anything that only lands if you know the ending, and avoid the crude and the sexual — these get printed above a library page.`,
     nonFiction: `the lines are the real ones: the presenter's catchphrase, the format's stock phrase, the commentator's famous call, the jargon its audience has adopted, the running joke about the show that its viewers all share.`,
     keys: ["flavorTexts"],
-    shape: `{"flavorTexts": [{"text": "", "kind": "quote | reference | joke", "attribution": "who says it, or where it appears", "why": "one short line on what makes it recognisable"}]}`,
-    structureNotes: `Between three and six entries, or an empty array. NEVER invent one to reach three. Reproduce a quote exactly as the notes give it — do not tidy the grammar, translate it, or trim it. "attribution" is optional and omitted when the notes do not name a speaker.`,
+    shape: `{"flavorTexts": [{"text": "", "kind": "quote | reference | joke", "scope": "work | medium", "attribution": "who says it, or where it appears", "why": "one short line on what makes it recognisable"}]}`,
+    structureNotes: `Between three and six entries, or an empty array. NEVER invent one to reach three. Reproduce a quote exactly as the notes give it — do not tidy the grammar, translate it, or trim it. "attribution" is optional and omitted when the notes do not name a speaker. "scope" is "work" unless the notes marked the line as being about the format rather than the work; a "medium" line names no title and no character, and never carries an attribution.`,
   },
 };
 

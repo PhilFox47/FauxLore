@@ -65,14 +65,19 @@ export function registerFlavorTextRoutes(app: Express, ctx: ServerContext) {
 
         const list = (byType[row.mediaType] ||= []);
         for (const t of texts) {
+          // A format line is about the medium, not the work — naming the entry
+          // that happened to surface it would be false, and would spoil the
+          // effect: these read as the app's own house lines, and that is the
+          // whole reason they work.
+          const ofTheWork = t.scope !== "medium";
           list.push({
             quote: t.text,
             // The work itself, not the speaker: this becomes the tooltip under
             // the library title, where "which of my entries is this from" is the
             // only question being asked.
-            source: row.title,
+            source: ofTheWork ? row.title : undefined,
             kind: t.kind,
-            attribution: t.attribution,
+            attribution: ofTheWork ? t.attribution : undefined,
             earned: true,
             mediaId: row.mediaId,
           });

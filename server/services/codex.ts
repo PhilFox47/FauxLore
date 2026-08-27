@@ -127,6 +127,16 @@ export interface CodexTerm {
 export interface CodexFlavorText {
   text: string;
   kind?: FlavorKind;
+  /**
+   * Whether this belongs to the work or to the format.
+   *
+   * A `medium` line is about the experience of consuming this KIND of thing —
+   * the bookmark that has not moved since March, the guide open in the other
+   * window — of the particular sort this work puts people through. It names no
+   * title and no character, so it is served with no source and reads as one of
+   * the app's own house lines rather than a quotation from anything.
+   */
+  scope?: FlavorScope;
   /** Who says it, or where it appears. Absent when nobody in particular does. */
   attribution?: string;
   /** What makes it recognisable. Shown in the Codex, not in the library header. */
@@ -134,9 +144,21 @@ export interface CodexFlavorText {
 }
 
 export type FlavorKind = "quote" | "reference" | "joke";
+export type FlavorScope = "work" | "medium";
 
 /** The ceiling the research is told to respect, enforced rather than trusted. */
 export const MAX_FLAVOR_TEXTS = 6;
+
+/**
+ * How many of those may be about the format rather than the work.
+ *
+ * Capped low on purpose. Format lines are the easiest thing here to write and
+ * the hardest to write WELL — a model asked for one will always produce
+ * something, and a generic one is indistinguishable from filler. Two is enough
+ * for a work that genuinely crystallises a habit of its medium, and low enough
+ * that a dossier can never become mostly house lines with a title attached.
+ */
+export const MAX_MEDIUM_FLAVOR_TEXTS = 2;
 
 /** A header line has to fit on a line. Anything longer is a paragraph, not a quote. */
 const MAX_FLAVOR_LENGTH = 240;
@@ -154,6 +176,7 @@ export function normalizeFlavorTexts(value: any): CodexFlavorText[] {
   if (!Array.isArray(value)) return [];
   const out: CodexFlavorText[] = [];
   const seen = new Set<string>();
+  let medium = 0;
 
   for (const row of value) {
     const raw = typeof row === "string" ? row : row?.text ?? row?.quote;
@@ -164,16 +187,24 @@ export function normalizeFlavorTexts(value: any): CodexFlavorText[] {
 
     const key = text.toLowerCase();
     if (seen.has(key)) continue;
-    seen.add(key);
 
     // "inside joke", "running joke" and "joke" are all the same kind.
     const said = String(row?.kind ?? "").toLowerCase();
     const kind: FlavorKind = said.includes("joke") ? "joke" : said.includes("refer") ? "reference" : "quote";
 
-    const entry: CodexFlavorText = { text, kind };
+    // Past the cap, a format line is dropped rather than demoted to the work:
+    // it names nothing in the work, so filing it under the title would be a lie.
+    const isMedium = String(row?.scope ?? "").toLowerCase().startsWith("medium");
+    if (isMedium && medium >= MAX_MEDIUM_FLAVOR_TEXTS) continue;
+    if (isMedium) medium++;
+
+    seen.add(key);
+    const entry: CodexFlavorText = { text, kind, scope: isMedium ? "medium" : "work" };
     const attribution = String(row?.attribution ?? "").trim();
     const why = String(row?.why ?? "").trim();
-    if (attribution && !/^(unknown|n\/?a|none)$/i.test(attribution)) entry.attribution = attribution;
+    // Nobody in particular says a format line, so an attribution on one is the
+    // model having ignored the rule rather than information worth keeping.
+    if (!isMedium && attribution && !/^(unknown|n\/?a|none)$/i.test(attribution)) entry.attribution = attribution;
     if (why && !/^(unknown|n\/?a|none)$/i.test(why)) entry.why = why;
 
     out.push(entry);

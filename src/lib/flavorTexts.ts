@@ -85,6 +85,14 @@ export const MEDIA_FLAVOR_TEXTS: Record<string, FlavorText[]> = {
     { quote: "Press F to pay respects.", source: "Call of Duty: Advanced Warfare", kind: "joke" },
     { quote: "Just one more turn.", kind: "joke" },
     { quote: "Bought in the sale, installed, never launched.", kind: "joke" },
+    { quote: "The character creator took ninety minutes. The helmet covers the face.", kind: "joke" },
+    { quote: "Saved before the boss. Saved after the boss. Saved between the two, just in case.", kind: "joke" },
+    { quote: "The side quest was better than the main one, and everybody knows it.", kind: "joke" },
+    { quote: "Forty hours in, still carrying an item you will never use.", kind: "joke" },
+    { quote: "The difficulty was chosen out of pride and regretted within the hour.", kind: "joke" },
+    { quote: "Fast travel unlocked, and the world got smaller.", kind: "joke" },
+    { quote: "Started a new run rather than finish the old one.", kind: "joke" },
+    { quote: "Every barrel, every crate, every drawer. Just in case.", kind: "joke" },
   ],
 
   Book: [
@@ -128,6 +136,16 @@ export const MEDIA_FLAVOR_TEXTS: Record<string, FlavorText[]> = {
     { quote: "If a gun is on the wall in act one, it must go off by act three.", kind: "reference" },
     { quote: "The to-be-read pile grows faster than it shrinks.", kind: "joke" },
     { quote: "One more chapter. It is always one more chapter.", kind: "joke" },
+    { quote: "The bookmark has not moved since March.", kind: "joke" },
+    { quote: "Read the same paragraph four times and took in none of it.", kind: "joke" },
+    { quote: "Everybody underlines in the first fifty pages and nowhere after.", kind: "joke" },
+    { quote: "Bought for the cover. Kept for the cover.", kind: "joke" },
+    { quote: "The map at the front gets consulted exactly twice.", kind: "joke" },
+    { quote: "Skipped the poem. Everybody skips the poem.", kind: "joke" },
+    { quote: "Lent it to someone in 2019. It is not coming back.", kind: "joke" },
+    { quote: "The sequel is out and every name has gone.", kind: "joke" },
+    { quote: "Four hundred pages, and the last ten are the whole reason.", kind: "joke" },
+    { quote: "Three books going at once, none of them finished.", kind: "joke" },
   ],
 
   Audiobook: [
@@ -159,6 +177,14 @@ export const MEDIA_FLAVOR_TEXTS: Record<string, FlavorText[]> = {
     { quote: "A bad narrator can end a good book in ten minutes.", kind: "joke" },
     { quote: "The credit arrives on the first of the month and is gone by the second.", kind: "joke" },
     { quote: "Chapter one. Again. You were not listening the first time.", kind: "joke" },
+    { quote: "Started it in the car park and sat there until the chapter ended.", kind: "joke" },
+    { quote: "Walked an extra mile to get to the end of it.", kind: "joke" },
+    { quote: "Someone spoke to you and you nodded through four paragraphs.", kind: "joke" },
+    { quote: "The narrator changed for book two, and nothing was ever right again.", kind: "joke" },
+    { quote: "Twenty-nine hours is not a commitment, it is a relationship.", kind: "joke" },
+    { quote: "The voice is the character now. The film got it wrong.", kind: "joke" },
+    { quote: "Bookmarked a line you will never find again.", kind: "joke" },
+    { quote: "A month at double speed, and now real people talk too slowly.", kind: "joke" },
   ],
 
   "Visual Novel": [
@@ -192,6 +218,16 @@ export const MEDIA_FLAVOR_TEXTS: Record<string, FlavorText[]> = {
     { quote: "Twelve hours in and the plot has not started yet. This is normal.", kind: "joke" },
     { quote: "One bad choice on hour thirty, and the autosave was overwritten.", kind: "joke" },
     { quote: "The soundtrack is better than it has any right to be.", kind: "joke" },
+    { quote: "Four endings in and you still have not met the one you started for.", kind: "joke" },
+    { quote: "A guide is open in the other window. It has been since hour one.", kind: "joke" },
+    { quote: "The choice that mattered was made six hours before you knew it mattered.", kind: "joke" },
+    { quote: "Nothing happened for three hours and you would not cut a minute of it.", kind: "joke" },
+    { quote: "You know the sprite is about to move. It still gets you.", kind: "joke" },
+    { quote: "One track from the soundtrack now owns a whole month of your life.", kind: "joke" },
+    { quote: "There is a flowchart. There has to be a flowchart.", kind: "joke" },
+    { quote: "Fifty hours, no combat, and it still wrecked you.", kind: "joke" },
+    { quote: "The route you liked least is the one that explains everything.", kind: "joke" },
+    { quote: "Skipped a scene by accident and spent ten minutes finding it again.", kind: "joke" },
   ],
 
   Movie: [
@@ -239,6 +275,12 @@ export const MEDIA_FLAVOR_TEXTS: Record<string, FlavorText[]> = {
     { quote: "Two hours is a film. Three hours is a statement.", kind: "joke" },
     { quote: "The trailer showed the three best jokes. All of them.", kind: "joke" },
     { quote: "Based on a true story, generously interpreted.", kind: "joke" },
+    { quote: "Subtitles on, for a film in your own language, and never off again.", kind: "joke" },
+    { quote: "Everyone in the room has now looked up the same actor.", kind: "joke" },
+    { quote: "Paused it twice to make tea and never quite got back in.", kind: "joke" },
+    { quote: "Scrolled for forty minutes and rewatched something you knew.", kind: "joke" },
+    { quote: "You do not remember the plot. You remember one shot.", kind: "joke" },
+    { quote: "Three hours, one interval's worth of bladder, no interval.", kind: "joke" },
   ],
 
   Series: [
@@ -282,6 +324,16 @@ export const MEDIA_FLAVOR_TEXTS: Record<string, FlavorText[]> = {
     { quote: "Everyone says it gets good after episode six.", kind: "joke" },
     { quote: "Skip intro. Every time. Except this one.", kind: "joke" },
     { quote: "Six episodes is a series now. That is a film with gaps.", kind: "joke" },
+    { quote: "Three episodes tonight. It is a school night.", kind: "joke" },
+    { quote: "The showrunner left after season two and you can tell exactly where.", kind: "joke" },
+    { quote: "A year between seasons, and no recap that helps.", kind: "joke" },
+    { quote: "You have watched the pilot four times and the finale never.", kind: "joke" },
+    { quote: "Renewed two years ago. Still 'in production'.", kind: "joke" },
+    { quote: "The theme tune is forty seconds and you have never once skipped it.", kind: "joke" },
+    { quote: "Started it for one actor and stayed for someone else entirely.", kind: "joke" },
+    { quote: "Someone spoiled it in a thumbnail.", kind: "joke" },
+    { quote: "Rewatching it while doing something else, which is its own kind of watching.", kind: "joke" },
+    { quote: "The episode order and the airing order disagree, and the internet has opinions.", kind: "joke" },
   ],
 
   Manga: [
@@ -320,6 +372,16 @@ export const MEDIA_FLAVOR_TEXTS: Record<string, FlavorText[]> = {
     { quote: "Forty volumes in and the tournament arc has not finished.", kind: "joke" },
     { quote: "A two-page spread is worth a whole episode.", kind: "joke" },
     { quote: "The author's margin notes are about their cat. Every time.", kind: "joke" },
+    { quote: "The scanlation group went quiet at chapter 214.", kind: "joke" },
+    { quote: "Two hundred chapters in and you still cannot pronounce the lead's name.", kind: "joke" },
+    { quote: "Read it in one night and regretted only the next morning.", kind: "joke" },
+    { quote: "The shelf is out of order because two volumes are still shipping.", kind: "joke" },
+    { quote: "The colour pages go on the wall. The rest gets read.", kind: "joke" },
+    { quote: "Bought volume one to support it and read the rest online anyway.", kind: "joke" },
+    { quote: "An author's note apologising for the delay, drawn as a chibi.", kind: "joke" },
+    { quote: "Nine panels of one fist, and it still reads as a single punch.", kind: "joke" },
+    { quote: "It ended on a page you had to turn back and look at again.", kind: "joke" },
+    { quote: "Sound effects left untranslated, and somehow you learned them anyway.", kind: "joke" },
   ],
 
   Comic: [
@@ -358,25 +420,49 @@ export const MEDIA_FLAVOR_TEXTS: Record<string, FlavorText[]> = {
     { quote: "Twenty-two pages, and six of them are an advert.", kind: "joke" },
     { quote: "Bagged, boarded, and never read again.", kind: "joke" },
     { quote: "The variant cover costs four times as much and has the same words in it.", kind: "joke" },
+    { quote: "The artist changed mid-arc and nobody acknowledged it.", kind: "joke" },
+    { quote: "Started at issue 47, because that is what the shop had.", kind: "joke" },
+    { quote: "Continued in a title you do not collect.", kind: "joke" },
+    { quote: "The letters page was the best part and they took it away.", kind: "joke" },
+    { quote: "Reading-order charts exist because publishing does not.", kind: "joke" },
+    { quote: "Longbox in the cupboard, spreadsheet on the laptop.", kind: "joke" },
+    { quote: "The origin has been retold six times and you have read all six.", kind: "joke" },
+    { quote: "One page, one image, and it is the reason you still buy these.", kind: "joke" },
+    { quote: "Everyone's favourite run is out of print.", kind: "joke" },
+    { quote: "The cover promises a fight that does not happen.", kind: "joke" },
   ],
 };
 
 const FALLBACK: FlavorText = { quote: "A shelf is a kind of autobiography.", kind: "joke" };
 
 /**
+ * How often a library that has earned lines of its own shows one.
+ *
+ * Not one, deliberately. A line from something you actually finished should
+ * dominate — that is the point of the rebuild — but a library with a single
+ * completed entry has only three to six of them, and showing nothing else would
+ * make the header repeat itself within a week. The remaining share keeps the
+ * built-in set in play, which matters most exactly when the earned pool is
+ * smallest, and fades to noise once it is large.
+ */
+const EARNED_SHARE = 0.7;
+
+const pick = <T,>(list: T[]): T => list[Math.floor(Math.random() * list.length)];
+
+/**
  * One line for a library header.
  *
- * `earned` are the texts this user's own Codexes have produced. They go first
- * when there are any: a line from something you actually finished beats a line
- * from a classic you have never touched, which is the entire point of the
- * rebuild. The built-in set is what a library falls back to before it has
- * earned anything, and stays available so a thin one is never repetitive.
+ * `earned` are the lines this user's own Codexes have produced, from works they
+ * have actually consumed. A format line among them arrives with no source, the
+ * same as a built-in one — so it is de-duplicated against the built-in set,
+ * which is the one way the two pools can collide.
  */
 export function getRandomFlavorText(type: string, earned: FlavorText[] = []): FlavorText {
-  const own = earned.filter((t) => t && t.quote);
-  if (own.length) return own[Math.floor(Math.random() * own.length)];
+  const texts = MEDIA_FLAVOR_TEXTS[type] || [];
+  const builtIn = new Set(texts.map((t) => t.quote.toLowerCase()));
+  const own = earned.filter((t) => t && t.quote && !builtIn.has(t.quote.toLowerCase()));
 
-  const texts = MEDIA_FLAVOR_TEXTS[type];
-  if (!texts || texts.length === 0) return FALLBACK;
-  return texts[Math.floor(Math.random() * texts.length)];
+  if (own.length && (!texts.length || Math.random() < EARNED_SHARE)) return pick(own);
+  if (!texts.length) return FALLBACK;
+  return pick(texts);
 }

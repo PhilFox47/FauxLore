@@ -36,7 +36,7 @@ const SECTION_LABEL: Record<string, string> = {
  * the panel that explains where the app's material comes from. The library
  * header shows the same lines with all of that stripped away.
  */
-function FlavorTexts({ entries }: { entries?: CodexFlavorText[] }) {
+function FlavorTexts({ entries, mediaType }: { entries?: CodexFlavorText[]; mediaType: string }) {
   const rows = (entries || []).filter((t) => t && t.text);
   if (!rows.length) return null;
   const KIND_LABEL: Record<string, string> = { quote: 'quote', reference: 'reference', joke: 'inside joke' };
@@ -50,6 +50,14 @@ function FlavorTexts({ entries }: { entries?: CodexFlavorText[] }) {
             <span className="text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600">
               {KIND_LABEL[t.kind || 'quote'] || t.kind}
             </span>
+            {/* A format line is shown under this work but does not belong to it,
+                and will appear in the library with no source at all. Saying so
+                here is the difference between a house line and a misattribution. */}
+            {t.scope === 'medium' && (
+              <span className="text-[9px] font-black uppercase tracking-[0.15em] text-zinc-500 border border-white/10 rounded px-1 py-px">
+                about {mediaType.toLowerCase()}s
+              </span>
+            )}
             {t.attribution && <span className="text-[11px] text-zinc-500">{t.attribution}</span>}
             {t.why && <span className="text-[11px] text-zinc-600">· {t.why}</span>}
           </div>
@@ -394,7 +402,10 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
               short, and they are what shows up under the library title later. */}
           {(data.flavorTexts?.length || 0) > 0 && (
             <Section icon={<Quote className="w-3 h-3" />} title="Known by">
-              <FlavorTexts entries={expanded ? data.flavorTexts : (data.flavorTexts || []).slice(0, 3)} />
+              <FlavorTexts
+                entries={expanded ? data.flavorTexts : (data.flavorTexts || []).slice(0, 3)}
+                mediaType={mediaType}
+              />
             </Section>
           )}
 

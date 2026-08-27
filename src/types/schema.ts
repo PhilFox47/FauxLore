@@ -292,6 +292,12 @@ export interface CodexIdentification {
 export interface CodexFlavorText {
   text: string;
   kind?: 'quote' | 'reference' | 'joke';
+  /**
+   * Whether this belongs to the work or to the format. A `medium` line is about
+   * the experience of consuming this kind of thing, names nothing in the work,
+   * and is served to the library with no source.
+   */
+  scope?: 'work' | 'medium';
   /** Who says it, or where it appears. */
   attribution?: string;
   /** What makes it recognisable. */
