@@ -461,7 +461,13 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
         </button>
 
         {/* Left/Background Panel: Cover Art & Basic Info */}
-        <div className="relative w-full md:w-2/5 p-5 sm:p-8 flex flex-col justify-end min-h-[300px]">
+        {/* The cover fills this column on desktop, which can make the stack
+            taller than the modal on a short screen. `overflow-y-auto` lets it
+            scroll instead of being clipped by the parent, and the content is
+            pushed down with `mt-auto` rather than `justify-end` — an end-justified
+            flex column clips its own top once it overflows, which would have
+            eaten the cover exactly when there was least room for it. */}
+        <div className="relative w-full md:w-2/5 p-5 sm:p-8 flex flex-col min-h-[300px] overflow-y-auto">
           {/* Blurred Background Image */}
           <div 
             className="absolute inset-0 bg-cover bg-center"
@@ -473,11 +479,21 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
           
-          <div className="relative z-10 flex flex-col items-center md:items-start text-center md:text-left">
+          <div className="relative z-10 mt-auto flex flex-col items-center md:items-start text-center md:text-left">
+            {/* Fixed at 192px, this sat in roughly 400px of column and left half
+                of it empty. It is now sized against the space that actually
+                exists rather than a guess.
+                The binding constraint is height, not width: the column also has
+                to hold the title, the tags and four buttons, and simply filling
+                the width pushed those off the bottom on a laptop. So the width
+                is capped by a fraction of the viewport height — a 2:3 cover 34vh
+                wide is about 48vh tall — which grows the cover on a tall screen
+                and keeps the actions visible on a short one. `min()` stops it
+                exceeding the column on very tall, narrow windows. */}
             {item.coverImageUrl ? (
-              <img src={item.coverImageUrl} alt={item.title} className="w-48 h-auto rounded-xl shadow-2xl mb-6 border border-white/10" referrerPolicy="no-referrer" />
+              <img src={item.coverImageUrl} alt={item.title} className="w-48 md:w-[min(100%,34vh)] h-auto rounded-xl shadow-2xl mb-6 border border-white/10" referrerPolicy="no-referrer" />
             ) : (
-              <div className="w-48 h-64 bg-zinc-800 rounded-xl shadow-2xl mb-6 flex items-center justify-center border border-white/10">
+              <div className="w-48 md:w-[min(100%,34vh)] aspect-[2/3] bg-zinc-800 rounded-xl shadow-2xl mb-6 flex items-center justify-center border border-white/10">
                 <BookOpen className="w-12 h-12 text-zinc-600" />
               </div>
             )}
