@@ -140,7 +140,7 @@ async function startServer() {
     // parked: the freeze is about AI spend, and this is the expensive part.
     if (activity.isFrozen(userId)) return;
     autoTag.queueAutoTag(userId, mediaId);
-  });
+  }, coverCache);
   cron.schedule("30 4 * * *", () => {
     const users = activity.activeUserIds();
     console.log(`Running daily metadata refresh for ${users.length} active user(s)...`);

@@ -1,8 +1,9 @@
 import type { Db } from "../context";
 import { getGameDetails } from "../integrations/gamestorylog";
-import { getIgdbToken } from "../integrations/igdb";
+import { getIgdbToken, igdbCoverUrl } from "../integrations/igdb";
 import { igdbRelease, mangadexRelease, tmdbRelease, type ReleaseState } from "../integrations/releaseFeeds";
 import type { NewNotification } from "./notifications";
+import type { CoverCache } from "./coverCache";
 import { decideStatus, releaseDateMoved, releaseFieldsFor } from "./releaseTracking";
 
 /**
@@ -76,6 +77,86 @@ const REFRESHERS: Record<string, Refresher> = {
 };
 
 /**
+ * Where each source keeps the cover, asked for only once.
+ *
+ * An unreleased entry is carrying whatever art existed when it was announced —
+ * a teaser, a logo on a black field, a placeholder — and that is usually replaced
+ * on or shortly before release day. So the cover is re-fetched at exactly the
+ * moment the entry stops being unreleased, and never otherwise: this is separate
+ * from REFRESHERS on purpose, because the daily poll runs against every tracked
+ * entry and has no business spending a request on art that has not changed.
+ *
+ * Returning undefined is normal — no key, no cover on the record, a source that
+ * does not publish one. The entry then keeps the cover it already had.
+ */
+type CoverFetcher = (sourceId: string, ctx: RefreshContext) => Promise<string | undefined>;
+
+/**
+ * TMDB serves posters at a handful of fixed widths. w780 is the largest before
+ * `original`, which is unbounded and occasionally enormous for no visible gain.
+ */
+const TMDB_POSTER_WIDTH = "w780";
+
+const COVER_FETCHERS: Record<string, CoverFetcher> = {
+  gsl: async (slug) => {
+    const game = await getGameDetails(slug, true);
+    return game?.coverImageUrl || undefined;
+  },
+
+  tmdb: async (id, { db, row }) => {
+    const keys = systemKeys(db);
+    const apiKey = keys.tmdbApiKey || process.env.TMDB_API_KEY;
+    if (!apiKey) return undefined;
+    const type = row.mediaType === "Movie" ? "movie" : "tv";
+    // A season has its own poster, and for a series tracked season by season it
+    // is the right one — the series poster is whatever the show is currently
+    // being sold as, which is usually the newest season.
+    const path = type === "tv" && row.season
+      ? `tv/${id}/season/${row.season}`
+      : `${type}/${id}`;
+    const res = await fetch(`https://api.themoviedb.org/3/${path}?api_key=${apiKey}`, {
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return undefined;
+    const detail: any = await res.json();
+    return detail?.poster_path
+      ? `https://image.tmdb.org/t/p/${TMDB_POSTER_WIDTH}${detail.poster_path}`
+      : undefined;
+  },
+
+  igdb: async (id, { db }) => {
+    const keys = systemKeys(db);
+    const clientId = keys.igdbClientId || process.env.IGDB_CLIENT_ID;
+    const clientSecret = keys.igdbClientSecret || process.env.IGDB_CLIENT_SECRET;
+    if (!clientId || !clientSecret) return undefined;
+    const token = await getIgdbToken(clientId, clientSecret);
+    const res = await fetch("https://api.igdb.com/v4/games", {
+      method: "POST",
+      headers: { "Client-ID": clientId, Authorization: `Bearer ${token}`, Accept: "application/json" },
+      body: `fields cover.image_id; where id = ${Number(id)};`,
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return undefined;
+    const rows: any[] = await res.json();
+    return igdbCoverUrl(rows?.[0]?.cover?.image_id) || undefined;
+  },
+
+  mangadex: async (id) => {
+    // The release poll reads the chapter feed, which carries no art, so this is
+    // the one source where the cover genuinely costs an extra request.
+    const res = await fetch(
+      `https://api.mangadex.org/manga/${encodeURIComponent(id)}?includes[]=cover_art`,
+      { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15_000) },
+    );
+    if (!res.ok) return undefined;
+    const body: any = await res.json();
+    const art = (body?.data?.relationships || []).find((r: any) => r?.type === "cover_art");
+    const file = art?.attributes?.fileName;
+    return file ? `https://uploads.mangadex.org/covers/${id}/${file}` : undefined;
+  },
+};
+
+/**
  * Statuses worth polling.
  *
  * Unreleased is in here because an announced date is the thing most likely to be
@@ -100,7 +181,51 @@ export function createMetadataRefresh(
    * earns it — this is where that debt is paid.
    */
   onReleased?: (userId: string, mediaId: string) => void,
+  /**
+   * Taken a local copy of, so a refreshed cover is stored the same way every
+   * other cover is. Optional: without it the release still happens, it just
+   * keeps whatever art it was announced with.
+   */
+  coverCache?: CoverCache,
 ) {
+  /**
+   * Replaces the pre-release cover once the thing is actually out.
+   *
+   * An unreleased entry carries whatever art existed when it was announced, and
+   * that is usually a teaser or a placeholder that gets replaced on or shortly
+   * before release day. This asks the source once, at the transition.
+   *
+   * Every failure keeps the existing cover. A source with no key, no cover on
+   * the record, an unreachable CDN, or something that comes back the wrong shape
+   * all end the same way: the entry is unchanged. That matters because the
+   * alternative — a released entry with no art at all — is worse than a stale
+   * teaser, and because `looksLikeCover` rejecting the download is exactly how a
+   * hotlink placeholder announces itself.
+   */
+  async function refreshCoverOnRelease(userId: string, row: any) {
+    if (!coverCache) return;
+    const fetcher = COVER_FETCHERS[row.metadataSource];
+    if (!fetcher) return;
+
+    try {
+      const url = await fetcher(row.metadataSourceId, { db, row });
+      if (!url) return;
+
+      const result = await coverCache.cacheCover(url);
+      if (!result.cached) {
+        console.warn(`[metadataRefresh] Release cover for "${row.title}" not taken: ${result.reason}`);
+        return;
+      }
+      // Same file as before, so the source simply never changed its art.
+      if (result.url === row.coverImageUrl) return;
+
+      db.prepare("UPDATE media SET coverImageUrl = ? WHERE id = ? AND userId = ?")
+        .run(result.url, row.id, userId);
+      console.log(`[metadataRefresh] "${row.title}" released — cover refreshed from ${row.metadataSource}`);
+    } catch (e) {
+      console.error(`[metadataRefresh] Could not refresh the cover for "${row.title}"`, e);
+    }
+  }
   /**
    * Writes what a source said about dates and instalments, and moves the status
    * if that changed the answer to "is there anything to watch".
@@ -109,7 +234,7 @@ export function createMetadataRefresh(
    * the picture cannot blank the rest: `releaseFieldsFor` returns only the
    * columns it actually has an opinion about.
    */
-  function applyRelease(userId: string, row: any, release: ReleaseState) {
+  async function applyRelease(userId: string, row: any, release: ReleaseState) {
     const fields = releaseFieldsFor(release, { expectedReleaseDate: row.expectedReleaseDate });
 
     // A date moving is news in itself — a delay is not something the user did.
@@ -156,9 +281,19 @@ export function createMetadataRefresh(
       // Now that it exists, it can be researched. Only entries actually parked
       // for that reason are picked up, so this never re-tags something the user
       // has already curated.
-      if (row.status === "Unreleased" && decision.status !== "Unreleased" && row.autoTagStatus === "deferred") {
+      const justReleased = row.status === "Unreleased" && decision.status !== "Unreleased";
+      if (justReleased && row.autoTagStatus === "deferred") {
         try { onReleased?.(userId, row.id); } catch (e) { console.error("[metadataRefresh] release hook failed", e); }
       }
+      // Unconditional, unlike the research above: the art needs replacing
+      // whether or not this entry was ever parked for tagging.
+      //
+      // Awaited rather than fired and forgotten. This is a once-per-entry
+      // opportunity — the status has already flipped, so the transition will
+      // never come round again — and a fetch still in flight when the process
+      // stops would be a cover that is never refreshed at all. A slow CDN
+      // delaying a nightly sweep by a few seconds is the cheaper problem.
+      if (justReleased) await refreshCoverOnRelease(userId, row);
       notify?.(userId, {
         type: decision.status === "Active" ? "media_update" : "media_released",
         title: `${row.title} is now ${decision.status}`,
@@ -267,7 +402,7 @@ export function createMetadataRefresh(
             );
           }
 
-          if (upstream.release) applyRelease(userId, row, upstream.release);
+          if (upstream.release) await applyRelease(userId, row, upstream.release);
         } catch (e) {
           // A single failing item must never abort the sweep (a page may 404 or the
           // markup may have shifted). Stamp lastSyncAt so it backs off either way.
