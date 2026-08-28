@@ -323,7 +323,7 @@ Include the ordinary and the everyday, not only the legendary. A work's most mem
     // what people SAID. A bare "famous quotes" query on a seasonal title returns
     // the franchise's greatest hits and a glossary of its patch notes, which is
     // precisely the material that must not be used.
-    query: "iconic quotes catchphrases behind the scenes trivia what fans still say about it",
+    query: "iconic quotes catchphrases memes behind the scenes trivia what fans still say",
     brief: `MEMORIES — the handful of small things that give someone who knows this work a jolt of recognition.
 
 That word is the brief. Not "notable quotations", not "trivia": a memory is a fragment that lands because the reader was there. Somebody who was not there reads it and shrugs, and that is fine — it was never for them.
@@ -351,6 +351,7 @@ IT HAS A SHAPE. Either a setup and a turn — "The character creator took ninety
 QUOTE — WORDS FROM INSIDE THE WORK. Said aloud, yes, but written counts just as much: text on a screen, a title card, a sign, a scrawl on a door, a line of interface, a sound effect printed on the page, a loading message. "Don't open, dead inside." is never spoken by anyone; it is painted on a door, and it is one of the most quoted things its season produced. YOU DIED. Reticulating splines. SNIKT. All quotes.
 Catchphrases live here too, and they are the easiest ones to miss because they are so familiar they stop registering as lines. If a character says a thing every week, or a show opens the same way every episode, that is a quote and probably the best one available. Take Supernatural's first season: "Driver picks the music, shotgun shuts his cakehole." is right, and so is "Saving people, hunting things — the family business.", and so is "Dad's been on a hunting trip, and he hasn't been home in a few days." — the last one being the line the show opened on again and again. Do not stop at two when the third is the one people actually say.
 Word for word. The exact wording is the whole value and an approximation is worthless. Marketing copy is not a quote; if it sounds like it came off a trailer, it did.
+A line from the work that went on to become a meme is still a QUOTE — see the note under jokes. It is filed by where the words came from, not by how famous they got.
 
 REFERENCE — SOMETHING YOU KNOW ABOUT THE WORK, not words from inside it. The production story, the fun fact, the thing the fandom has collectively decided is true. Written the way one fan tells another, short and flat, with no throat-clearing:
   "Gooseworx actually hates this."
@@ -366,6 +367,16 @@ JOKE — WHAT THE FANDOM SAYS, PERFORMED. This is where the generated ones fail 
   YES  "Killing people with rubber ducks since 2016."
 Same material both times. What changes is that the second one is being SAID to someone. Shapes that work: the conspiratorial question ("Did you know…?"), the mock tagline ("… since 2016."), the resigned report of a running gag ("Zoro is lost again. He was standing right there."), the affectionate complaint ("Togashi is on hiatus again."), the flat overstatement played straight.
 THE TEST: if it would sit unchanged in the Trivia section of a wiki, it is not a joke yet. Say it out loud. If nobody is speaking, rewrite it until someone is.
+
+MEMES COUNT, AND THEY ARE THE STRONGEST VERSION OF THIS. A meme is an inside joke that spread far enough to become a format, so if a work produced one it is almost certainly the best memory that work has — go looking for it first, not last. Three things about them:
+
+- A MEME HAS A CANONICAL WORDING. Reproduce it exactly, the way you would a quote. Paraphrase kills it: "Players press F to show respect" is not "Press F to pay respects", and only the second one is recognised by anybody.
+- WHICH KIND IT IS depends on where the words came from, not on the fact that it is a meme. If the wording is from the work — a line, a screen, an interface prompt — file it as a QUOTE. If the fandom wrote it themselves, file it as a JOKE. "One does not simply walk into Mordor." is a quote that became a meme; "Togashi is on hiatus again." is a joke its readers made up. Both belong here; they just belong under different kinds.
+- IF IT IS AN IMAGE, IT NEEDS WORDS TO SURVIVE. Only text is printed, so a purely visual meme cannot be used — and must not be DESCRIBED instead. "The one where he points at the screen" is a caption for a picture nobody can see, which is the label failure again in a new coat. Either the meme carries its own words, or it does not belong.
+
+A meme that outgrew its source still counts. Plenty of people know "Press F to pay respects" without knowing which game it came from; the user who finished that game knows both, and that doubled recognition is exactly what this is for.
+
+Most works have no meme at all, and that is unremarkable. Never manufacture one — a work without a meme has other memories.
 
 === WORKED EXAMPLES ===
 
@@ -401,7 +412,7 @@ Look where people are using these lines, not where people are explaining them:
 - Threads asking "favourite line", "most iconic moment", "what do you still quote".
 - Comment sections and forum posts where the phrase is dropped casually with NO explanation attached. This is the strongest possible evidence: it means the phrase is common currency.
 - Video titles and top comments that quote the line back.
-- Memes and image macros built on it — a line that survives being a template is a line that landed.
+- Memes built on it, and meme databases. A line that survives being turned into a template is a line that landed, and the template's own wording is the form to record. Check whether the phrase has a life outside the work's own community — that is the ceiling of recognition.
 - Retrospectives and anniversary pieces, which tend to collect the famous beats.
 - For anything live-service or serialised: the reaction threads to the specific update, where the community's own name for what happened shows up.
 - Merchandise. A line printed on a shirt has already proved itself.
