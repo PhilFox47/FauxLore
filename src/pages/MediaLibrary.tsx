@@ -132,7 +132,7 @@ export function MediaLibrary() {
                   .join(' — ')}
                 {flavorText.earned && (
                   <span className="ml-2 text-[10px] uppercase tracking-[0.15em] text-[var(--accent)] font-bold">
-                    From your library
+                    A memory from your library
                   </span>
                 )}
               </div>

@@ -323,8 +323,10 @@ Include the ordinary and the everyday, not only the legendary. A work's most mem
     // what people SAID. A bare "famous quotes" query on a seasonal title returns
     // the franchise's greatest hits and a glossary of its patch notes, which is
     // precisely the material that must not be used.
-    query: "memorable quotes new voice lines what fans kept saying community reaction running jokes",
-    brief: `The handful of lines this work is actually KNOWN BY.
+    query: "iconic quotes catchphrases behind the scenes trivia what fans still say about it",
+    brief: `MEMORIES — the handful of small things that give someone who knows this work a jolt of recognition.
+
+That word is the brief. Not "notable quotations", not "trivia": a memory is a fragment that lands because the reader was there. Somebody who was not there reads it and shrugs, and that is fine — it was never for them.
 
 START HERE, BECAUSE EVERYTHING ELSE FOLLOWS FROM IT: you are collecting things people SAY, not things the work HAS. An utterance, not a label. Someone types it into a chat with another person who loves the same thing, unprompted, and is understood — that is the entire test, and it is the only one that matters.
 
@@ -346,11 +348,24 @@ IT HAS A SHAPE. Either a setup and a turn — "The character creator took ninety
 
 === THE THREE KINDS ===
 
-QUOTES — words actually spoken or written in the work, that people repeat. Word for word: the exact wording is the whole value and an approximation is worthless. Marketing copy is not a quote, a logline is not a quote; if it sounds like it came off a trailer, it did.
+QUOTE — WORDS FROM INSIDE THE WORK. Said aloud, yes, but written counts just as much: text on a screen, a title card, a sign, a scrawl on a door, a line of interface, a sound effect printed on the page, a loading message. "Don't open, dead inside." is never spoken by anyone; it is painted on a door, and it is one of the most quoted things its season produced. YOU DIED. Reticulating splines. SNIKT. All quotes.
+Catchphrases live here too, and they are the easiest ones to miss because they are so familiar they stop registering as lines. If a character says a thing every week, or a show opens the same way every episode, that is a quote and probably the best one available. Take Supernatural's first season: "Driver picks the music, shotgun shuts his cakehole." is right, and so is "Saving people, hunting things — the family business.", and so is "Dad's been on a hunting trip, and he hasn't been home in a few days." — the last one being the line the show opened on again and again. Do not stop at two when the third is the one people actually say.
+Word for word. The exact wording is the whole value and an approximation is worthless. Marketing copy is not a quote; if it sounds like it came off a trailer, it did.
 
-REFERENCES — words the audience has READ WITH THEIR OWN EYES so often that they work as quotation even though no character says them. Text on a screen, a sound written on a page, a stock caption, an interface string: YOU DIED. MEANWHILE… To Be Continued →. SNIKT. The name of a mechanic, an item, an event or a patch is NOT a reference, however specific it is.
+REFERENCE — SOMETHING YOU KNOW ABOUT THE WORK, not words from inside it. The production story, the fun fact, the thing the fandom has collectively decided is true. Written the way one fan tells another, short and flat, with no throat-clearing:
+  "Gooseworx actually hates this."
+  "Probably the most accurate video-game adaptation ever made."
+  "Should have been in cinemas."
+  "The whole thing was a sketch on an imageboard before it made grown adults cry."
+Those are verdicts and trivia, not quotations, and they are the kind that gets written least often because it is the least obvious. Go looking for it deliberately: who made it and what they have said about it since, what it was nearly called, what got cut, what the fandom argues about, what it is agreed to have deserved and not got. Never a bare noun phrase, never a wiki sentence — a thing a person would say.
 
-INSIDE JOKES — what the fandom says about it rather than what the work says. Written out the way they would actually say it, in one complete sentence.
+JOKE — WHAT THE FANDOM SAYS, PERFORMED. This is where the generated ones fail most often, and the failure is always the same: reporting the joke instead of telling it. A joke has a stance and a delivery. A fact has neither.
+  NO   "Sam wears women's underwear."
+  YES  "Did you know Sam Winchester wears women's underwear?"
+  NO   "The subreddit is dedicated to rubber duckies."
+  YES  "Killing people with rubber ducks since 2016."
+Same material both times. What changes is that the second one is being SAID to someone. Shapes that work: the conspiratorial question ("Did you know…?"), the mock tagline ("… since 2016."), the resigned report of a running gag ("Zoro is lost again. He was standing right there."), the affectionate complaint ("Togashi is on hiatus again."), the flat overstatement played straight.
+THE TEST: if it would sit unchanged in the Trivia section of a wiki, it is not a joke yet. Say it out loud. If nobody is speaking, rewrite it until someone is.
 
 === WORKED EXAMPLES ===
 
@@ -390,6 +405,8 @@ Look where people are using these lines, not where people are explaining them:
 - Retrospectives and anniversary pieces, which tend to collect the famous beats.
 - For anything live-service or serialised: the reaction threads to the specific update, where the community's own name for what happened shows up.
 - Merchandise. A line printed on a shirt has already proved itself.
+
+For REFERENCES specifically, which are the ones most often missed, look somewhere else entirely: interviews and commentary tracks, "behind the scenes" and "making of" pieces, the trivia section of a wiki or database entry, what the creator has said about it since, what was cut or nearly changed, and the arguments the fandom keeps having. That last one is where a verdict like "should have been in cinemas" comes from — a thing everybody thinks and nobody had to be told.
 
 THE FIELD TEST: if every result you can find is an article EXPLAINING the phrase, it is trivia and not currency — leave it out. If you find it used in passing, by strangers, as though everyone already knows it, it belongs here.
 

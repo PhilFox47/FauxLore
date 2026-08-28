@@ -26,19 +26,23 @@ const SECTION_LABEL: Record<string, string> = {
   world: 'places, factions & vocabulary',
   things: 'notable objects',
   craft: 'style, production & themes',
-  lore: 'quotes & references',
+  lore: 'memories',
 };
 
 /**
- * The lines the work is known by.
+ * Memories: the small things that give someone who knows this work a jolt of
+ * recognition.
  *
  * Shown here in full — kind, speaker and why it is memorable — because this is
  * the panel that explains where the app's material comes from. The library
- * header shows the same lines with all of that stripped away.
+ * header shows the same lines with all of that stripped away, which is the form
+ * they are actually for.
  */
 function FlavorTexts({ entries, mediaType }: { entries?: CodexFlavorText[]; mediaType: string }) {
   const rows = (entries || []).filter((t) => t && t.text);
   if (!rows.length) return null;
+  // The three kinds, named as the research is asked to think of them: words from
+  // inside the work, something you know about it, and what the fandom says.
   const KIND_LABEL: Record<string, string> = { quote: 'quote', reference: 'reference', joke: 'inside joke' };
 
   return (
@@ -401,7 +405,7 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
           {/* Kept in the collapsed view, where almost nothing else is: these are
               short, and they are what shows up under the library title later. */}
           {(data.flavorTexts?.length || 0) > 0 && (
-            <Section icon={<Quote className="w-3 h-3" />} title="Known by">
+            <Section icon={<Quote className="w-3 h-3" />} title="Memories">
               <FlavorTexts
                 entries={expanded ? data.flavorTexts : (data.flavorTexts || []).slice(0, 3)}
                 mediaType={mediaType}
