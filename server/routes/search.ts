@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { searchGames, getGameDetails, diagnose as gslDiagnose } from "../integrations/gamestorylog";
+import { diagnose as hltbDiagnose } from "../integrations/hltb";
 import { LOW_RES_WIDTH, bestCoverForVolume } from "../integrations/bookCovers";
 import { VNDB_TITLE_FIELDS, vndbNames } from "../integrations/vndb";
 import { igdbCoverUrl } from "../integrations/igdb";
@@ -462,6 +463,21 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
 
   // Diagnostics: reports what the GSL integration can actually see upstream
   // (sitemap shape, slug count, and whether a game page renders server-side).
+  /**
+   * Why playtimes are not arriving. HLTB moves the endpoint their site uses, so
+   * this reports which step broke rather than leaving an empty result to be
+   * read as "no such game".
+   */
+  app.get("/api/hltb/diagnose", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      res.json(await hltbDiagnose((req.query.q as string) || "Portal 2"));
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
+
   app.get("/api/gsl/diagnose", async (req, res) => {
     try {
       const userId = getAuthUser(req, res);
