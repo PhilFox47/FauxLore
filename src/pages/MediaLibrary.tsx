@@ -9,9 +9,11 @@ import { FilterSortBar } from '../components/FilterSortBar';
 import { useMediaFilterSort } from '../hooks/useMediaFilterSort';
 import { MediaItem, MediaType, MEDIA_HEX, getMetricForType } from '../types/schema';
 import { NATIVE_UNIT_LABELS, calculateRPGState } from '../lib/rpgSystem';
+import { libraryStats } from '../lib/libraryStats';
+import { cn } from '../lib/utils';
 import { getRandomFlavorText, type FlavorText } from '../lib/flavorTexts';
 import { DatabaseService } from '../services/db';
-import { Plus, Search, CheckCircle2, TrendingUp, Pickaxe } from 'lucide-react';
+import { Plus, Search, CheckCircle2, TrendingUp, Pickaxe, Star, CalendarRange } from 'lucide-react';
 
 export function MediaLibrary() {
   const { mediaType } = useParams<{ mediaType: string }>();
@@ -58,6 +60,18 @@ export function MediaLibrary() {
     const metric = getMetricForType(decodedMediaType);
     return baseMediaItems.reduce((acc, m) => acc + ((m[metric as keyof MediaItem] as number) || 0), 0);
   }, [baseMediaItems, decodedMediaType]);
+
+  /**
+   * How this library has actually been used, month by month.
+   *
+   * Derived from logs already in memory, so it costs a pass over an array and
+   * no round trip. Hidden entirely when nothing has been logged for this type —
+   * an empty chart says less than no chart.
+   */
+  const stats = useMemo(
+    () => libraryStats(decodedMediaType, media, logs),
+    [decodedMediaType, media, logs],
+  );
 
   const completionRate = useMemo(() => {
     if (baseMediaItems.length === 0) return 0;
@@ -174,6 +188,77 @@ export function MediaLibrary() {
             </div>
           </div>
         </div>
+
+        {stats.hasActivity && (
+          <div className="relative z-10 w-full pt-5 border-t border-white/5 flex flex-col xl:flex-row xl:items-end gap-6 xl:gap-10">
+            {/* Twelve months of this library, in its own unit. Bars rather than a
+                chart library: twelve values need no axes, and a plain div scales
+                to the accent colour the rest of the header already uses. */}
+            <div className="flex-1 min-w-0">
+              <div className="text-[9px] uppercase tracking-[0.1em] text-zinc-500 font-bold flex items-center gap-1 mb-2">
+                <CalendarRange className="w-3 h-3 text-[var(--accent)]" />
+                {NATIVE_UNIT_LABELS[decodedMediaType] || 'Activity'} · last 12 months
+              </div>
+              <div className="flex items-end gap-1 h-14">
+                {stats.months.map((m) => {
+                  const peak = stats.bestMonth?.value || 1;
+                  // A month with activity always shows something: a bar rounded
+                  // to nothing reads as a month you skipped, which is a lie.
+                  const pct = m.value > 0 ? Math.max(8, (m.value / peak) * 100) : 0;
+                  return (
+                    <div key={m.key} className="flex-1 flex flex-col items-center gap-1 group/bar min-w-0">
+                      <div className="w-full h-11 flex items-end" title={`${m.full}: ${m.value.toLocaleString()}`}>
+                        <div
+                          className={cn(
+                            'w-full rounded-sm transition-all duration-500',
+                            m.value > 0 ? 'bg-[var(--accent)] opacity-70 group-hover/bar:opacity-100' : 'bg-white/5',
+                          )}
+                          style={{ height: m.value > 0 ? `${pct}%` : '2px' }}
+                        />
+                      </div>
+                      <span className="text-[8px] text-zinc-600 font-bold uppercase truncate w-full text-center">{m.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-6 sm:gap-8 shrink-0">
+              <div className="flex flex-col justify-center">
+                <div className="text-[9px] uppercase tracking-[0.1em] text-zinc-500 font-bold mb-0.5">This Year</div>
+                <div className="text-xl font-black text-white leading-none">{stats.thisYear.toLocaleString()}</div>
+              </div>
+
+              {stats.bestMonth && (
+                <div className="flex flex-col justify-center">
+                  <div className="text-[9px] uppercase tracking-[0.1em] text-zinc-500 font-bold mb-0.5">Best Month</div>
+                  <div className="text-xl font-black text-white leading-none">
+                    {stats.bestMonth.value.toLocaleString()}
+                    <span className="text-[10px] font-medium text-zinc-500 ml-1.5">{stats.bestMonth.label}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col justify-center">
+                <div className="text-[9px] uppercase tracking-[0.1em] text-zinc-500 font-bold mb-0.5">Active Months</div>
+                <div className="text-xl font-black text-white leading-none">
+                  {stats.activeMonths}<span className="text-[10px] font-medium text-zinc-500">/12</span>
+                </div>
+              </div>
+
+              {stats.averageRating !== null && (
+                <div className="flex flex-col justify-center">
+                  <div className="text-[9px] uppercase tracking-[0.1em] text-zinc-500 font-bold flex items-center gap-1 mb-0.5">
+                    <Star className="w-3 h-3 text-[var(--accent)]" /> Your Rating
+                  </div>
+                  <div className="text-xl font-black text-white leading-none">
+                    {stats.averageRating.toFixed(1)}<span className="text-[10px] font-medium text-zinc-500">/5</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4 relative z-10 w-full pt-2">
           <FilterSortBar 
