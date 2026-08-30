@@ -133,6 +133,28 @@ export const TYPE_BRIEF: Record<string, string> = {
   Movie: "a single feature film. NOT a television series, book or game of the same name",
 };
 
+/**
+ * Where a work of this type is written about when it is NOT famous.
+ *
+ * This is the half of the library the research is worst at. Any model already
+ * knows Star Wars, so retrieval barely matters there; for a small western AVN or
+ * a self-published webcomic it is the only thing that matters, and a general
+ * search returns nothing because the general web has nothing. Naming the places
+ * that DO cover it is the difference between a usable dossier and a shrug — and
+ * a thin Codex hurts more than a thin famous one, because every later feature
+ * has no prior knowledge to fall back on.
+ */
+const NICHE_SOURCES: Record<string, string> = {
+  "Visual Novel": "for a small or independent title: the developer's own devlog, Patreon or Discord announcements, its itch.io page, its VNDB entry, F95zone and Lemmasoft threads, and long-running community wikis. Fan wikis for these are often one or two dedicated editors and are still the best record that exists",
+  Game: "for an indie or early-access title: the Steam page and its update history, the developer's devlog and Discord, itch.io, and subreddit or forum threads written by people actually playing it",
+  Book: "for a self-published or small-press book: Goodreads reviews and lists, the author's own site and newsletter, Royal Road or Wattpad if it started serialised, and dedicated reader forums",
+  Manga: "for something unlicensed or niche: MangaDex and MangaUpdates entries, scanlation group pages and their release notes, Baka-Updates, and the series' own fan wiki",
+  Comic: "for a webcomic or small-press book: the comic's own archive and about page, the artist's social posts, Comic Vine, and the reader community around it",
+  Audiobook: "for an independent podcast or small audiobook: the show's own site and episode notes, its subreddit, podcast directories with real descriptions, and the narrator's or author's own pages",
+  Series: "for a small or regional show: its broadcaster's page, fan wikis however small, episode-by-episode discussion threads, and reviews from writers who actually watched it",
+  Movie: "for an independent or foreign film: festival listings and programme notes, Letterboxd reviews, the distributor's page, and the director's own interviews",
+};
+
 /** The short format word used inside a search query line. */
 const TYPE_QUERY_WORD: Record<string, string> = {
   Game: "video game",
@@ -148,6 +170,15 @@ const TYPE_QUERY_WORD: Record<string, string> = {
 /** What the identify pass settled on, carried into every later call. */
 export interface CodexIdentity {
   title?: string;
+  /**
+   * How much material exists about this work, as judged during identification.
+   *
+   * Sets the research budget. A famous work is described accurately from what
+   * any model already knows, so volume there is mostly padding that costs money;
+   * an obscure one is not described at all unless it is dug out, and every later
+   * feature depends entirely on what this dossier managed to record.
+   */
+  coverage?: "abundant" | "moderate" | "thin";
   year?: number | string;
   season?: number | string;
   type?: string;
@@ -319,22 +350,65 @@ Include the ordinary and the everyday, not only the legendary. A work's most mem
 }`,
   },
   lore: {
-    // Named narrowly so retrieval fetches pages about THIS version, and about
-    // what people SAID. A bare "famous quotes" query on a seasonal title returns
-    // the franchise's greatest hits and a glossary of its patch notes, which is
-    // precisely the material that must not be used.
+    // Short and search-shaped. `:online` keys its retrieval on the message, so
+    // the query line has to stay near the front and not be buried under rules.
     query: "iconic quotes catchphrases memes behind the scenes trivia what fans still say",
     brief: `MEMORIES — the handful of small things that give someone who knows this work a jolt of recognition.
 
 That word is the brief. Not "notable quotations", not "trivia": a memory is a fragment that lands because the reader was there. Somebody who was not there reads it and shrugs, and that is fine — it was never for them.
 
-START HERE, BECAUSE EVERYTHING ELSE FOLLOWS FROM IT: you are collecting things people SAY, not things the work HAS. An utterance, not a label. Someone types it into a chat with another person who loves the same thing, unprompted, and is understood — that is the entire test, and it is the only one that matters.
+YOUR JOB HERE IS TO FIND THE MATERIAL, NOT TO POLISH IT. Gather what is actually there and write it down plainly; a later pass does the selecting and the phrasing. What that pass cannot do is invent what you failed to find, so err toward recording more.
 
-=== WHAT MAKES ONE GOOD ===
+Collect three things:
+
+WORDS FROM INSIDE THE WORK, reproduced EXACTLY. Spoken lines, yes, but written counts just as much: text on a screen, a title card, a sign, a scrawl on a door, an interface string, a sound effect printed on the page. "Don't open, dead inside." is never spoken by anyone; it is painted on a door, and it is one of the most quoted things its season produced. Catchphrases belong here and are the easiest to miss, because familiarity stops them registering as lines — if a character says a thing every week, or a show opens the same way every episode, write it down. Exact wording is everything; an approximation is worthless. Note who says it and where.
+
+THINGS PEOPLE KNOW ABOUT IT. The production story, the fun fact, the verdict the fandom has settled on — what the creator has said about it since, what was cut or nearly changed, what it is agreed to have deserved and not got, the argument its audience keeps having. Not words from inside the work: facts and opinions about it.
+
+WHAT THE FANDOM SAYS. The running gag, the affectionate complaint, the meme, the thing everyone who finished it brings up. Record the actual phrasing where there is one — a meme has a canonical wording and paraphrase destroys it. Where there is no fixed phrasing, describe the joke plainly and let the next pass write it.
+
+MEMES ARE THE STRONGEST SIGNAL. A meme is an inside joke that spread far enough to become a format, so if this work produced one it is almost certainly its best memory. Go looking first, not last. Record its exact wording, and say whether the words came from the work or from the fandom — that decides how it is filed later.
+
+=== WHERE TO FIND THEM ===
+
+Look where people are using these lines, not where people are explaining them:
+
+- The work's own wiki, especially a /Quotes subpage — most fan wikis keep one.
+- Threads asking "favourite line", "most iconic moment", "what do you still quote".
+- Comment sections and forum posts where the phrase is dropped casually with NO explanation attached. This is the strongest possible evidence: it means the phrase is common currency.
+- Video titles and top comments that quote the line back.
+- Memes built on it, and meme databases. A line that survives being turned into a template is a line that landed, and the template's own wording is the form to record. Check whether the phrase has a life outside the work's own community — that is the ceiling of recognition.
+- Retrospectives and anniversary pieces, which tend to collect the famous beats.
+- For anything live-service or serialised: the reaction threads to the specific update, where the community's own name for what happened shows up.
+- Merchandise. A line printed on a shirt has already proved itself.
+
+For REFERENCES specifically, which are the ones most often missed, look somewhere else entirely: interviews and commentary tracks, "behind the scenes" and "making of" pieces, the trivia section of a wiki or database entry, what the creator has said about it since, what was cut or nearly changed, and the arguments the fandom keeps having. That last one is where a verdict like "should have been in cinemas" comes from — a thing everybody thinks and nobody had to be told.
+
+THE FIELD TEST: if every result you can find is an article EXPLAINING the phrase, it is trivia and not currency — leave it out. If you find it used in passing, by strangers, as though everyone already knows it, it belongs here.
+
+DO NOT MINE THE MARKETING. Store pages, press releases, trailer voiceover, the publisher's own blurb and the "about" section produce confident, well-formed, worthless lines. Nobody quotes an announcement.
+
+=== IT MUST BELONG TO THIS VERSION ===
+
+The trap on everything that comes in seasons, updates, remakes and re-releases: a famous line from the wider franchise or from the base game is NOT a line from the season, update or edition being described. Asked about one season of a hero shooter, "HULK SMASH" is the wrong answer — Hulk was there before it and will be there after; it says nothing about this season and would read identically under any other. Ask instead: would someone who experienced ONLY this version recognise it, and would someone who experienced every version EXCEPT this one not? What qualifies is what this version introduced or is remembered for — the new character's line, the event's own catchphrase, the bug or the balance decision it became notorious for, the thing the community would not stop saying while it ran.
+
+=== FORMAT LINES ===
+
+At most two may be about the format rather than the work. Mark those "scope": "medium"; everything else is "scope": "work". A format line is about the EXPERIENCE of consuming this kind of thing, of the specific sort this work puts people through — "The bookmark has not moved since March." "Saved before the boss. Saved after the boss. Saved between the two, just in case." "A guide is open in the other window. It has been since hour one."
+
+Extra rules for one: no proper nouns, no title, no character — it must still read true for someone who has never touched this work. And it must be a real habit of the format, not an observation you constructed to fill the slot; if nothing about this work points at one, return none, which is much the more common case.
+
+Report honestly on how much you actually found. A work with two real lines and nothing else is a normal result and saying so is more useful than padding. Never invent a quotation: it will be shown to the user as a real line from something they finished.
+
+Avoid anything that only lands if you know the ending, and avoid the crude and the sexual — these get printed above a library page.`,
+    nonFiction: `the lines are the real ones: the presenter's catchphrase, the format's stock phrase, the commentator's famous call, the running joke about the show that its viewers all share. Not the name of a segment, a rule or a trophy — what people actually say about it.`,
+    keys: ["flavorTexts"],
+    shape: `{"flavorTexts": [{"text": "the line itself, complete and quotable on its own", "kind": "quote | reference | joke", "scope": "work | medium", "attribution": "who says it, or where it appears", "why": "at most eight words of context for an archivist — NOT an explanation of the line"}]}`,
+    structureNotes: `=== WHAT MAKES ONE GOOD ===
 
 These get printed alone, in italics, under the title of a library. One line, no context, nothing around it. So:
 
-IT CARRIES A WHOLE FEELING IN A FRAGMENT. "Wait for the trade." is four words holding a complete argument: monthly issues cost too much, the story does not land in twenty-page pieces, and the person saying it has been doing this for years. Compression is the craft. A line that needs a second sentence to arrive has not arrived — and the corollary is the sharpest test in this brief: IF THE LINE NEEDS ITS \"why\" FIELD TO LAND, IT IS THE WRONG LINE. That field is a note for an archivist, never the setup for a punchline. Move the meaning into the text or drop the entry.
+IT CARRIES A WHOLE FEELING IN A FRAGMENT. "Wait for the trade." is four words holding a complete argument: monthly issues cost too much, the story does not land in twenty-page pieces, and the person saying it has been doing this for years. Compression is the craft. A line that needs a second sentence to arrive has not arrived — and the corollary is the sharpest test in this brief: IF THE LINE NEEDS ITS \\"why\\" FIELD TO LAND, IT IS THE WRONG LINE. That field is a note for an archivist, never the setup for a punchline. Move the meaning into the text or drop the entry.
 
 THE SPECIFIC DETAIL IS THE CREDENTIAL. "The scanlation group went quiet at chapter 214." The number is what makes it true. Anyone can say a series had translation trouble; only a reader says 214. One concrete thing — a number, an object, a moment, a small defeat — is what separates a line from an observation. Categories are not details: "recurring humour about the protagonist's poor sense of direction" is a category, "Zoro is lost again. He was standing right there." is a detail.
 
@@ -345,38 +419,6 @@ THE AFFECTION IS LOAD-BEARING. Almost all of these are complaints from people wh
 IT DOES NOT ANNOUNCE ITSELF AS A JOKE. State the fact deadpan and let the recognition do the laughing. No "and we all know", no exclamation added for energy, no signalling that a joke is arriving.
 
 IT HAS A SHAPE. Either a setup and a turn — "The character creator took ninety minutes. The helmet covers the face." — or a flat statement whose comedy is the flatness — "Bought in the sale, installed, never launched." What kills a line is trailing off: a strong open and a vague close reads worse than either half alone.
-
-=== THE THREE KINDS ===
-
-QUOTE — WORDS FROM INSIDE THE WORK. Said aloud, yes, but written counts just as much: text on a screen, a title card, a sign, a scrawl on a door, a line of interface, a sound effect printed on the page, a loading message. "Don't open, dead inside." is never spoken by anyone; it is painted on a door, and it is one of the most quoted things its season produced. YOU DIED. Reticulating splines. SNIKT. All quotes.
-Catchphrases live here too, and they are the easiest ones to miss because they are so familiar they stop registering as lines. If a character says a thing every week, or a show opens the same way every episode, that is a quote and probably the best one available. Take Supernatural's first season: "Driver picks the music, shotgun shuts his cakehole." is right, and so is "Saving people, hunting things — the family business.", and so is "Dad's been on a hunting trip, and he hasn't been home in a few days." — the last one being the line the show opened on again and again. Do not stop at two when the third is the one people actually say.
-Word for word. The exact wording is the whole value and an approximation is worthless. Marketing copy is not a quote; if it sounds like it came off a trailer, it did.
-A line from the work that went on to become a meme is still a QUOTE — see the note under jokes. It is filed by where the words came from, not by how famous they got.
-
-REFERENCE — SOMETHING YOU KNOW ABOUT THE WORK, not words from inside it. The production story, the fun fact, the thing the fandom has collectively decided is true. Written the way one fan tells another, short and flat, with no throat-clearing:
-  "Gooseworx actually hates this."
-  "Probably the most accurate video-game adaptation ever made."
-  "Should have been in cinemas."
-  "The whole thing was a sketch on an imageboard before it made grown adults cry."
-Those are verdicts and trivia, not quotations, and they are the kind that gets written least often because it is the least obvious. Go looking for it deliberately: who made it and what they have said about it since, what it was nearly called, what got cut, what the fandom argues about, what it is agreed to have deserved and not got. Never a bare noun phrase, never a wiki sentence — a thing a person would say.
-
-JOKE — WHAT THE FANDOM SAYS, PERFORMED. This is where the generated ones fail most often, and the failure is always the same: reporting the joke instead of telling it. A joke has a stance and a delivery. A fact has neither.
-  NO   "Sam wears women's underwear."
-  YES  "Did you know Sam Winchester wears women's underwear?"
-  NO   "The subreddit is dedicated to rubber duckies."
-  YES  "Killing people with rubber ducks since 2016."
-Same material both times. What changes is that the second one is being SAID to someone. Shapes that work: the conspiratorial question ("Did you know…?"), the mock tagline ("… since 2016."), the resigned report of a running gag ("Zoro is lost again. He was standing right there."), the affectionate complaint ("Togashi is on hiatus again."), the flat overstatement played straight.
-THE TEST: if it would sit unchanged in the Trivia section of a wiki, it is not a joke yet. Say it out loud. If nobody is speaking, rewrite it until someone is.
-
-MEMES COUNT, AND THEY ARE THE STRONGEST VERSION OF THIS. A meme is an inside joke that spread far enough to become a format, so if a work produced one it is almost certainly the best memory that work has — go looking for it first, not last. Three things about them:
-
-- A MEME HAS A CANONICAL WORDING. Reproduce it exactly, the way you would a quote. Paraphrase kills it: "Players press F to show respect" is not "Press F to pay respects", and only the second one is recognised by anybody.
-- WHICH KIND IT IS depends on where the words came from, not on the fact that it is a meme. If the wording is from the work — a line, a screen, an interface prompt — file it as a QUOTE. If the fandom wrote it themselves, file it as a JOKE. "One does not simply walk into Mordor." is a quote that became a meme; "Togashi is on hiatus again." is a joke its readers made up. Both belong here; they just belong under different kinds.
-- IF IT IS AN IMAGE, IT NEEDS WORDS TO SURVIVE. Only text is printed, so a purely visual meme cannot be used — and must not be DESCRIBED instead. "The one where he points at the screen" is a caption for a picture nobody can see, which is the label failure again in a new coat. Either the meme carries its own words, or it does not belong.
-
-A meme that outgrew its source still counts. Plenty of people know "Press F to pay respects" without knowing which game it came from; the user who finished that game knows both, and that doubled recognition is exactly what this is for.
-
-Most works have no meme at all, and that is unremarkable. Never manufacture one — a work without a meme has other memories.
 
 === WORKED EXAMPLES ===
 
@@ -404,29 +446,6 @@ The same material, wrong and then right:
 
 And one that is a real quotation and still fails: a line genuinely spoken in the work that nobody has ever repeated. Accuracy is not the bar. The bar is that it LEFT the work.
 
-=== WHERE TO FIND THEM ===
-
-Look where people are using these lines, not where people are explaining them:
-
-- The work's own wiki, especially a /Quotes subpage — most fan wikis keep one.
-- Threads asking "favourite line", "most iconic moment", "what do you still quote".
-- Comment sections and forum posts where the phrase is dropped casually with NO explanation attached. This is the strongest possible evidence: it means the phrase is common currency.
-- Video titles and top comments that quote the line back.
-- Memes built on it, and meme databases. A line that survives being turned into a template is a line that landed, and the template's own wording is the form to record. Check whether the phrase has a life outside the work's own community — that is the ceiling of recognition.
-- Retrospectives and anniversary pieces, which tend to collect the famous beats.
-- For anything live-service or serialised: the reaction threads to the specific update, where the community's own name for what happened shows up.
-- Merchandise. A line printed on a shirt has already proved itself.
-
-For REFERENCES specifically, which are the ones most often missed, look somewhere else entirely: interviews and commentary tracks, "behind the scenes" and "making of" pieces, the trivia section of a wiki or database entry, what the creator has said about it since, what was cut or nearly changed, and the arguments the fandom keeps having. That last one is where a verdict like "should have been in cinemas" comes from — a thing everybody thinks and nobody had to be told.
-
-THE FIELD TEST: if every result you can find is an article EXPLAINING the phrase, it is trivia and not currency — leave it out. If you find it used in passing, by strangers, as though everyone already knows it, it belongs here.
-
-DO NOT MINE THE MARKETING. Store pages, press releases, trailer voiceover, the publisher's own blurb and the "about" section produce confident, well-formed, worthless lines. Nobody quotes an announcement.
-
-=== IT MUST BELONG TO THIS VERSION ===
-
-The trap on everything that comes in seasons, updates, remakes and re-releases: a famous line from the wider franchise or from the base game is NOT a line from the season, update or edition being described. Asked about one season of a hero shooter, "HULK SMASH" is the wrong answer — Hulk was there before it and will be there after; it says nothing about this season and would read identically under any other. Ask instead: would someone who experienced ONLY this version recognise it, and would someone who experienced every version EXCEPT this one not? What qualifies is what this version introduced or is remembered for — the new character's line, the event's own catchphrase, the bug or the balance decision it became notorious for, the thing the community would not stop saying while it ran.
-
 === HOW MANY ===
 
 Up to six, and fewer is usually right. There is no minimum.
@@ -437,22 +456,11 @@ So: six only for something with a deep, well-documented well of quoted material.
 
 Never pad. Never assemble a line from facts because a slot is empty. A fabricated quote is the single worst thing this research can produce, because it will be shown to the user as a real line from something they finished.
 
-=== FORMAT LINES ===
+ONE EXCEPTION TO THE USUAL RULE, and only for this section: you MAY rephrase. The notes are raw material, and an inside joke recorded as a flat fact has to be written out as somebody saying it before it is worth printing — "Sam wears women's underwear." becomes "Did you know Sam Winchester wears women's underwear?". That is writing, not inventing. What you must NOT do is add a memory the notes do not support, or alter the wording of anything the notes give as a direct quotation: a quote and a meme both have exact wording and it is reproduced character for character, never tidied, translated or trimmed.
 
-At most two may be about the format rather than the work. Mark those "scope": "medium"; everything else is "scope": "work". A format line is about the EXPERIENCE of consuming this kind of thing, of the specific sort this work puts people through — "The bookmark has not moved since March." "Saved before the boss. Saved after the boss. Saved between the two, just in case." "A guide is open in the other window. It has been since hour one."
-
-Extra rules for one: no proper nouns, no title, no character — it must still read true for someone who has never touched this work. And it must be a real habit of the format, not an observation you constructed to fill the slot; if nothing about this work points at one, return none, which is much the more common case.
-
-=== FINALLY ===
-
-Avoid anything that only lands if you know the ending, and avoid the crude and the sexual — these get printed above a library page.`,
-    nonFiction: `the lines are the real ones: the presenter's catchphrase, the format's stock phrase, the commentator's famous call, the running joke about the show that its viewers all share. Not the name of a segment, a rule or a trophy — what people actually say about it.`,
-    keys: ["flavorTexts"],
-    shape: `{"flavorTexts": [{"text": "the line itself, complete and quotable on its own", "kind": "quote | reference | joke", "scope": "work | medium", "attribution": "who says it, or where it appears", "why": "at most eight words of context for an archivist — NOT an explanation of the line"}]}`,
-    structureNotes: `AT MOST six entries, and there is no minimum — an empty array is a valid answer and so is one entry. Record every line the notes actually support and not one more. If the notes offer two strong lines, return two: the app shows ONE of these at a time, so a padded entry does not average out, it gets its own turn on the page alone. NEVER invent one to fill a slot.
 "text" must be a complete utterance — something a person says. A bare noun phrase is a glossary headword, not a line: if an entry reads like the title of a topic ("The Waiting Room", "Crimson Chronovium", "The 35 GB DLC"), either the notes contain the actual line and you should use that instead, or they do not and the entry must be dropped.
 If "text" only makes sense once "why" is read, the entry is wrong. Fix it or drop it.
-Reproduce a quote exactly as the notes give it — do not tidy the grammar, translate it, or trim it. Never add a gloss, a parenthetical or an explanation to a line.
+"kind" is decided by where the words came from: from inside the work is "quote", something known about the work is "reference", something the fandom says is "joke". A meme follows the same rule — "One does not simply walk into Mordor." is a quote that became a meme, "Togashi is on hiatus again." is a joke its readers wrote.
 "attribution" is optional and omitted when the notes do not name a speaker. "scope" is "work" unless the notes marked the line as being about the format rather than the work; a "medium" line names no title and no character, and never carries an attribution.`,
   },
 };
@@ -483,6 +491,31 @@ export const FACET_FOR_KEY: Record<string, Facet> = {
 export interface ResearchContext {
   subject: CodexSubject;
   identity: CodexIdentity;
+}
+
+/**
+ * How much to write, set by how much there is to write about.
+ *
+ * This used to be one line — "BREADTH IS THE POINT, aim well past a dozen
+ * entries" — sent to every facet of every work. On something with a large wiki
+ * that produces pages of material the model could have written from memory, and
+ * research output is the largest single cost in the whole pipeline. On something
+ * obscure the same instruction produces padding, because the long tail it is
+ * reaching for does not exist and inventing it is the failure mode that matters
+ * most: for a work nobody knows, the dossier is the ONLY thing later features
+ * have to go on, so a confident fabrication propagates unchallenged.
+ *
+ * So the budget follows the coverage the identify pass reported. Spend little on
+ * what is already common knowledge, spend everything on what is not.
+ */
+function depthRule(coverage?: string): string {
+  if (coverage === "abundant") {
+    return `- THIS WORK IS WELL DOCUMENTED, so be thorough but not expansive. Name every entry that matters and give each one or two tight lines — the reader of this dossier needs the facts, not an essay, and padding a well-known subject adds cost without adding anything. Depth beats length: a precise line about a minor character is worth more than a paragraph about the lead.`;
+  }
+  if (coverage === "thin") {
+    return `- THIS WORK IS BARELY DOCUMENTED, and that makes this pass the whole ballgame. Nothing downstream knows anything about it beyond what you write here, so record everything you can actually verify, including the small and the incidental, and prefer a specific detail from one dedicated source over a general statement you could have made about any work in the genre. Where the record simply stops, say so plainly and stop with it — a short sourced answer is exactly right, and a fabricated one is worse here than anywhere else in this dossier because there is nothing else to catch it.`;
+  }
+  return `- BREADTH IS THE POINT. The obvious headline entries are the easy part; the value is in the long tail. Aim well past a dozen entries where the work supports it, and include the minor, the regional and the everyday.`;
 }
 
 /**
@@ -613,9 +646,12 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
   "why": "one sentence on how you know this is the right one and not a same-named work",
   "alternatives": ["same-named works you rejected, with their year and format"],
   "sources": ["up to 4 URLs you actually consulted"],
+  "coverage": "abundant | moderate | thin",
   "confidence": "high | medium | low",
   "notes": "anything ambiguous (empty string if all clear)"
 }
+
+"coverage" is how much MATERIAL EXISTS about this work, which is a different question from how confident you are that you found the right one. "abundant" means encyclopedic — a large wiki, wide press coverage, something most people have heard of. "thin" means the record is a handful of pages: an indie title, a small webcomic, a self-published book, a work in a language with little English coverage. "moderate" is everything between. Judge the WORLD's coverage, not your own knowledge, and do not flatter it — calling a small work abundant is the more damaging error, because it tells the passes after this one that they need not look hard.
 
 If NOTHING matches the format and year, do not substitute the famous one: say so in "notes", set "confidence" to "low", and answer for the work that was actually asked for.`;
 }
@@ -657,9 +693,10 @@ ${REFERENCE_NOT_TEMPLATE}
 How to answer:
 - Prose, not JSON, not a schema. Headings and bullets are fine. Length is not a problem — this is the one place the detail gets recorded, and everything the app later invents is built from it.
 - Name things. Never write "various characters", "several locations" or "a rich world" — those are worth nothing to the reader of this dossier.
+- IF THIS WORK IS OBSCURE, THAT IS THE CASE THIS PASS EXISTS FOR. A famous work is described just as well from what you already know; a small one is not described at all unless it is looked up. When the general web is thin, go where its actual audience is — ${NICHE_SOURCES[subject.mediaType] || "the communities, forums and wikis its own audience keeps"}. A short honest answer sourced from one dedicated wiki beats a confident one assembled from a similar-sounding title, and inventing detail to fill a gap is the single worst outcome here: everything the app builds later is written from this, and for a work nobody knows there is nothing else to catch the error.
 ${facet === "lore"
   ? `- SELECTIVITY IS THE POINT, and this facet is the exception to how the others work. Every other part of the dossier wants the long tail; this one wants only what genuinely cleared the bar above. Two lines you are sure of beat six with four you talked yourself into.`
-  : `- BREADTH IS THE POINT. The obvious headline entries are the easy part; the value is in the long tail. Aim well past a dozen entries where the work supports it, and include the minor, the regional and the everyday.`}
+  : depthRule(identity.coverage)}
 - Prefer widely known material. Avoid late-story twists and ending spoilers — the user may still be partway through.
 ${facet === "lore" ? "" : `- Write it as an encyclopedia would: what is true, in the work's own vocabulary. Not a pitch, not a stat block, not a list of things someone could use.\n`}
 - If you genuinely cannot verify something, leave it out and say so at the end rather than inventing it. A short honest answer beats a padded one.
