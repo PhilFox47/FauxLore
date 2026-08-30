@@ -374,6 +374,13 @@ export interface CodexData {
   confidence?: string;
   /** Per-section confidence, so one weak area does not discredit the rest. */
   sectionConfidence?: CodexSectionConfidence;
+  /**
+   * Which sections were looked up and which the model wrote from its own recall.
+   * Research is only run where the model said it was unsure, so this records
+   * what was actually checked — the two are not equally trustworthy and the
+   * difference is otherwise invisible.
+   */
+  sectionSourcing?: Partial<Record<string, 'searched' | 'recalled'>>;
   notes?: string;
   sources?: string[];
 }

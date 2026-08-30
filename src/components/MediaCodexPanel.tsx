@@ -295,6 +295,13 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
   const data = codex?.data;
   const isBusy = isCompiling || codex?.status === 'generating';
 
+  // Sections the model wrote from memory rather than looking up. Worth saying
+  // out loud: research is skipped where the model claimed to be sure, and on an
+  // obscure work that claim is exactly where invention gets in.
+  const recalled = Object.entries(data?.sectionSourcing || {})
+    .filter(([, how]) => how === 'recalled')
+    .map(([section]) => SECTION_LABEL[section] || section);
+
   const weakSections = Object.entries(data?.sectionConfidence || {})
     .filter(([, grade]) => grade && grade !== 'high') as [string, string][];
 
@@ -555,7 +562,7 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
                 )}
               </Chapter>
 
-              {(weakSections.length > 0 || data.notes) && (
+              {(weakSections.length > 0 || recalled.length > 0 || data.notes) && (
                 <Chapter title="About this research">
                   {weakSections.length > 0 && (
                     <Section icon={<AlertTriangle className="w-3 h-3" />} title="Less certain about">
@@ -571,6 +578,29 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
                           </span>
                         ))}
                       </div>
+                    </Section>
+                  )}
+                  {recalled.length > 0 && (
+                    <Section icon={<Library className="w-3 h-3" />} title="Not looked up">
+                      {/* The model is asked up front which areas it already knows,
+                          and only the rest are searched — searching is the part
+                          that costs money. Saying which is which matters: a
+                          section written from recall about an obscure work is
+                          where invention gets in, and it otherwise looks exactly
+                          like a researched one. */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {recalled.map((label) => (
+                          <span
+                            key={label}
+                            className="text-xs px-2 py-1 bg-zinc-500/10 text-zinc-400 rounded border border-white/10"
+                          >
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-xs text-zinc-600 leading-snug mt-1.5">
+                        Written from what the model already knew, having said it was sure. Re-research to look these up as well.
+                      </p>
                     </Section>
                   )}
                   {data.notes && (
