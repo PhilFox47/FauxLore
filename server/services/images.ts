@@ -1,4 +1,5 @@
 import fs from "fs";
+import { imageSize } from "../lib/imageSize";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
@@ -132,7 +133,32 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
       const arrayBuffer = await imageRes.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      const fileName = `${uuidv4()}.webp`;
+      // What we asked for and what we got are not the same question, and until
+      // now nothing compared them. A provider that ignores `size` — or silently
+      // rounds it to a shape it prefers — produced an image of the wrong
+      // dimensions with nothing anywhere to say so, which is indistinguishable
+      // from the setting never having been saved.
+      const actual = imageSize(buffer);
+      if (actual?.width && actual?.height) {
+        const got = `${actual.width}x${actual.height}`;
+        if (cfg.size && got !== cfg.size) {
+          console.warn(
+            `[images] Asked ${cfg.model} for ${cfg.size} and got ${got}. ` +
+              `The provider is not honouring the size parameter for this model — ` +
+              `changing it in Settings will keep having no effect until a value it accepts is used.`,
+          );
+        } else {
+          console.log(`[images] ${cfg.model} returned ${got}`);
+        }
+      }
+
+      // The extension follows what actually arrived. It was hard-coded to .webp
+      // while the bytes were written through untouched, so a PNG from the model
+      // landed on disk claiming to be something else.
+      const ext = ({ webp: ".webp", png: ".png", jpg: ".jpg", jpeg: ".jpg", gif: ".gif" } as Record<string, string>)[
+        String(actual?.type || "").toLowerCase()
+      ] || ".webp";
+      const fileName = `${uuidv4()}${ext}`;
       const filePath = path.join(aiImagesDir, fileName);
 
       fs.writeFileSync(filePath, buffer);
