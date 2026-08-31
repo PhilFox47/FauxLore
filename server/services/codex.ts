@@ -343,6 +343,15 @@ export interface CodexData {
     styleKeywords?: string[];
     /** The wrong default someone unfamiliar would reach for. */
     notLike?: string;
+    /**
+     * What form the work actually takes.
+     *
+     * Everything else in this block is read through it: "line quality" means
+     * nothing for a live-action drama and "film grain" means nothing for a
+     * webcomic, so the labels shown for these fields are chosen from here rather
+     * than assuming everything is drawn.
+     */
+    form?: string;
   };
   characters?: CodexEntity[];
   /** Who and what stands in opposition — people, groups, forces, creature types. */
@@ -474,15 +483,35 @@ export function codexArtStyleBlock(codex: CodexRow | null): string {
   if (!art) return "";
 
   const keywords = (art.styleKeywords || []).map((k) => String(k).trim()).filter(Boolean);
+  const form = String(art.form || "").toLowerCase();
+  const photographic = /live action|photograph/.test(form);
+  const rendered = /3d|render/.test(form);
+
+  // The same three fields mean different things depending on what the work is,
+  // and labelling them all as drawing was the bug: it invited a live-action
+  // series to be described as though somebody had inked it.
+  const surfaceLabel = photographic
+    ? "Film stock, grain & grade"
+    : rendered
+      ? "Rendering, materials & post-processing"
+      : "Line, texture & rendering";
+  const framingLabel = photographic ? "Camera, lens & framing" : "Framing & composition";
+  const peopleLabel = photographic
+    ? "Casting, costume & make-up look"
+    : rendered
+      ? "Character models & design language"
+      : "How its people and creatures look";
+
   const rows: [string, string | undefined][] = [
+    ["Form", art.form],
     ["Named style", keywords.length ? keywords.join(", ") : undefined],
     ["In one line", art.summary],
     ["Medium & technique", art.medium],
     ["Palette", art.palette],
     ["Light & weather", art.lighting],
-    ["Line & rendering", art.linework],
-    ["Framing", art.composition],
-    ["How its people and creatures are drawn", art.characterDesign],
+    [surfaceLabel, art.linework],
+    [framingLabel, art.composition],
+    [peopleLabel, art.characterDesign],
     ["Recurring motifs & emblems", art.iconography],
   ];
 
@@ -492,7 +521,12 @@ export function codexArtStyleBlock(codex: CodexRow | null): string {
   if (!lines.length) return "";
 
   if (art.notLike && art.notLike.trim()) {
-    lines.push(`Commonly drawn wrong as: ${art.notLike.trim()} — this work does not look like that.`);
+    lines.push(`Commonly pictured wrong as: ${art.notLike.trim()} — this work does not look like that.`);
+  }
+  if (/^none/.test(form)) {
+    lines.push(
+      "This work has no rendered form of its own — everything above is the visual register it is ASSOCIATED with, not a style it was drawn in. Treat it as a direction to work in, not a look to reproduce.",
+    );
   }
   return [`— HOUSE STYLE OF THIS WORK —`, ...lines].join("\n");
 }

@@ -134,6 +134,28 @@ export const TYPE_BRIEF: Record<string, string> = {
 };
 
 /**
+ * What "visual identity" means for this kind of work.
+ *
+ * The vocabulary of art style is overwhelmingly drawn from illustration —
+ * linework, palette, character design — and asked in those terms a researcher
+ * quietly reframes everything as if it were animated. A live-action drama gets
+ * described as though somebody inked it, a photoreal game as though it were a
+ * cartoon, and a novel gets an invented art style because the question assumed
+ * one existed. The app covers everything from prestige television to pixel-art
+ * roguelikes to audiobooks, so the question has to change shape per medium.
+ */
+const VISUAL_IDENTITY_BY_TYPE: Record<string, string> = {
+  Movie: `This may be live action, animated, or a mix — establish which FIRST, and describe what it actually is. For live action that means cinematography rather than drawing: the lens language and depth of field, whether it was shot on film or digital and how it is graded, its aspect ratio, how it is lit and with what quality of light, the camera's behaviour (locked off, handheld, crane, long take), the production design, costume and make-up, the practical-versus-digital balance of its effects, and its grain and texture. For animation, describe the animation technique itself.`,
+  Series: `This may be live action, animated, documentary or a studio-format show — establish which FIRST. Live action means cinematography, not drawing: lens language, film or digital and how it is graded, aspect ratio, lighting quality, camera behaviour, production design, costume and make-up, and how it uses effects. A studio or panel show has a real visual identity too — its set, its lighting rig, its title sequence, its graphics package. Describe whichever this actually is.`,
+  Game: `Establish the rendering approach FIRST: photoreal 3D, stylised or toon-shaded 3D, hand-painted 3D, 2D sprite or pixel art, hand-drawn animation, isometric, first-person, or something else. Then describe it in the terms that approach actually uses — for 3D that means material and surfacing treatment, poly and detail density, lighting model, post-processing signature (bloom, chromatic aberration, grain, colour grade), and camera perspective; for pixel art it means resolution, palette limits and animation cadence. Name the engine look if it has a recognisable one.`,
+  "Visual Novel": `Establish FIRST whether the art is anime-style illustration, painted, photographic, 3D-rendered or photo-composite, since western and Japanese titles differ sharply here. Then cover the character-sprite style and how expressions are handled, the background treatment (painted, photographic, filtered photography, 3D render), the CG illustration style at set-piece moments, and the interface and text-box design, which is a real part of how these look.`,
+  Manga: `Ink and page craft: line weight and confidence, screentone versus hatching versus digital shading, how black is used, panel shapes and page rhythm, how motion and impact are drawn, and the character design language — proportions, eyes, hair, faces. Note whether it is published in black and white and how any colour pages differ.`,
+  Comic: `Ink and colour craft: line weight and finish, whether it is inked or painted or digitally rendered, the colouring approach (flats, rendered, watercolour, limited palette, halftone), lettering and sound-effect design, panel and page layout, and the character design language. Note the era's printing look if that is part of its identity.`,
+  Book: `A novel has no rendered form of its own, so do NOT invent an art style for it. Describe instead the visual register it is ASSOCIATED with, which is a real and useful thing: the tradition its covers belong to and how they have been designed across editions, any interior illustration or map work and by whom, how it is depicted when it is depicted — adaptations, official art, the way its readers picture it — and where its world sits on the scale from grounded and realistic to heightened and fantastical, with the period, materials and textures that world implies. If it genuinely has no established visual identity at all, say so plainly rather than manufacturing one.`,
+  Audiobook: `An audiobook or podcast has no visual form. Do not invent one. Describe its cover and packaging design if it has a distinctive one, and otherwise the visual register its subject matter implies — the period, the materials, the textures, how grounded or heightened its world is — and say plainly that this is an association rather than a rendered style. For a non-fiction show, that may be nothing more than its own branding, which is an honest answer.`,
+};
+
+/**
  * Where a work of this type is written about when it is NOT famous.
  *
  * This is the half of the library the research is worst at. Any model already
@@ -311,7 +333,10 @@ Include the ordinary and the everyday, not only the legendary. A work's most mem
 - the setpieces, beats and images it is famous for, avoiding ending spoilers
 - its sound: score, composer, instrumentation, signature sounds or voices
 - its VISUAL identity, in more detail than anything else here. This section is not description for its own sake: the app generates artwork that has to pass as belonging to this work, and this is the only thing it has to go on. Cover the medium and technique it is rendered in, its palette, how it is lit and in what weather and time of day, its line quality and how much detail it resolves, how shots are framed, the design language of its people and creatures, and its recurring motifs, emblems and architecture. An adaptation does not look like its source; describe how THIS version looks.
-  Then two things specifically for an artist working from your notes. First, the SHORT NAMED PHRASES someone would use to brief this look — the medium, the technique, the era, the school, the studio's house style, the comparable work anyone in the field would recognise ("cel-shaded anime key art", "ligne claire", "16-bit pixel art", "gouache storybook illustration", "photoreal handheld 35mm"). Concrete craft terms, not moods: "atmospheric" briefs nothing, "high-contrast chiaroscuro with crushed blacks" briefs a picture. Second, what this work is most often MISTAKEN for or wrongly drawn as — the wrong default that someone unfamiliar would reach for, which for a great many works is generic flat cartoon vector art.
+  Then three things specifically for an artist working from your notes.
+  First, SAY WHAT FORM IT TAKES in plain words — live action, 2D animation, 3D render, illustration, pixel art, photography, a mix of these, or none at all. Everything else depends on getting that right, and the commonest failure in this section is describing a live-action or photoreal work in the language of drawing.
+  Second, the SHORT NAMED PHRASES someone would use to brief this look — the technique, the era, the school, the house style, the comparable work anyone in the field would recognise. Draw them from the vocabulary the form actually uses: "anamorphic 35mm, teal-and-orange grade, handheld" for live action, "photoreal PBR, volumetric fog, heavy chromatic aberration" for a 3D game, "cel-shaded anime key art" or "ligne claire" for drawn work, "16-bit sprite work, 32-colour palette" for pixel art. Concrete craft terms, not moods: "atmospheric" briefs nothing, "high-contrast chiaroscuro with crushed blacks" briefs a picture.
+  Third, what this work is most often MISTAKEN for or pictured wrongly as — the wrong default someone unfamiliar would reach for. For a great many works that is generic flat cartoon vector art; for a stylised game it is often photorealism; for a period drama it is often a clean modern digital look it does not have.
 - how it was made: the studio, the authors, the notable production or development history, anything unusual about how it came to exist
 - how it was received: acclaim or dismissal, awards, controversy, its reputation now, what it influenced
 - the descriptive words that would classify it: its genres, and the subject matter, mechanics, structure, mood and audience terms that apply`,
@@ -345,7 +370,8 @@ Include the ordinary and the everyday, not only the legendary. A work's most mem
     "composition": "how shots are framed and composed",
     "characterDesign": "the design language of its people and creatures",
     "iconography": "recurring motifs, emblems, logos, insignia, costume or architecture cues",
-    "styleKeywords": ["4-8 short named craft phrases that brief this exact look"],
+    "form": "live action | 2D animation | 3D render | illustration | pixel art | photography | mixed | none",
+    "styleKeywords": ["4-8 short named craft phrases that brief this exact look, in the vocabulary this form uses"],
     "notLike": "the wrong look someone unfamiliar would default to, named plainly"
   },
   "genres": ["3-6 genre terms, most defining first"],
@@ -681,6 +707,12 @@ ${alreadyFound.slice(0, 60).join(", ")}
 Go after the ones a first look misses: the recurring minor names, the regional and the everyday, the things listed further down the page.`
     : "";
 
+  // The visual question is asked differently per medium, and only the craft
+  // facet asks it. Everything else in this spec is medium-neutral already.
+  const visualNote = facet === "craft" && VISUAL_IDENTITY_BY_TYPE[subject.mediaType]
+    ? `\n\nHOW TO ANSWER THE VISUAL SECTION FOR THIS MEDIUM: ${VISUAL_IDENTITY_BY_TYPE[subject.mediaType]}`
+    : "";
+
   return `${searchQueryLine(subject, identity, spec.query)}
 
 You are the Codex Archivist of FauxLore, researching ONE subject area of ONE work. The work has already been identified — do not question it, and do not describe a different one.
@@ -689,7 +721,7 @@ THE WORK: "${title}"${identity.year ? ` (${identity.year})` : ""}${identity.crea
 ${aka.length ? `ALSO KNOWN AS: ${aka.join(" · ")} — search under these too, especially the original-language title, where the detailed material usually is.` : ""}${versionScope(subject)}
 ${gapBlock}
 
-WRITE UP: ${spec.brief}
+WRITE UP: ${spec.brief}${visualNote}
 
 ${REFERENCE_NOT_TEMPLATE}
 
