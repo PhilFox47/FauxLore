@@ -101,30 +101,84 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
     };
   }
 
+  /**
+   * Pulls the image URL out of whatever shape the answer arrives in.
+   *
+   * The normalized route's response is not written down in the documentation,
+   * and the legacy one returns `data[0].url`. Rather than guess one and break on
+   * the other, every plausible carrier is checked — a URL, a data URL, or raw
+   * base64 that has to be given a scheme before anything can fetch it.
+   */
+  function imageUrlFrom(payload: any): string | null {
+    const first = payload?.data?.[0] ?? payload?.images?.[0] ?? payload?.output?.[0] ?? null;
+    if (!first) return null;
+    if (typeof first === "string") return first;
+    if (first.url) return String(first.url);
+    if (first.image_url?.url) return String(first.image_url.url);
+    if (first.b64_json) return `data:image/png;base64,${first.b64_json}`;
+    return null;
+  }
+
+  /**
+   * Asks NanoGPT for an image.
+   *
+   * Two routes exist and they do NOT share field names — the documentation says
+   * so outright. The normalized one takes `resolution`; the older
+   * OpenAI-compatible one takes `size`, which is what this used to send, and
+   * which the Seedream route quietly ignored: the size in Settings had no effect
+   * and nothing anywhere said why.
+   *
+   * So the normalized route is tried first with the field it actually documents,
+   * and the legacy route is kept as a fallback for any model or deployment the
+   * new one does not serve. Losing image generation over a routing change would
+   * be a far worse outcome than a square picture.
+   */
+  async function requestImage(apiKey: string, body: Record<string, unknown>, url: string) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`${url} -> ${res.status} ${await res.text()}`);
+    return res.json();
+  }
+
   async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = ""): Promise<string> {
     const cfg = readImageConfig();
     const negativePrompt = [cfg.negative, extraNegative].filter(Boolean).join(", ");
-    const res = await fetch("https://nano-gpt.com/api/v1/images/generations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
+
+    // Steps and guidance are not among the API's common fields at all — they are
+    // model-specific where they exist — so they only ride along for a model whose
+    // name says it is the kind that needs them.
+    const tuning = {
+      ...(cfg.steps !== undefined ? { num_inference_steps: cfg.steps } : {}),
+      ...(cfg.guidance !== undefined ? { guidance_scale: cfg.guidance } : {}),
+    };
+
+    let remoteUrl: string | null = null;
+    try {
+      remoteUrl = imageUrlFrom(await requestImage(apiKey, {
         model: cfg.model,
-        prompt: prompt,
+        prompt,
+        negative_prompt: negativePrompt,
+        resolution: cfg.size,
+        n: 1,
+        ...tuning,
+      }, "https://nano-gpt.com/api/v1/images"));
+      if (!remoteUrl) throw new Error("no image in the normalized response");
+    } catch (e) {
+      console.warn(`[images] Normalized route failed, falling back to /generations: ${String((e as any)?.message || e)}`);
+      remoteUrl = imageUrlFrom(await requestImage(apiKey, {
+        model: cfg.model,
+        prompt,
         negative_prompt: negativePrompt,
         size: cfg.size,
-        // Omitted rather than guessed for a model whose schedule we do not know.
-        ...(cfg.steps !== undefined ? { num_inference_steps: cfg.steps } : {}),
-        ...(cfg.guidance !== undefined ? { guidance_scale: cfg.guidance } : {}),
-        response_format: "url"
-      })
-    });
-    if (!res.ok) throw new Error("NanoGPT Image Generation Failed: " + await res.text());
-    const data = await res.json();
-    const remoteUrl = data.data?.[0]?.url;
-    if (!remoteUrl) throw new Error("NanoGPT did not return an image URL");
+        ...tuning,
+        response_format: "url",
+      }, "https://nano-gpt.com/api/v1/images/generations"));
+    }
+
+    if (!remoteUrl) throw new Error("NanoGPT did not return an image");
 
     try {
       // Download and store locally
@@ -133,11 +187,6 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
       const arrayBuffer = await imageRes.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      // What we asked for and what we got are not the same question, and until
-      // now nothing compared them. A provider that ignores `size` — or silently
-      // rounds it to a shape it prefers — produced an image of the wrong
-      // dimensions with nothing anywhere to say so, which is indistinguishable
-      // from the setting never having been saved.
       const actual = imageSize(buffer);
       if (actual?.width && actual?.height) {
         const got = `${actual.width}x${actual.height}`;
@@ -319,7 +368,38 @@ Return ONLY the final image prompt text, nothing else.`;
     return nanoGenerateText(aiConfig, prompt, { temperature: 0.7, webSearch: !codexBlock, tier: "analytical" });
   }
 
+  /**
+   * What the configured image model actually accepts, from NanoGPT itself.
+   *
+   * `supported_parameters` is machine-readable and varies per model, so this is
+   * the only honest answer to "which resolutions can I use" — the enum values,
+   * the default, and the price per resolution, straight from the source rather
+   * than from a guess. It is also how to find out whether a setting that appears
+   * to do nothing is a value the model was never going to accept.
+   */
+  async function describeImageModel() {
+    const cfg = readImageConfig();
+    const url = `https://nano-gpt.com/api/v1/images/models/${encodeURIComponent(cfg.model)}/endpoints`;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+      if (!res.ok) return { ok: false, model: cfg.model, configured: cfg, error: `${res.status} ${await res.text()}` };
+      const body: any = await res.json();
+      const endpoint = body?.endpoints?.[0];
+      return {
+        ok: true,
+        model: cfg.model,
+        configured: { resolution: cfg.size, steps: cfg.steps, guidance: cfg.guidance },
+        supported_parameters: endpoint?.supported_parameters ?? null,
+        pricing: endpoint?.pricing ?? null,
+        input_reference_constraints: endpoint?.input_reference_constraints ?? null,
+      };
+    } catch (e: any) {
+      return { ok: false, model: cfg.model, error: String(e?.message || e) };
+    }
+  }
+
   return {
+    describeImageModel,
     internalGenerateImageWithNanoGpt,
     generateBossImageBackground,
     generateArtifactImageBackground,

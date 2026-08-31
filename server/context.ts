@@ -34,6 +34,8 @@ export interface ServerContext {
   generateBossImageBackground: (userId: string, bossId: string) => Promise<void>;
   generateArtifactImageBackground: (userId: string, artifactId: string) => Promise<void>;
   codex: CodexService;
+  /** What the configured image model accepts, asked of NanoGPT directly. */
+  describeImageModel: () => Promise<any>;
   /** The lines under a library title: global starters plus this user's earned ones. */
   flavorLibrary: FlavorLibrary;
   autoTag: AutoTagService;

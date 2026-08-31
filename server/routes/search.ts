@@ -468,6 +468,21 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
    * this reports which step broke rather than leaving an empty result to be
    * read as "no such game".
    */
+  /**
+   * What the configured image model accepts and what each resolution costs,
+   * read from NanoGPT rather than assumed. The answer to "why did my size
+   * setting do nothing" is usually in supported_parameters.
+   */
+  app.get("/api/images/model", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      res.json(await ctx.describeImageModel());
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
+
   app.get("/api/hltb/diagnose", async (req, res) => {
     try {
       const userId = getAuthUser(req, res);

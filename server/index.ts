@@ -119,7 +119,7 @@ async function startServer() {
       catch (e) { console.error("[flavorLibrary] Could not record researched lines", e); }
     },
   });
-  const { generateBossImageBackground, generateArtifactImageBackground } = createImageService({ db, aiImagesDir, codex });
+  const { generateBossImageBackground, generateArtifactImageBackground, describeImageModel } = createImageService({ db, aiImagesDir, codex });
   const coverCache = createCoverCache({ coversDir });
   const { spawnWorldBoss, generateEnemy } = createWorldBossService({ db, generateBossImageBackground, codex });
   const { generateLoot } = createLootService({ db, codex });
@@ -205,6 +205,7 @@ async function startServer() {
     generateBossImageBackground,
     generateArtifactImageBackground,
     codex,
+    describeImageModel,
     flavorLibrary,
     autoTag,
     activity,
