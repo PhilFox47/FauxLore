@@ -52,7 +52,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     nanoGptCreativeModel: '',
     geminiApiKey: '',
     imageModel: 'z-image-turbo',
-    imageSize: '1024x1024',
+    imageSize: '1024x768',
     imageSteps: 10,
     imageGuidance: 1.5,
     imageNegativePrompt: '',
@@ -119,7 +119,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         nanoGptCreativeModel: settings.nanoGptCreativeModel || '',
         geminiApiKey: settings.geminiApiKey || '',
         imageModel: settings.imageModel || 'z-image-turbo',
-        imageSize: settings.imageSize || '1024x1024',
+        imageSize: settings.imageSize || '1024x768',
         imageSteps: settings.imageSteps ?? 10,
         imageGuidance: settings.imageGuidance ?? 1.5,
         imageNegativePrompt: settings.imageNegativePrompt || '',
@@ -175,7 +175,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             nanoGptCreativeModel: settings.nanoGptCreativeModel || '',
             geminiApiKey: settings.geminiApiKey || '',
             imageModel: settings.imageModel || 'z-image-turbo',
-            imageSize: settings.imageSize || '1024x1024',
+            imageSize: settings.imageSize || '1024x768',
             imageSteps: settings.imageSteps ?? 10,
             imageGuidance: settings.imageGuidance ?? 1.5,
             imageNegativePrompt: settings.imageNegativePrompt || '',
@@ -1256,7 +1256,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-zinc-400 mb-1">Resolution</label>
-                      <input name="imageSize" value={formData.imageSize} onChange={handleChange} className="input-field" placeholder="1024x1024" />
+                      <input name="imageSize" value={formData.imageSize} onChange={handleChange} className="input-field" placeholder="1024x768" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-zinc-400 mb-1">Steps</label>

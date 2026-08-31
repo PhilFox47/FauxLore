@@ -25,7 +25,10 @@ import { codexArtStyleBlock, codexPromptBlock, type CodexService } from "./codex
  */
 const IMAGE_DEFAULTS = {
   model: "z-image-turbo",
-  size: "1024x1024",
+  // 4:3, because that is the box the app draws these in. A square default meant
+  // every generated image lost a quarter of itself to `object-cover` before
+  // anyone saw it. Same width as before, so nothing gets more expensive.
+  size: "1024x768",
   steps: 10,
   guidance: 1.5,
   negative: "watermark, signature, low quality, blurry, soft focus, out of focus, bokeh, shallow depth of field, heavy vignette, jpeg artifacts, deformed, disfigured, bad anatomy, extra limbs, cropped, oversaturated",
@@ -39,6 +42,24 @@ const IMAGE_DEFAULTS = {
  * advertise it — turbo, lightning, schnell, hyper, lcm — because the speed is
  * the selling point.
  */
+/**
+ * Tidies a resolution typed by hand into the form the API expects.
+ *
+ * The setting is a free-text field and the failure it produces is silent: a
+ * stray space or a multiplication sign instead of an "x" is not an error, it is
+ * a value the provider does not recognise and quietly replaces with its own
+ * default. Having just spent a round chasing exactly that, the obvious typos are
+ * now absorbed rather than passed on. Anything that still does not look like a
+ * resolution is left untouched, because inventing a correction would be worse
+ * than sending what was actually typed.
+ */
+export function normalizeResolution(value?: string | null): string | undefined {
+  const raw = String(value ?? "").trim();
+  if (!raw) return undefined;
+  const m = raw.replace(/[×✕✖]/g, "x").replace(/\s+/g, "").match(/^(\d{2,5})[xX*](\d{2,5})$/);
+  return m ? `${Number(m[1])}x${Number(m[2])}` : raw;
+}
+
 function isDistilled(model: string): boolean {
   return /\b(turbo|lightning|schnell|hyper|lcm|flash|fast)\b/i.test(model);
 }
@@ -92,7 +113,7 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
     return {
       model,
       distilled,
-      size: row.imageSize || IMAGE_DEFAULTS.size,
+      size: normalizeResolution(row.imageSize) || IMAGE_DEFAULTS.size,
       // Only defaulted for the family they were measured on. An explicit setting
       // is always honoured — someone who typed a number meant it.
       steps: row.imageSteps ?? (distilled ? IMAGE_DEFAULTS.steps : undefined),
