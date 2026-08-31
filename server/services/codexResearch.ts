@@ -310,7 +310,8 @@ Include the ordinary and the everyday, not only the legendary. A work's most mem
 - what sets it apart from the obvious comparisons — the thing its admirers name first
 - the setpieces, beats and images it is famous for, avoiding ending spoilers
 - its sound: score, composer, instrumentation, signature sounds or voices
-- its VISUAL identity in detail — the medium and technique it is rendered in, its palette, how it is lit and in what weather and time of day, its line quality and how much detail it resolves, how shots are framed, the design language of its people and creatures, and its recurring motifs, emblems and architecture. An adaptation does not look like its source; describe how THIS version looks.
+- its VISUAL identity, in more detail than anything else here. This section is not description for its own sake: the app generates artwork that has to pass as belonging to this work, and this is the only thing it has to go on. Cover the medium and technique it is rendered in, its palette, how it is lit and in what weather and time of day, its line quality and how much detail it resolves, how shots are framed, the design language of its people and creatures, and its recurring motifs, emblems and architecture. An adaptation does not look like its source; describe how THIS version looks.
+  Then two things specifically for an artist working from your notes. First, the SHORT NAMED PHRASES someone would use to brief this look — the medium, the technique, the era, the school, the studio's house style, the comparable work anyone in the field would recognise ("cel-shaded anime key art", "ligne claire", "16-bit pixel art", "gouache storybook illustration", "photoreal handheld 35mm"). Concrete craft terms, not moods: "atmospheric" briefs nothing, "high-contrast chiaroscuro with crushed blacks" briefs a picture. Second, what this work is most often MISTAKEN for or wrongly drawn as — the wrong default that someone unfamiliar would reach for, which for a great many works is generic flat cartoon vector art.
 - how it was made: the studio, the authors, the notable production or development history, anything unusual about how it came to exist
 - how it was received: acclaim or dismissal, awards, controversy, its reputation now, what it influenced
 - the descriptive words that would classify it: its genres, and the subject matter, mechanics, structure, mood and audience terms that apply`,
@@ -343,7 +344,9 @@ Include the ordinary and the everyday, not only the legendary. A work's most mem
     "linework": "line quality, rendering, texture, how much detail it resolves",
     "composition": "how shots are framed and composed",
     "characterDesign": "the design language of its people and creatures",
-    "iconography": "recurring motifs, emblems, logos, insignia, costume or architecture cues"
+    "iconography": "recurring motifs, emblems, logos, insignia, costume or architecture cues",
+    "styleKeywords": ["4-8 short named craft phrases that brief this exact look"],
+    "notLike": "the wrong look someone unfamiliar would default to, named plainly"
   },
   "genres": ["3-6 genre terms, most defining first"],
   "tags": ["12-20 descriptive tags: subject matter, mechanics, structure, mood, audience"]

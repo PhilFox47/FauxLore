@@ -335,6 +335,14 @@ export interface CodexData {
     composition?: string;
     /** The design language of its people and creatures. */
     characterDesign?: string;
+    /**
+     * Short named craft phrases that brief this look — the medium, technique,
+     * era or school. These are what an image model actually keys on: "ligne
+     * claire" moves a picture, "atmospheric" does not.
+     */
+    styleKeywords?: string[];
+    /** The wrong default someone unfamiliar would reach for. */
+    notLike?: string;
   };
   characters?: CodexEntity[];
   /** Who and what stands in opposition — people, groups, forces, creature types. */
@@ -444,6 +452,50 @@ export const SECTION_LABEL: Record<string, string> = {
   things: "notable objects",
   craft: "style, production & themes",
 };
+
+/**
+ * The work's visual language, on its own.
+ *
+ * `codexPromptBlock` renders the whole dossier and flattens the eight art-style
+ * fields into one pipe-joined line somewhere after the cast, the factions and
+ * the terminology. For a reader that is fine. For an art director it is the one
+ * section that matters buried among the ones that do not, and the resulting
+ * images drifted toward whatever the image model considers default — which for
+ * most works is flat cartoon vector art, the exact failure the enemy prompt has
+ * always had a line telling it to avoid.
+ *
+ * So this pulls the visual identity out and lays it out as a style sheet, to be
+ * given its own place in the prompt. `styleKeywords` leads because short named
+ * craft terms are what an image model actually keys on, and `notLike` is stated
+ * as the wrong default to steer off rather than as a general negative.
+ */
+export function codexArtStyleBlock(codex: CodexRow | null): string {
+  const art = codex?.data?.artStyle;
+  if (!art) return "";
+
+  const keywords = (art.styleKeywords || []).map((k) => String(k).trim()).filter(Boolean);
+  const rows: [string, string | undefined][] = [
+    ["Named style", keywords.length ? keywords.join(", ") : undefined],
+    ["In one line", art.summary],
+    ["Medium & technique", art.medium],
+    ["Palette", art.palette],
+    ["Light & weather", art.lighting],
+    ["Line & rendering", art.linework],
+    ["Framing", art.composition],
+    ["How its people and creatures are drawn", art.characterDesign],
+    ["Recurring motifs & emblems", art.iconography],
+  ];
+
+  const lines = rows
+    .filter(([, v]) => v && String(v).trim())
+    .map(([label, v]) => `${label}: ${String(v).trim()}`);
+  if (!lines.length) return "";
+
+  if (art.notLike && art.notLike.trim()) {
+    lines.push(`Commonly drawn wrong as: ${art.notLike.trim()} — this work does not look like that.`);
+  }
+  return [`— HOUSE STYLE OF THIS WORK —`, ...lines].join("\n");
+}
 
 /**
  * Renders a Codex as the reference section other prompts read.

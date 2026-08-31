@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText } from "../lib/ai";
 import { AUTHENTICITY, SHARPNESS, enemyTier, rarityArt } from "../lib/artDirection";
-import { codexPromptBlock, type CodexService } from "./codex";
+import { codexArtStyleBlock, codexPromptBlock, type CodexService } from "./codex";
 
 /**
  * Image-generation defaults, and how they differ by model family.
@@ -189,6 +189,7 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
 
     const codexRow = await codex.tryEnsureCodex(userId, { mediaId: boss.mediaId, title: mediaTitle, mediaType });
     const codexBlock = codexPromptBlock(codexRow);
+    const styleBlock = codexArtStyleBlock(codexRow);
     const tier = enemyTier(boss.level || 1);
     const imageCfg = readImageConfig();
     const fullName = [boss.name, boss.title].filter(Boolean).join(", ");
@@ -201,11 +202,12 @@ SUBJECT: a single RPG enemy named "${fullName}", from the media "${mediaTitle}" 
 
 ${codexBlock || `(No Codex is on record. Use web search to identify what "${boss.name}" is within "${mediaTitle}", and the authentic visual art style, medium and colour palette of "${mediaTitle}" itself.)`}
 
+${styleBlock ? `${styleBlock}\n\nThat house style is the single most important thing to get right. The creature must look as though it was drawn by the same hand, for the same work — its medium, palette, light and line quality are not options.\n` : ""}
 YOUR TASK: write ONE prompt describing this single character/creature so it looks like it genuinely belongs in "${mediaTitle}".
 
 THE PROMPT MUST:
 - OPEN with the creature itself — what it is and the most striking thing about how it looks. Everything else follows it.
-- Render the entity in the ACTUAL art style and medium of "${mediaTitle}"${codexRow?.data?.artStyle?.summary ? ` (the Codex records it as: ${codexRow.data.artStyle.summary})` : ""}. Explicitly name that style/medium, and reference the franchise by name to anchor the look. Do NOT default to generic 2D cartoon or flat vector art unless that truly matches the source.
+- Render the entity in the ACTUAL art style and medium of "${mediaTitle}". NAME that style explicitly in the prompt using the house style above — the named craft terms are what an image model keys on, so use them verbatim rather than paraphrasing them into adjectives. Reference the franchise by name as well, to anchor the look. Do NOT default to generic 2D cartoon or flat vector art unless that truly matches the source.
 - ${AUTHENTICITY(mediaTitle)}
 - Depict ONE subject only, with a setting/background appropriate to its tier — never a busy crowd scene.
 - Show it mid-action rather than posed: ${tier.action}. Frame it with ${tier.camera}. Never a neutral standing figure facing the lens — no mugshots, no line-ups, no posing for a photograph.
@@ -260,6 +262,7 @@ Return ONLY the final image prompt text, nothing else.`;
 
     const codexRow = await codex.tryEnsureCodex(userId, { mediaId: artifact.mediaId, title: mediaTitle, mediaType });
     const codexBlock = codexPromptBlock(codexRow);
+    const styleBlock = codexArtStyleBlock(codexRow);
     const art = rarityArt(artifact.rarity || "Common");
     const imageCfg = readImageConfig();
 
@@ -271,12 +274,13 @@ SUBJECT: a single RPG loot item named "${artifact.name}", described as "${artifa
 
 ${codexBlock || `(No Codex is on record. Use web search to determine what "${artifact.name}" literally IS within "${mediaTitle}", and the authentic art style, medium and material language of "${mediaTitle}".)`}
 
+${styleBlock ? `${styleBlock}\n\nThat house style is the single most important thing to get right. The object must look as though it was drawn by the same hand, for the same work — its medium, palette, light and material language are not options.\n` : ""}
 YOUR TASK: write ONE prompt for a single game-inventory icon of this exact object.
 
 THE PROMPT MUST:
 - OPEN with the object itself — what it plainly is, and what it is made of. Everything else follows it.
 - Keep the object TYPE literal and correct. If it is a sword it is a sword; a cassette tape a cassette; a book a book; a flower a flower. NEVER substitute a generic ring, gem, orb or "magic trinket" unless the item genuinely is one. Believable proportions, a recognizable real object.
-- Render it in the ACTUAL art style and material design of "${mediaTitle}"${codexRow?.data?.artStyle?.summary ? ` (the Codex records it as: ${codexRow.data.artStyle.summary})` : ""}. Name that style/medium and reference the franchise to anchor the look. Avoid generic flat cartoon icons.
+- Render it in the ACTUAL art style and material design of "${mediaTitle}". NAME that style explicitly using the house style above, reusing its craft terms verbatim rather than paraphrasing them, and reference the franchise to anchor the look. Avoid generic flat cartoon icons.
 - ${AUTHENTICITY(mediaTitle)}
 - Scale the item's grandeur to its rarity: ${art.grandeur}.
 - Present ONE hero item only, centered, as a polished inventory icon / studio product shot, on this rarity-specific background: ${art.background}. A soft contact shadow under the item.
