@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
+import { getAiConfig } from "../lib/ai";
 
 export function registerAiRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, activity } = ctx;
@@ -31,6 +32,46 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
       });
       res.json({ success: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  /**
+   * Which providers can serve the configured model, and what each one costs.
+   *
+   * Provider IDs are not guessable and differ per model, so this asks NanoGPT
+   * rather than making the user find them. `supportsProviderSelection` is the
+   * field that matters: when it is false the setting is inert for that model,
+   * and knowing that is better than wondering why pinning one changed nothing.
+   *
+   * Deliberately not under /api/v1 upstream, and the model ID has to be
+   * URL-encoded because it usually contains a slash.
+   */
+  app.get("/api/ai/providers", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const config = getAiConfig(db, userId as string);
+      if (!config) return res.status(400).json({ error: "AI is not configured." });
+
+      const model = (req.query.model as string) || config.model;
+      const url = `https://nano-gpt.com/api/models/${encodeURIComponent(model)}/providers`;
+      const upstream = await fetch(url, {
+        headers: { Authorization: `Bearer ${config.apiKey}` },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!upstream.ok) {
+        return res.status(502).json({ error: `${upstream.status} ${(await upstream.text()).slice(0, 300)}`, model });
+      }
+      const body: any = await upstream.json();
+      res.json({
+        model,
+        configured: config.provider || null,
+        supportsProviderSelection: body?.supportsProviderSelection ?? null,
+        defaultPrice: body?.defaultPrice ?? null,
+        providers: body?.providers ?? [],
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
   });
 
   app.post("/api/nano-gpt/chat/completions", async (req, res) => {

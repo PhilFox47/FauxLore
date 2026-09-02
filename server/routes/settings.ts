@@ -36,15 +36,15 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
       const userRec: any = db.prepare('SELECT role FROM users WHERE id = ?').get(userId);
       const isAdmin = userRec?.role === 'Admin';
       
-      const oldSettings: any = db.prepare('SELECT aiPersona, enemyDifficulty, mediaDifficulty, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, geminiApiKey, googleBooksApiKey FROM settings WHERE userId = ?').get(userId);
+      const oldSettings: any = db.prepare('SELECT aiPersona, enemyDifficulty, mediaDifficulty, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, geminiApiKey, googleBooksApiKey FROM settings WHERE userId = ?').get(userId);
       const oldDifficulty = oldSettings?.enemyDifficulty ?? 1.0;
       const newDifficulty = settings.enemyDifficulty ?? 1.0;
       const oldMediaDifficulty = oldSettings?.mediaDifficulty || null;
       const newMediaDifficulty = settings.mediaDifficulty ? JSON.stringify(settings.mediaDifficulty) : null;
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, geminiApiKey, googleBooksApiKey, timezone, aiPersona, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs, disableAutoDrop, pushEnabled, pushTypes, inactivityReminderDays)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @geminiApiKey, @googleBooksApiKey, @timezone, @aiPersona, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs, @disableAutoDrop, @pushEnabled, @pushTypes, @inactivityReminderDays)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, geminiApiKey, googleBooksApiKey, timezone, aiPersona, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs, disableAutoDrop, pushEnabled, pushTypes, inactivityReminderDays)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @nanoGptProvider, @geminiApiKey, @googleBooksApiKey, @timezone, @aiPersona, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs, @disableAutoDrop, @pushEnabled, @pushTypes, @inactivityReminderDays)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -54,6 +54,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
           nanoGptModel=excluded.nanoGptModel,
           nanoGptWebModel=excluded.nanoGptWebModel,
           nanoGptCreativeModel=excluded.nanoGptCreativeModel,
+          nanoGptProvider=excluded.nanoGptProvider,
           geminiApiKey=excluded.geminiApiKey,
           googleBooksApiKey=excluded.googleBooksApiKey,
           timezone=excluded.timezone,
@@ -81,6 +82,9 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
         nanoGptModel: isAdmin ? (settings.nanoGptModel || null) : (oldSettings?.nanoGptModel || null),
         nanoGptWebModel: isAdmin ? (settings.nanoGptWebModel || null) : (oldSettings?.nanoGptWebModel || null),
         nanoGptCreativeModel: isAdmin ? (settings.nanoGptCreativeModel || null) : (oldSettings?.nanoGptCreativeModel || null),
+        // Same rule as the model fields: a non-admin cannot change where their
+        // requests are routed, they inherit whatever is already stored.
+        nanoGptProvider: isAdmin ? (settings.nanoGptProvider || null) : (oldSettings?.nanoGptProvider || null),
         geminiApiKey: isAdmin ? (settings.geminiApiKey || null) : (oldSettings?.geminiApiKey || null),
         googleBooksApiKey: isAdmin ? (settings.googleBooksApiKey || null) : (oldSettings?.googleBooksApiKey || null),
         timezone: settings.timezone || null,

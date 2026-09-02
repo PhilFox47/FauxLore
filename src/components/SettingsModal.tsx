@@ -51,6 +51,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     nanoGptWebModel: '',
     nanoGptCreativeModel: '',
     geminiApiKey: '',
+    nanoGptProvider: '',
     imageModel: 'z-image-turbo',
     imageSize: '1024x768',
     imageSteps: 10,
@@ -118,6 +119,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         nanoGptWebModel: settings.nanoGptWebModel || '',
         nanoGptCreativeModel: settings.nanoGptCreativeModel || '',
         geminiApiKey: settings.geminiApiKey || '',
+        nanoGptProvider: settings.nanoGptProvider || '',
         imageModel: settings.imageModel || 'z-image-turbo',
         imageSize: settings.imageSize || '1024x768',
         imageSteps: settings.imageSteps ?? 10,
@@ -174,7 +176,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             nanoGptWebModel: settings.nanoGptWebModel || '',
             nanoGptCreativeModel: settings.nanoGptCreativeModel || '',
             geminiApiKey: settings.geminiApiKey || '',
-            imageModel: settings.imageModel || 'z-image-turbo',
+            nanoGptProvider: settings.nanoGptProvider || '',
+        imageModel: settings.imageModel || 'z-image-turbo',
             imageSize: settings.imageSize || '1024x768',
             imageSteps: settings.imageSteps ?? 10,
             imageGuidance: settings.imageGuidance ?? 1.5,
@@ -533,6 +536,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         nanoGptModel: formData.nanoGptModel,
         nanoGptWebModel: formData.nanoGptWebModel,
         nanoGptCreativeModel: formData.nanoGptCreativeModel,
+        nanoGptProvider: formData.nanoGptProvider,
         geminiApiKey: formData.geminiApiKey,
         imageModel: formData.imageModel,
         imageSize: formData.imageSize,
@@ -1241,6 +1245,20 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       placeholder="gpt-4o-mini"
                     />
                     <p className="text-[10px] text-zinc-500 mt-1">Everything you read as prose: enemy and item flavour text, level and quest titles, recap writing, Roulette blurbs. A roleplay-tuned model is a good fit here.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Provider <span className="text-zinc-600 font-normal">(optional)</span></label>
+                    <input
+                      type="text"
+                      name="nanoGptProvider"
+                      value={formData.nanoGptProvider}
+                      onChange={handleChange}
+                      className="input-field"
+                      placeholder="leave empty to let NanoGPT choose"
+                    />
+                    <p className="text-[10px] text-zinc-500 mt-1">
+                      Pins which upstream provider serves your models. Leave it empty and nothing changes — NanoGPT routes as it does today. Worth setting when a popular model has one provider struggling and requests keep timing out. Valid IDs differ per model: <code>/api/ai/providers</code> lists the ones yours accepts, and says whether it supports the choice at all. Applies to text only; image generation ignores it. Note that pinning a provider is always billed pay-as-you-go.
+                    </p>
                   </div>
                 </div>
 

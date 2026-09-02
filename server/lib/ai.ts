@@ -26,6 +26,8 @@ const NANO_GPT_CHAT_URL = "https://nano-gpt.com/api/v1/chat/completions";
 export interface AiConfig {
   apiKey: string;
   model: string;
+  /** Upstream provider to pin, or "" to let NanoGPT route. */
+  provider?: string;
   webModel: string;
   creativeModel: string;
 }
@@ -35,7 +37,7 @@ export type AiTier = "analytical" | "creative";
 
 /** Reads the NanoGPT key/models for a user, falling back to the system-wide settings. */
 export function getAiConfig(db: Db, userId: string): AiConfig | null {
-  const cols = "nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel";
+  const cols = "nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider";
   const userSettings: any = db
     .prepare(`SELECT ${cols} FROM settings WHERE userId = ?`)
     .get(userId);
@@ -49,9 +51,19 @@ export function getAiConfig(db: Db, userId: string): AiConfig | null {
   // Both specialised slots fall back to the analytical model, so an install that
   // never fills them in behaves exactly as it did before.
   const model = userSettings?.nanoGptModel || sysSettings?.nanoGptModel || "gpt-4o-mini";
+  /**
+   * Which upstream provider serves the model, when the choice has been made.
+   *
+   * Optional by design: empty means NanoGPT routes the request itself, which is
+   * what every install did before this existed and remains the default. It earns
+   * its place when a model is popular enough that one of its providers is
+   * struggling — pinning a healthy one is the difference between a dossier and a
+   * row of timeouts.
+   */
+  const provider = (userSettings?.nanoGptProvider || sysSettings?.nanoGptProvider || "").trim();
   const webModel = userSettings?.nanoGptWebModel || sysSettings?.nanoGptWebModel || model;
   const creativeModel = userSettings?.nanoGptCreativeModel || sysSettings?.nanoGptCreativeModel || model;
-  return { apiKey, model, webModel, creativeModel };
+  return { apiKey, model, webModel, creativeModel, provider };
 }
 
 export function resolveModel(config: AiConfig, webSearch: boolean, tier: AiTier = "analytical"): string {
@@ -89,6 +101,15 @@ export async function nanoGenerateText(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${config.apiKey}`,
+      // Only sent when one has been chosen. The header is the documented
+      // per-request override and is ignored by models that do not support
+      // provider selection, so an unsupported pairing degrades to today's
+      // behaviour rather than failing.
+      //
+      // Note this is the CHAT call only. The image API documents provider
+      // options as unsupported and answers `unsupported_provider_options`, so
+      // nothing like this belongs on that route.
+      ...(config.provider ? { "X-Provider": config.provider } : {}),
     },
     body: JSON.stringify({
       model: resolveModel(config, !!opts.webSearch, opts.tier),

@@ -22,8 +22,8 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
 
       const settings = req.body;
       db.prepare(`
-        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, geminiApiKey, googleBooksApiKey, imageModel, imageSize, imageSteps, imageGuidance, imageNegativePrompt)
-        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @geminiApiKey, @googleBooksApiKey, @imageModel, @imageSize, @imageSteps, @imageGuidance, @imageNegativePrompt)
+        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, geminiApiKey, googleBooksApiKey, imageModel, imageSize, imageSteps, imageGuidance, imageNegativePrompt)
+        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @nanoGptProvider, @geminiApiKey, @googleBooksApiKey, @imageModel, @imageSize, @imageSteps, @imageGuidance, @imageNegativePrompt)
         ON CONFLICT(id) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -32,6 +32,7 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
           nanoGptApiKey=excluded.nanoGptApiKey,
           nanoGptModel=excluded.nanoGptModel,
           nanoGptWebModel=excluded.nanoGptWebModel,
+          nanoGptProvider=excluded.nanoGptProvider,
           nanoGptCreativeModel=excluded.nanoGptCreativeModel,
           geminiApiKey=excluded.geminiApiKey,
           googleBooksApiKey=excluded.googleBooksApiKey,
@@ -48,6 +49,7 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
         nanoGptApiKey: settings.nanoGptApiKey || null,
         nanoGptModel: settings.nanoGptModel || null,
         nanoGptWebModel: settings.nanoGptWebModel || null,
+        nanoGptProvider: settings.nanoGptProvider || null,
         nanoGptCreativeModel: settings.nanoGptCreativeModel || null,
         geminiApiKey: settings.geminiApiKey || null,
         googleBooksApiKey: settings.googleBooksApiKey || null,

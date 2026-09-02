@@ -425,6 +425,8 @@ export interface Settings {
   nanoGptCreativeModel?: string;
   geminiApiKey?: string;
   // Image generation (system-wide; merged in from system_settings on the client)
+  /** Optional upstream provider pin for text models. Empty = NanoGPT routes. */
+  nanoGptProvider?: string;
   imageModel?: string;
   imageSize?: string;
   imageSteps?: number;

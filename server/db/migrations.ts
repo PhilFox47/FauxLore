@@ -128,6 +128,10 @@ export function runMigrations(db: Db) {
   // web search.
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptWebModel TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN nanoGptWebModel TEXT").run(); } catch (e) {}
+  // Which upstream provider serves the model. Optional: empty means NanoGPT
+  // routes it, which is what every install did before this existed.
+  try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptProvider TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE system_settings ADD COLUMN nanoGptProvider TEXT").run(); } catch (e) {}
   // Time Travel: entries belonging to a chronological watch-through, kept off
   // the main dashboard so a dozen simultaneous series do not bury the handful
   // of things actually being worked through.
