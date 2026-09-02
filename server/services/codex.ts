@@ -1103,14 +1103,38 @@ export function createCodexService({ db, onFlavorTexts }: {
           );
           const refills = await Promise.allSettled(plan.map((p) => runFacet(p.facet, p.alreadyFound)));
           refills.forEach((result, i) => {
+            const facet = plan[i].facet;
             if (result.status !== "fulfilled") {
-              console.error(`Codex gap-fill for "${plan[i].facet}" failed; keeping the first pass`, result.reason);
+              console.error(`Codex gap-fill for "${facet}" failed; keeping the first pass`, result.reason);
               return;
             }
-            data = mergeExpansion(data, result.value, FACET_SPECS[plan[i].facet].keys);
+            data = mergeExpansion(data, result.value, FACET_SPECS[facet].keys);
+
+            // A repaired section is no longer a failed one. Without this the
+            // dossier contradicted itself: a full cast list under a heading
+            // saying the cast could not be researched, and a note listing every
+            // facet as incomplete when the retry had already filled them in.
+            const stillFailed = failed.indexOf(facet);
+            if (stillFailed !== -1) failed.splice(stillFailed, 1);
+            sectionConfidence[facet] = result.value.confidence || "medium";
+            sectionSourcing[facet] = searched.has(facet) ? "searched" : "recalled";
           });
         }
       }
+
+      // Restated after the gap-fill, since a successful retry changes both what
+      // is missing and how confident the dossier as a whole should sound.
+      data.sectionConfidence = sectionConfidence;
+      data.sectionSourcing = sectionSourcing;
+      data.notes = [
+        identity.notes,
+        problem ? `Could not confirm this is the right work: ${problem}` : "",
+        failed.length ? `Research incomplete for: ${failed.join(", ")}.` : "",
+      ].filter(Boolean).join(" ") || undefined;
+      const finalGrades = Object.values(sectionConfidence).filter(Boolean) as string[];
+      data.confidence = problem
+        ? "low"
+        : finalGrades.includes("low") ? "low" : finalGrades.includes("medium") ? "medium" : "high";
 
       db.prepare(
         `UPDATE media_codex SET data = ?, status = 'ready', error = NULL, model = ?, mediaId = COALESCE(mediaId, ?), updatedAt = ? WHERE id = ?`,

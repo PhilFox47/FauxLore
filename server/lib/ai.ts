@@ -69,7 +69,7 @@ export function resolveModel(config: AiConfig, webSearch: boolean, tier: AiTier 
 export async function nanoGenerateText(
   config: AiConfig,
   prompt: string,
-  opts: { temperature?: number; webSearch?: boolean; systemPrompt?: string; tier?: AiTier } = {},
+  opts: { temperature?: number; webSearch?: boolean; systemPrompt?: string; tier?: AiTier; timeoutMs?: number } = {},
 ): Promise<string> {
   const messages: { role: string; content: string }[] = [];
   if (opts.systemPrompt) messages.push({ role: "system", content: opts.systemPrompt });
@@ -77,6 +77,10 @@ export async function nanoGenerateText(
 
   const res = await fetch(NANO_GPT_CHAT_URL, {
     method: "POST",
+    // Without this a stalled generation blocks a Codex indefinitely: the facets
+    // run under Promise.allSettled, which waits for every one of them. Generous,
+    // because a search-augmented call on a large prompt is legitimately slow.
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 240_000),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${config.apiKey}`,
@@ -99,20 +103,73 @@ export async function nanoGenerateText(
  * Parses JSON out of a model reply that may be fenced, prefixed with prose, or
  * both. Throws if nothing parseable is in there.
  */
+/**
+ * Pulls a JSON document out of a model reply.
+ *
+ * The old version took everything from the first bracket to the last one. That
+ * is right for a model that answers with JSON and wrong for a reasoning model,
+ * which thinks out loud first — and reasoning about a JSON schema is full of
+ * braces. One `{` in the preamble and the slice started in the middle of a
+ * sentence, `JSON.parse` threw, and the whole facet was recorded as failed
+ * research when the model had in fact answered correctly.
+ *
+ * So candidates are found by scanning for a BALANCED document instead, and each
+ * is tried in turn. Strings are tracked while scanning, because a brace inside
+ * one closes nothing.
+ */
 export function parseJsonLoose<T = any>(text: string): T {
   let body = (text || "").trim();
-  const fenced = body.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (fenced) body = fenced[1].trim();
 
-  try {
-    return JSON.parse(body) as T;
-  } catch (_) {
-    // Fall back to the outermost {...} / [...] the reply contains.
-    const start = body.search(/[{[]/);
-    const end = Math.max(body.lastIndexOf("}"), body.lastIndexOf("]"));
-    if (start !== -1 && end > start) {
-      return JSON.parse(body.slice(start, end + 1)) as T;
-    }
-    throw new Error("The model did not return parseable JSON.");
+  // Reasoning models emit their working in a think block. It is not an answer
+  // and it is the single richest source of stray brackets.
+  body = body.replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/<\/?think>/gi, "").trim();
+
+  const fenced = body.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced) {
+    const inner = fenced[1].trim();
+    try { return JSON.parse(inner) as T; } catch { body = inner; }
   }
+
+  try { return JSON.parse(body) as T; } catch { /* fall through to scanning */ }
+
+  for (const candidate of balancedCandidates(body)) {
+    try { return JSON.parse(candidate) as T; } catch { /* try the next one */ }
+  }
+  throw new Error("The model did not return parseable JSON.");
+}
+
+/**
+ * Every balanced `{...}` or `[...]` in the text, longest first.
+ *
+ * Longest first because the document we want is almost always the biggest one:
+ * a preamble that mentions `{"characters": [...]}` should never win over the
+ * real answer that follows it.
+ */
+function balancedCandidates(text: string): string[] {
+  const found: string[] = [];
+
+  for (let i = 0; i < text.length; i++) {
+    const open = text[i];
+    if (open !== "{" && open !== "[") continue;
+    const close = open === "{" ? "}" : "]";
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let j = i; j < text.length; j++) {
+      const c = text[j];
+      if (escaped) { escaped = false; continue; }
+      if (c === "\\" && inString) { escaped = true; continue; }
+      if (c === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (c === open) depth++;
+      else if (c === close) {
+        depth--;
+        if (depth === 0) { found.push(text.slice(i, j + 1)); break; }
+      }
+    }
+  }
+
+  return found.sort((a, b) => b.length - a.length).slice(0, 8);
 }
