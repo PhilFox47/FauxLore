@@ -1022,12 +1022,44 @@ export function createCodexService({ db, onFlavorTexts }: {
       // ROUND 2 + 3 — research each subject area on its own query, then convert
       // that prose to the dossier's shape without search, on the cheap model.
       // Facets are independent, so the whole thing is two rounds of wall-clock.
+      /**
+       * Facets that gave up on retrieval and answered from memory instead.
+       *
+       * Tracked so the dossier can say so. A recalled section is not as good as
+       * a researched one and the difference has to stay visible.
+       */
+      const fellBackToRecall = new Set<Facet>();
+
       const researchFacet = async (facet: Facet, alreadyFound?: string[]): Promise<string> => {
-        const prose = await nanoGenerateText(aiConfig, buildFacetPrompt(ctx, facet, alreadyFound), {
-          temperature: 0.2,
-          webSearch: searched.has(facet),
-          tier: "analytical",
-        });
+        const prompt = buildFacetPrompt(ctx, facet, alreadyFound);
+        const wanted = searched.has(facet);
+
+        const ask = (webSearch: boolean) =>
+          nanoGenerateText(aiConfig, prompt, { temperature: 0.2, webSearch, tier: "analytical" });
+
+        let prose = "";
+        try {
+          prose = await ask(wanted);
+        } catch (e: any) {
+          // A retrieval call that runs out of time is the one failure worth
+          // retrying differently rather than simply repeating. Search plus a long
+          // generation is what exceeds the clock; the same model answering from
+          // its own knowledge finishes comfortably — which is exactly what the
+          // un-searched facets in the same run demonstrate. A section written
+          // from memory and labelled as such beats an empty one, and repeating
+          // the search would spend another search fee to time out again.
+          const timedOut = e?.name === "TimeoutError" || /timeout|aborted/i.test(String(e?.message || ""));
+          if (!wanted || !timedOut) throw e;
+          console.warn(`[codex] "${facet}" timed out while searching; retrying from the model's own knowledge`);
+          prose = await ask(false);
+          fellBackToRecall.add(facet);
+          // Do not pay for that search again. The gap-fill re-runs whichever
+          // facets came back thin, and without this it would attempt the very
+          // retrieval that has just been shown to exceed the clock — another
+          // search fee, another wait, the same result.
+          searched.delete(facet);
+        }
+
         if (!prose) throw new Error(`The ${facet} research came back empty.`);
         return prose;
       };

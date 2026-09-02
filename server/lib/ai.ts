@@ -78,9 +78,14 @@ export async function nanoGenerateText(
   const res = await fetch(NANO_GPT_CHAT_URL, {
     method: "POST",
     // Without this a stalled generation blocks a Codex indefinitely: the facets
-    // run under Promise.allSettled, which waits for every one of them. Generous,
-    // because a search-augmented call on a large prompt is legitimately slow.
-    signal: AbortSignal.timeout(opts.timeoutMs ?? 240_000),
+    // run under Promise.allSettled, which waits for every one of them.
+    //
+    // A retrieval call gets far longer than a plain one, because it is doing two
+    // jobs: the provider searches and injects results BEFORE the model writes a
+    // word, and the facets then ask for pages of prose. On a slow model that
+    // combination is minutes, and 240s was cutting off work that would have
+    // finished — the sections came back empty and looked like failed research.
+    signal: AbortSignal.timeout(opts.timeoutMs ?? (opts.webSearch ? 600_000 : 180_000)),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${config.apiKey}`,
