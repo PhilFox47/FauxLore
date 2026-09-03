@@ -514,7 +514,7 @@ export const FACET_FLOORS: Partial<Record<string, number>> = {
  */
 function depthRule(coverage?: string): string {
   if (coverage === "abundant") {
-    return `- THIS WORK IS WELL DOCUMENTED, so be thorough but not expansive. Name every entry that matters and give each one or two tight lines — the reader of this dossier needs the facts, not an essay, and padding a well-known subject adds cost without adding anything. Depth beats length: a precise line about a minor character is worth more than a paragraph about the lead.`;
+    return `- THIS WORK IS WELL DOCUMENTED, WHICH MEANS THIS DOSSIER SHOULD BE LONG. A work with years of coverage and a deep wiki has a long tail worth having, and getting it is the whole job: name every character with a name, every place that appears more than once, every faction, every piece of vocabulary, every object the work is remembered for. Twenty entries are better than eight when twenty of them are real. Nothing is gained by stopping early on a work that has more to give.`;
   }
   if (coverage === "thin") {
     return `- THIS WORK IS BARELY DOCUMENTED, and that makes this pass the whole ballgame. Nothing downstream knows anything about it beyond what you write here, so record everything you can actually verify, including the small and the incidental, and prefer a specific detail from one dedicated source over a general statement you could have made about any work in the genre. Where the record simply stops, say so plainly and stop with it — a short sourced answer is exactly right, and a fabricated one is worse here than anywhere else in this dossier because there is nothing else to catch it.`;
@@ -677,8 +677,9 @@ ${REFERENCE_NOT_TEMPLATE}
 
 ${depthRule(identity?.coverage)}
 - Name things. Never write "various characters", "several locations" or "a rich world" — those are worth nothing to the reader of this dossier.
-- Detail per entry is what matters, not total length. One tight line naming a specific thing beats a paragraph circling it, and the reader of this dossier is a program extracting facts, not a person reading for pleasure.
-- Aim for as many entries as the material honestly supports — up to a dozen or more characters where the work has them, and the same for places, groups, vocabulary and objects. THESE ARE CEILINGS, NOT QUOTAS. A short honest list is a good result; a padded one is a corrupted record.
+- LENGTH IS NOT A PROBLEM. There is no budget to come in under and nothing to be gained by being brief. A long dossier on a work that supports one is the best possible outcome; the only thing worth trimming is repetition.
+- THE LENGTH COMES FROM MORE ENTRIES, NOT MORE WORDS PER ENTRY. That distinction is the whole rule. Every real character, place, faction, term and object that exists is worth adding, however minor — but three sentences restating what one sentence already said are worth nothing, and an entry you are not sure exists is worse than nothing, because it becomes permanent and everything downstream treats it as true.
+- So: as many entries as the work genuinely has, each described concretely and without padding. Stop when you run out of real material, not when the list looks long enough.
 - Go after what a first look misses: the recurring minor names, the regional and the everyday, the entries further down the page. That long tail is the part a shallow pass always loses, and the part later features most need.
 - Prefer widely known material, and avoid late-story twists and ending spoilers — the user may still be partway through.
 

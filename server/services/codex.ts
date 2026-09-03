@@ -1007,18 +1007,25 @@ export function createCodexService({ db, onFlavorTexts }: {
         scope: "codex",
         userId,
         /**
-         * Room to actually finish.
+         * Room to actually finish, with a lot to spare.
          *
-         * Nothing was sent here, so the provider chose, and its choice for this
-         * model was 15,000 tokens — a dossier stopped mid-array with a 200 and
-         * no error. On a thinking model that budget is shared with the model's
-         * own reasoning, so the visible answer got whatever was left.
+         * Nothing was sent here originally, so the provider chose, and its choice
+         * for this model was 15,000 tokens — a dossier stopped mid-array with a
+         * 200 and no error. On a thinking model that budget is shared with the
+         * model's own reasoning, so the visible answer got whatever was left.
          *
-         * 48,000 is far more than a dossier needs. It is a ceiling, not a
-         * target: nothing is billed for room that goes unused, and the cost of
-         * setting it too low is the failure this replaced.
+         * This is a ceiling, not a target, and an unused ceiling is billed
+         * nothing at all — so the only thing a low number can do is truncate a
+         * dossier that had more to say. Long dossiers are wanted here, so the
+         * ceiling is set well clear of any of them rather than close to the
+         * largest seen so far.
+         *
+         * It cannot be raised alone. At the ~100 tokens/second these runs
+         * actually produce, this much output is around sixteen minutes of
+         * generation, so the timeout below has to clear it or a truncation
+         * failure is simply traded for a timeout.
          */
-        maxTokens: 48_000,
+        maxTokens: 96_000,
         /**
          * Streamed so the connection is never silent.
          *
@@ -1031,10 +1038,13 @@ export function createCodexService({ db, onFlavorTexts }: {
          */
         stream: true,
         // A deep search runs several queries before the model writes a word, and
-        // then it writes the whole dossier. Fifteen minutes is generous on
-        // purpose: this call IS the Codex, so letting it finish slowly beats
-        // losing all of it to the clock.
-        timeoutMs: 900_000,
+        // then it writes the whole dossier. Twenty-five minutes is generous on
+        // purpose and sized to the ceiling above: 96,000 tokens at the ~100
+        // tokens/second these runs produce is about sixteen minutes of writing,
+        // plus a deep search in front of it. This call IS the Codex, so letting
+        // it finish slowly beats losing all of it to the clock — and nothing is
+        // written unless it succeeds, so a long wait costs only the wait.
+        timeoutMs: 1_500_000,
       });
 
       const parsed = parseJsonLoose<any>(raw);

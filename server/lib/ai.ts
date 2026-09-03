@@ -535,10 +535,15 @@ async function postChat(
  * that has never heard of them answers 400, and without this a perfectly good
  * Codex would fail because of a field that was only ever an optimisation.
  */
-function rejectsOptionalField(err: any, opts: GenerateOptions): "json" | "search" | null {
+function rejectsOptionalField(err: any, opts: GenerateOptions): "json" | "search" | "maxTokens" | null {
   if (err?.httpStatus !== 400 && err?.httpStatus !== 422) return null;
   const message = String(err?.message || "").toLowerCase();
   if (opts.json && /response_format|json_schema|json_object|structured output/.test(message)) return "json";
+  // A ceiling above what the model will accept. Asking for less is always
+  // possible, so this degrades rather than failing — a shorter dossier beats
+  // none, and the alternative is picking a number timid enough to be safe
+  // everywhere, which is what truncated one in the first place.
+  if (opts.maxTokens && /max_tokens|max tokens|maximum.{0,20}tokens|too large|exceeds/.test(message)) return "maxTokens";
   // Deliberately narrow. This matched on the bare word "search" once, which is
   // in the text of a great many unrelated errors, and quietly turned the deep
   // pass into a standard one for the rest of the call. Only an error that names
@@ -566,6 +571,12 @@ export async function nanoGenerateText(
       // Drop the unsupported field and try again on the same attempt budget.
       // The request still does its job without it; only the safety net is lost.
       const unsupported = rejectsOptionalField(e, active);
+      if (unsupported === "maxTokens") {
+        const halved = Math.max(8_000, Math.floor((active.maxTokens || 16_000) / 2));
+        console.warn(`[ai] the model rejected max_tokens=${active.maxTokens}; retrying with ${halved}`);
+        active = { ...active, maxTokens: halved };
+        continue;
+      }
       if (unsupported) {
         console.warn(`[ai] the model rejected ${unsupported === "json" ? "JSON mode" : "the search options"}; retrying without`);
         // Only the rejected half is dropped. `search` stays, so the depth still
