@@ -75,6 +75,47 @@ export function registerDiagnosticsRoutes(app: Express, ctx: ServerContext) {
     })(),
   });
 
+  /**
+   * The exchange behind one call: what was sent, and what came back verbatim.
+   *
+   * Fetched on demand rather than with the log, because a Codex prompt and reply
+   * together are a couple of hundred kilobytes and nobody wants that arriving
+   * with two hundred log rows they were only skimming.
+   */
+  app.get("/api/diagnostics/payload/:callId", (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const row: any = db
+        .prepare("SELECT * FROM diagnostics_payloads WHERE callId = ?")
+        .get(req.params.callId);
+      if (!row) return res.json(null);
+
+      /**
+       * Cut off, or just wrong?
+       *
+       * The two have opposite fixes — ask for more room, or fix the prompt — and
+       * from a token count alone they are indistinguishable. A reply that fails
+       * to parse AND does not end on a closing bracket stopped mid-document; one
+       * that ends properly and still fails to parse is malformed.
+       */
+      const reply = String(row.reply || "");
+      const trimmed = reply.trimEnd();
+      let parses = false;
+      try { JSON.parse(trimmed); parses = true; } catch { /* not JSON, or not valid */ }
+
+      res.json({
+        ...row,
+        promptTruncated: !!row.promptTruncated,
+        replyTruncated: !!row.replyTruncated,
+        verdict: {
+          parses,
+          endsCleanly: /[}\]]$/.test(trimmed),
+          lastChars: trimmed.slice(-80),
+        },
+      });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   app.get("/api/diagnostics", (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
@@ -213,18 +254,54 @@ export function registerDiagnosticsRoutes(app: Express, ctx: ServerContext) {
       const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const format = String(req.query.format || "txt");
 
+      /**
+       * Exports carry the exchange too, when one was kept.
+       *
+       * The whole reason to export is to read it somewhere else or hand it to
+       * someone, and "the reply was 14,572 tokens" is not something anyone can
+       * diagnose from. The bodies are what settle it.
+       */
+      const withPayload = (r: any) => {
+        const hydrated = hydrate(r);
+        const callId = hydrated.detail?.callId;
+        if (!callId) return hydrated;
+        const payload: any = db
+          .prepare("SELECT prompt, reply, promptBytes, replyBytes FROM diagnostics_payloads WHERE callId = ?")
+          .get(callId);
+        return payload ? { ...hydrated, exchange: payload } : hydrated;
+      };
+
       if (format === "json") {
         res.setHeader("Content-Type", "application/json");
         res.setHeader("Content-Disposition", `attachment; filename="fauxlore-diagnostics-${stamp}.json"`);
-        return res.send(JSON.stringify({ exportedAt: new Date().toISOString(), count: rows.length, entries: rows.map(hydrate) }, null, 2));
+        return res.send(JSON.stringify({ exportedAt: new Date().toISOString(), count: rows.length, entries: rows.map(withPayload) }, null, 2));
       }
 
       const lines = rows.map((r) => {
         const head = `${r.ts}  ${r.level.toUpperCase().padEnd(5)} [${r.channel}/${r.scope || "app"}]  ${r.message}`;
         if (!r.detail) return head;
         let detail = r.detail;
-        try { detail = JSON.stringify(JSON.parse(r.detail), null, 2); } catch { /* keep raw */ }
-        return `${head}\n${String(detail).split("\n").map((l: string) => `        ${l}`).join("\n")}`;
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(r.detail);
+          detail = JSON.stringify(parsed, null, 2);
+        } catch { /* keep raw */ }
+        const indent = (t: string) => String(t).split("\n").map((l: string) => `        ${l}`).join("\n");
+        let out = `${head}\n${indent(detail)}`;
+
+        // Only on the end row, so a prompt is not printed twice for one call.
+        if (parsed?.callId && parsed?.phase === "end") {
+          const payload: any = db
+            .prepare("SELECT prompt, reply, promptBytes, replyBytes FROM diagnostics_payloads WHERE callId = ?")
+            .get(parsed.callId);
+          if (payload?.prompt) {
+            out += `\n\n        ── PROMPT (${Number(payload.promptBytes).toLocaleString()} bytes) ──\n${indent(payload.prompt)}`;
+          }
+          if (payload?.reply) {
+            out += `\n\n        ── REPLY (${Number(payload.replyBytes).toLocaleString()} bytes) ──\n${indent(payload.reply)}`;
+          }
+        }
+        return out;
       });
 
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
@@ -239,8 +316,18 @@ export function registerDiagnosticsRoutes(app: Express, ctx: ServerContext) {
     try {
       if (!requireAdmin(req, res)) return;
       const { where, params } = buildQuery(req.query);
+      // The exchanges belong to the rows; clearing the log without them would
+      // leave hundreds of megabytes of orphaned prompts behind.
+      const doomed = db
+        .prepare(`SELECT json_extract(detail, '$.callId') AS callId FROM diagnostics ${where}`)
+        .all(...params) as any[];
       const result = db.prepare(`DELETE FROM diagnostics ${where}`).run(...params);
-      res.json({ success: true, deleted: result.changes });
+      const drop = db.prepare("DELETE FROM diagnostics_payloads WHERE callId = ?");
+      let exchanges = 0;
+      for (const row of doomed) {
+        if (row.callId) exchanges += drop.run(row.callId).changes;
+      }
+      res.json({ success: true, deleted: result.changes, exchanges });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 }

@@ -368,6 +368,34 @@ export function runMigrations(db: Db) {
   } catch (e) {}
 
   /**
+   * The prompts and replies themselves, kept apart from the log they belong to.
+   *
+   * A separate table because the size is completely different: a log row is a
+   * sentence, an exchange is a 32KB prompt and a reply that can run past 100KB.
+   * Keeping 20,000 of those alongside the log would be gigabytes, so these are
+   * retained by their own much shorter count and the log stays light.
+   *
+   * Keyed by the call id the log rows already carry, so a row and its exchange
+   * find each other without duplicating anything.
+   */
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS diagnostics_payloads (
+        callId TEXT PRIMARY KEY,
+        ts TEXT NOT NULL,
+        scope TEXT,
+        prompt TEXT,
+        reply TEXT,
+        promptBytes INTEGER,
+        replyBytes INTEGER,
+        promptTruncated INTEGER DEFAULT 0,
+        replyTruncated INTEGER DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS diagnostics_payloads_ts ON diagnostics_payloads(ts DESC);
+    `);
+  } catch (e) {}
+
+  /**
    * The diagnostic log. Note the name: `logs` is the media-progress table and
    * has been since the beginning, so this one cannot be called that.
    *

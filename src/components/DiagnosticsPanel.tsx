@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   RefreshCw, Download, Trash2, ChevronRight, AlertTriangle, Search,
-  Cpu, Server, Layers, Copy, Check, Loader2, Ghost,
+  Cpu, Server, Layers, Copy, Check, Loader2, Ghost, ArrowUp, ArrowDown, Scissors,
 } from 'lucide-react';
 import { apiFetch } from '../services/db';
 
@@ -75,11 +75,71 @@ function elapsed(sinceIso: string, now: number): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
 }
 
+interface Exchange {
+  prompt: string | null;
+  reply: string | null;
+  promptBytes: number | null;
+  replyBytes: number | null;
+  promptTruncated: boolean;
+  replyTruncated: boolean;
+  verdict: { parses: boolean; endsCleanly: boolean; lastChars: string };
+}
+
+/** One side of an exchange: collapsed by default, copyable, monospaced. */
+function Body({ label, icon: Icon, text, bytes, clipped }: {
+  label: string; icon: any; text: string; bytes: number | null; clipped: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="rounded-lg border border-white/5 bg-black/40 overflow-hidden">
+      <div className="flex items-center gap-2 px-2.5 py-1.5">
+        <button type="button" onClick={() => setOpen(!open)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+          <Icon className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+          <span className="text-[10px] uppercase tracking-wider text-zinc-400">{label}</span>
+          <span className="text-[10px] text-zinc-600 font-mono">
+            {bytes != null ? `${bytes.toLocaleString()} bytes` : ''}{clipped ? ' · middle trimmed' : ''}
+          </span>
+          <ChevronRight className={`w-3 h-3 text-zinc-600 transition-transform ${open ? 'rotate-90' : ''}`} />
+        </button>
+        <button
+          type="button"
+          onClick={() => { navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }).catch(() => {}); }}
+          className="shrink-0 p-1 rounded hover:bg-white/10 text-zinc-500 hover:text-zinc-200"
+          title={`Copy the ${label.toLowerCase()}`}
+        >
+          {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+        </button>
+      </div>
+      {open && (
+        <pre className="text-[11px] font-mono text-zinc-400 px-3 pb-3 max-h-[300px] overflow-auto whitespace-pre-wrap break-words">
+          {text}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function LogRow({ entry }: { entry: Entry }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [exchange, setExchange] = useState<Exchange | null>(null);
+  const [loadingExchange, setLoadingExchange] = useState(false);
   const hasDetail = entry.detail !== null && entry.detail !== undefined;
   const d = entry.detail || {};
+  const callId: string | undefined = d.callId;
+
+  // Fetched only when the row is opened: a Codex prompt and reply together are a
+  // couple of hundred kilobytes, and nobody skimming two hundred rows wants that.
+  useEffect(() => {
+    if (!open || !callId || exchange || loadingExchange) return;
+    setLoadingExchange(true);
+    apiFetch(`/api/diagnostics/payload/${encodeURIComponent(callId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((v) => setExchange(v))
+      .catch(() => {})
+      .finally(() => setLoadingExchange(false));
+  }, [open, callId, exchange, loadingExchange]);
 
   const copy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -146,6 +206,46 @@ function LogRow({ entry }: { entry: Entry }) {
               ))}
             </div>
           )}
+          {callId && (
+            <div className="space-y-2 mb-2">
+              {loadingExchange && <div className="text-[11px] text-zinc-500">Loading the exchange…</div>}
+
+              {/* The question this whole thing exists to answer: was the reply
+                  cut off, or was it just wrong? They have opposite fixes. */}
+              {exchange?.reply && !exchange.verdict.parses && (
+                <div className={`flex items-start gap-2 px-2.5 py-2 rounded-lg text-[11px] border ${
+                  exchange.verdict.endsCleanly
+                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+                    : 'bg-red-500/10 border-red-500/20 text-red-300'
+                }`}>
+                  <Scissors className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    {exchange.verdict.endsCleanly
+                      ? 'The reply is not valid JSON, but it does end on a closing bracket — malformed rather than cut off.'
+                      : 'The reply stops mid-document: it is not valid JSON and does not end on a closing bracket. It was cut off.'}
+                    <div className="mt-1 font-mono text-[10px] text-zinc-400 break-all">
+                      ends with: …{exchange.verdict.lastChars}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {exchange?.prompt && (
+                <Body label="Prompt sent" icon={ArrowUp} text={exchange.prompt}
+                      bytes={exchange.promptBytes} clipped={exchange.promptTruncated} />
+              )}
+              {exchange?.reply && (
+                <Body label="Reply received" icon={ArrowDown} text={exchange.reply}
+                      bytes={exchange.replyBytes} clipped={exchange.replyTruncated} />
+              )}
+              {!loadingExchange && exchange === null && (
+                <div className="text-[11px] text-zinc-600">
+                  The exchange for this call is no longer kept — only the most recent 300 are.
+                </div>
+              )}
+            </div>
+          )}
+
           <pre className="text-[11px] font-mono text-zinc-400 bg-black/40 rounded-lg p-3 overflow-x-auto border border-white/5 whitespace-pre-wrap break-words">
             {typeof entry.detail === 'string' ? entry.detail : JSON.stringify(entry.detail, null, 2)}
           </pre>
@@ -275,8 +375,9 @@ export function DiagnosticsPanel() {
         )}
       </div>
       <p className="text-xs text-zinc-500">
-        What the server and the AI actually did. Kept in the database, capped at the most recent 20,000 entries,
-        with API keys stripped out. Export it to send it somewhere.
+        What the server and the AI actually did. Kept in the database, capped at the most recent 20,000 entries —
+        plus the last 300 prompts and replies in full — with API keys stripped out. Open an AI row to read the
+        exchange; export it to send it somewhere.
       </p>
 
       {summary && summary.inFlight?.length > 0 && (

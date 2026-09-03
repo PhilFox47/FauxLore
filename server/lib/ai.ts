@@ -1,6 +1,6 @@
 import type { Db } from "../context";
 import { Agent } from "undici";
-import { recordAiCall, recordAiCallStart, nextCallId } from "./diagnostics";
+import { recordAiCall, recordAiCallStart, nextCallId, recordPayload } from "./diagnostics";
 
 /**
  * Server-side text generation via NanoGPT's OpenAI-compatible endpoint.
@@ -349,6 +349,12 @@ async function postChat(
   // process that had never been asked to do anything.
   recordAiCallStart(shape);
 
+  // The prompt is stored the moment it goes out, so a call that never comes back
+  // still leaves behind what it was asked to do.
+  recordPayload(callId, opts.scope, {
+    prompt: messages.map((m) => `[${m.role}]\n${m.content}`).join("\n\n"),
+  });
+
   /**
    * Every exit from this function goes through here.
    *
@@ -425,10 +431,14 @@ async function postChat(
   }
 
   if (!res.ok) {
-    const err: any = new Error(`NanoGPT error (${res.status}): ${(await res.text().catch(() => "")).slice(0, 300)}`);
+    const body = await res.text().catch(() => "");
+    const err: any = new Error(`NanoGPT error (${res.status}): ${body.slice(0, 300)}`);
     // Carried so the retry decision can read the status rather than parse it
     // back out of the message.
     err.httpStatus = res.status;
+    // The error body in full, not the 300 characters the message can hold —
+    // a provider's explanation of a rejection is usually longer than that.
+    recordPayload(callId, opts.scope, { reply: body });
     report({ httpStatus: res.status, error: err.message });
     throw err;
   }
@@ -494,6 +504,8 @@ async function postChat(
     injectedTokens: promptTokens ? Math.max(0, promptTokens - ownPromptTokens) : undefined,
     error: truncated ? "truncated (finish_reason=length)" : text ? undefined : "empty reply",
   });
+
+  recordPayload(callId, opts.scope, { reply: text });
 
   if (truncated) {
     const err: any = new Error(

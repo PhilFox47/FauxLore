@@ -51,9 +51,24 @@ export interface DiagnosticRecord {
 const MAX_ROWS = 20_000;
 const TRIM_EVERY = 200;
 
+/**
+ * How many prompt/reply pairs are kept, and how big each may be.
+ *
+ * Far fewer than log rows, because they are thousands of times larger. The reply
+ * cap is deliberately generous: the question these exist to answer is "was this
+ * cut off or just malformed", and a reply trimmed by the log on its way in
+ * cannot answer it — the end is exactly the part that matters. A full Codex
+ * dossier is around 120KB, so 512KB holds one whole with room to spare.
+ */
+const MAX_PAYLOADS = 300;
+const MAX_PROMPT_BYTES = 128 * 1024;
+const MAX_REPLY_BYTES = 512 * 1024;
+
 let db: Db | null = null;
 let insert: any = null;
+let insertPayload: any = null;
 let sinceTrim = 0;
+let sincePayloadTrim = 0;
 
 /**
  * Re-entrancy guard.
@@ -127,6 +142,15 @@ export function initDiagnostics(database: Db) {
   insert = db.prepare(
     `INSERT INTO diagnostics (ts, channel, level, scope, message, userId, detail)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  );
+  insertPayload = db.prepare(
+    `INSERT INTO diagnostics_payloads
+       (callId, ts, scope, prompt, reply, promptBytes, replyBytes, promptTruncated, replyTruncated)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(callId) DO UPDATE SET
+       reply = excluded.reply,
+       replyBytes = excluded.replyBytes,
+       replyTruncated = excluded.replyTruncated`,
   );
 
   /**
@@ -232,6 +256,83 @@ export function record(entry: DiagnosticRecord): void {
   } catch {
     // Swallowed on purpose. There is nowhere to report a logging failure to
     // that would not itself be logging.
+  } finally {
+    writing = false;
+  }
+}
+
+/**
+ * Scrubs credentials without shortening anything.
+ *
+ * `redact` caps every string at 4,000 characters, which is right for a log
+ * message and destroys the one thing a stored reply is for: whether it ends
+ * mid-sentence. This applies the same credential patterns and leaves the length
+ * alone, so the end of the document is still there to look at.
+ */
+function scrub(text: string): string {
+  let out = text;
+  for (const pattern of SECRET_VALUE) out = out.replace(pattern, "[redacted]");
+  return out;
+}
+
+/** Cuts a string to a byte budget, saying whether it had to. */
+function cap(text: string, maxBytes: number): { text: string; bytes: number; truncated: boolean } {
+  const bytes = Buffer.byteLength(text, "utf8");
+  if (bytes <= maxBytes) return { text, bytes, truncated: false };
+  // Cut from the MIDDLE, not the end. Both ends carry the evidence — the start
+  // says what was asked and the last characters say whether the answer finished
+  // — and dropping the tail would defeat the point.
+  const keep = Math.floor(maxBytes / 2);
+  const head = Buffer.from(text, "utf8").subarray(0, keep).toString("utf8");
+  const tail = Buffer.from(text, "utf8").subarray(bytes - keep).toString("utf8");
+  return {
+    text: `${head}\n\n… [${(bytes - maxBytes).toLocaleString()} bytes omitted from the middle] …\n\n${tail}`,
+    bytes,
+    truncated: true,
+  };
+}
+
+/**
+ * Stores what was actually sent and what actually came back.
+ *
+ * The log could say a reply was 14,572 tokens and would not say whether those
+ * tokens were a complete document or one that stopped mid-array — which is the
+ * difference between "ask for more room" and "the model wrote bad JSON", and
+ * those have opposite fixes.
+ */
+export function recordPayload(
+  callId: string,
+  scope: string | undefined,
+  parts: { prompt?: string; reply?: string },
+): void {
+  if (!db || !insertPayload || writing) return;
+  writing = true;
+  try {
+    const p = parts.prompt !== undefined ? cap(scrub(parts.prompt), MAX_PROMPT_BYTES) : null;
+    const r = parts.reply !== undefined ? cap(scrub(parts.reply), MAX_REPLY_BYTES) : null;
+
+    insertPayload.run(
+      callId,
+      new Date().toISOString(),
+      scope || null,
+      p?.text ?? null,
+      r?.text ?? null,
+      p?.bytes ?? null,
+      r?.bytes ?? null,
+      p?.truncated ? 1 : 0,
+      r?.truncated ? 1 : 0,
+    );
+
+    if (++sincePayloadTrim >= 25) {
+      sincePayloadTrim = 0;
+      db.prepare(
+        `DELETE FROM diagnostics_payloads WHERE ts <= (
+           SELECT ts FROM diagnostics_payloads ORDER BY ts DESC LIMIT 1 OFFSET ?
+         )`,
+      ).run(MAX_PAYLOADS);
+    }
+  } catch {
+    // As everywhere else here: a failure to log must not become a failure.
   } finally {
     writing = false;
   }
