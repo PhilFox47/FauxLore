@@ -223,6 +223,21 @@ export interface GenerateOptions {
    */
   maxTokens?: number;
   /**
+   * Receive the reply as it is written, rather than in one piece at the end.
+   *
+   * Nothing here displays a stream — the reason is that the connection survives.
+   * A non-streamed request sends no bytes at all while the model works, and
+   * something in the path between here and the model hangs up on a silent
+   * connection after 340 seconds: three Codex attempts failed at 340,029ms,
+   * 340,029ms and 340,062ms with `UND_ERR_SOCKET: other side closed`, while the
+   * one that succeeded took 319 seconds. Twenty seconds of headroom is not a
+   * margin, it is a coin toss.
+   *
+   * Streaming keeps tokens flowing the whole time, so there is no silence to
+   * time out, and the request is bounded by our own clock again.
+   */
+  stream?: boolean;
+  /**
    * none | minimal | low | medium | high | xhigh.
    *
    * Reasoning tokens are billed as output AND count against `maxTokens`, so on a
@@ -249,6 +264,55 @@ export interface GenerateOptions {
    * sending it twice was meant to prevent.
    */
   searchBody?: boolean;
+}
+
+/**
+ * Reads a Server-Sent Events reply, assembling the answer from its deltas.
+ *
+ * `delta.reasoning_content` is deliberately not collected. A thinking model
+ * streams its working on that field and the answer on `content`, so taking only
+ * `content` keeps the reasoning out of what gets parsed as JSON — the problem
+ * `parseJsonLoose` had to strip `<think>` blocks for.
+ */
+async function readEventStream(res: Response): Promise<{ text: string; finishReason: string; usage: any }> {
+  const reader = (res.body as any)?.getReader?.();
+  if (!reader) throw new Error("The streamed reply had no body.");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  let finishReason = "";
+  let usage: any = null;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    // Events are newline-delimited, and a chunk can end mid-line, so whatever is
+    // left after the last newline stays in the buffer for the next read.
+    let nl: number;
+    while ((nl = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (!line.startsWith("data:")) continue;
+
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      try {
+        const chunk = JSON.parse(payload);
+        const choice = chunk.choices?.[0];
+        if (typeof choice?.delta?.content === "string") text += choice.delta.content;
+        if (choice?.finish_reason) finishReason = String(choice.finish_reason);
+        // Sent once at the end when stream_options.include_usage is set.
+        if (chunk.usage) usage = chunk.usage;
+      } catch {
+        // A keepalive or a comment line. Not every `data:` is a chunk.
+      }
+    }
+  }
+
+  return { text: text.trim(), finishReason, usage };
 }
 
 /** One chat request. Throws on a non-OK response or an empty completion. */
@@ -338,6 +402,9 @@ async function postChat(
       ...(opts.json ? { response_format: { type: "json_object" } } : {}),
       ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
       ...(opts.reasoningEffort ? { reasoning_effort: opts.reasoningEffort } : {}),
+      // Streaming is not about showing progress here; it is about the connection
+      // staying alive. See `stream` in GenerateOptions.
+      ...(opts.stream ? { stream: true, stream_options: { include_usage: true } } : {}),
     }),
     });
   } catch (e: any) {
@@ -357,9 +424,29 @@ async function postChat(
     throw err;
   }
 
-  const data: any = await res.json();
-  const choice = data.choices?.[0] || {};
-  const text = (choice.message?.content || "").trim();
+  /**
+   * A streamed reply and a plain one are both accepted, whatever was asked for.
+   *
+   * The content type decides, not the request: a provider that quietly ignores
+   * `stream` sends ordinary JSON, and that has to keep working rather than
+   * failing to parse.
+   */
+  let text: string;
+  let finishReasonRaw: string;
+  let usage: any;
+
+  if (/text\/event-stream/i.test(res.headers.get("content-type") || "")) {
+    const streamed = await readEventStream(res);
+    text = streamed.text;
+    finishReasonRaw = streamed.finishReason;
+    usage = streamed.usage;
+  } else {
+    const data: any = await res.json();
+    const choice = data.choices?.[0] || {};
+    text = (choice.message?.content || "").trim();
+    finishReasonRaw = String(choice.finish_reason || "");
+    usage = data.usage;
+  }
 
   /**
    * The provider says outright when it ran out of room, and this used to ignore
@@ -371,7 +458,7 @@ async function postChat(
    * character object. That parsed, satisfied every check, and was written to the
    * database as a Codex containing nothing at all.
    */
-  const finishReason = String(choice.finish_reason || "");
+  const finishReason = finishReasonRaw;
 
   /**
    * `usage` is what the billing page shows, recorded here so nobody has to go
@@ -383,17 +470,17 @@ async function postChat(
    * tens of thousands; a call that quietly fell back to a shallow search shows
    * almost none, and is otherwise indistinguishable.
    */
-  const promptTokens = Number(data.usage?.prompt_tokens) || undefined;
+  const promptTokens = Number(usage?.prompt_tokens) || undefined;
   const ownPromptTokens = Math.round(promptChars / 4);
   const truncated = finishReason === "length";
   report({
     httpStatus: res.status,
     promptTokens,
-    completionTokens: Number(data.usage?.completion_tokens) || undefined,
+    completionTokens: Number(usage?.completion_tokens) || undefined,
     // Reasoning is billed as output and spends the same budget as the answer, so
     // when a reply is truncated this is the number that says whether the model
     // ran out of room to think or ran out of room to answer.
-    reasoningTokens: Number(data.usage?.completion_tokens_details?.reasoning_tokens) || undefined,
+    reasoningTokens: Number(usage?.completion_tokens_details?.reasoning_tokens) || undefined,
     finishReason: finishReason || undefined,
     injectedTokens: promptTokens ? Math.max(0, promptTokens - ownPromptTokens) : undefined,
     error: truncated ? "truncated (finish_reason=length)" : text ? undefined : "empty reply",
@@ -401,7 +488,7 @@ async function postChat(
 
   if (truncated) {
     const err: any = new Error(
-      `The reply was cut off at the token limit (${data.usage?.completion_tokens ?? "?"} tokens` +
+      `The reply was cut off at the token limit (${usage?.completion_tokens ?? "?"} tokens` +
       `${opts.maxTokens ? `, asked for up to ${opts.maxTokens}` : ", no max_tokens was sent"}).`,
     );
     // Not transient: asking again produces the same length. The caller has to
@@ -451,6 +538,7 @@ export async function nanoGenerateText(
 
   let active = opts;
   for (let attempt = 1; ; attempt++) {
+    const attemptStartedAt = Date.now();
     try {
       return await postChat(config, messages, active, attempt);
     } catch (e: any) {
@@ -464,6 +552,21 @@ export async function nanoGenerateText(
         // shallower search than the caller asked for.
         active = unsupported === "json" ? { ...active, json: false } : { ...active, searchBody: false };
         continue;
+      }
+      /**
+       * A failure that took minutes is not a blip, whatever it says.
+       *
+       * `fetch failed` reads as transient and gets retried, which is right for a
+       * connection refused in 20ms and badly wrong for one dropped after five
+       * and a half minutes of work: three of those turned a doomed Codex into a
+       * seventeen-minute wait, and every attempt failed at the same 340 seconds.
+       * If the request got far enough to spend real time, repeating it verbatim
+       * is not the answer.
+       */
+      const spent = Date.now() - attemptStartedAt;
+      if (spent > 120_000) {
+        console.warn(`[ai] not retrying — the attempt already ran for ${Math.round(spent / 1000)}s before failing`);
+        throw e;
       }
       if (attempt >= MAX_ATTEMPTS || !isTransient(e, e?.httpStatus)) throw e;
       // Exponential, with jitter so calls that failed together do not come back

@@ -348,6 +348,15 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
       // A dormant account still gets to add things — it just does not get the AI
       // work until it logs something. The entry is parked as 'deferred' and the
       // first log picks it up, so nothing is silently lost.
+      /**
+       * Every branch here says what it decided and why.
+       *
+       * There are four reasons a new entry might get no Codex — it is not new,
+       * it arrived already tagged, it is unreleased, or the account is dormant —
+       * and from the outside all four look identical: you add something and
+       * nothing happens. "It didn't build a Codex for Severance" was not
+       * answerable from the log, which is the one thing the log exists for.
+       */
       if (isNewEntry && (item.genres || []).length === 0 && (item.tags || []).length === 0) {
         // Something that does not exist yet cannot be researched. A Codex for an
         // unreleased title would be written from a marketing page and a guess,
@@ -355,11 +364,22 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
         // parked exactly like dormant-account work is, and the release picks it
         // up. Tagging and the Codex travel together here: autoTagMedia compiles
         // the Codex as its first step.
-        if (item.status === 'Unreleased' || activity.isFrozen(userId as string)) {
+        const frozen = activity.isFrozen(userId as string);
+        if (item.status === 'Unreleased' || frozen) {
           db.prepare("UPDATE media SET autoTagStatus = 'deferred' WHERE id = ?").run(item.id);
+          console.log(
+            `[autotag] Parked "${item.title}" — ${item.status === 'Unreleased' ? 'it has not been released yet' : 'the account is dormant'}. ` +
+            `Tagging and the Codex run when that changes.`,
+          );
         } else {
+          console.log(`[autotag] Queued "${item.title}" (${item.mediaType}); the Codex is compiled as its first step.`);
           autoTag.queueAutoTag(userId as string, item.id);
         }
+      } else if (isNewEntry) {
+        console.log(
+          `[autotag] Skipped "${item.title}" — it arrived already tagged ` +
+          `(${(item.genres || []).length} genre(s), ${(item.tags || []).length} tag(s)), so no Codex was compiled.`,
+        );
       }
 
       const saved = db.prepare('SELECT * FROM media WHERE id = ?').get(item.id);

@@ -967,6 +967,17 @@ export function createCodexService({ db, onFlavorTexts }: {
          * setting it too low is the failure this replaced.
          */
         maxTokens: 48_000,
+        /**
+         * Streamed so the connection is never silent.
+         *
+         * Nothing shows the stream to anyone. It is here because a non-streamed
+         * request sends no bytes while the model works, and something between
+         * this server and the model closes a silent connection at 340 seconds —
+         * measured three times to the millisecond, against a successful run of
+         * 319. This is the longest request the app makes and the only one
+         * anywhere near that wall.
+         */
+        stream: true,
         // A deep search runs several queries before the model writes a word, and
         // then it writes the whole dossier. Fifteen minutes is generous on
         // purpose: this call IS the Codex, so letting it finish slowly beats
