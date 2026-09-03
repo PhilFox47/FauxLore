@@ -379,11 +379,15 @@ That word is the brief. Not "notable quotations", not "trivia": a memory is a fr
 
 YOUR JOB HERE IS TO FIND THE MATERIAL, NOT TO POLISH IT. Gather what is actually there and write it down plainly; a later pass does the selecting and the phrasing. What that pass cannot do is invent what you failed to find, so err toward recording more.
 
+THE ONE RULE THAT DECIDES MOST OF THIS: A "quote" IS WORDS FROM INSIDE THE WORK. Dialogue, text on screen, a sign, an interface string — something a person encounters while playing, watching or reading it. Nothing said ABOUT the work is a quote, however well phrased and whoever said it. A developer in an interview, a director at a showcase, a line from the store page, a press release, a review: none of those are quotes, because none of them are in the thing. Filing them as quotes is the commonest way this section goes wrong, and it produces a dossier that reads like a press kit for a work nobody has actually experienced.
+
 Collect three things:
 
 WORDS FROM INSIDE THE WORK, reproduced EXACTLY. Spoken lines, yes, but written counts just as much: text on a screen, a title card, a sign, a scrawl on a door, an interface string, a sound effect printed on the page. "Don't open, dead inside." is never spoken by anyone; it is painted on a door, and it is one of the most quoted things its season produced. Catchphrases belong here and are the easiest to miss, because familiarity stops them registering as lines — if a character says a thing every week, or a show opens the same way every episode, write it down. Exact wording is everything; an approximation is worthless. Note who says it and where.
 
-THINGS PEOPLE KNOW ABOUT IT. The production story, the fun fact, the verdict the fandom has settled on — what the creator has said about it since, what was cut or nearly changed, what it is agreed to have deserved and not got, the argument its audience keeps having. Not words from inside the work: facts and opinions about it.
+THINGS PEOPLE KNOW ABOUT IT. The production story, the fun fact, the verdict its audience has settled on: what was cut or nearly changed, what it is agreed to have deserved and not got, the argument its fans keep having, the thing everyone who played it found out afterwards.
+
+WRITE THESE IN THE AUDIENCE'S WORDS, NOT THE CREATOR'S. A fact the creator has confirmed is fair material, but the memory is the fact as fans repeat it, not a sentence lifted from the interview where it was said. "Gooseworx actually hates this." is the form — six words, a fandom's shorthand for a thing its creator said. Quoting the creator at length instead is the failure this is warning about: nobody repeats a director's sentence about their own work, and a dossier full of them is a press kit.
 
 WHAT THE FANDOM SAYS. The running gag, the affectionate complaint, the meme, the thing everyone who finished it brings up. Record the actual phrasing where there is one — a meme has a canonical wording and paraphrase destroys it. Where there is no fixed phrasing, describe the joke plainly and let the next pass write it.
 
@@ -406,7 +410,11 @@ For REFERENCES specifically, which are the ones most often missed, look somewher
 
 THE FIELD TEST: if every result you can find is an article EXPLAINING the phrase, it is trivia and not currency — leave it out. If you find it used in passing, by strangers, as though everyone already knows it, it belongs here.
 
-DO NOT MINE THE MARKETING. Store pages, press releases, trailer voiceover, the publisher's own blurb and the "about" section produce confident, well-formed, worthless lines. Nobody quotes an announcement.
+DO NOT MINE THE MARKETING OR THE PRESS TOUR. Store pages, press releases, trailer voiceover, the publisher's blurb, the "about" section, announcement posts, developer interviews, showcase soundbites and pre-release coverage all produce confident, well-formed, worthless lines. They are the easiest text on the internet to find about any work, which is exactly why they keep turning up here and exactly why they are worth nothing. Nobody quotes an announcement. Nobody has ever repeated a director's sentence about their own game to another fan.
+
+The test is simple and it is the same one as everywhere else here: would somebody who loves this work say this to somebody else who loves it? "Rise as Rook, Dragon Age's newest hero" is copy written to sell a game to a stranger. "It's the most deliberately crafted companion experience we've ever done" is a creative director doing his job at a trade show. Neither is a memory, and neither belongs in this list at all.
+
+AT MOST ONE memory in the whole set may come from outside the work — a production fact, a fandom verdict, a piece of trivia. Everything else must be words from inside it or words its audience says. If you find yourself with two or more entries sourced to interviews, articles or marketing, you have researched the coverage instead of the work: go back to the wiki, the quotes page, and the threads where people are using the lines rather than explaining them.
 
 === IT MUST BELONG TO THIS VERSION ===
 
@@ -441,6 +449,8 @@ IT DOES NOT ANNOUNCE ITSELF AS A JOKE. State the fact deadpan and let the recogn
 IT HAS A SHAPE. Either a setup and a turn — "The character creator took ninety minutes. The helmet covers the face." — or a flat statement whose comedy is the flatness — "Bought in the sale, installed, never launched." What kills a line is trailing off: a strong open and a vague close reads worse than either half alone.
 
 === WORKED EXAMPLES ===
+
+THESE ARE ILLUSTRATIONS OF FORM, NOT MATERIAL. Never reproduce one in an answer. They are about other works entirely, and one of them ("The character creator took ninety minutes…") has already been copied verbatim into a real dossier for a game it had nothing to do with. If a line you are about to write appears below, it is the wrong line.
 
 The same material, wrong and then right:
 

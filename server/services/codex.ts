@@ -206,11 +206,68 @@ export function isBareLabel(text: string): boolean {
  * is worse than nothing. The research is asked for three to six; this is what
  * makes six actually mean six.
  */
+/**
+ * The prompt's own worked examples, which have been coming back as answers.
+ *
+ * They are printed in the brief to show the SHAPE of a good line, and one of
+ * them turned up verbatim in a real dossier for Dragon Age: The Veilguard — a
+ * game whose character creator it says nothing about, in a list where every
+ * other entry was marketing copy. An illustration copied into the record is not
+ * a memory, it is the prompt talking to itself, so they are refused here as well
+ * as forbidden there.
+ */
+const PROMPT_EXAMPLES = new Set([
+  "the character creator took ninety minutes. the helmet covers the face.",
+  "two hundred chapters of waiting, and he arrives in a mid-season patch.",
+  "uninstalled the texture pack. got thirty-five gigabytes and a blurry hero.",
+  "togashi is on hiatus again.",
+  "the scanlation group went quiet at chapter 214.",
+  "zoro is lost again. he was standing right there.",
+  "bought in the sale, installed, never launched.",
+  "wait for the trade.",
+  "saved before the boss. saved after the boss. saved between the two, just in case.",
+  "the bookmark has not moved since march.",
+  "a guide is open in the other window. it has been since hour one.",
+  "finished the errand in twenty minutes; the calendar charged me for the whole day anyway.",
+]);
+
+/**
+ * Where a line came from, when the attribution admits it.
+ *
+ * A quote is words from inside the work. These are the sources that are not:
+ * the press tour, the store page, the review. They are the easiest text about
+ * any work to find, which is why they kept arriving — one dossier's memories
+ * were a blog post, a store description, a creative director at a trade show and
+ * a note about the EA App, none of which anybody has ever said to another fan.
+ *
+ * Matched on the attribution rather than the text, because that is where a model
+ * is honest about it: it writes "Official game description" or "Creative
+ * director John Epler at Summer Game Fest" quite plainly, having simply filed it
+ * under the wrong kind.
+ */
+const OUTSIDE_THE_WORK = new RegExp(
+  [
+    "marketing", "press release", "press kit", "announcement", "blog post", "store page",
+    "steam page", "official (?:game )?description", "publisher", "promotional", "trailer",
+    "interview", "creative director", "game director", "showcase", "summer game fest",
+    "developer(?:s)?(?: said| statement| commentary)?", "dev(?:s)? said", "keynote",
+    "pre-?release coverage", "review(?:er|s)?", "ign\\b", "gamespot", "polygon", "kotaku", "eurogamer",
+  ].join("|"),
+  "i",
+);
+
 export function normalizeFlavorTexts(value: any): CodexFlavorText[] {
   if (!Array.isArray(value)) return [];
   const out: CodexFlavorText[] = [];
   const seen = new Set<string>();
   let medium = 0;
+  /**
+   * How many memories may come from outside the work.
+   *
+   * One, matching the brief. A production fact or a settled fandom verdict earns
+   * its place; four of them mean the coverage was researched instead of the work.
+   */
+  let outside = 0;
 
   for (const row of value) {
     const raw = typeof row === "string" ? row : row?.text ?? row?.quote;
@@ -227,6 +284,10 @@ export function normalizeFlavorTexts(value: any): CodexFlavorText[] {
 
     const key = text.toLowerCase();
     if (seen.has(key)) continue;
+    if (PROMPT_EXAMPLES.has(key)) {
+      console.warn(`[codex] Dropped a flavor text copied from the prompt's own examples: "${text}"`);
+      continue;
+    }
 
     // "inside joke", "running joke" and "joke" are all the same kind.
     const said = String(row?.kind ?? "").toLowerCase();
@@ -238,9 +299,33 @@ export function normalizeFlavorTexts(value: any): CodexFlavorText[] {
     if (isMedium && medium >= MAX_MEDIUM_FLAVOR_TEXTS) continue;
     if (isMedium) medium++;
 
+    /**
+     * Anything sourced to the press tour is not a quote, and only one of them
+     * gets in at all.
+     *
+     * A line the marketing wrote or a director said at a showcase can be a
+     * `reference` — a fact about the work — but it is never a `quote`, because
+     * nothing said ABOUT a work is inside it. Demoting rather than dropping
+     * keeps the genuinely interesting production fact; the cap stops the list
+     * turning into a press kit.
+     */
+    const attributionRaw = String(row?.attribution ?? "").trim();
+    let finalKind = kind;
+    if (!isMedium && attributionRaw && OUTSIDE_THE_WORK.test(attributionRaw)) {
+      if (outside >= 1) {
+        console.warn(`[codex] Dropped a flavor text sourced outside the work: "${text}" (${attributionRaw})`);
+        continue;
+      }
+      outside++;
+      if (finalKind === "quote") {
+        console.warn(`[codex] Refiled a flavor text as a reference — it is not from inside the work: "${text}" (${attributionRaw})`);
+        finalKind = "reference";
+      }
+    }
+
     seen.add(key);
-    const entry: CodexFlavorText = { text, kind, scope: isMedium ? "medium" : "work" };
-    const attribution = String(row?.attribution ?? "").trim();
+    const entry: CodexFlavorText = { text, kind: finalKind, scope: isMedium ? "medium" : "work" };
+    const attribution = attributionRaw;
     const why = String(row?.why ?? "").trim();
     // Nobody in particular says a format line, so an attribution on one is the
     // model having ignored the rule rather than information worth keeping.
