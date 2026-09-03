@@ -863,7 +863,14 @@ export function createCodexService({ db, onFlavorTexts }: {
 
   function getCodexRow(userId: string, opts: { mediaId?: string | null; title?: string; mediaType?: string; year?: number | null; season?: number | null }): CodexRow | null {
     if (opts.mediaId) {
-      const byMedia = db.prepare("SELECT * FROM media_codex WHERE userId = ? AND mediaId = ?").get(userId, opts.mediaId);
+      // Newest first, and explicitly so. Without an ORDER BY this returned
+      // whichever row SQLite reached first, which is the oldest — so an entry
+      // that had somehow acquired two Codexes would show the stale one forever
+      // while the fresh one sat unread beside it. `generate` now keeps a single
+      // row per entry, and this is the belt to that pair of braces.
+      const byMedia = db
+        .prepare("SELECT * FROM media_codex WHERE userId = ? AND mediaId = ? ORDER BY updatedAt DESC LIMIT 1")
+        .get(userId, opts.mediaId);
       if (byMedia) return hydrate(byMedia);
     }
     if (opts.title && opts.mediaType) {
@@ -902,20 +909,58 @@ export function createCodexService({ db, onFlavorTexts }: {
     const key = codexTitleKey(subject.title, subject.mediaType, year, subjectSeason(subject));
     const now = new Date().toISOString();
 
-    // Upsert on the title key, so two requests that slip past the in-flight guard
-    // (a forced re-research racing an implicit one) share a row instead of
-    // colliding on the unique index.
-    db.prepare(
-      `INSERT INTO media_codex (id, userId, mediaId, titleKey, title, mediaType, status, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, 'generating', ?, ?)
-       ON CONFLICT(userId, titleKey) DO UPDATE SET
-         status = 'generating',
-         error = NULL,
-         mediaId = COALESCE(media_codex.mediaId, excluded.mediaId),
-         updatedAt = excluded.updatedAt`,
-    ).run(uuidv4(), userId, subject.mediaId || null, key, subject.title, subject.mediaType, now, now);
+    /**
+     * ONE CODEX PER ENTRY. The row an entry already has is the row it keeps.
+     *
+     * This used to key only on the title, and the title key carries the year:
+     * `nukitashi::visual novel` before a year is known, `nukitashi::visual
+     * novel::2019` after. So an entry whose year arrived later — a metadata
+     * refresh, an edit — regenerated into a SECOND row, while the reader, which
+     * looks up by `mediaId`, kept returning the first one. The result was a
+     * Codex that visibly regenerated, was saved, was reported saved, and then
+     * reverted to the old one the moment the card was reopened. Both rows were
+     * real, both carried the same `mediaId`, and the writer and the reader were
+     * simply not talking about the same one.
+     *
+     * So if this entry already has a Codex, that row is updated in place and its
+     * title key is brought up to date. Any other row holding the key we are
+     * moving onto, or any other row attached to this entry, is a duplicate of
+     * the same work and goes.
+     */
+    let id: string | undefined;
 
-    const id = (db.prepare("SELECT id FROM media_codex WHERE userId = ? AND titleKey = ?").get(userId, key) as any).id;
+    if (subject.mediaId) {
+      const mine: any = db
+        .prepare("SELECT id FROM media_codex WHERE userId = ? AND mediaId = ? ORDER BY updatedAt DESC LIMIT 1")
+        .get(userId, subject.mediaId);
+      if (mine) {
+        db.prepare("DELETE FROM media_codex WHERE userId = ? AND id != ? AND (titleKey = ? OR mediaId = ?)")
+          .run(userId, mine.id, key, subject.mediaId);
+        db.prepare(
+          `UPDATE media_codex
+              SET titleKey = ?, title = ?, mediaType = ?, status = 'generating', error = NULL, updatedAt = ?
+            WHERE id = ?`,
+        ).run(key, subject.title, subject.mediaType, now, mine.id);
+        id = mine.id;
+      }
+    }
+
+    if (!id) {
+      // No entry yet, or no Codex for it. Upsert on the title key, so two
+      // requests that slip past the in-flight guard (a forced re-research racing
+      // an implicit one) share a row instead of colliding on the unique index.
+      db.prepare(
+        `INSERT INTO media_codex (id, userId, mediaId, titleKey, title, mediaType, status, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, 'generating', ?, ?)
+         ON CONFLICT(userId, titleKey) DO UPDATE SET
+           status = 'generating',
+           error = NULL,
+           mediaId = COALESCE(media_codex.mediaId, excluded.mediaId),
+           updatedAt = excluded.updatedAt`,
+      ).run(uuidv4(), userId, subject.mediaId || null, key, subject.title, subject.mediaType, now, now);
+
+      id = (db.prepare("SELECT id FROM media_codex WHERE userId = ? AND titleKey = ?").get(userId, key) as any).id;
+    }
 
     try {
       /**

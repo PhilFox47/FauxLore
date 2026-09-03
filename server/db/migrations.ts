@@ -334,6 +334,40 @@ export function runMigrations(db: Db) {
   try { db.prepare("UPDATE media SET autoTagStatus = 'failed' WHERE autoTagStatus = 'pending'").run(); } catch (e) {}
 
   /**
+   * Collapse duplicate Codexes.
+   *
+   * The title key carries the year, so an entry whose year arrived after its
+   * first Codex regenerated into a second row rather than over the first. Both
+   * carried the same `mediaId`; the writer updated one and the reader returned
+   * the other, so a freshly generated Codex reverted to the old one as soon as
+   * the card was reopened.
+   *
+   * Generation now keeps one row per entry, but the duplicates already written
+   * are still there, and the wrong one of each pair is the one being shown. Keep
+   * the most recently updated row that actually has research in it — a newer
+   * failed attempt must not evict an older working dossier.
+   */
+  try {
+    const dupes = db.prepare(
+      `SELECT userId, mediaId FROM media_codex
+        WHERE mediaId IS NOT NULL
+        GROUP BY userId, mediaId HAVING COUNT(*) > 1`,
+    ).all() as { userId: string; mediaId: string }[];
+
+    for (const { userId, mediaId } of dupes) {
+      const keep: any = db.prepare(
+        `SELECT id FROM media_codex WHERE userId = ? AND mediaId = ?
+          ORDER BY (data IS NOT NULL AND data != 'null') DESC, updatedAt DESC LIMIT 1`,
+      ).get(userId, mediaId);
+      if (!keep) continue;
+      const removed = db
+        .prepare("DELETE FROM media_codex WHERE userId = ? AND mediaId = ? AND id != ?")
+        .run(userId, mediaId, keep.id);
+      console.log(`Migration: collapsed ${removed.changes} duplicate Codex row(s) for media ${mediaId}`);
+    }
+  } catch (e) {}
+
+  /**
    * The diagnostic log. Note the name: `logs` is the media-progress table and
    * has been since the beginning, so this one cannot be called that.
    *
