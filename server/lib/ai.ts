@@ -1,6 +1,6 @@
 import type { Db } from "../context";
 import { Agent } from "undici";
-import { recordAiCall } from "./diagnostics";
+import { recordAiCall, recordAiCallStart, nextCallId } from "./diagnostics";
 
 /**
  * Server-side text generation via NanoGPT's OpenAI-compatible endpoint.
@@ -325,6 +325,29 @@ async function postChat(
   const model = resolveModel(config, !!opts.webSearch, opts.tier, opts.search?.depth);
   const promptChars = messages.reduce((n, m) => n + m.content.length, 0);
   const startedAt = Date.now();
+  const callId = nextCallId();
+
+  /** Everything both rows share, so the pair cannot describe different calls. */
+  const shape = {
+    callId,
+    model,
+    scope: opts.scope,
+    tier: opts.tier,
+    webSearch: !!opts.webSearch,
+    searchDepth: opts.webSearch ? opts.search?.depth || "standard" : undefined,
+    searchProvider: opts.search?.provider,
+    searchBody: opts.webSearch ? opts.searchBody !== false && !!opts.search : undefined,
+    json: !!opts.json,
+    stream: !!opts.stream,
+    attempt,
+    promptChars,
+    userId: opts.userId,
+  };
+
+  // Written before the request goes out, so a call that never comes back still
+  // left a mark. Until this existed, a killed process looked exactly like a
+  // process that had never been asked to do anything.
+  recordAiCallStart(shape);
 
   /**
    * Every exit from this function goes through here.
@@ -335,21 +358,7 @@ async function postChat(
    * would leave exactly the gap this is meant to close.
    */
   const report = (extra: Partial<Parameters<typeof recordAiCall>[0]>) =>
-    recordAiCall({
-      model,
-      scope: opts.scope,
-      tier: opts.tier,
-      webSearch: !!opts.webSearch,
-      searchDepth: opts.webSearch ? opts.search?.depth || "standard" : undefined,
-      searchProvider: opts.search?.provider,
-      searchBody: opts.webSearch ? opts.searchBody !== false && !!opts.search : undefined,
-      json: !!opts.json,
-      attempt,
-      durationMs: Date.now() - startedAt,
-      promptChars,
-      userId: opts.userId,
-      ...extra,
-    });
+    recordAiCall({ ...shape, durationMs: Date.now() - startedAt, ...extra });
 
   let res: Response;
   try {

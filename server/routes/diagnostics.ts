@@ -112,6 +112,58 @@ export function registerDiagnosticsRoutes(app: Express, ctx: ServerContext) {
           .prepare("SELECT COUNT(*) AS n FROM diagnostics WHERE level = 'error' AND ts >= ?")
           .get(dayAgo) as any).n,
         oldest: (db.prepare("SELECT MIN(ts) AS ts FROM diagnostics").get() as any).ts,
+        /**
+         * Calls that started and never reported back.
+         *
+         * A "started" row with no matching "end" row is either still running or
+         * died without a word — a killed process, a restarted container. Both
+         * were completely invisible before, because a log written only when an
+         * answer arrives says nothing at all about an answer that never does.
+         *
+         * Anything from before the most recent boot is not still running,
+         * whatever the rows say, so the search starts there.
+         */
+        inFlight: (() => {
+          const lastBoot = (db
+            .prepare("SELECT MAX(ts) AS ts FROM diagnostics WHERE scope = 'boot'")
+            .get() as any)?.ts || dayAgo;
+          return db.prepare(
+            `SELECT ts, message, userId,
+                    json_extract(detail, '$.callId') AS callId,
+                    json_extract(detail, '$.model')  AS model,
+                    json_extract(detail, '$.scope')  AS callScope,
+                    json_extract(detail, '$.attempt') AS attempt
+             FROM diagnostics
+             WHERE channel = 'ai'
+               AND ts >= ?
+               AND json_extract(detail, '$.phase') = 'start'
+               AND json_extract(detail, '$.callId') NOT IN (
+                 SELECT json_extract(detail, '$.callId') FROM diagnostics
+                 WHERE channel = 'ai' AND ts >= ? AND json_extract(detail, '$.phase') = 'end'
+               )
+             ORDER BY id DESC LIMIT 20`,
+          ).all(lastBoot, lastBoot);
+        })(),
+        /** Rows from before the last restart that never finished. */
+        abandoned: (() => {
+          const lastBoot = (db
+            .prepare("SELECT MAX(ts) AS ts FROM diagnostics WHERE scope = 'boot'")
+            .get() as any)?.ts;
+          if (!lastBoot) return [];
+          return db.prepare(
+            `SELECT ts, message,
+                    json_extract(detail, '$.model') AS model,
+                    json_extract(detail, '$.scope') AS callScope
+             FROM diagnostics
+             WHERE channel = 'ai' AND ts < ? AND ts >= ?
+               AND json_extract(detail, '$.phase') = 'start'
+               AND json_extract(detail, '$.callId') NOT IN (
+                 SELECT json_extract(detail, '$.callId') FROM diagnostics
+                 WHERE channel = 'ai' AND json_extract(detail, '$.phase') = 'end'
+               )
+             ORDER BY id DESC LIMIT 10`,
+          ).all(lastBoot, dayAgo);
+        })(),
         newest: (db.prepare("SELECT MAX(ts) AS ts FROM diagnostics").get() as any).ts,
         /**
          * What the AI actually did in the last day.

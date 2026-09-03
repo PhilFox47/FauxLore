@@ -239,6 +239,17 @@ export function record(entry: DiagnosticRecord): void {
 
 /** One AI request, as it actually went out and came back. */
 export interface AiCallRecord {
+  /**
+   * Ties the "started" row to the "finished" row.
+   *
+   * Without a pair there is no way to tell a call that is still running from one
+   * that died without a word — the process was killed, the container restarted,
+   * the machine went to sleep. Both look identical from a log that only writes a
+   * row when an answer arrives: nothing at all.
+   */
+  callId?: string;
+  /** Which half of the pair this row is. */
+  phase?: "start" | "end";
   /** The resolved model name, including any `:online/...` suffix. */
   model: string;
   scope?: string;
@@ -279,9 +290,47 @@ export interface AiCallRecord {
    */
   injectedTokens?: number;
   error?: string;
+  /** Whether the reply was streamed. */
+  stream?: boolean;
   /** Set when an unsupported option was dropped and the call retried without it. */
   downgraded?: string;
   userId?: string | null;
+}
+
+/** Short, readable, and unique enough to pair two rows minutes apart. */
+let callSeq = 0;
+export function nextCallId(): string {
+  callSeq = (callSeq + 1) % 100000;
+  return `${Date.now().toString(36)}-${callSeq.toString(36)}`;
+}
+
+/**
+ * Records that a request has gone out, before anything comes back.
+ *
+ * The log used to write one row per call, at the end. That answers "what
+ * happened" and cannot answer "is it still going" — which is the question
+ * actually being asked while a Codex sits there for five minutes, and the only
+ * question that matters when a call never returns at all.
+ */
+export function recordAiCallStart(call: Omit<AiCallRecord, "durationMs">): void {
+  const label = [
+    call.model,
+    call.searchDepth && call.webSearch ? `search:${call.searchDepth}` : call.webSearch ? "search" : "",
+    call.json ? "json" : "",
+    call.stream ? "streamed" : "",
+    (call.attempt ?? 1) > 1 ? `attempt ${call.attempt}` : "",
+  ].filter(Boolean).join(" · ");
+
+  record({
+    // Debug, so "Info and above" hides the starts and shows only outcomes. The
+    // in-flight view reads them regardless of level.
+    channel: "ai",
+    level: "debug",
+    scope: call.scope || "ai",
+    message: `${label} — started, ${call.promptChars.toLocaleString()} chars sent`,
+    userId: call.userId,
+    detail: { ...call, phase: "start" },
+  });
 }
 
 export function recordAiCall(call: AiCallRecord): void {
@@ -290,6 +339,7 @@ export function recordAiCall(call: AiCallRecord): void {
     call.model,
     call.searchDepth && call.webSearch ? `search:${call.searchDepth}` : call.webSearch ? "search" : "",
     call.json ? "json" : "",
+    call.stream ? "streamed" : "",
     call.attempt > 1 ? `attempt ${call.attempt}` : "",
   ].filter(Boolean).join(" · ");
 
@@ -301,7 +351,7 @@ export function recordAiCall(call: AiCallRecord): void {
       ? `${label} — failed after ${Math.round(call.durationMs)}ms: ${call.error}`
       : `${label} — ${call.promptTokens ?? "?"} in / ${call.completionTokens ?? "?"} out in ${Math.round(call.durationMs / 100) / 10}s`,
     userId: call.userId,
-    detail: call,
+    detail: { ...call, phase: "end" },
   });
 }
 

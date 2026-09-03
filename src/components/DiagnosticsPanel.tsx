@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   RefreshCw, Download, Trash2, ChevronRight, AlertTriangle, Search,
-  Cpu, Server, Layers, Copy, Check,
+  Cpu, Server, Layers, Copy, Check, Loader2, Ghost,
 } from 'lucide-react';
 import { apiFetch } from '../services/db';
 
@@ -38,6 +38,8 @@ interface Summary {
   errorsLastDay: number;
   oldest: string | null;
   newest: string | null;
+  inFlight: { ts: string; message: string; callId: string; model: string; callScope: string; attempt: number }[];
+  abandoned: { ts: string; message: string; model: string; callScope: string }[];
   aiLastDay: {
     model: string; depth: string | null; calls: number; failures: number;
     promptTokens: number; completionTokens: number; avgMs: number;
@@ -65,6 +67,13 @@ function shortDate(ts: string): string {
 }
 
 const n = (v: any) => (typeof v === 'number' ? v.toLocaleString() : v ?? '—');
+
+/** "4m 12s" — how long something has been going, at a glance. */
+function elapsed(sinceIso: string, now: number): string {
+  const ms = Math.max(0, now - new Date(sinceIso).getTime());
+  const s = Math.floor(ms / 1000);
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+}
 
 function LogRow({ entry }: { entry: Entry }) {
   const [open, setOpen] = useState(false);
@@ -158,6 +167,13 @@ export function DiagnosticsPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  // Ticks once a second purely so the in-flight durations count up. Cheap, and
+  // the whole point of the panel is answering "is it still going".
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const params = useMemo(() => {
     const p = new URLSearchParams();
@@ -263,6 +279,39 @@ export function DiagnosticsPanel() {
         with API keys stripped out. Export it to send it somewhere.
       </p>
 
+      {summary && summary.inFlight?.length > 0 && (
+        <div className="rounded-xl bg-sky-500/10 border border-sky-500/20 overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2 text-xs text-sky-300 border-b border-sky-500/10">
+            <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+            {summary.inFlight.length} call{summary.inFlight.length === 1 ? '' : 's'} still running
+          </div>
+          {summary.inFlight.map((c) => (
+            <div key={c.callId} className="flex items-center gap-3 px-3 py-1.5 text-[11px] font-mono text-sky-200/80">
+              <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-[10px]">{c.callScope || 'ai'}</span>
+              <span className="flex-1 truncate" title={c.model}>{c.model}</span>
+              {c.attempt > 1 && <span className="text-sky-300/60">attempt {c.attempt}</span>}
+              <span className="tabular-nums text-sky-300">{elapsed(c.ts, now)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {summary && summary.abandoned?.length > 0 && (
+        <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2 text-xs text-amber-300 border-b border-amber-500/10">
+            <Ghost className="w-4 h-4 shrink-0" />
+            {summary.abandoned.length} call{summary.abandoned.length === 1 ? '' : 's'} never finished before the last restart
+          </div>
+          {summary.abandoned.map((c, i) => (
+            <div key={i} className="flex items-center gap-3 px-3 py-1.5 text-[11px] font-mono text-amber-200/70">
+              <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-[10px]">{c.callScope || 'ai'}</span>
+              <span className="flex-1 truncate" title={c.model}>{c.model}</span>
+              <span className="tabular-nums">{shortTime(c.ts)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {summary && summary.errorsLastDay > 0 && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300">
           <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -346,7 +395,7 @@ export function DiagnosticsPanel() {
           onChange={(e) => setLevel(e.target.value as Level)}
           className="px-2.5 py-1.5 text-xs bg-black/30 border border-white/10 rounded-lg text-zinc-200 focus:outline-none focus:border-orange-500/40"
         >
-          <option value="all">All levels</option>
+          <option value="all">All levels (incl. call starts)</option>
           <option value="info">Info and above</option>
           <option value="warn">Warnings and errors</option>
           <option value="error">Errors only</option>

@@ -946,6 +946,13 @@ export function createCodexService({ db, onFlavorTexts }: {
        * the write. If this call fails, nothing is written and the previous
        * dossier (if any) is kept untouched.
        */
+      const season = subjectSeason(subject);
+      console.log(
+        `[codex] Compiling the Codex for "${subject.title}"` +
+        `${season ? ` season ${season}` : ""} (${subject.mediaType})` +
+        ` — one deep-search pass, typically three to six minutes.`,
+      );
+
       const raw = await nanoGenerateText(aiConfig, buildDossierPrompt(subject), {
         temperature: 0.2,
         tier: "analytical",
@@ -1079,6 +1086,7 @@ export function createCodexService({ db, onFlavorTexts }: {
       db.prepare(
         `UPDATE media_codex SET data = ?, status = 'ready', error = NULL, model = ?, mediaId = COALESCE(mediaId, ?), updatedAt = ? WHERE id = ?`,
       ).run(JSON.stringify(data), aiConfig.webModel, subject.mediaId || null, new Date().toISOString(), id);
+      console.log(`[codex] Saved the Codex for "${subject.title}" (confidence: ${data.confidence}).`);
     } catch (e: any) {
       console.error(`Codex generation failed for "${subject.title}"`, e);
       const message = String(e?.message || e).slice(0, 500);
