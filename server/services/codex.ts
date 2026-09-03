@@ -3,8 +3,7 @@ import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
 import {
   FACETS, FACET_FLOORS, FACET_FOR_KEY, FACET_SPECS, TYPE_BRIEF,
-  ASSESSABLE_FACETS,
-  buildFacetPrompt, buildIdentifyPrompt, buildSelfAssessPrompt, buildStructurePrompt,
+  buildFacetPrompt, buildIdentifyPrompt, buildStructurePrompt,
   subjectSeason, subjectYear,
   type CodexIdentity, type CodexSubject, type Facet, type ResearchContext,
 } from "./codexResearch";
@@ -986,42 +985,26 @@ export function createCodexService({ db, onFlavorTexts }: {
 
       const ctx: ResearchContext = { subject, identity };
 
-      // ROUND 1.5 — ask what it already knows, so retrieval is spent on the gaps.
-      //
-      // Retrieval is charged per search, not per token, so seven searches is
-      // what a dossier costs whatever the prompts weigh. Most of them go on
-      // works the model could describe unaided. This one cheap unsearched call
-      // decides which ones actually need looking up.
-      //
-      // Two rules are not negotiable. `lore` always searches, because quotes and
-      // memes turn on exact wording and that is precisely what recall gets wrong
-      // while feeling certain. And any failure here falls back to searching
-      // everything: the assessment is an optimisation, and an optimisation that
-      // cannot run must not quietly downgrade the research.
+      /**
+       * Every facet is looked up. There is no longer a pass that decides some
+       * need not be.
+       *
+       * That pass existed to save search fees, on the understanding that
+       * retrieval was what a dossier cost. Measured against a real run it is
+       * not: output tokens were 78% of the bill and searches 17%, so skipping a
+       * search saved a sixth of a cent and bought a section written from memory
+       * — which on Far Cry 3, a game any model claims to know, put a hostage
+       * down as a helicopter pilot, moved a recluse into a clinic, and spelled
+       * both credited creators wrong. Two sections even disagreed with each
+       * other about what the same antagonist looked like, because neither was
+       * grounded in anything.
+       *
+       * Capping how much each facet writes saves more than skipping every search
+       * ever did, and costs nothing that matters. So the budget goes there, and
+       * retrieval goes back to being unconditional.
+       */
       const searched = new Set<Facet>(FACETS);
-      try {
-        const raw = await nanoGenerateText(aiConfig, buildSelfAssessPrompt(subject, identity), {
-          temperature: 0.1,
-          tier: "analytical",
-        });
-        const assessment = raw ? parseJsonLoose<any>(raw) : null;
-        if (assessment && typeof assessment === "object") {
-          for (const facet of ASSESSABLE_FACETS) {
-            if (String(assessment[facet] ?? "").toLowerCase() === "high") searched.delete(facet);
-          }
-          const skipped = FACETS.filter((f) => !searched.has(f));
-          console.log(
-            `[codex] "${subject.title}": ${searched.size}/${FACETS.length} facets need looking up` +
-              (skipped.length ? ` (confident about ${skipped.join(", ")})` : ""),
-          );
-        }
-      } catch (e) {
-        console.warn(`[codex] Self-assessment failed for "${subject.title}"; searching everything`, e);
-      }
 
-      // ROUND 2 + 3 — research each subject area on its own query, then convert
-      // that prose to the dossier's shape without search, on the cheap model.
-      // Facets are independent, so the whole thing is two rounds of wall-clock.
       /**
        * Facets that gave up on retrieval and answered from memory instead.
        *

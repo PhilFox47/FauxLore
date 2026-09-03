@@ -523,6 +523,30 @@ export interface ResearchContext {
 }
 
 /**
+ * How many words each facet may spend.
+ *
+ * There was no ceiling at all: the instruction read "length is not a problem".
+ * Measured against a real run, one research pass returned 41,975 output tokens
+ * and a single dossier came to 243,000 — 78% of what it cost, against 17% for
+ * the searches everything had been optimised around. Generation volume, not
+ * retrieval, is the bill and the eight minutes.
+ *
+ * The budgets are sized to what each section can honestly hold. `cast` and
+ * `world` carry the most entries and get the most; `craft` is prose about one
+ * work; `lore` is a handful of lines and needs almost nothing. They are stated
+ * as ceilings rather than targets because the failure mode of a number in a
+ * prompt is a model writing up to it.
+ */
+const WORD_BUDGET: Record<Facet, number> = {
+  cast: 1200,
+  conflict: 900,
+  world: 1200,
+  things: 900,
+  craft: 900,
+  lore: 400,
+};
+
+/**
  * How much to write, set by how much there is to write about.
  *
  * This used to be one line — "BREADTH IS THE POINT, aim well past a dozen
@@ -709,6 +733,7 @@ Go after the ones a first look misses: the recurring minor names, the regional a
 
   // The visual question is asked differently per medium, and only the craft
   // facet asks it. Everything else in this spec is medium-neutral already.
+  const budget = WORD_BUDGET[facet] ?? 900;
   const visualNote = facet === "craft" && VISUAL_IDENTITY_BY_TYPE[subject.mediaType]
     ? `\n\nHOW TO ANSWER THE VISUAL SECTION FOR THIS MEDIUM: ${VISUAL_IDENTITY_BY_TYPE[subject.mediaType]}`
     : "";
@@ -726,7 +751,8 @@ WRITE UP: ${spec.brief}${visualNote}
 ${REFERENCE_NOT_TEMPLATE}
 
 How to answer:
-- Prose, not JSON, not a schema. Headings and bullets are fine. Length is not a problem — this is the one place the detail gets recorded, and everything the app later invents is built from it.
+- Prose, not JSON, not a schema. Headings and bullets are fine.
+- STAY UNDER ${budget} WORDS. This is a budget, not a target: come in well under it if the work does not fill it. Detail per entry is what matters, not total length — one tight line naming a specific thing beats a paragraph circling it, and the reader of this dossier is a program that will extract facts, not a person reading for pleasure. Nothing is gained by restating an entry's significance in three ways, and a list padded out to hit a number is worse than a short one, because every invented entry is a fact the app will later treat as true.
 - Name things. Never write "various characters", "several locations" or "a rich world" — those are worth nothing to the reader of this dossier.
 - IF THIS WORK IS OBSCURE, THAT IS THE CASE THIS PASS EXISTS FOR. A famous work is described just as well from what you already know; a small one is not described at all unless it is looked up. When the general web is thin, go where its actual audience is — ${NICHE_SOURCES[subject.mediaType] || "the communities, forums and wikis its own audience keeps"}. A short honest answer sourced from one dedicated wiki beats a confident one assembled from a similar-sounding title, and inventing detail to fill a gap is the single worst outcome here: everything the app builds later is written from this, and for a work nobody knows there is nothing else to catch the error.
 ${facet === "lore"
@@ -738,80 +764,6 @@ ${facet === "lore" ? "" : `- Write it as an encyclopedia would: what is true, in
 - Finish with one line: CONFIDENCE: high | medium | low, and a few words on why.
 
 IF THIS IS NOT FICTION — a reality or competition show, a documentary, a podcast, a sporting competition — the subject area still applies, it just means real things: ${spec.nonFiction}`;
-}
-
-/**
- * What knowing a facet actually means, in terms the model can check itself against.
- *
- * Asked "how confident are you about the cast", a model says high. Asked to name
- * three of them first, it either can or it cannot, and the difference is the
- * whole point of this pass.
- */
-const FACET_EVIDENCE: Partial<Record<Facet, string>> = {
-  cast: "name three specific characters and what each one does",
-  conflict: "name the central conflict and who or what stands in opposition",
-  world: "name two specific places, factions or in-universe terms",
-  things: "name two specific objects the work is associated with",
-  craft: "name the studio or author, and describe how it actually looks",
-};
-
-/** Facets this pass judges. `lore` is deliberately absent — see below. */
-export const ASSESSABLE_FACETS = Object.keys(FACET_EVIDENCE) as Facet[];
-
-/**
- * PASS 1.5 — how much of this does the model already know?
- *
- * Each facet's research runs with retrieval attached, and retrieval is charged
- * per search rather than per token: seven searches is what a dossier costs, and
- * most of them are spent re-reading pages about works the model could describe
- * from memory. This asks first, once, cheaply and without searching, so the
- * searches that follow are spent on the gaps.
- *
- * The prompt is built entirely around the failure it has to avoid. Left to
- * answer a bare confidence question a model says "high" and then fills the gaps
- * it does not know about with plausible invention — which is exactly what
- * happens on obscure works, and is worse than an empty section because it is
- * written into a permanent record that later features treat as ground truth. So
- * every facet has to be paid for with specifics BEFORE a confidence is allowed,
- * and the asymmetry is stated outright: a wrong "low" costs a fraction of a
- * cent, a wrong "high" costs the truth.
- *
- * `lore` is never assessed and always searched. Quotes and memes live or die on
- * exact wording — the one thing recall is worst at and the one thing that cannot
- * be half-right — so it is not offered as something to be confident about.
- */
-export function buildSelfAssessPrompt(subject: CodexSubject, identity: CodexIdentity): string {
-  const season = subjectSeason(subject);
-  const edition = subjectEdition(subject);
-  const aka = (identity.alsoKnownAs || []).filter(Boolean).slice(0, 6);
-
-  return `Before anything is looked up, say honestly how much you already know about ONE specific work.
-
-THE WORK: "${identity.title || subject.title}"${identity.year ? ` (${identity.year})` : ""}${identity.creator ? `, by ${identity.creator}` : ""} — ${TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`}.${
-    aka.length ? `\nALSO KNOWN AS: ${aka.join(" · ")}` : ""
-  }${season ? `\nThis is SEASON ${season} specifically, not the work as a whole.` : ""}${
-    edition ? `\nThis is the ${edition} specifically, not the original release.` : ""
-  }
-
-For each area below, first WRITE DOWN THE SPECIFICS YOU CAN ACTUALLY RECALL, then rate yourself. In that order — the specifics are what the rating has to be based on, and a rating written before them is a guess about yourself.
-
-${ASSESSABLE_FACETS.map((f) => `- ${f}: ${FACET_EVIDENCE[f]}`).join("\n")}
-
-HOW TO RATE:
-- "high" — you produced real, specific, checkable detail above and you are sure it belongs to THIS work. Not to the franchise, not to a similarly named one, not to the genre in general.
-- "medium" — you know roughly what it is but could not swear to the particulars.
-- "low" — you cannot produce the specifics, or you are not certain the work you are thinking of is the one described. An obscure title, a small independent release, something recent, or anything where you find yourself reasoning from what works like this USUALLY contain.
-
-BE PESSIMISTIC, AND UNDERSTAND WHY. Every area you rate below "high" gets looked up properly; every area you rate "high" is written from your memory alone and never checked. Saying "low" when you knew it wastes a fraction of a cent. Saying "high" when you did not know it puts invented facts into a permanent record that everything else in this application will afterwards treat as true, about a work whose real details nobody will be around to correct. If you are hesitating between two ratings, the lower one is correct.
-
-If you do not recognise this work at all, say so: rate everything "low" and set "recognised" to false. That is a useful, honest answer and costs nothing.
-
-Return ONLY a pure JSON object, no markdown fence, no commentary:
-{
-  "recall": "the specifics you could actually name, or an empty string if none",
-  "recognised": true,
-${ASSESSABLE_FACETS.map((f) => `  "${f}": "high | medium | low"`).join(",\n")}
-}`;
 }
 
 /**
