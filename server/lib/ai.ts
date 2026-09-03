@@ -77,20 +77,52 @@ export function resolveModel(config: AiConfig, webSearch: boolean, tier: AiTier 
   return (tier === "creative" ? config.creativeModel : config.model).trim();
 }
 
-/** Single-turn completion. Returns the trimmed assistant message, or "" on failure. */
-export async function nanoGenerateText(
-  config: AiConfig,
-  prompt: string,
-  opts: { temperature?: number; webSearch?: boolean; systemPrompt?: string; tier?: AiTier; timeoutMs?: number } = {},
-): Promise<string> {
-  const messages: { role: string; content: string }[] = [];
-  if (opts.systemPrompt) messages.push({ role: "system", content: opts.systemPrompt });
-  messages.push({ role: "user", content: prompt });
+/**
+ * Whether a failure is worth simply doing again.
+ *
+ * A rate limit, a gateway error or a dropped socket says the provider was busy,
+ * not that the request was wrong — the same call a moment later usually works.
+ * A 400 or a 401 says the opposite, and repeating it wastes time and money.
+ *
+ * A TIMEOUT IS DELIBERATELY NOT IN HERE, even though it is transient in every
+ * other sense. A retrieval call is given ten minutes; repeating one that has
+ * already spent them costs another ten to reach the same place, three attempts
+ * turn one slow facet into half an hour, and the caller has a far better answer
+ * to a timeout than patience — `researchFacet` re-asks the same question without
+ * search, which finishes in seconds. Blind repetition would sit in front of that
+ * and never let it run.
+ */
+function isTransient(err: any, status?: number): boolean {
+  if (status !== undefined) return status === 408 || status === 409 || status === 429 || status >= 500;
+  const name = String(err?.name || "");
+  if (name === "TimeoutError" || name === "AbortError") return false;
+  const message = String(err?.message || err || "");
+  if (/timeout|aborted/i.test(message)) return false;
+  return /network|socket|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|fetch failed|empty reply/i.test(message);
+}
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * How many times a call is tried before it is treated as a real failure.
+ *
+ * There was one. A single hiccup from a busy provider cost a whole section of a
+ * dossier permanently, and six of them at once cost the entire Codex — which is
+ * what a popular model on a struggling provider produces all day. Two extra
+ * attempts with backoff turn almost all of that into a slower success.
+ */
+const MAX_ATTEMPTS = 3;
+
+/** One chat request. Throws on a non-OK response or an empty completion. */
+async function postChat(
+  config: AiConfig,
+  messages: { role: string; content: string }[],
+  opts: { temperature?: number; webSearch?: boolean; tier?: AiTier; timeoutMs?: number },
+): Promise<string> {
   const res = await fetch(NANO_GPT_CHAT_URL, {
     method: "POST",
     // Without this a stalled generation blocks a Codex indefinitely: the facets
-    // run under Promise.allSettled, which waits for every one of them.
+    // are waited on together, so the slowest one sets the pace for all of them.
     //
     // A retrieval call gets far longer than a plain one, because it is doing two
     // jobs: the provider searches and injects results BEFORE the model writes a
@@ -119,10 +151,46 @@ export async function nanoGenerateText(
   });
 
   if (!res.ok) {
-    throw new Error(`NanoGPT error (${res.status}): ${(await res.text().catch(() => "")).slice(0, 300)}`);
+    const err: any = new Error(`NanoGPT error (${res.status}): ${(await res.text().catch(() => "")).slice(0, 300)}`);
+    // Carried so the retry decision can read the status rather than parse it
+    // back out of the message.
+    err.httpStatus = res.status;
+    throw err;
   }
+
   const data: any = await res.json();
-  return (data.choices?.[0]?.message?.content || "").trim();
+  const text = (data.choices?.[0]?.message?.content || "").trim();
+
+  // A 200 with nothing in it is a provider failure wearing a success code, and
+  // it is common enough on a loaded model to be worth naming. Every caller
+  // treats "" as a failure anyway; throwing here is what lets it be retried
+  // instead of silently costing a section.
+  if (!text) throw new Error("NanoGPT returned an empty reply.");
+  return text;
+}
+
+/** Single-turn completion. Throws if the model cannot be reached or says nothing. */
+export async function nanoGenerateText(
+  config: AiConfig,
+  prompt: string,
+  opts: { temperature?: number; webSearch?: boolean; systemPrompt?: string; tier?: AiTier; timeoutMs?: number } = {},
+): Promise<string> {
+  const messages: { role: string; content: string }[] = [];
+  if (opts.systemPrompt) messages.push({ role: "system", content: opts.systemPrompt });
+  messages.push({ role: "user", content: prompt });
+
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await postChat(config, messages, opts);
+    } catch (e: any) {
+      if (attempt >= MAX_ATTEMPTS || !isTransient(e, e?.httpStatus)) throw e;
+      // Exponential, with jitter so calls that failed together do not come back
+      // together and recreate the burst that failed.
+      const wait = Math.round(1500 * 2 ** (attempt - 1) * (0.75 + Math.random() * 0.5));
+      console.warn(`[ai] ${String(e?.message || e).slice(0, 120)} — retrying in ${wait}ms (${attempt}/${MAX_ATTEMPTS - 1})`);
+      await sleep(wait);
+    }
+  }
 }
 
 /**

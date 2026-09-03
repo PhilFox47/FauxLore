@@ -865,6 +865,42 @@ export function mergeExpansion(data: CodexData, extra: any, keys: string[]): Cod
   return merged;
 }
 
+/**
+ * How many research calls may be in flight at once.
+ *
+ * All six facets used to fire together. Each one is a retrieval request, and six
+ * simultaneous ones at a provider that is already busy is the shape that gets
+ * rate-limited, queued past the timeout, or simply dropped — which is why the
+ * failures landed on different facets every run and occasionally on all of them.
+ * Two at a time takes longer in the best case and finishes far more often, which
+ * is the trade worth making for something that runs once per title.
+ */
+const RESEARCH_CONCURRENCY = 2;
+
+/**
+ * Runs tasks a few at a time, settling every one.
+ *
+ * Same result shape as `Promise.allSettled`, and the same order, so callers that
+ * pair results back to their inputs by index keep working.
+ */
+export async function settleWithLimit<T>(tasks: (() => Promise<T>)[], limit: number): Promise<PromiseSettledResult<T>[]> {
+  const results = new Array<PromiseSettledResult<T>>(tasks.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, async () => {
+    while (true) {
+      const i = next++;
+      if (i >= tasks.length) return;
+      try {
+        results[i] = { status: "fulfilled", value: await tasks[i]() };
+      } catch (reason) {
+        results[i] = { status: "rejected", reason };
+      }
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 /** Codex storage plus the on-demand generation the AI features call into. */
 export function createCodexService({ db, onFlavorTexts }: {
   db: Db;
@@ -1047,21 +1083,43 @@ export function createCodexService({ db, onFlavorTexts }: {
         return prose;
       };
 
+      /**
+       * Turn one facet's prose into the dossier's shape.
+       *
+       * The unparseable answer is retried, and it is worth being clear about why
+       * this is not the same retry `nanoGenerateText` already does. That one
+       * handles a provider that did not reply. This one handles a provider that
+       * replied with something that is not JSON — a reasoning model narrating
+       * its way to an answer, a truncated object, a fence inside a fence. The
+       * request succeeded, so nothing below would try again, and the section was
+       * thrown away along with the retrieval that had just been paid for.
+       * Asking a second time costs one cheap unsearched call and usually lands.
+       */
       const structureFacet = async (facet: Facet, prose: string): Promise<any> => {
-        const raw = await nanoGenerateText(aiConfig, buildStructurePrompt(ctx, facet, prose), {
-          temperature: 0.1,
-          tier: "analytical",
-        });
-        if (!raw) throw new Error(`The ${facet} section could not be structured.`);
-        const parsed = parseJsonLoose<any>(raw);
-        if (!parsed || typeof parsed !== "object") throw new Error(`The ${facet} section was not a JSON object.`);
-        return parsed;
+        let last: any = null;
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          const raw = await nanoGenerateText(aiConfig, buildStructurePrompt(ctx, facet, prose), {
+            temperature: 0.1,
+            tier: "analytical",
+          });
+          try {
+            const parsed = parseJsonLoose<any>(raw);
+            if (!parsed || typeof parsed !== "object") throw new Error(`The ${facet} section was not a JSON object.`);
+            return parsed;
+          } catch (e) {
+            last = e;
+            if (attempt === 1) {
+              console.warn(`[codex] "${facet}" did not come back as JSON; asking once more`);
+            }
+          }
+        }
+        throw last;
       };
 
       const runFacet = async (facet: Facet, alreadyFound?: string[]) =>
         structureFacet(facet, await researchFacet(facet, alreadyFound));
 
-      const settled = await Promise.allSettled(FACETS.map((f) => runFacet(f)));
+      const settled = await settleWithLimit(FACETS.map((f) => () => runFacet(f)), RESEARCH_CONCURRENCY);
 
       // A facet that fails costs its own section, not the dossier. Losing the
       // cast list is bad; losing the whole Codex over a soundtrack lookup is worse.
@@ -1086,7 +1144,13 @@ export function createCodexService({ db, onFlavorTexts }: {
         }
       });
 
-      if (failed.length === FACETS.length) throw new Error("Every research pass failed.");
+      if (failed.length === FACETS.length) {
+        const why = settled
+          .map((r, i) => (r.status === "rejected" ? `${FACETS[i]}: ${String((r as any).reason?.message || (r as any).reason).slice(0, 80)}` : ""))
+          .filter(Boolean)
+          .join(" · ");
+        throw new Error(`Every research pass failed — ${why}`);
+      }
 
       // The one field shown to the user word for word, so the three-to-six rule
       // is enforced here rather than left to the prompt's good manners.
@@ -1116,7 +1180,7 @@ export function createCodexService({ db, onFlavorTexts }: {
           console.warn(
             `Codex for "${subject.title}" came back thin (${gaps.map((g) => `${g.key} ${g.have}/${g.want}`).join(", ")}). Re-running: ${plan.map((p) => p.facet).join(", ")}.`,
           );
-          const refills = await Promise.allSettled(plan.map((p) => runFacet(p.facet, p.alreadyFound)));
+          const refills = await settleWithLimit(plan.map((p) => () => runFacet(p.facet, p.alreadyFound)), RESEARCH_CONCURRENCY);
           refills.forEach((result, i) => {
             const facet = plan[i].facet;
             if (result.status !== "fulfilled") {
@@ -1156,8 +1220,25 @@ export function createCodexService({ db, onFlavorTexts }: {
       ).run(JSON.stringify(data), aiConfig.webModel, subject.mediaId || null, new Date().toISOString(), id);
     } catch (e: any) {
       console.error(`Codex generation failed for "${subject.title}"`, e);
-      db.prepare("UPDATE media_codex SET status = 'failed', error = ?, updatedAt = ? WHERE id = ?")
-        .run(String(e?.message || e).slice(0, 500), new Date().toISOString(), id);
+      const message = String(e?.message || e).slice(0, 500);
+
+      // A failed refresh must not cost a dossier that already worked.
+      //
+      // The row is flipped to 'generating' at the start, so a failure used to
+      // leave it 'failed' — and the existing research, still sitting in `data`,
+      // stopped being shown. Re-researching a good Codex on a bad afternoon
+      // destroyed it. The previous document is kept and served as before; only
+      // the error is recorded, so the panel can say the last refresh did not
+      // take without pretending there is nothing on file.
+      const existing: any = db.prepare("SELECT data FROM media_codex WHERE id = ?").get(id);
+      const hasPrevious = !!existing?.data && existing.data !== "null";
+
+      db.prepare("UPDATE media_codex SET status = ?, error = ?, updatedAt = ? WHERE id = ?")
+        .run(hasPrevious ? "ready" : "failed", message, new Date().toISOString(), id);
+
+      if (hasPrevious) {
+        console.warn(`Kept the previous Codex for "${subject.title}"; the refresh failed and changed nothing.`);
+      }
     }
 
     const finished: any = db.prepare("SELECT * FROM media_codex WHERE id = ?").get(id);
