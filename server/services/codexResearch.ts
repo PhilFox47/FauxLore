@@ -1,32 +1,33 @@
 /**
- * How the Codex is researched.
+ * How the Codex is researched: ONE call, with deep retrieval, for every title.
  *
- * The dossier used to be one call: identify the work, research everything about
- * it, and emit a large JSON document — all at once, with web search on. That has
- * two problems, and both cap quality no matter how much the schema is expanded.
+ * It was fifteen. An identify call, then per subject area a research call and a
+ * separate structuring call, a pass that decided which of those searches could
+ * be skipped, and a gap-fill round afterwards. The reasoning behind the split
+ * was sound on paper — `:online` is retrieval rather than an agent, so the
+ * provider searches once on the message and injects the results before the model
+ * writes a word, and one search keyed on a long prompt serves no question well.
+ * Six tight queries beat one vague one.
  *
- * First, `:online` is retrieval, not an agent. The provider runs a search keyed
- * on the message and injects the results before the model writes a word; the
- * model cannot go and look again. So "search harder" instructions do nothing,
- * and a 4,000-word prompt of JSON schema and rules is a terrible search query —
- * the part that identifies the work is a dozen words buried in the middle.
+ * What that reasoning missed is that DEEP retrieval is not one search. It runs
+ * its own iterative queries, which is precisely the thing the six separate calls
+ * were being spent to imitate — and it does it inside a single request, so there
+ * is one thing that can fail instead of fifteen. Measured on a game released the
+ * same morning, one deep pass returned thirty-six sources across the publisher,
+ * two wikis, a completion guide, review aggregators and Reddit, and filled every
+ * section, for $0.076. The fifteen-call version cost $0.0716 and routinely
+ * arrived with whole sections missing.
  *
- * Second, one search had to serve every question the dossier asks. A result set
- * good enough to describe the art style is not the one that lists the cast.
+ * So the prompt below is the whole procedure. It does not have to be a good
+ * search query in the old sense, because deep retrieval writes its own; it has
+ * to be a complete brief. Nothing in it is compressed to fit — input is about 5%
+ * of what a dossier costs, and the one trial that did compress it got back
+ * exactly the weak, explained-instead-of-performed memories the long brief had
+ * been rewritten four times to prevent.
  *
- * So research is now split two ways:
- *
- *   IDENTIFY   one short, search-shaped call that settles which work this is and
- *              what else it is called.
- *   FACETS     one call per subject area, each with its own tight query, run in
- *              parallel. These return prose, not JSON — the schema is not
- *              competing with the research for the model's attention.
- *   STRUCTURE  one cheap, non-web call per facet that turns that prose into the
- *              dossier's shape. Reasoning over text already retrieved needs no
- *              search and no expensive model.
- *
- * Wall-clock is three rounds instead of one. The search bill is a few cents,
- * once, for the life of the entry.
+ * `FACET_SPECS` survives the collapse. It is no longer a list of calls; it is
+ * the sectioned brief and the shape, and `buildDossierPrompt` assembles both
+ * from it so there is still one place to edit a section.
  */
 
 export interface CodexSubject {
@@ -217,9 +218,7 @@ export interface CodexIdentity {
 export type Facet = "cast" | "conflict" | "world" | "things" | "craft" | "lore";
 
 export interface FacetSpec {
-  /** Appended to the title to form the search query line. */
-  query: string;
-  /** What prose the research pass should come back with. */
+  /** What this section of the dossier should come back with. */
   brief: string;
   /** The JSON the structuring pass emits, and the keys it fills. */
   keys: string[];
@@ -254,7 +253,6 @@ const INTRODUCED = `"introducedAt" is where this first appears, in the work's ow
 
 export const FACET_SPECS: Record<Facet, FacetSpec> = {
   cast: {
-    query: "main characters full cast list who's who",
     brief: `Every named character of any importance: leads, supporting cast, mentors, rivals, recurring minor figures, memorable one-offs.
 For each one write a short paragraph covering:
 - who they are, what they do, and what part they play in the work
@@ -270,7 +268,6 @@ For each one write a short paragraph covering:
     structureNotes: `"prominence" is how central the character is TO THE WORK — a fact about the story, not a rating of anything. "central" is a lead, "minor" is someone who appears once or twice.\n${INTRODUCED}`,
   },
   conflict: {
-    query: "central conflict antagonists rivalries what drives the story",
     brief: `What this work is ABOUT, in terms of opposition and tension. Two parts.
 
 THE CONFLICTS: the tensions that actually drive it. Not a list of fights — the real pressures. A struggle against an empire, yes, but equally a rivalry, a deadline, a debt, an illness, a family expectation, a moral compromise, the weather, the passing of time. Name the ones a critic would name, and say what is at stake in each.
@@ -287,7 +284,6 @@ Where a work has no villain at all, that is a fact worth recording plainly — d
     structureNotes: `Do not invent an antagonist the notes do not describe. A work whose "antagonists" list is short and whose "conflicts" list is long is being recorded correctly, not badly.\n${INTRODUCED}`,
   },
   world: {
-    query: "setting worldbuilding locations factions organizations glossary terminology",
     brief: `How this world works and what is in it. Five parts.
 
 PLACES: every named location of note — cities, regions, buildings, ships, realms, venues. For each: what it is, what it looks and feels like, what larger region it sits in, and what happens there.
@@ -307,7 +303,6 @@ EVERYDAY LIFE: the texture of it — what ordinary people do, eat, wear, believe
     structureNotes: INTRODUCED,
   },
   things: {
-    query: "notable objects artifacts equipment props what characters carry",
     brief: `The objects this work is associated with: things characters carry, wear, drive, treasure or fight over, and the ordinary props it is remembered for.
 For each one write a short paragraph covering:
 - plainly WHAT IT IS, in ordinary words. A sword is a sword; a cassette tape is a cassette tape; a laminated badge is a laminated badge.
@@ -322,7 +317,6 @@ Include the ordinary and the everyday, not only the legendary. A work's most mem
     structureNotes: INTRODUCED,
   },
   craft: {
-    query: "premise plot summary themes art style visual design soundtrack production reception",
     brief: `What this work is like as a made thing, and how it landed. Cover, in prose:
 - the premise in one spoiler-free line, then a fuller summary of what actually happens
 - the setting: where and when, how advanced, how it is governed, what daily life is like
@@ -379,9 +373,6 @@ Include the ordinary and the everyday, not only the legendary. A work's most mem
 }`,
   },
   lore: {
-    // Short and search-shaped. `:online` keys its retrieval on the message, so
-    // the query line has to stay near the front and not be buried under rules.
-    query: "iconic quotes catchphrases memes behind the scenes trivia what fans still say",
     brief: `MEMORIES — the handful of small things that give someone who knows this work a jolt of recognition.
 
 That word is the brief. Not "notable quotations", not "trivia": a memory is a fragment that lands because the reader was there. Somebody who was not there reads it and shrugs, and that is fine — it was never for them.
@@ -504,46 +495,6 @@ export const FACET_FLOORS: Partial<Record<string, number>> = {
   locations: 6,
   items: 8,
   terminology: 8,
-};
-
-/** Which facet to re-run when a given list comes back short. */
-export const FACET_FOR_KEY: Record<string, Facet> = {
-  characters: "cast",
-  antagonists: "conflict",
-  factions: "world",
-  locations: "world",
-  terminology: "world",
-  items: "things",
-};
-
-/** Everything the later passes need to know about the work, settled up front. */
-export interface ResearchContext {
-  subject: CodexSubject;
-  identity: CodexIdentity;
-}
-
-/**
- * How many words each facet may spend.
- *
- * There was no ceiling at all: the instruction read "length is not a problem".
- * Measured against a real run, one research pass returned 41,975 output tokens
- * and a single dossier came to 243,000 — 78% of what it cost, against 17% for
- * the searches everything had been optimised around. Generation volume, not
- * retrieval, is the bill and the eight minutes.
- *
- * The budgets are sized to what each section can honestly hold. `cast` and
- * `world` carry the most entries and get the most; `craft` is prose about one
- * work; `lore` is a handful of lines and needs almost nothing. They are stated
- * as ceilings rather than targets because the failure mode of a number in a
- * prompt is a model writing up to it.
- */
-const WORD_BUDGET: Record<Facet, number> = {
-  cast: 1200,
-  conflict: 900,
-  world: 1200,
-  things: 900,
-  craft: 900,
-  lore: 400,
 };
 
 /**
@@ -744,92 +695,4 @@ ${combinedShape()}
 ${INTRODUCED}
 
 "coverage" is how much material actually exists about this work: "abundant" for something with a large wiki and years of coverage, "thin" for something recent, small or niche. "confidence" and each "sectionConfidence" entry rate how well-sourced that part genuinely is — be pessimistic, since a wrong "high" corrupts the record and a wrong "low" costs nothing.`;
-}
-
-/**
- * PASS 2 — research one subject area, and write prose.
- *
- * No JSON here. Asking for a schema at the same time as the research makes the
- * model spend its attention on shape instead of substance, and a truncated JSON
- * array loses the tail of the cast. Prose can run as long as it needs to and is
- * turned into the dossier's shape afterwards, for a fraction of the cost.
- */
-export function buildFacetPrompt(ctx: ResearchContext, facet: Facet, alreadyFound?: string[]): string {
-  const spec = FACET_SPECS[facet];
-  const { subject, identity } = ctx;
-  const season = subjectSeason(subject);
-  const title = identity.title || subject.title;
-  const aka = (identity.alsoKnownAs || []).filter(Boolean).slice(0, 8);
-
-  const gapBlock = alreadyFound?.length
-    ? `
-THIS IS A SECOND PASS. The first one came back thin. These are already on file — do NOT write them up again, find the ones that are missing:
-${alreadyFound.slice(0, 60).join(", ")}
-Go after the ones a first look misses: the recurring minor names, the regional and the everyday, the things listed further down the page.`
-    : "";
-
-  // The visual question is asked differently per medium, and only the craft
-  // facet asks it. Everything else in this spec is medium-neutral already.
-  const budget = WORD_BUDGET[facet] ?? 900;
-  const visualNote = facet === "craft" && VISUAL_IDENTITY_BY_TYPE[subject.mediaType]
-    ? `\n\nHOW TO ANSWER THE VISUAL SECTION FOR THIS MEDIUM: ${VISUAL_IDENTITY_BY_TYPE[subject.mediaType]}`
-    : "";
-
-  return `${searchQueryLine(subject, identity, spec.query)}
-
-You are the Codex Archivist of FauxLore, researching ONE subject area of ONE work. The work has already been identified — do not question it, and do not describe a different one.
-
-THE WORK: "${title}"${identity.year ? ` (${identity.year})` : ""}${identity.creator ? `, by ${identity.creator}` : ""} — ${TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`}.
-${aka.length ? `ALSO KNOWN AS: ${aka.join(" · ")} — search under these too, especially the original-language title, where the detailed material usually is.` : ""}${versionScope(subject)}
-${gapBlock}
-
-WRITE UP: ${spec.brief}${visualNote}
-
-${REFERENCE_NOT_TEMPLATE}
-
-How to answer:
-- Prose, not JSON, not a schema. Headings and bullets are fine.
-- STAY UNDER ${budget} WORDS. This is a budget, not a target: come in well under it if the work does not fill it. Detail per entry is what matters, not total length — one tight line naming a specific thing beats a paragraph circling it, and the reader of this dossier is a program that will extract facts, not a person reading for pleasure. Nothing is gained by restating an entry's significance in three ways, and a list padded out to hit a number is worse than a short one, because every invented entry is a fact the app will later treat as true.
-- Name things. Never write "various characters", "several locations" or "a rich world" — those are worth nothing to the reader of this dossier.
-- IF THIS WORK IS OBSCURE, THAT IS THE CASE THIS PASS EXISTS FOR. A famous work is described just as well from what you already know; a small one is not described at all unless it is looked up. When the general web is thin, go where its actual audience is — ${NICHE_SOURCES[subject.mediaType] || "the communities, forums and wikis its own audience keeps"}. A short honest answer sourced from one dedicated wiki beats a confident one assembled from a similar-sounding title, and inventing detail to fill a gap is the single worst outcome here: everything the app builds later is written from this, and for a work nobody knows there is nothing else to catch the error.
-${facet === "lore"
-  ? `- SELECTIVITY IS THE POINT, and this facet is the exception to how the others work. Every other part of the dossier wants the long tail; this one wants only what genuinely cleared the bar above. Two lines you are sure of beat six with four you talked yourself into.`
-  : depthRule(identity.coverage)}
-- Prefer widely known material. Avoid late-story twists and ending spoilers — the user may still be partway through.
-${facet === "lore" ? "" : `- Write it as an encyclopedia would: what is true, in the work's own vocabulary. Not a pitch, not a stat block, not a list of things someone could use.\n`}
-- If you genuinely cannot verify something, leave it out and say so at the end rather than inventing it. A short honest answer beats a padded one.
-- Finish with one line: CONFIDENCE: high | medium | low, and a few words on why.
-
-IF THIS IS NOT FICTION — a reality or competition show, a documentary, a podcast, a sporting competition — the subject area still applies, it just means real things: ${spec.nonFiction}`;
-}
-
-/**
- * PASS 3 — turn one facet's prose into the dossier's shape.
- *
- * No web search: everything it needs is in the prose above it. That means it can
- * run on the cheap model, and it gets the whole context window to spend on
- * getting the schema right rather than splitting it with retrieval.
- */
-export function buildStructurePrompt(ctx: ResearchContext, facet: Facet, research: string): string {
-  const spec = FACET_SPECS[facet];
-  const { subject, identity } = ctx;
-  const season = subjectSeason(subject);
-
-  return `You are converting research notes into a structured record. The notes below were gathered about "${identity.title || subject.title}"${identity.year ? ` (${identity.year})` : ""}${season ? `, season ${season}` : ""}${subjectEdition(subject) ? ` (${subjectEdition(subject)})` : ""}.
-
-=== RESEARCH NOTES ===
-${research}
-=== END NOTES ===
-
-Convert those notes into JSON. Rules:
-- Use ONLY what the notes contain. Do not add entries from your own knowledge, and do not correct them — if the notes are wrong, that is the researcher's problem, not yours.
-- BE EXHAUSTIVE. Every named entry in the notes gets a record. Do not summarise, do not select the interesting ones, do not stop at ten. Dropping entries is the one thing that ruins this step.
-- Fill every field the notes support. Leave a field out entirely when the notes do not cover it — never write "unknown", "N/A" or a guess.
-- Keep the notes' own wording where it is concrete. Descriptions should be one or two tight lines.
-- This is a reference record. Do not add difficulty ratings, rarities, tiers or any other grading the notes do not contain — if it is not in the notes it does not go in the record.
-${spec.structureNotes ? `- ${spec.structureNotes}\n` : ""}
-Return ONLY a pure JSON object, no markdown fence, no commentary, in exactly this shape:
-${spec.shape}
-
-Add one more key alongside the above: "confidence": "high | medium | low" — how much of this section the notes actually supported. Read the researcher's own confidence line if they left one.`;
 }

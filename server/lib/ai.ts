@@ -66,13 +66,30 @@ export function getAiConfig(db: Db, userId: string): AiConfig | null {
   return { apiKey, model, webModel, creativeModel, provider };
 }
 
-export function resolveModel(config: AiConfig, webSearch: boolean, tier: AiTier = "analytical"): string {
+export function resolveModel(
+  config: AiConfig,
+  webSearch: boolean,
+  tier: AiTier = "analytical",
+  depth?: "standard" | "deep",
+): string {
   // Search wins over tier: a creative call that still needs to look something up
   // has to run on the model the search results are being injected into.
   if (webSearch) {
     const base = config.webModel.trim();
     // Don't double-suffix if the configured name already opts in.
-    return /:online\b/.test(base) ? base : `${base}:online`;
+    if (/:online\b/.test(base)) return base;
+    /**
+     * The depth goes on the model name as well as in the request body.
+     *
+     * Belt and braces, and it is not paranoia — it was measured. One run billed
+     * a deep search fee and came back with 39,000 tokens of retrieved material;
+     * the next four billed a standard fee and came back with none, from the same
+     * code sending the same `webSearch` object. The body form is documented as
+     * taking precedence when it is honoured, and the suffix is what happens when
+     * it is not, so sending both means the request is deep either way instead of
+     * silently degrading to a shallower search nobody asked for.
+     */
+    return depth === "deep" ? `${base}:online/linkup-deep` : `${base}:online`;
   }
   return (tier === "creative" ? config.creativeModel : config.model).trim();
 }
@@ -85,12 +102,12 @@ export function resolveModel(config: AiConfig, webSearch: boolean, tier: AiTier 
  * A 400 or a 401 says the opposite, and repeating it wastes time and money.
  *
  * A TIMEOUT IS DELIBERATELY NOT IN HERE, even though it is transient in every
- * other sense. A retrieval call is given ten minutes; repeating one that has
- * already spent them costs another ten to reach the same place, three attempts
- * turn one slow facet into half an hour, and the caller has a far better answer
- * to a timeout than patience — `researchFacet` re-asks the same question without
- * search, which finishes in seconds. Blind repetition would sit in front of that
- * and never let it run.
+ * other sense. The Codex pass is given fifteen minutes; repeating one that has
+ * already spent them costs another fifteen to reach the same place, and three
+ * attempts turn one slow generation into most of an hour while the user watches
+ * a spinner. A timeout is reported as a failure so it can be tried again
+ * deliberately, which for a Codex is safe: nothing is written unless the call
+ * succeeds, so the previous dossier is still there.
  */
 function isTransient(err: any, status?: number): boolean {
   if (status !== undefined) return status === 408 || status === 409 || status === 429 || status >= 500;
@@ -137,6 +154,16 @@ export interface GenerateOptions {
   search?: SearchOptions;
   /** Ask the provider to constrain the reply to valid JSON. */
   json?: boolean;
+  /**
+   * Internal. Set false after a provider rejects the `webSearch` body object.
+   *
+   * The depth is requested two ways — in the body and on the model suffix — so
+   * that dropping the half a provider refuses does not quietly take the other
+   * half with it. An earlier version dropped the whole `search` option here and
+   * the request silently became a standard search, which is the exact failure
+   * sending it twice was meant to prevent.
+   */
+  searchBody?: boolean;
 }
 
 /** One chat request. Throws on a non-OK response or an empty completion. */
@@ -170,13 +197,13 @@ async function postChat(
       ...(config.provider ? { "X-Provider": config.provider } : {}),
     },
     body: JSON.stringify({
-      model: resolveModel(config, !!opts.webSearch, opts.tier),
+      model: resolveModel(config, !!opts.webSearch, opts.tier, opts.search?.depth),
       temperature: opts.temperature ?? 0.9,
       messages,
       // The documented body form of the search controls. It takes precedence
       // over the model's `:online` suffix, which stays on the model name so an
       // install whose provider ignores this object still searches.
-      ...(opts.webSearch && opts.search
+      ...(opts.webSearch && opts.search && opts.searchBody !== false
         ? {
             webSearch: {
               enabled: true,
@@ -225,7 +252,11 @@ function rejectsOptionalField(err: any, opts: GenerateOptions): "json" | "search
   if (err?.httpStatus !== 400 && err?.httpStatus !== 422) return null;
   const message = String(err?.message || "").toLowerCase();
   if (opts.json && /response_format|json_schema|json_object|structured output/.test(message)) return "json";
-  if (opts.search && /websearch|web_search|search|provider|depth|unsupported/.test(message)) return "search";
+  // Deliberately narrow. This matched on the bare word "search" once, which is
+  // in the text of a great many unrelated errors, and quietly turned the deep
+  // pass into a standard one for the rest of the call. Only an error that names
+  // the field itself counts.
+  if (opts.search && opts.searchBody !== false && /websearch|web_search|unsupported_provider_options/.test(message)) return "search";
   return null;
 }
 
@@ -249,7 +280,10 @@ export async function nanoGenerateText(
       const unsupported = rejectsOptionalField(e, active);
       if (unsupported) {
         console.warn(`[ai] the model rejected ${unsupported === "json" ? "JSON mode" : "the search options"}; retrying without`);
-        active = unsupported === "json" ? { ...active, json: false } : { ...active, search: undefined };
+        // Only the rejected half is dropped. `search` stays, so the depth still
+        // reaches the model suffix and the request does not silently become a
+        // shallower search than the caller asked for.
+        active = unsupported === "json" ? { ...active, json: false } : { ...active, searchBody: false };
         continue;
       }
       if (attempt >= MAX_ATTEMPTS || !isTransient(e, e?.httpStatus)) throw e;
