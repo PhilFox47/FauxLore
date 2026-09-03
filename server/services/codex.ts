@@ -3,7 +3,7 @@ import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
 import {
   FACETS, FACET_FLOORS, FACET_FOR_KEY, FACET_SPECS, TYPE_BRIEF,
-  buildFacetPrompt, buildIdentifyPrompt, buildStructurePrompt,
+  buildDossierPrompt, buildFacetPrompt, buildStructurePrompt,
   subjectSeason, subjectYear,
   type CodexIdentity, type CodexSubject, type Facet, type ResearchContext,
 } from "./codexResearch";
@@ -808,15 +808,21 @@ export function depthGaps(data: CodexData): DepthGap[] {
 }
 
 /**
- * Whether a thin dossier is worth re-running the facets that came up short.
+ * Whether a thin dossier is worth looking the short lists up again.
  *
- * Faceted research rarely comes back empty, so this is deliberately reluctant: a
- * genuinely small work is allowed to be short. It fires when the shortfall is
- * broad (three or more lists under floor) or when one of the two lists the enemy
- * forge draws from came back less than half full.
+ * This used to want three lists under floor before it would run, because the
+ * research it triggered was six separate searched passes and reluctance was
+ * cheap insurance. The single dossier pass changed both halves of that. Short
+ * lists are now the expected weakness rather than a rare one — a measured run
+ * returned three of the twelve named places its subject's wiki documents — and
+ * the top-up is one narrow search per short list rather than a second round of
+ * everything. So it fires on two.
+ *
+ * A genuinely small work is still allowed to be short: one list under floor on
+ * its own is not evidence of anything.
  */
 export function needsExpansion(gaps: DepthGap[]): boolean {
-  if (gaps.length >= 3) return true;
+  if (gaps.length >= 2) return true;
   return gaps.some((g) => (g.key === "characters" || g.key === "enemies") && g.have * 2 < g.want);
 }
 
@@ -989,231 +995,182 @@ export function createCodexService({ db, onFlavorTexts }: {
     const id = (db.prepare("SELECT id FROM media_codex WHERE userId = ? AND titleKey = ?").get(userId, key) as any).id;
 
     try {
-      // ROUND 1 — settle which work this is, and what else it is called.
-      // Short prompt on purpose: `:online` keys its search on the message, so a
-      // long one buries the only thing this call needs to find.
-      const identify = async (correction?: string): Promise<CodexIdentity> => {
-        const raw = await nanoGenerateText(aiConfig, buildIdentifyPrompt(subject, correction), {
-          temperature: 0.1,
+      /**
+       * How the dossier pass searches.
+       *
+       * Deep retrieval runs its own iterative queries instead of one, and that
+       * is what makes a single call viable: it returns the breadth six separate
+       * standard searches were being spent to approximate, without six chances
+       * to fail. A deep search is roughly ten times a standard one, so this
+       * costs about what seven standard searches did — the same money, spent
+       * once, on one attempt that finishes.
+       *
+       * The provider is left unset, which means NanoGPT's default (Linkup).
+       * Setting it to "tavily" here would cut the search fee about fourfold if
+       * that ever matters more than leaving the default alone.
+       */
+      const DOSSIER_SEARCH = { depth: "deep" as const };
+
+      /**
+       * ONE PASS — identify, research and structure, in a single call.
+       *
+       * This replaced fifteen: an identify call, six facets each researched and
+       * then separately structured, and a gap-fill round. Every one of those was
+       * an independent chance to fail, and at any believable per-call success
+       * rate a run that touches fifteen of them fails about half the time. It
+       * showed: dossiers arriving with three sections missing were routine, and
+       * whole generations failed outright.
+       *
+       * Identification is folded in rather than kept as its own call. It existed
+       * to settle which work this is before the research was spent on it, but a
+       * deep pass is doing that work anyway — and the result is checked against
+       * the entry afterwards either way, which is what actually catches a wrong
+       * identification.
+       */
+      const dossierPrompt = buildDossierPrompt(subject);
+      const askDossier = (depth: "deep" | "standard", timeoutMs: number) =>
+        nanoGenerateText(aiConfig, dossierPrompt, {
+          temperature: 0.2,
+          tier: "analytical",
+          webSearch: true,
+          search: { ...DOSSIER_SEARCH, depth },
+          json: true,
+          // A deep search runs several queries before the model writes a word,
+          // and then it writes the whole dossier. Fifteen minutes is generous on
+          // purpose: the pass is the entire Codex now, so letting it finish
+          // slowly beats losing all of it to the clock.
+          timeoutMs,
+        });
+
+      let shallowFallback = false;
+      let raw: string;
+      try {
+        raw = await askDossier("deep", 900_000);
+      } catch (e: any) {
+        // A deep pass that runs out of time is the one failure worth answering
+        // differently rather than repeating: it has already spent its fifteen
+        // minutes, and doing that again reaches the same place an hour later.
+        //
+        // The retry drops to a STANDARD search rather than to no search at all.
+        // Falling back to the model's own memory is what produced the dossier
+        // that put a hostage down as a helicopter pilot; a shallower search is
+        // still grounded in something, and it is quick. The dossier records that
+        // it happened, because a shallow pass is a weaker record and the
+        // difference has to stay visible.
+        const timedOut = e?.name === "TimeoutError" || /timeout|aborted/i.test(String(e?.message || ""));
+        if (!timedOut) throw e;
+        console.warn(`[codex] the deep pass for "${subject.title}" ran out of time; retrying with a standard search`);
+        raw = await askDossier("standard", 300_000);
+        shallowFallback = true;
+      }
+
+      const parsed = parseJsonLoose<any>(raw);
+      if (!parsed || typeof parsed !== "object") throw new Error("The research did not come back as a JSON object.");
+
+      let data: CodexData = { ...parsed };
+
+      const identity: CodexIdentity = {
+        ...(parsed.identifiedAs && typeof parsed.identifiedAs === "object" ? parsed.identifiedAs : {}),
+        sources: Array.isArray(parsed.sources) ? parsed.sources : undefined,
+      };
+      if (!identity.title) identity.title = subject.title;
+
+      const ctx: ResearchContext = { subject, identity };
+      const problem = identificationProblem(identity, subject);
+      if (problem) console.warn(`Codex may have identified the wrong work for "${subject.title}": ${problem}`);
+
+      /**
+       * What the dossier says about its own sourcing.
+       *
+       * Every section came out of the same searched pass, so they are all
+       * "searched" unless a top-up later says otherwise. The per-section
+       * confidence is the model's own, which is worth more than a single overall
+       * grade: it is where it admits the parts it could not find much on.
+       */
+      const sectionConfidence: CodexSectionConfidence = {
+        identity: identity.confidence,
+        ...(parsed.sectionConfidence && typeof parsed.sectionConfidence === "object" ? parsed.sectionConfidence : {}),
+      };
+      const sectionSourcing: CodexSectionSourcing = {};
+      for (const facet of FACETS) sectionSourcing[facet] = "searched";
+
+      // The single pass identifies and researches at once, so a section it never
+      // filled is not a failed call — it is a section the sources did not
+      // support. That distinction is what `sectionConfidence` records.
+      const failed: string[] = [];
+
+      /**
+       * TOP-UP — the one thing a single pass measurably does worse.
+       *
+       * A deep pass gets the shape of a work right and the long enumerable lists
+       * short: on a game whose wiki documents twelve named places it returned
+       * three, and missed the castle the whole plot points at. So the lists are
+       * checked against their floors and only the ones that came in under get
+       * looked up again, told what is already on file so they hunt the tail
+       * rather than repeating the head.
+       *
+       * These are standard searches, not deep ones. The question is narrow by
+       * this point — "what else is in it" — and that is what a standard search
+       * is for. On a well-covered title this round does not run at all.
+       */
+      const topUp = async (facet: Facet, alreadyFound: string[]): Promise<any> => {
+        const prose = await nanoGenerateText(aiConfig, buildFacetPrompt(ctx, facet, alreadyFound), {
+          temperature: 0.2,
           webSearch: true,
           tier: "analytical",
         });
-        if (!raw) throw new Error("The model could not identify this work.");
-        const parsed = parseJsonLoose<CodexIdentity>(raw);
-        if (!parsed || typeof parsed !== "object") throw new Error("The identification was not a JSON object.");
-        return parsed;
+        const structured = await nanoGenerateText(aiConfig, buildStructurePrompt(ctx, facet, prose), {
+          temperature: 0.1,
+          tier: "analytical",
+          json: true,
+        });
+        const out = parseJsonLoose<any>(structured);
+        if (!out || typeof out !== "object") throw new Error(`The ${facet} top-up was not a JSON object.`);
+        return out;
       };
 
-      let identity = await identify();
-      let problem = identificationProblem(identity, subject);
-      if (problem) {
-        // One correction. Cheap now that it is only the identification being
-        // redone rather than the whole dossier.
-        console.warn(`Codex identified the wrong work for "${subject.title}": ${problem} Retrying.`);
-        try {
-          const retry = await identify(problem);
-          identity = retry;
-          problem = identificationProblem(retry, subject);
-        } catch (e) {
-          console.error("Codex identification retry failed; keeping the first answer", e);
-        }
-      }
-
-      const ctx: ResearchContext = { subject, identity };
-
-      /**
-       * Every facet is looked up. There is no longer a pass that decides some
-       * need not be.
-       *
-       * That pass existed to save search fees, on the understanding that
-       * retrieval was what a dossier cost. Measured against a real run it is
-       * not: output tokens were 78% of the bill and searches 17%, so skipping a
-       * search saved a sixth of a cent and bought a section written from memory
-       * — which on Far Cry 3, a game any model claims to know, put a hostage
-       * down as a helicopter pilot, moved a recluse into a clinic, and spelled
-       * both credited creators wrong. Two sections even disagreed with each
-       * other about what the same antagonist looked like, because neither was
-       * grounded in anything.
-       *
-       * Capping how much each facet writes saves more than skipping every search
-       * ever did, and costs nothing that matters. So the budget goes there, and
-       * retrieval goes back to being unconditional.
-       */
-      const searched = new Set<Facet>(FACETS);
-
-      /**
-       * Facets that gave up on retrieval and answered from memory instead.
-       *
-       * Tracked so the dossier can say so. A recalled section is not as good as
-       * a researched one and the difference has to stay visible.
-       */
-      const fellBackToRecall = new Set<Facet>();
-
-      const researchFacet = async (facet: Facet, alreadyFound?: string[]): Promise<string> => {
-        const prompt = buildFacetPrompt(ctx, facet, alreadyFound);
-        const wanted = searched.has(facet);
-
-        const ask = (webSearch: boolean) =>
-          nanoGenerateText(aiConfig, prompt, { temperature: 0.2, webSearch, tier: "analytical" });
-
-        let prose = "";
-        try {
-          prose = await ask(wanted);
-        } catch (e: any) {
-          // A retrieval call that runs out of time is the one failure worth
-          // retrying differently rather than simply repeating. Search plus a long
-          // generation is what exceeds the clock; the same model answering from
-          // its own knowledge finishes comfortably — which is exactly what the
-          // un-searched facets in the same run demonstrate. A section written
-          // from memory and labelled as such beats an empty one, and repeating
-          // the search would spend another search fee to time out again.
-          const timedOut = e?.name === "TimeoutError" || /timeout|aborted/i.test(String(e?.message || ""));
-          if (!wanted || !timedOut) throw e;
-          console.warn(`[codex] "${facet}" timed out while searching; retrying from the model's own knowledge`);
-          prose = await ask(false);
-          fellBackToRecall.add(facet);
-          // Do not pay for that search again. The gap-fill re-runs whichever
-          // facets came back thin, and without this it would attempt the very
-          // retrieval that has just been shown to exceed the clock — another
-          // search fee, another wait, the same result.
-          searched.delete(facet);
-        }
-
-        if (!prose) throw new Error(`The ${facet} research came back empty.`);
-        return prose;
-      };
-
-      /**
-       * Turn one facet's prose into the dossier's shape.
-       *
-       * The unparseable answer is retried, and it is worth being clear about why
-       * this is not the same retry `nanoGenerateText` already does. That one
-       * handles a provider that did not reply. This one handles a provider that
-       * replied with something that is not JSON — a reasoning model narrating
-       * its way to an answer, a truncated object, a fence inside a fence. The
-       * request succeeded, so nothing below would try again, and the section was
-       * thrown away along with the retrieval that had just been paid for.
-       * Asking a second time costs one cheap unsearched call and usually lands.
-       */
-      const structureFacet = async (facet: Facet, prose: string): Promise<any> => {
-        let last: any = null;
-        for (let attempt = 1; attempt <= 2; attempt++) {
-          const raw = await nanoGenerateText(aiConfig, buildStructurePrompt(ctx, facet, prose), {
-            temperature: 0.1,
-            tier: "analytical",
-          });
-          try {
-            const parsed = parseJsonLoose<any>(raw);
-            if (!parsed || typeof parsed !== "object") throw new Error(`The ${facet} section was not a JSON object.`);
-            return parsed;
-          } catch (e) {
-            last = e;
-            if (attempt === 1) {
-              console.warn(`[codex] "${facet}" did not come back as JSON; asking once more`);
-            }
+      const gaps = depthGaps(data);
+      if (!problem && needsExpansion(gaps)) {
+        const plan = expansionPlan(data, gaps);
+        console.log(
+          `Codex for "${subject.title}" came back thin (${gaps.map((g) => `${g.key} ${g.have}/${g.want}`).join(", ")}). Topping up: ${plan.map((p) => p.facet).join(", ")}.`,
+        );
+        const refills = await settleWithLimit(
+          plan.map((p) => () => topUp(p.facet, p.alreadyFound)),
+          RESEARCH_CONCURRENCY,
+        );
+        refills.forEach((result, i) => {
+          const facet = plan[i].facet;
+          if (result.status !== "fulfilled") {
+            console.error(`Codex top-up for "${facet}" failed; keeping the first pass`, result.reason);
+            return;
           }
-        }
-        throw last;
-      };
-
-      const runFacet = async (facet: Facet, alreadyFound?: string[]) =>
-        structureFacet(facet, await researchFacet(facet, alreadyFound));
-
-      const settled = await settleWithLimit(FACETS.map((f) => () => runFacet(f)), RESEARCH_CONCURRENCY);
-
-      // A facet that fails costs its own section, not the dossier. Losing the
-      // cast list is bad; losing the whole Codex over a soundtrack lookup is worse.
-      let data: CodexData = { identifiedAs: identity, sources: identity.sources || [] };
-      const sectionConfidence: CodexSectionConfidence = { identity: identity.confidence };
-      const sectionSourcing: CodexSectionSourcing = {};
-      const failed: string[] = [];
-
-      settled.forEach((result, i) => {
-        const facet = FACETS[i];
-        if (result.status !== "fulfilled") {
-          failed.push(facet);
-          sectionConfidence[facet] = "low";
-          console.error(`Codex facet "${facet}" failed for "${subject.title}"`, result.reason);
-          return;
-        }
-        sectionConfidence[facet] = result.value.confidence || "medium";
-        sectionSourcing[facet] = searched.has(facet) ? "searched" : "recalled";
-        for (const key of FACET_SPECS[facet].keys) {
-          const value = result.value[key];
-          if (value !== undefined && value !== null && value !== "") (data as any)[key] = value;
-        }
-      });
-
-      if (failed.length === FACETS.length) {
-        const why = settled
-          .map((r, i) => (r.status === "rejected" ? `${FACETS[i]}: ${String((r as any).reason?.message || (r as any).reason).slice(0, 80)}` : ""))
-          .filter(Boolean)
-          .join(" · ");
-        throw new Error(`Every research pass failed — ${why}`);
+          data = mergeExpansion(data, result.value, FACET_SPECS[facet].keys);
+        });
       }
 
       // The one field shown to the user word for word, so the three-to-six rule
       // is enforced here rather than left to the prompt's good manners.
       if (data.flavorTexts) data.flavorTexts = normalizeFlavorTexts(data.flavorTexts);
 
+      data.identifiedAs = identity;
+      data.sources = identity.sources || [];
       data.creators = identity.creator || data.creators;
-      data.releaseYear = identity.year || subjectYear(subject) || undefined;
-      data.sectionConfidence = sectionConfidence;
-      data.sectionSourcing = sectionSourcing;
-      data.notes = [identity.notes, failed.length ? `Research incomplete for: ${failed.join(", ")}.` : ""]
-        .filter(Boolean).join(" ") || undefined;
-
-      // The dossier's overall confidence is now the weakest thing in it, which is
-      // only fair because `sectionConfidence` says where the weakness actually is.
-      const grades = Object.values(sectionConfidence).filter(Boolean) as string[];
-      data.confidence = grades.includes("low") ? "low" : grades.includes("medium") ? "medium" : "high";
-
-      if (problem) {
-        data.confidence = "low";
-        data.notes = [`Could not confirm this is the right work: ${problem}`, data.notes].filter(Boolean).join(" ");
-      } else {
-        // Faceted research rarely comes up short, but when it does the fix is to
-        // re-run only the facets that did, telling them what they already found.
-        const gaps = depthGaps(data);
-        if (needsExpansion(gaps)) {
-          const plan = expansionPlan(data, gaps);
-          console.warn(
-            `Codex for "${subject.title}" came back thin (${gaps.map((g) => `${g.key} ${g.have}/${g.want}`).join(", ")}). Re-running: ${plan.map((p) => p.facet).join(", ")}.`,
-          );
-          const refills = await settleWithLimit(plan.map((p) => () => runFacet(p.facet, p.alreadyFound)), RESEARCH_CONCURRENCY);
-          refills.forEach((result, i) => {
-            const facet = plan[i].facet;
-            if (result.status !== "fulfilled") {
-              console.error(`Codex gap-fill for "${facet}" failed; keeping the first pass`, result.reason);
-              return;
-            }
-            data = mergeExpansion(data, result.value, FACET_SPECS[facet].keys);
-
-            // A repaired section is no longer a failed one. Without this the
-            // dossier contradicted itself: a full cast list under a heading
-            // saying the cast could not be researched, and a note listing every
-            // facet as incomplete when the retry had already filled them in.
-            const stillFailed = failed.indexOf(facet);
-            if (stillFailed !== -1) failed.splice(stillFailed, 1);
-            sectionConfidence[facet] = result.value.confidence || "medium";
-            sectionSourcing[facet] = searched.has(facet) ? "searched" : "recalled";
-          });
-        }
-      }
-
-      // Restated after the gap-fill, since a successful retry changes both what
-      // is missing and how confident the dossier as a whole should sound.
+      data.releaseYear = Number(identity.year) || subjectYear(subject) || undefined;
       data.sectionConfidence = sectionConfidence;
       data.sectionSourcing = sectionSourcing;
       data.notes = [
         identity.notes,
         problem ? `Could not confirm this is the right work: ${problem}` : "",
-        failed.length ? `Research incomplete for: ${failed.join(", ")}.` : "",
+        shallowFallback ? "The deep research ran out of time; this was compiled from a shallower search." : "",
       ].filter(Boolean).join(" ") || undefined;
-      const finalGrades = Object.values(sectionConfidence).filter(Boolean) as string[];
-      data.confidence = problem
+
+      // The dossier's overall confidence is the weakest thing in it, which is
+      // fair because `sectionConfidence` says where the weakness actually is.
+      const grades = Object.values(sectionConfidence).filter(Boolean) as string[];
+      data.confidence = problem || shallowFallback
         ? "low"
-        : finalGrades.includes("low") ? "low" : finalGrades.includes("medium") ? "medium" : "high";
+        : grades.includes("low") ? "low" : grades.includes("medium") ? "medium" : "high";
 
       db.prepare(
         `UPDATE media_codex SET data = ?, status = 'ready', error = NULL, model = ?, mediaId = COALESCE(mediaId, ?), updatedAt = ? WHERE id = ?`,

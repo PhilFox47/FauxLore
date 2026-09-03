@@ -627,86 +627,123 @@ export function searchQueryLine(subject: CodexSubject, identity: CodexIdentity |
 }
 
 /**
- * PASS 1 — which work is this, and what else is it called?
+ * The dossier's JSON shape, assembled from the facets' own fragments.
  *
- * Short on purpose: it is the only call whose search query needs to be about the
- * work's identity, and a long prompt would bury it. Its second job is finding
- * the work's other names, which is what the facet searches are keyed on — a
- * visual novel is far easier to find under its Japanese title, and a series
- * under the name its wiki uses rather than its streaming label.
+ * Each facet declares the object it fills; stitching them rather than writing a
+ * second copy keeps one source of truth, so a field added to `FACET_SPECS` turns
+ * up here without anyone remembering to add it twice.
  */
-export function buildIdentifyPrompt(subject: CodexSubject, correction?: string): string {
-  const year = subjectYear(subject);
-  const season = subjectSeason(subject);
-  const typeBrief = TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`;
-
-  const known = [
-    subject.subtitle ? `Also listed as: ${subject.subtitle}` : "",
-    subject.creator ? `Creator / author / studio / director: ${subject.creator}` : "",
-    subject.publisher ? `Publisher: ${subject.publisher}` : "",
-    year ? `Release year: ${year}${subject.year ? "" : " (expected)"}` : "",
-    subject.releaseStatus ? `Release status: ${subject.releaseStatus}` : "",
-    subject.franchises?.length ? `Franchise: ${subject.franchises.join(", ")}` : "",
-    subject.platforms?.length ? `Platforms: ${subject.platforms.join(", ")}` : "",
-    subject.language ? `Language: ${subject.language}` : "",
-    subject.description ? `Synopsis on record: ${String(subject.description).slice(0, 500)}` : "",
-  ].filter(Boolean).join("\n");
-
-  const constraints = [
-    `- FORMAT: it must be ${typeBrief}.`,
-    year
-      ? `- YEAR: it was released in ${year}. A work of the same name from a different year is a DIFFERENT work — a remake, a reboot, a sequel or an adaptation. Do not describe the ${year < 2015 ? "newer" : "older"} one.`
-      : `- YEAR: unknown. If several works share this name, say so in "notes" and pick the one that best matches the other details.`,
-    subject.creator ? `- CREATOR: it is by ${subject.creator}. A same-named work by someone else is a different work.` : "",
-    subject.franchises?.length ? `- FRANCHISE: it belongs to ${subject.franchises.join(", ")}.` : "",
-    subject.description ? `- SYNOPSIS: it must match the synopsis on record above. If your candidate's plot or subject matter contradicts it, you have the wrong work.` : "",
-    season ? `- SEASON: the entry is SEASON ${season}. Identify the title first, then confirm it has that season. Seasons are not only a television thing — a live-service game's numbered seasons count, and each is its own entry.` : "",
-    subjectEdition(subject) ? `- VERSION: the entry is the ${subjectEdition(subject)}, NOT the original release. Confirm that this version exists and identify it specifically.` : "",
-  ].filter(Boolean).join("\n");
-
-  const correctionBlock = correction
-    ? `\n\nYOUR PREVIOUS ANSWER WAS WRONG. ${correction}\nStart again and satisfy every constraint above.\n`
-    : "";
-
-  return `${searchQueryLine(subject, null, `${subject.creator || ""} wiki release date`)}
-
-You are the Codex Archivist of FauxLore. Before anything is researched about this media entry, work out exactly which work it is.
-
-ENTRY: "${subject.title}" (${subject.mediaType})
-${known || "(No further details on record.)"}
-
-Your candidate must satisfy ALL of these:
-${constraints}
-
-Popular names are reused constantly — a cartoon and its live-action remake, a game and the show adapted from it, a novel and its film. Picking the wrong one makes every later fact wrong too.${correctionBlock}
-
-You also need every OTHER NAME this work goes by, because the research that follows will be searched under them. Look for:
-- its original-language title, and the romanisation of it
-- its English or localised title, if that differs
-- regional or alternate release titles
-- official abbreviations and the short forms fans actually use
-- the name its wiki, database entry or fan community files it under
-Do not limit yourself to the names given above — go and find the ones that are missing.
-
-Return ONLY a pure JSON object, no markdown fence, no commentary:
-{
-  "title": "the work's own full title as published",
-  "year": ${year || 0},
-  "type": "film | television series | reality or competition show | documentary series | sporting competition | video game | novel | manga | comic | visual novel | audiobook | podcast",${season ? `
-  "season": ${season},` : ""}
-  "creator": "studio, author, director or developer",
-  "alsoKnownAs": ["every other title, romanisation, abbreviation or fan name this is known by"],
-  "why": "one sentence on how you know this is the right one and not a same-named work",
-  "alternatives": ["same-named works you rejected, with their year and format"],
-  "sources": ["up to 4 URLs you actually consulted"],
-  "coverage": "abundant | moderate | thin",
-  "confidence": "high | medium | low",
-  "notes": "anything ambiguous (empty string if all clear)"
+function combinedShape(): string {
+  const inner = FACETS.map((f) => {
+    const s = FACET_SPECS[f].shape.trim();
+    const body = s.replace(/^\{/, "").replace(/\}$/, "").trim().replace(/,$/, "");
+    // Facets declare their fragment at their own indentation — some on one line,
+    // some already nested several levels deep. Strip the common indent and add
+    // one level back, so relative nesting survives and the assembled template
+    // reads as the single object it is asking for.
+    const lines = body.split("\n");
+    const base = Math.min(...lines.slice(1).filter((l) => l.trim()).map((l) => l.match(/^ */)![0].length), 99);
+    return lines
+      .map((line, i) => (i === 0 ? `  ${line.trim()}` : `  ${line.slice(Number.isFinite(base) ? base : 0)}`))
+      .join("\n");
+  });
+  return `{\n  "identifiedAs": {"title": "", "year": 0, "creator": "who made it — studio, developer, author, publisher", "alsoKnownAs": [""], "coverage": "abundant | moderate | thin", "confidence": "high | medium | low"},\n  "sources": ["the pages you actually drew on"],\n  "sectionConfidence": {${FACETS.map((f) => `"${f}": "high | medium | low"`).join(", ")}},\n\n${inner.join(",\n\n")}\n}`;
 }
 
-"coverage" is how much MATERIAL EXISTS about this work, which is a different question from how confident you are that you found the right one. "abundant" means encyclopedic — a large wiki, wide press coverage, something most people have heard of. "thin" means the record is a handful of pages: an indie title, a small webcomic, a self-published book, a work in a language with little English coverage. "moderate" is everything between. Judge the WORLD's coverage, not your own knowledge, and do not flatter it — calling a small work abundant is the more damaging error, because it tells the passes after this one that they need not look hard.
+/**
+ * THE DOSSIER PASS — one deep search, one document, one call.
+ *
+ * This replaced a pipeline of fifteen: identify, then six facets each researched
+ * and then separately structured, then gap-fills. Every one of those was an
+ * independent chance to fail, and they did — a dossier arriving with three
+ * sections simply absent was the normal outcome, not the exceptional one.
+ *
+ * The objection to collapsing them was that one call means one search query, and
+ * that "who is in the cast" and "what do people still quote" are not the same
+ * search. Measured, that turned out to be wrong: deep retrieval runs its own
+ * iterative queries, and a single pass on a game released that morning came back
+ * with thirty-six sources spanning the publisher, Famitsu, two wikis, a
+ * completion guide, review aggregators and Reddit — and every section populated,
+ * against a six-pass run on the same title that lost three of them entirely.
+ *
+ * What the measurement did show is where a single pass is weaker: the long
+ * enumerable lists. It found three of the twelve named locations that work's
+ * wiki documents. That is what the top-up pass afterwards is for, and it is
+ * driven by which lists actually came in under their floor rather than by a
+ * fixed list of subject areas.
+ *
+ * NOTHING IS COMPRESSED TO FIT. Every facet's full brief goes in verbatim.
+ * Input is about 5% of what a dossier costs, so there is nothing to win by
+ * trimming, and one thing to lose: an early trial of this prompt shortened the
+ * memories brief and got back exactly the weak, explained-instead-of-performed
+ * lines that brief had been rewritten four times to prevent.
+ */
+export function buildDossierPrompt(subject: CodexSubject, identity?: CodexIdentity | null): string {
+  const title = identity?.title || subject.title;
+  const year = identity?.year || subjectYear(subject);
+  const aka = (identity?.alsoKnownAs || []).filter(Boolean).slice(0, 8);
+  const visualNote = VISUAL_IDENTITY_BY_TYPE[subject.mediaType]
+    ? `\n\nHOW TO ANSWER THE VISUAL SECTION FOR THIS MEDIUM: ${VISUAL_IDENTITY_BY_TYPE[subject.mediaType]}`
+    : "";
 
-If NOTHING matches the format and year, do not substitute the famous one: say so in "notes", set "confidence" to "low", and answer for the work that was actually asked for.`;
+  // The section briefs, in the order the shape lists them, each under a heading
+  // the model can navigate by. `lore` keeps its structuring notes because for
+  // that one section the writing rules ARE the brief — the difference between a
+  // memory and a fact about the work lives entirely in them.
+  const sections = FACETS.map((f) => {
+    const spec = FACET_SPECS[f];
+    const extra = f === "lore" ? `\n\n${spec.structureNotes}` : "";
+    return `━━━ ${f.toUpperCase()} ━━━
+
+${spec.brief}${f === "craft" ? visualNote : ""}${extra}
+
+IF THIS IS NOT FICTION — a reality or competition show, a documentary, a podcast, a sporting competition — this section still applies, it just means real things: ${spec.nonFiction}`;
+  }).join("\n\n");
+
+  return `${searchQueryLine(subject, identity || null, "characters plot setting factions lore quotes trivia art style reception")}
+
+You are the Codex Archivist of FauxLore. Research ONE work thoroughly and return ONE complete reference dossier on it.
+
+THE WORK: "${title}"${year ? ` (${year})` : ""}${identity?.creator ? `, by ${identity.creator}` : ""} — ${TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`}.${
+    aka.length ? `\nALSO KNOWN AS: ${aka.join(" · ")} — search under these too, especially the original-language title, where the detailed material usually is.` : ""
+  }${subject.creator && !identity?.creator ? `\nCREDITED TO: ${subject.creator}` : ""}${
+    subject.description ? `\nTHE ENTRY SAYS: ${String(subject.description).slice(0, 400)}` : ""
+  }${versionScope(subject)}
+
+Everything this application later generates about this work — artwork, enemies, items, tags, recommendations — is written from this document and from nothing else. Nobody will check it afterwards.
+
+=== THE RULE THAT OUTRANKS EVERY OTHER ONE ===
+
+NEVER INVENT. You will hit areas where the information does not exist, and that is a normal result, not a failure: return an empty list or an empty string and move on. Do not fill a gap with what works of this kind usually contain, do not carry facts across from the same creator's other work or from a similarly named one, and do not promote a rumour, a leak or a fan theory to a fact.
+
+An empty field is a correct answer. An invented one is the worst possible outcome, because it becomes permanent and everything downstream treats it as true.
+
+Prefer what is documented — the official source, the creator's own statements, interviews, the wiki, contemporaneous coverage — over what is merely plausible. Where sources genuinely conflict, say so in the field rather than silently picking one. When the general web is thin, go where the work's actual audience is: ${NICHE_SOURCES[subject.mediaType] || "the communities, forums and wikis its own audience keeps"}.
+
+${REFERENCE_NOT_TEMPLATE}
+
+=== HOW MUCH TO WRITE ===
+
+${depthRule(identity?.coverage)}
+- Name things. Never write "various characters", "several locations" or "a rich world" — those are worth nothing to the reader of this dossier.
+- Detail per entry is what matters, not total length. One tight line naming a specific thing beats a paragraph circling it, and the reader of this dossier is a program extracting facts, not a person reading for pleasure.
+- Aim for as many entries as the material honestly supports — up to a dozen or more characters where the work has them, and the same for places, groups, vocabulary and objects. THESE ARE CEILINGS, NOT QUOTAS. A short honest list is a good result; a padded one is a corrupted record.
+- Go after what a first look misses: the recurring minor names, the regional and the everyday, the entries further down the page. That long tail is the part a shallow pass always loses, and the part later features most need.
+- Prefer widely known material, and avoid late-story twists and ending spoilers — the user may still be partway through.
+
+=== THE SECTIONS ===
+
+${sections}
+
+=== OUTPUT ===
+
+Return ONLY a single JSON object matching this shape exactly — no markdown fence, no commentary before or after, no reasoning left in the reply:
+
+${combinedShape()}
+
+${INTRODUCED}
+
+"coverage" is how much material actually exists about this work: "abundant" for something with a large wiki and years of coverage, "thin" for something recent, small or niche. "confidence" and each "sectionConfidence" entry rate how well-sourced that part genuinely is — be pessimistic, since a wrong "high" corrupts the record and a wrong "low" costs nothing.`;
 }
 
 /**

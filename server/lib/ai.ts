@@ -113,11 +113,37 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  */
 const MAX_ATTEMPTS = 3;
 
+/**
+ * How the provider should search, when a plain `:online` is not what is wanted.
+ *
+ * `deep` costs roughly ten times a standard search and runs its own iterative
+ * queries rather than one. That is the whole reason the Codex can be a single
+ * call: one deep pass returns the breadth six standard searches were being spent
+ * to fake, without six chances to fail on the way.
+ */
+export interface SearchOptions {
+  /** linkup | tavily | brave | sofya | exa | kagi | perplexity | valyu. Empty leaves NanoGPT's default. */
+  provider?: string;
+  depth?: "standard" | "deep";
+}
+
+export interface GenerateOptions {
+  temperature?: number;
+  webSearch?: boolean;
+  systemPrompt?: string;
+  tier?: AiTier;
+  timeoutMs?: number;
+  /** Retrieval provider and depth. Ignored unless `webSearch` is set. */
+  search?: SearchOptions;
+  /** Ask the provider to constrain the reply to valid JSON. */
+  json?: boolean;
+}
+
 /** One chat request. Throws on a non-OK response or an empty completion. */
 async function postChat(
   config: AiConfig,
   messages: { role: string; content: string }[],
-  opts: { temperature?: number; webSearch?: boolean; tier?: AiTier; timeoutMs?: number },
+  opts: GenerateOptions,
 ): Promise<string> {
   const res = await fetch(NANO_GPT_CHAT_URL, {
     method: "POST",
@@ -147,6 +173,23 @@ async function postChat(
       model: resolveModel(config, !!opts.webSearch, opts.tier),
       temperature: opts.temperature ?? 0.9,
       messages,
+      // The documented body form of the search controls. It takes precedence
+      // over the model's `:online` suffix, which stays on the model name so an
+      // install whose provider ignores this object still searches.
+      ...(opts.webSearch && opts.search
+        ? {
+            webSearch: {
+              enabled: true,
+              ...(opts.search.provider ? { provider: opts.search.provider } : {}),
+              ...(opts.search.depth ? { depth: opts.search.depth } : {}),
+            },
+          }
+        : {}),
+      // `json_object` rather than a full `json_schema`: it is the widely
+      // supported mode, and the shape is already spelled out in the prompt. What
+      // it buys is the one failure it was added for — a model narrating its way
+      // to an answer, or fencing it, and the reply being discarded as unparseable.
+      ...(opts.json ? { response_format: { type: "json_object" } } : {}),
     }),
   });
 
@@ -169,20 +212,46 @@ async function postChat(
   return text;
 }
 
+/**
+ * Whether a rejection is the provider saying it does not understand one of the
+ * optional fields, rather than that the request was wrong.
+ *
+ * `response_format` and the `webSearch` object are both documented as
+ * provider-dependent — "some provider-specific limitations may apply". A model
+ * that has never heard of them answers 400, and without this a perfectly good
+ * Codex would fail because of a field that was only ever an optimisation.
+ */
+function rejectsOptionalField(err: any, opts: GenerateOptions): "json" | "search" | null {
+  if (err?.httpStatus !== 400 && err?.httpStatus !== 422) return null;
+  const message = String(err?.message || "").toLowerCase();
+  if (opts.json && /response_format|json_schema|json_object|structured output/.test(message)) return "json";
+  if (opts.search && /websearch|web_search|search|provider|depth|unsupported/.test(message)) return "search";
+  return null;
+}
+
 /** Single-turn completion. Throws if the model cannot be reached or says nothing. */
 export async function nanoGenerateText(
   config: AiConfig,
   prompt: string,
-  opts: { temperature?: number; webSearch?: boolean; systemPrompt?: string; tier?: AiTier; timeoutMs?: number } = {},
+  opts: GenerateOptions = {},
 ): Promise<string> {
   const messages: { role: string; content: string }[] = [];
   if (opts.systemPrompt) messages.push({ role: "system", content: opts.systemPrompt });
   messages.push({ role: "user", content: prompt });
 
+  let active = opts;
   for (let attempt = 1; ; attempt++) {
     try {
-      return await postChat(config, messages, opts);
+      return await postChat(config, messages, active);
     } catch (e: any) {
+      // Drop the unsupported field and try again on the same attempt budget.
+      // The request still does its job without it; only the safety net is lost.
+      const unsupported = rejectsOptionalField(e, active);
+      if (unsupported) {
+        console.warn(`[ai] the model rejected ${unsupported === "json" ? "JSON mode" : "the search options"}; retrying without`);
+        active = unsupported === "json" ? { ...active, json: false } : { ...active, search: undefined };
+        continue;
+      }
       if (attempt >= MAX_ATTEMPTS || !isTransient(e, e?.httpStatus)) throw e;
       // Exponential, with jitter so calls that failed together do not come back
       // together and recreate the burst that failed.
