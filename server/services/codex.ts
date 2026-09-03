@@ -954,6 +954,19 @@ export function createCodexService({ db, onFlavorTexts }: {
         json: true,
         scope: "codex",
         userId,
+        /**
+         * Room to actually finish.
+         *
+         * Nothing was sent here, so the provider chose, and its choice for this
+         * model was 15,000 tokens — a dossier stopped mid-array with a 200 and
+         * no error. On a thinking model that budget is shared with the model's
+         * own reasoning, so the visible answer got whatever was left.
+         *
+         * 48,000 is far more than a dossier needs. It is a ceiling, not a
+         * target: nothing is billed for room that goes unused, and the cost of
+         * setting it too low is the failure this replaced.
+         */
+        maxTokens: 48_000,
         // A deep search runs several queries before the model writes a word, and
         // then it writes the whole dossier. Fifteen minutes is generous on
         // purpose: this call IS the Codex, so letting it finish slowly beats
@@ -967,6 +980,33 @@ export function createCodexService({ db, onFlavorTexts }: {
         // this ever fires, the reply itself is the only evidence of why.
         console.error(`[codex] "${subject.title}" did not come back as JSON. Reply began: ${raw.slice(0, 400)}`);
         throw new Error("The research did not come back as a JSON object.");
+      }
+
+      /**
+       * It parsed. That is not the same as it being a dossier.
+       *
+       * `parseJsonLoose` scans for balanced brackets so it can recover an answer
+       * a model wrapped in prose, and that leniency has a failure mode: given a
+       * document truncated part way through, the largest balanced thing in it is
+       * not the dossier but some complete object nested inside it. A cut-off
+       * Codex came back as a single character record — `{"name": …,
+       * "description": …}` — which is valid JSON, is an object, and passed every
+       * check above before being written to the database as a Codex containing
+       * nothing whatsoever.
+       *
+       * So the shape is checked, not just the type. A real dossier has at least
+       * one of the things a dossier is made of.
+       */
+      const DOSSIER_KEYS = [
+        "identifiedAs", "premise", "overview", "characters", "conflicts",
+        "antagonists", "locations", "factions", "terminology", "items", "artStyle", "flavorTexts",
+      ];
+      if (!DOSSIER_KEYS.some((k) => (parsed as any)[k] != null)) {
+        console.error(
+          `[codex] "${subject.title}" returned JSON that is not a dossier — keys: ${Object.keys(parsed).join(", ") || "(none)"}. ` +
+          `This usually means the reply was cut off. Reply began: ${raw.slice(0, 400)}`,
+        );
+        throw new Error("The research came back as JSON, but not as a dossier — it was probably cut off.");
       }
 
       const data: CodexData = { ...parsed };

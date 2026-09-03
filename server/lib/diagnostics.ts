@@ -257,6 +257,16 @@ export interface AiCallRecord {
   promptTokens?: number;
   completionTokens?: number;
   /**
+   * How much of the output was the model thinking rather than answering.
+   *
+   * Billed as output and spent from the same ceiling, so on a thinking model it
+   * competes with the answer. When a reply comes back truncated this is the
+   * number that says which of the two ran out of room.
+   */
+  reasoningTokens?: number;
+  /** "stop" when the model finished; "length" when it was cut off. */
+  finishReason?: string;
+  /**
    * Roughly how much retrieved material came back injected.
    *
    * The single most useful number here, and the one that took a billing

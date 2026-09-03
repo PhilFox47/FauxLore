@@ -213,6 +213,24 @@ export interface GenerateOptions {
   /** Ask the provider to constrain the reply to valid JSON. */
   json?: boolean;
   /**
+   * Ceiling on generated tokens.
+   *
+   * Not optional in practice, whatever the API says. Omitting it hands the
+   * decision to the provider, and the provider's answer for this model was
+   * 15,000 — which truncated a Codex mid-document, mid-array, with a 200 and no
+   * error anywhere. The reply came back exactly 15000 tokens long, which is not
+   * a number a model stops on by itself.
+   */
+  maxTokens?: number;
+  /**
+   * none | minimal | low | medium | high | xhigh.
+   *
+   * Reasoning tokens are billed as output AND count against `maxTokens`, so on a
+   * thinking model they compete directly with the answer for the same budget.
+   * Left unset by default, which keeps whatever the model does normally.
+   */
+  reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
+  /**
    * Which feature is making this call, and for whom. Diagnostics only.
    *
    * Without it every row in the AI log reads "some model was called", and the
@@ -318,6 +336,8 @@ async function postChat(
       // it buys is the one failure it was added for — a model narrating its way
       // to an answer, or fencing it, and the reply being discarded as unparseable.
       ...(opts.json ? { response_format: { type: "json_object" } } : {}),
+      ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
+      ...(opts.reasoningEffort ? { reasoning_effort: opts.reasoningEffort } : {}),
     }),
     });
   } catch (e: any) {
@@ -338,7 +358,20 @@ async function postChat(
   }
 
   const data: any = await res.json();
-  const text = (data.choices?.[0]?.message?.content || "").trim();
+  const choice = data.choices?.[0] || {};
+  const text = (choice.message?.content || "").trim();
+
+  /**
+   * The provider says outright when it ran out of room, and this used to ignore
+   * it.
+   *
+   * `finish_reason: "length"` means the reply is cut off mid-sentence. Handed to
+   * a lenient JSON parser that answer does not fail — it yields whichever
+   * fragment happens to be balanced, which for a truncated dossier was a single
+   * character object. That parsed, satisfied every check, and was written to the
+   * database as a Codex containing nothing at all.
+   */
+  const finishReason = String(choice.finish_reason || "");
 
   /**
    * `usage` is what the billing page shows, recorded here so nobody has to go
@@ -352,13 +385,30 @@ async function postChat(
    */
   const promptTokens = Number(data.usage?.prompt_tokens) || undefined;
   const ownPromptTokens = Math.round(promptChars / 4);
+  const truncated = finishReason === "length";
   report({
     httpStatus: res.status,
     promptTokens,
     completionTokens: Number(data.usage?.completion_tokens) || undefined,
+    // Reasoning is billed as output and spends the same budget as the answer, so
+    // when a reply is truncated this is the number that says whether the model
+    // ran out of room to think or ran out of room to answer.
+    reasoningTokens: Number(data.usage?.completion_tokens_details?.reasoning_tokens) || undefined,
+    finishReason: finishReason || undefined,
     injectedTokens: promptTokens ? Math.max(0, promptTokens - ownPromptTokens) : undefined,
-    error: text ? undefined : "empty reply",
+    error: truncated ? "truncated (finish_reason=length)" : text ? undefined : "empty reply",
   });
+
+  if (truncated) {
+    const err: any = new Error(
+      `The reply was cut off at the token limit (${data.usage?.completion_tokens ?? "?"} tokens` +
+      `${opts.maxTokens ? `, asked for up to ${opts.maxTokens}` : ", no max_tokens was sent"}).`,
+    );
+    // Not transient: asking again produces the same length. The caller has to
+    // ask for more room, or for less output.
+    err.truncated = true;
+    throw err;
+  }
 
   // A 200 with nothing in it is a provider failure wearing a success code, and
   // it is common enough on a loaded model to be worth naming. Every caller
