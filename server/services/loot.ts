@@ -190,6 +190,7 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
         temperature: 0.95,
         webSearch: !codexBlock,
         tier: "analytical",
+        scope: "loot",
       });
       if (!raw) throw new Error("The model returned an empty item.");
       const spec = parseJsonLoose<any>(raw);
@@ -254,7 +255,7 @@ Write it as the world would describe the object, not as a stat block. Do not res
 Return ONLY the flavour text, nothing else.`;
 
     try {
-      const raw = await nanoGenerateText(aiConfig, prompt, { temperature: 1.0, tier: "creative" });
+      const raw = await nanoGenerateText(aiConfig, prompt, { temperature: 1.0, tier: "creative", scope: "loot" });
       return String(raw || "").replace(/^["']|["']$/g, "").trim();
     } catch (e) {
       // A plain description beats no drop: the caller falls back to the brief.

@@ -1,4 +1,5 @@
 import type { Db } from "../context";
+import { recordAiCall } from "./diagnostics";
 
 /**
  * Server-side text generation via NanoGPT's OpenAI-compatible endpoint.
@@ -155,6 +156,15 @@ export interface GenerateOptions {
   /** Ask the provider to constrain the reply to valid JSON. */
   json?: boolean;
   /**
+   * Which feature is making this call, and for whom. Diagnostics only.
+   *
+   * Without it every row in the AI log reads "some model was called", and the
+   * question being asked of that log is almost always "what did the Codex do",
+   * not "what did anything do".
+   */
+  scope?: string;
+  userId?: string | null;
+  /**
    * Internal. Set false after a provider rejects the `webSearch` body object.
    *
    * The depth is requested two ways — in the body and on the model suffix — so
@@ -171,8 +181,40 @@ async function postChat(
   config: AiConfig,
   messages: { role: string; content: string }[],
   opts: GenerateOptions,
+  attempt = 1,
 ): Promise<string> {
-  const res = await fetch(NANO_GPT_CHAT_URL, {
+  const model = resolveModel(config, !!opts.webSearch, opts.tier, opts.search?.depth);
+  const promptChars = messages.reduce((n, m) => n + m.content.length, 0);
+  const startedAt = Date.now();
+
+  /**
+   * Every exit from this function goes through here.
+   *
+   * The whole reason the diagnostic log exists is that a run's search depth once
+   * had to be reverse-engineered from a billing page, so the row is written
+   * whether the call succeeded, was rejected, or threw — a failure with no row
+   * would leave exactly the gap this is meant to close.
+   */
+  const report = (extra: Partial<Parameters<typeof recordAiCall>[0]>) =>
+    recordAiCall({
+      model,
+      scope: opts.scope,
+      tier: opts.tier,
+      webSearch: !!opts.webSearch,
+      searchDepth: opts.webSearch ? opts.search?.depth || "standard" : undefined,
+      searchProvider: opts.search?.provider,
+      searchBody: opts.webSearch ? opts.searchBody !== false && !!opts.search : undefined,
+      json: !!opts.json,
+      attempt,
+      durationMs: Date.now() - startedAt,
+      promptChars,
+      userId: opts.userId,
+      ...extra,
+    });
+
+  let res: Response;
+  try {
+    res = await fetch(NANO_GPT_CHAT_URL, {
     method: "POST",
     // Without this a stalled generation blocks a Codex indefinitely: the facets
     // are waited on together, so the slowest one sets the pace for all of them.
@@ -218,18 +260,44 @@ async function postChat(
       // to an answer, or fencing it, and the reply being discarded as unparseable.
       ...(opts.json ? { response_format: { type: "json_object" } } : {}),
     }),
-  });
+    });
+  } catch (e: any) {
+    // A timeout or a dropped socket never reaches a status code.
+    report({ error: String(e?.message || e) });
+    throw e;
+  }
 
   if (!res.ok) {
     const err: any = new Error(`NanoGPT error (${res.status}): ${(await res.text().catch(() => "")).slice(0, 300)}`);
     // Carried so the retry decision can read the status rather than parse it
     // back out of the message.
     err.httpStatus = res.status;
+    report({ httpStatus: res.status, error: err.message });
     throw err;
   }
 
   const data: any = await res.json();
   const text = (data.choices?.[0]?.message?.content || "").trim();
+
+  /**
+   * `usage` is what the billing page shows, recorded here so nobody has to go
+   * and look at the billing page.
+   *
+   * `injectedTokens` is the derived one and the most useful: retrieval is
+   * injected into the prompt before the model sees it, so prompt tokens minus
+   * this app's own prompt is the size of the search result. A deep pass shows
+   * tens of thousands; a call that quietly fell back to a shallow search shows
+   * almost none, and is otherwise indistinguishable.
+   */
+  const promptTokens = Number(data.usage?.prompt_tokens) || undefined;
+  const ownPromptTokens = Math.round(promptChars / 4);
+  report({
+    httpStatus: res.status,
+    promptTokens,
+    completionTokens: Number(data.usage?.completion_tokens) || undefined,
+    injectedTokens: promptTokens ? Math.max(0, promptTokens - ownPromptTokens) : undefined,
+    error: text ? undefined : "empty reply",
+  });
 
   // A 200 with nothing in it is a provider failure wearing a success code, and
   // it is common enough on a loaded model to be worth naming. Every caller
@@ -273,7 +341,7 @@ export async function nanoGenerateText(
   let active = opts;
   for (let attempt = 1; ; attempt++) {
     try {
-      return await postChat(config, messages, active);
+      return await postChat(config, messages, active, attempt);
     } catch (e: any) {
       // Drop the unsupported field and try again on the same attempt budget.
       // The request still does its job without it; only the safety net is lost.

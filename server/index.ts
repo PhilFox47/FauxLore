@@ -11,6 +11,7 @@ import { hltbSearch } from "./integrations/hltb";
 import { getIgdbToken } from "./integrations/igdb";
 import { initSchema } from "./db/schema";
 import { runMigrations } from "./db/migrations";
+import { initDiagnostics, captureConsole, httpDiagnostics, diag } from "./lib/diagnostics";
 import { safeJsonParse, normalizeMedia } from "./lib/normalize";
 import { recalcTaxonomyUsageCounts } from "./lib/taxonomyCounts";
 import { createGetAuthUser } from "./services/auth";
@@ -33,6 +34,7 @@ import { registerUserRoutes } from "./routes/users";
 import { registerSystemSettingsRoutes } from "./routes/systemSettings";
 import { registerMediaRoutes } from "./routes/media";
 import { registerLogRoutes } from "./routes/logs";
+import { registerDiagnosticsRoutes } from "./routes/diagnostics";
 import { registerSettingsRoutes } from "./routes/settings";
 import { registerRecapRoutes } from "./routes/recaps";
 import { registerAiRoutes } from "./routes/ai";
@@ -82,6 +84,17 @@ async function startServer() {
   // CREATE TABLE IF NOT EXISTS and guarded ALTERs.
   initSchema(db);
   runMigrations(db);
+
+  // Wired up immediately after the tables exist and before anything else runs,
+  // so a failure during startup is in the log rather than only in a terminal
+  // nobody was watching.
+  initDiagnostics(db);
+  captureConsole();
+  diag.info("boot", "Server starting", { node: process.version, env: process.env.NODE_ENV || "development" });
+
+  // Registered after the database exists so the very first request cannot land
+  // before there is somewhere to record it.
+  app.use(httpDiagnostics());
 
   const { createDatabaseBackup } = createBackupManager({ dbPath, backupsDir });
 
@@ -220,6 +233,7 @@ async function startServer() {
   // Local DB API Routes
   registerMediaRoutes(app, ctx);
   registerLogRoutes(app, ctx);
+  registerDiagnosticsRoutes(app, ctx);
   registerSettingsRoutes(app, ctx);
   registerRecapRoutes(app, ctx);
   registerAiRoutes(app, ctx);

@@ -952,6 +952,8 @@ export function createCodexService({ db, onFlavorTexts }: {
         webSearch: true,
         search: DOSSIER_SEARCH,
         json: true,
+        scope: "codex",
+        userId,
         // A deep search runs several queries before the model writes a word, and
         // then it writes the whole dossier. Fifteen minutes is generous on
         // purpose: this call IS the Codex, so letting it finish slowly beats

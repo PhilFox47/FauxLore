@@ -122,7 +122,7 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
       // STAGE 1 — analytical. Which opponent, at what level, looking like what.
       // No web search: the Codex already did the research. This is the pass that
       // must not invent, so it runs on the analytical model.
-      const raw = await nanoGenerateText(aiConfig, prompt, { temperature: 1.0, tier: "analytical" });
+      const raw = await nanoGenerateText(aiConfig, prompt, { temperature: 1.0, tier: "analytical", scope: "boss" });
       if (!raw) throw new Error("The model returned an empty enemy.");
       const spec = parseJsonLoose<any>(raw);
 
@@ -192,7 +192,7 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
 { "title": "the epithet, without the name", "description": "1-3 sentences" }`;
 
     try {
-      const raw = await nanoGenerateText(aiConfig, prompt, { temperature: 1.05, tier: "creative" });
+      const raw = await nanoGenerateText(aiConfig, prompt, { temperature: 1.05, tier: "creative", scope: "boss" });
       if (!raw) return null;
       return parseJsonLoose<any>(raw);
     } catch (e) {

@@ -332,4 +332,28 @@ export function runMigrations(db: Db) {
   try { db.prepare("ALTER TABLE media ADD COLUMN autoTagStatus TEXT").run(); } catch (e) {}
   // Nothing can still be running across a restart.
   try { db.prepare("UPDATE media SET autoTagStatus = 'failed' WHERE autoTagStatus = 'pending'").run(); } catch (e) {}
+
+  /**
+   * The diagnostic log. Note the name: `logs` is the media-progress table and
+   * has been since the beginning, so this one cannot be called that.
+   *
+   * Integer primary key rather than a uuid, because the trim is "delete
+   * everything older than the newest N" and that is an id comparison.
+   */
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS diagnostics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        level TEXT NOT NULL,
+        scope TEXT,
+        message TEXT NOT NULL,
+        userId TEXT,
+        detail TEXT
+      );
+      CREATE INDEX IF NOT EXISTS diagnostics_ts ON diagnostics(ts DESC);
+      CREATE INDEX IF NOT EXISTS diagnostics_channel ON diagnostics(channel, id DESC);
+    `);
+  } catch (e) {}
 }

@@ -340,6 +340,8 @@ Platforms: ${parse(media.platforms).join(", ") || "N/A"}${codexBlock ? `\n\n${co
         temperature: 0.1,
         webSearch: !codexBlock,
         systemPrompt,
+        scope: "autotag",
+        userId,
       });
       if (!raw) throw new Error("The model returned an empty response.");
 

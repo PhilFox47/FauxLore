@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Sparkles, RefreshCw, UserCircle, Settings as SettingsIcon, Shield, Database, Users, Target, Image as ImageIcon, Bell } from 'lucide-react';
+import { X, Save, Sparkles, RefreshCw, UserCircle, Settings as SettingsIcon, Shield, Database, Users, Target, Image as ImageIcon, Bell, Activity } from 'lucide-react';
 import { DatabaseService } from '../services/db';
 import { IntegrationsService } from '../services/integrations';
 import { useMediaContext } from '../contexts/MediaContext';
@@ -9,6 +9,7 @@ import { generateText } from '../services/nanoGptService';
 import { AI_PERSONAS, getPersona, getPersonaDescription } from '../lib/personas';
 import { getProgressionContext, levelBudget, buildTitleSystemPrompt, buildMainTitlePrompt } from '../lib/lorekeeperTitles';
 import { UserManagement } from './UserManagement';
+import { DiagnosticsPanel } from './DiagnosticsPanel';
 import { creativeModel } from '../lib/aiModels';
 import { cn } from '../lib/utils';
 import {
@@ -32,7 +33,7 @@ interface SettingsModalProps {
 export function SettingsModal({ onClose }: SettingsModalProps) {
   const { user, login } = useAuth();
   const { media, logs, settings, aiTextCache, saveAiText, refreshData, artifacts } = useMediaContext();
-  const [activeTab, setActiveTab] = useState<'account'|'preferences'|'rpg'|'quests'|'system'|'users'>('account');
+  const [activeTab, setActiveTab] = useState<'account'|'preferences'|'rpg'|'quests'|'system'|'users'|'diagnostics'>('account');
   
   const [accountData, setAccountData] = useState({
     username: user?.username || '',
@@ -618,6 +619,15 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
            )}
 
            {user?.role === 'Admin' && (
+             <button
+               onClick={() => setActiveTab('diagnostics')}
+               className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-sm font-medium ${activeTab === 'diagnostics' ? 'bg-emerald-500/10 text-emerald-400' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'}`}
+             >
+               <Activity className="w-5 h-5" /> Diagnostics (Admin)
+             </button>
+           )}
+
+           {user?.role === 'Admin' && (
              <button 
                onClick={() => setActiveTab('system')}
                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-sm font-medium ${activeTab === 'system' ? 'bg-red-500/10 text-red-400' : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'}`}
@@ -1131,6 +1141,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                <UserManagement />
             )}
 
+            {user?.role === 'Admin' && activeTab === 'diagnostics' && (
+               <DiagnosticsPanel />
+            )}
+
             {user?.role === 'Admin' && activeTab === 'system' && (
                   <>
                   <div className="space-y-4">
@@ -1429,9 +1443,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             onClick={onClose} 
             className="px-4 py-2 text-sm font-medium text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
           >
-            {activeTab === 'users' ? 'Close' : 'Cancel'}
+            {activeTab === 'users' || activeTab === 'diagnostics' ? 'Close' : 'Cancel'}
           </button>
-          {activeTab !== 'users' && (
+          {activeTab !== 'users' && activeTab !== 'diagnostics' && (
             <button 
               type="submit" 
               form="settings-form"
