@@ -1,4 +1,5 @@
 import type { Db } from "../context";
+import { Agent } from "undici";
 import { recordAiCall } from "./diagnostics";
 
 /**
@@ -23,6 +24,36 @@ import { recordAiCall } from "./diagnostics";
  * that were never in the work, and for the Codex that error is permanent.
  */
 const NANO_GPT_CHAT_URL = "https://nano-gpt.com/api/v1/chat/completions";
+
+/**
+ * Node's own five-minute cap on a request, removed.
+ *
+ * `fetch` waits 300 seconds for the response headers and then aborts. That is
+ * fine for an ordinary API and completely wrong for this one: the request is not
+ * streamed, so the provider sends nothing at all until a deep search and a full
+ * dossier are finished, and a Codex for a niche title takes longer than five
+ * minutes to reach that point. Our own fifteen-minute budget never got a chance
+ * to apply — Node killed the connection at 300,783ms first, reported it as
+ * "fetch failed", and the retry logic then spent five more minutes twice over on
+ * a failure that could never clear.
+ *
+ * Both timeouts are disabled so `AbortSignal.timeout` is the only clock, which
+ * is the one the caller actually set. `connectTimeout` stays short, because
+ * failing to reach the host at all is a genuinely different thing and should
+ * still fail fast.
+ *
+ * Imported statically rather than with `require`, which was the first attempt and
+ * silently did nothing: this package is ESM, so `require` is not defined, the
+ * construction threw, and the dispatcher stayed unset — the five-minute cap was
+ * still in force everywhere the server ran from source. Only the bundled build
+ * would have worked, which is the worst kind of half-fix.
+ */
+let dispatcher: Agent | undefined;
+try {
+  dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0, connectTimeout: 30_000 });
+} catch (e) {
+  console.warn("[ai] Could not raise the HTTP timeout; long requests may be cut off at five minutes", e);
+}
 
 export interface AiConfig {
   apiKey: string;
@@ -114,9 +145,35 @@ function isTransient(err: any, status?: number): boolean {
   if (status !== undefined) return status === 408 || status === 409 || status === 429 || status >= 500;
   const name = String(err?.name || "");
   if (name === "TimeoutError" || name === "AbortError") return false;
+
+  // A clock that ran out is a timeout however it is dressed. `fetch failed` with
+  // a headers-timeout underneath IS one, and it used to be retried three times
+  // because the message says nothing and the cause was never read — five minutes
+  // of waiting, three times over, for a failure that was never going to clear.
+  const code = String(err?.cause?.code || err?.code || "");
+  if (code === "UND_ERR_HEADERS_TIMEOUT" || code === "UND_ERR_BODY_TIMEOUT") return false;
+
   const message = String(err?.message || err || "");
   if (/timeout|aborted/i.test(message)) return false;
   return /network|socket|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|fetch failed|empty reply/i.test(message);
+}
+
+/**
+ * What actually went wrong, when `fetch` will only say "fetch failed".
+ *
+ * Node puts the real error on `cause`, and every layer above this was reading
+ * `err.message` — so a five-minute headers timeout, a refused connection and a
+ * DNS failure all arrived in the log as the same three words. That cost an
+ * afternoon: the failure had to be identified by noticing that 300,783ms is
+ * suspiciously close to five minutes.
+ */
+function describeFetchError(err: any): string {
+  const base = String(err?.message || err || "unknown error");
+  const cause = err?.cause;
+  if (!cause) return base;
+  const code = cause.code ? ` [${cause.code}]` : "";
+  const detail = cause.message && cause.message !== base ? `: ${cause.message}` : "";
+  return `${base}${code}${detail}`;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -216,6 +273,8 @@ async function postChat(
   try {
     res = await fetch(NANO_GPT_CHAT_URL, {
     method: "POST",
+    // Lifts Node's 300s response cap; see `dispatcher` above.
+    ...(dispatcher ? { dispatcher } : {}),
     // Without this a stalled generation blocks a Codex indefinitely: the facets
     // are waited on together, so the slowest one sets the pace for all of them.
     //
@@ -262,8 +321,10 @@ async function postChat(
     }),
     });
   } catch (e: any) {
-    // A timeout or a dropped socket never reaches a status code.
-    report({ error: String(e?.message || e) });
+    // A timeout or a dropped socket never reaches a status code. The cause is
+    // recorded rather than the message, because the message is "fetch failed"
+    // for every one of them.
+    report({ error: describeFetchError(e) });
     throw e;
   }
 
