@@ -656,15 +656,29 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
                 <Section icon={<ExternalLink className="w-3 h-3" />} title="Sources consulted">
                   <div className="flex flex-col gap-1">
                     {(data.sources || []).slice(0, 6).map((s, i) => (
-                      <a
-                        key={`src-${i}`}
-                        href={s}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="text-xs text-zinc-500 hover:text-amber-400 transition truncate"
-                      >
-                        {s}
-                      </a>
+                      /*
+                       * A source is only a link when it is actually a URL.
+                       *
+                       * The research sometimes names its sources rather than
+                       * citing them — "GTA Wiki (Fandom): Grand Theft Auto V" —
+                       * and an <a href> on that resolves against this app's own
+                       * origin, so the Codex offered a row of links that all
+                       * 404ed on FauxLore itself. A named source is still worth
+                       * showing; it is just not clickable.
+                       */
+                      /^https?:\/\//i.test(String(s).trim()) ? (
+                        <a
+                          key={`src-${i}`}
+                          href={s}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="text-xs text-zinc-500 hover:text-amber-400 transition truncate"
+                        >
+                          {s}
+                        </a>
+                      ) : (
+                        <span key={`src-${i}`} className="text-xs text-zinc-600 truncate" title={s}>{s}</span>
+                      )
                     ))}
                   </div>
                 </Section>

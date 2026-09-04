@@ -625,7 +625,7 @@ function combinedShape(): string {
       .map((line, i) => (i === 0 ? `  ${line.trim()}` : `  ${line.slice(Number.isFinite(base) ? base : 0)}`))
       .join("\n");
   });
-  return `{\n  "identifiedAs": {"title": "", "year": 0, "creator": "who made it — studio, developer, author, publisher", "alsoKnownAs": [""], "coverage": "abundant | moderate | thin", "confidence": "high | medium | low"},\n  "sources": ["the pages you actually drew on"],\n  "sectionConfidence": {${FACETS.map((f) => `"${f}": "high | medium | low"`).join(", ")}},\n\n${inner.join(",\n\n")}\n}`;
+  return `{\n  "identifiedAs": {"title": "", "year": 0, "creator": "who made it — studio, developer, author, publisher", "alsoKnownAs": [""], "coverage": "abundant | moderate | thin", "confidence": "high | medium | low"},\n  "sources": ["the FULL URLs of the pages you actually drew on, starting with https:// — a title or a description is not a source"],\n  "sectionConfidence": {${FACETS.map((f) => `"${f}": "high | medium | low"`).join(", ")}},\n\n${inner.join(",\n\n")}\n}`;
 }
 
 /**

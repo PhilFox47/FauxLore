@@ -934,7 +934,11 @@ const PLACEHOLDER = [
   /^(none|n\/?a|unknown|unspecified|not applicable|nil|null|tbd|-{1,2}|—|\.)\s*[.!—–-]*$/i,
   /^not (specified|stated|mentioned|established|given|known|available|applicable|documented|described)\b/i,
   /^no (information|details?|data|sources?|record)\b/i,
-  /^none\s*[—–-]/i,
+  // "None — it is a standard, not a will", "None (self-funded)", "None (retired
+  // criminal; forced to work for the FIB)". A qualifier after the word does not
+  // stop it being an admission that the field is empty. "None of the crew trust
+  // him" survives, because "of" is not a bracket or a dash.
+  /^none\s*[—–\-({\[]/i,
 ];
 
 function isPlaceholder(value: string): boolean {
