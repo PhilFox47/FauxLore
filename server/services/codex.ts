@@ -191,6 +191,12 @@ export function isBareLabel(text: string): boolean {
   if (/[.!?…。！？]$/.test(text)) return false;
   if (/[→←↑↓~—-]$/.test(text)) return false;
   if (text === text.toUpperCase()) return false;
+  // Punctuation INSIDE the line means somebody is speaking, whatever the case of
+  // the words. "Bye, Felicia" is Title Case with no full stop and was being
+  // thrown out every boot as a glossary headword; the comma is the tell that it
+  // is a person addressing another person. Same for a colon, a dash or a
+  // question inside the line.
+  if (/[,;:!?—–]/.test(text.slice(0, -1))) return false;
 
   const significant = words.filter((w) => !MINOR_WORDS.has(w.toLowerCase().replace(/[^\w']/g, "")));
   if (significant.length < 2) return false;
@@ -215,6 +221,17 @@ export function isBareLabel(text: string): boolean {
  * other entry was marketing copy. An illustration copied into the record is not
  * a memory, it is the prompt talking to itself, so they are refused here as well
  * as forbidden there.
+ */
+/**
+ * OFF BY DEFAULT, and the reason matters.
+ *
+ * The examples in the brief were taken FROM the curated starter library, because
+ * they are the best lines in it — so blacklisting them blacklisted nine real
+ * entries, including "Wait for the trade.", "Togashi is on hiatus again." and
+ * "The bookmark has not moved since March.", which were being destroyed on every
+ * single boot. The guard is only correct against a model's fresh output, where
+ * an example arriving back is leakage; against the hand-written library it is
+ * deleting the good stuff.
  */
 const PROMPT_EXAMPLES = new Set([
   "the character creator took ninety minutes. the helmet covers the face.",
@@ -256,7 +273,10 @@ const OUTSIDE_THE_WORK = new RegExp(
   "i",
 );
 
-export function normalizeFlavorTexts(value: any): CodexFlavorText[] {
+export function normalizeFlavorTexts(
+  value: any,
+  opts: { rejectPromptExamples?: boolean } = {},
+): CodexFlavorText[] {
   if (!Array.isArray(value)) return [];
   const out: CodexFlavorText[] = [];
   const seen = new Set<string>();
@@ -284,7 +304,7 @@ export function normalizeFlavorTexts(value: any): CodexFlavorText[] {
 
     const key = text.toLowerCase();
     if (seen.has(key)) continue;
-    if (PROMPT_EXAMPLES.has(key)) {
+    if (opts.rejectPromptExamples && PROMPT_EXAMPLES.has(key)) {
       console.warn(`[codex] Dropped a flavor text copied from the prompt's own examples: "${text}"`);
       continue;
     }
@@ -895,6 +915,24 @@ export function depthGaps(data: CodexData): DepthGap[] {
 }
 
 /**
+ * What makes a parsed reply an actual dossier rather than merely valid JSON.
+ *
+ * `parseJsonLoose` scans for balanced brackets so it can recover an answer a
+ * model wrapped in prose, and that leniency has a failure mode: given a broken
+ * or empty document, the thing it recovers is whatever small balanced fragment
+ * happens to parse. A literal `{}` satisfies every structural check and contains
+ * nothing whatsoever — which is exactly what three real runs produced after
+ * twenty thousand output tokens apiece.
+ *
+ * So the shape is checked, not just the type. A real dossier has at least one of
+ * the things a dossier is made of.
+ */
+const DOSSIER_KEYS = [
+  "identifiedAs", "premise", "overview", "characters", "conflicts",
+  "antagonists", "locations", "factions", "terminology", "items", "artStyle", "flavorTexts",
+];
+
+/**
  * How the dossier pass searches.
  *
  * Deep retrieval runs its own iterative queries instead of one, and that is what
@@ -1083,7 +1121,18 @@ export function createCodexService({ db, onFlavorTexts }: {
         ` — one deep-search pass, typically three to six minutes.`,
       );
 
-      const raw = await nanoGenerateText(aiConfig, buildDossierPrompt(subject), {
+      /**
+       * ONE CALL, TRIED TWICE IF THE FIRST ANSWER IS UNUSABLE.
+       *
+       * Still one call in the sense that matters — there is no pipeline, no
+       * second stage, no other prompt. It is the same request repeated when the
+       * reply cannot be used at all, which measured at three failures in
+       * fourteen: every one of them came back as a literal `{}` after twenty to
+       * thirty-four thousand output tokens, and every one of them succeeded when
+       * it was run again by hand. Making the user notice and click is not a
+       * recovery strategy when the fix is to ask the same question twice.
+       */
+      const askForDossier = () => nanoGenerateText(aiConfig, buildDossierPrompt(subject), {
         temperature: 0.2,
         tier: "analytical",
         webSearch: true,
@@ -1130,41 +1179,60 @@ export function createCodexService({ db, onFlavorTexts }: {
         // it finish slowly beats losing all of it to the clock — and nothing is
         // written unless it succeeds, so a long wait costs only the wait.
         timeoutMs: 1_500_000,
+        /**
+         * Enough thinking to sort the search results out, not enough to spend
+         * the whole answer on it.
+         *
+         * Measured across fourteen real dossiers, reasoning was 48-80% of the
+         * output and averaged 68% — on one run 32,232 of 40,546 tokens were the
+         * model thinking. It is billed as output, it is most of the two-to-six
+         * minutes, and on the three runs that failed the model produced twenty
+         * thousand tokens of it and then wrote `{}`. This is an extraction and
+         * organisation task over material that has already been retrieved, not
+         * a puzzle, so it does not need to be pondered at length.
+         *
+         * "low" rather than "none" on purpose: some judgement is genuinely
+         * wanted here — which sources are about the right version of the work,
+         * which lines clear the memories bar — and that is exactly the kind of
+         * call that goes wrong with no thinking at all.
+         */
+        reasoningEffort: "low",
       });
 
-      const parsed = parseJsonLoose<any>(raw);
-      if (!parsed || typeof parsed !== "object") {
-        // Logged in full because there is no second pass to cover for it: if
-        // this ever fires, the reply itself is the only evidence of why.
-        console.error(`[codex] "${subject.title}" did not come back as JSON. Reply began: ${raw.slice(0, 400)}`);
-        throw new Error("The research did not come back as a JSON object.");
+      /**
+       * What a usable answer looks like, and why it is checked twice.
+       *
+       * A reply that parses is not the same as a reply that is a dossier: the
+       * lenient parser recovers a balanced fragment from a broken document, and
+       * `{}` satisfies every structural check while containing nothing at all.
+       */
+      const asDossier = (text: string): any | null => {
+        let doc: any = null;
+        try { doc = parseJsonLoose<any>(text); } catch { return null; }
+        if (!doc || typeof doc !== "object") return null;
+        return DOSSIER_KEYS.some((k) => doc[k] != null) ? doc : null;
+      };
+
+      let raw = await askForDossier();
+      let parsed = asDossier(raw);
+
+      if (!parsed) {
+        console.warn(
+          `[codex] "${subject.title}" came back unusable (${raw.length} chars, keys: ` +
+          `${(() => { try { return Object.keys(parseJsonLoose<any>(raw)).join(", ") || "(none)"; } catch { return "unparseable"; } })()}). ` +
+          `Asking once more.`,
+        );
+        raw = await askForDossier();
+        parsed = asDossier(raw);
       }
 
-      /**
-       * It parsed. That is not the same as it being a dossier.
-       *
-       * `parseJsonLoose` scans for balanced brackets so it can recover an answer
-       * a model wrapped in prose, and that leniency has a failure mode: given a
-       * document truncated part way through, the largest balanced thing in it is
-       * not the dossier but some complete object nested inside it. A cut-off
-       * Codex came back as a single character record — `{"name": …,
-       * "description": …}` — which is valid JSON, is an object, and passed every
-       * check above before being written to the database as a Codex containing
-       * nothing whatsoever.
-       *
-       * So the shape is checked, not just the type. A real dossier has at least
-       * one of the things a dossier is made of.
-       */
-      const DOSSIER_KEYS = [
-        "identifiedAs", "premise", "overview", "characters", "conflicts",
-        "antagonists", "locations", "factions", "terminology", "items", "artStyle", "flavorTexts",
-      ];
-      if (!DOSSIER_KEYS.some((k) => (parsed as any)[k] != null)) {
+      if (!parsed) {
+        // Logged in full because the reply itself is the only evidence of why,
+        // and by now it has failed twice.
         console.error(
-          `[codex] "${subject.title}" returned JSON that is not a dossier — keys: ${Object.keys(parsed).join(", ") || "(none)"}. ` +
-          `This usually means the reply was cut off. Reply began: ${raw.slice(0, 400)}`,
+          `[codex] "${subject.title}" came back unusable twice. Second reply began: ${raw.slice(0, 400)}`,
         );
-        throw new Error("The research came back as JSON, but not as a dossier — it was probably cut off.");
+        throw new Error("The research did not come back as a usable dossier, twice.");
       }
 
       const data: CodexData = { ...parsed };
@@ -1195,7 +1263,9 @@ export function createCodexService({ db, onFlavorTexts }: {
 
       // The one field shown to the user word for word, so the three-to-six rule
       // is enforced here rather than left to the prompt's good manners.
-      if (data.flavorTexts) data.flavorTexts = normalizeFlavorTexts(data.flavorTexts);
+      // The only place the prompt-example guard applies: this IS the model's
+      // fresh output, so an example coming back is leakage rather than library.
+      if (data.flavorTexts) data.flavorTexts = normalizeFlavorTexts(data.flavorTexts, { rejectPromptExamples: true });
 
       data.identifiedAs = identity;
       data.sources = identity.sources || [];
@@ -1208,12 +1278,27 @@ export function createCodexService({ db, onFlavorTexts }: {
         problem ? `Could not confirm this is the right work: ${problem}` : "",
       ].filter(Boolean).join(" ") || undefined;
 
-      // The dossier's overall confidence is the weakest thing in it, which is
-      // fair because `sectionConfidence` says where the weakness actually is.
+      /**
+       * The overall grade is what most of the dossier is, not its worst corner.
+       *
+       * It used to be the minimum, and with six sections that meant one weak one
+       * decided everything: across eleven real dossiers, nine came out "low",
+       * and in six of them the single dragging section was `things` — a list of
+       * objects being thin is not a reason to distrust the cast, the plot and
+       * the art style. A field that says "low" about everything says nothing,
+       * and `sectionConfidence` is right there to name the actual weak spot.
+       *
+       * So it is the majority now: "low" only when most of the dossier is, and
+       * a wrong identification still overrides everything, because if it is the
+       * wrong work then nothing else in here is about anything.
+       */
       const grades = Object.values(sectionConfidence).filter(Boolean) as string[];
+      const tally = (g: string) => grades.filter((x) => x === g).length;
       data.confidence = problem
         ? "low"
-        : grades.includes("low") ? "low" : grades.includes("medium") ? "medium" : "high";
+        : tally("low") > grades.length / 2 ? "low"
+        : tally("high") >= grades.length / 2 ? "high"
+        : "medium";
 
       // Reported rather than acted on. A short list is what the sources
       // supported, and chasing it costs another call and another chance to lose

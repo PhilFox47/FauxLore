@@ -304,6 +304,17 @@ EVERYDAY LIFE: the texture of it — what ordinary people do, eat, wear, believe
   },
   things: {
     brief: `The objects this work is associated with: things characters carry, wear, drive, treasure or fight over, and the ordinary props it is remembered for.
+
+THIS IS THE SECTION THAT COMES BACK EMPTIEST, AND IT IS ALMOST NEVER BECAUSE THE WORK HAS NO OBJECTS. Grand Theft Auto V returned two. A season of Supernatural returned three, from a show whose fans can name the car, the amulet, the Colt, the demon knife, the journal and the fake FBI badges. The mistake is looking only for treasures and legendary artefacts. Almost every work is full of objects; they are simply ordinary.
+
+So go looking deliberately, and in this order:
+- WHAT THE MAIN CHARACTERS CARRY OR WEAR EVERY DAY. A weapon, a coat, a phone, a badge, a ring, a pair of glasses, a hat. If a character is drawn or filmed with a thing on them, that thing is an entry.
+- WHAT THEY TRAVEL IN. Cars, ships, horses, bikes, a specific named vehicle. These are among the most recognisable objects any work has and they are missed constantly.
+- WHAT THE PLOT TURNS ON. The letter, the tape, the key, the photograph, the contract, the body, the thing everyone is looking for.
+- WHAT THE WORK SELLS OR IS PICTURED WITH. Whatever is on the cover, the poster, the merchandise, the icon. If it is on a T-shirt, it is an object worth recording.
+- THE FORMAT'S OWN FURNITURE. For a game: the currency, the healing item, the collectible, the signature weapon class, the vehicle you get first. For a show: the recurring set dressing, the props in the credits, the thing the presenters always use. For a book: what is described more than once.
+
+A work with genuinely no notable objects exists but is rare. If this list is coming out under about half a dozen entries for anything with a wiki, the search was for the wrong kind of thing — go back and look for the ordinary ones.
 For each one write a short paragraph covering:
 - plainly WHAT IT IS, in ordinary words. A sword is a sword; a cassette tape is a cassette tape; a laminated badge is a laminated badge.
 - what it LOOKS like and what it is made of — shape, materials, wear, markings, colour
@@ -705,5 +716,5 @@ ${combinedShape()}
 
 ${INTRODUCED}
 
-"coverage" is how much material actually exists about this work: "abundant" for something with a large wiki and years of coverage, "thin" for something recent, small or niche. "confidence" and each "sectionConfidence" entry rate how well-sourced that part genuinely is — be pessimistic, since a wrong "high" corrupts the record and a wrong "low" costs nothing.`;
+"coverage" is how much material actually exists about this work, AND IT DECIDES HOW MUCH THIS DOSSIER IS ASKED FOR, so judge it on what you actually found rather than on how obscure the title felt before you looked. "abundant" is the normal answer for anything with a dedicated wiki, a Wikipedia article of any length, reviews in the trade press, or an active community — that includes every mainstream film, game and television series. "moderate" is for something documented but lightly. Reserve "thin" for what it is really for: a small independent release, something very recent, a work with no wiki and almost nothing written about it. A flagship television series rated "thin" tells the rest of this brief to stop early, and the result is a short dossier about a work there was plenty to say about. "confidence" and each "sectionConfidence" entry rate how well-sourced that part genuinely is — be pessimistic, since a wrong "high" corrupts the record and a wrong "low" costs nothing.`;
 }
