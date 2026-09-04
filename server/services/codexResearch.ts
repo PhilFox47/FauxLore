@@ -742,7 +742,7 @@ ${spec.brief}${f === "craft" ? visualNote : ""}${extra}
 IF THIS IS NOT FICTION — a reality or competition show, a documentary, a podcast, a sporting competition — this section still applies, it just means real things: ${spec.nonFiction}`;
   }).join("\n\n");
 
-  return `${searchQueryLine(subject, identity || null, "characters plot setting factions lore quotes trivia art style reception")}
+  return `${searchQueryLine(subject, identity || null, "wiki characters plot setting factions lore art style reception reddit discussion fan reaction quotes memes")}
 
 You are the Codex Archivist of FauxLore. Research ONE work thoroughly and return ONE complete reference dossier on it.
 
@@ -782,6 +782,18 @@ An empty field is a correct answer. An invented one is the worst possible outcom
 Prefer what is documented — the official source, the creator's own statements, interviews, the wiki, contemporaneous coverage — over what is merely plausible. Where sources genuinely conflict, say so in the field rather than silently picking one. When the general web is thin, go where the work's actual audience is: ${NICHE_SOURCES[subject.mediaType] || "the communities, forums and wikis its own audience keeps"}.
 
 ${REFERENCE_NOT_TEMPLATE}
+
+=== WHERE TO RESEARCH ===
+
+TWO KINDS OF SOURCE, AND YOU NEED BOTH.
+
+THE RECORD, for what the work contains: its own wiki, Wikipedia, a fan wiki's character and location pages, a completion guide, a database entry, contemporaneous coverage. This is where the cast, the places, the vocabulary and the objects come from.
+
+THE AUDIENCE, for what the work is known BY: the subreddit and its most-upvoted threads, forum and Discourse posts, the comments under "best moments" videos, meme pages, the wiki's own quotes subpage, review threads on release day. This is where the memories come from and it is the half that keeps getting skipped.
+
+IF EVERY SOURCE YOU END UP WITH IS THE PUBLISHER'S OWN SITE, A PRESS RELEASE OR LAUNCH COVERAGE, YOU HAVE RESEARCHED THE ANNOUNCEMENT AND NOT THE WORK. That is a failed search, not a thin subject. A season of television that has actually aired has people arguing about it within hours — go and read them. A dossier sourced entirely to aboutamazon.co.uk and a press kit will describe what a show intends to be and nothing about what it turned out to be, and it will have no memories in it at all, because nobody quotes a press release.
+
+The exception is a work that genuinely has not come out yet. Then the announcement IS the record, and an empty memories list is correct.
 
 === HOW MUCH TO WRITE ===
 

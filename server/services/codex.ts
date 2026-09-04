@@ -1454,6 +1454,34 @@ export function createCodexService({ db, onFlavorTexts }: {
        */
       const cited = (data.sources || []).filter((s) => /^https?:\/\//i.test(String(s).trim()));
       const ungrounded = cited.length === 0;
+
+      /**
+       * Whether the research ever reached the people, or only the publisher.
+       *
+       * The Grand Tour's 2026 season came back with five sources — two Amazon
+       * newsrooms, the Prime Video store page, an Amazon MGM press release and
+       * one launch article — and no memories at all. That is not a season nobody
+       * is talking about; it released that morning and the subreddit was already
+       * arguing. The search went to the announcement and stopped.
+       *
+       * Neither signal is worth much alone. A work can legitimately have no
+       * community, and a dossier can legitimately have no memories. Together
+       * they say the half of the research where memories live never happened,
+       * which is a thing worth being told.
+       */
+      const COMMUNITY = /(reddit|fandom\.com|\.wiki|wiki\.|wikia|forum|neogaf|resetera|gamefaqs|steamcommunity|tvtropes|letterboxd|myanimelist|vndb|goodreads|youtube|tumblr|bsky|twitter|x\.com|discord|quora)/i;
+      const OFFICIAL = /(press\.|newsroom|aboutamazon|prnewswire|businesswire|\.press|primevideo\.com|store\.|press-release)/i;
+      const community = cited.filter((s) => COMMUNITY.test(String(s)));
+      const pressOnly = cited.length > 0 && community.length === 0 &&
+        cited.some((s) => OFFICIAL.test(String(s)));
+      const noMemories = !(data.flavorTexts || []).length;
+
+      if (pressOnly && noMemories) {
+        console.warn(
+          `[codex] "${subject.title}" has no memories and no community sources — the research reached the ` +
+          `announcement but never the audience. Sources: ${cited.map((s) => String(s).replace(/^https?:\/\//, "").split("/")[0]).join(", ")}`,
+        );
+      }
       if (ungrounded) {
         console.warn(
           `[codex] "${subject.title}" was written without any web sources — the search returned nothing usable. ` +
@@ -1466,6 +1494,9 @@ export function createCodexService({ db, onFlavorTexts }: {
         problem ? `Could not confirm this is the right work: ${problem}` : "",
         ungrounded
           ? "The search returned no usable sources, so this was written from the entry's own description and general knowledge. Expanding or redoing it later — once more has been published about the work — is likely to do better."
+          : "",
+        pressOnly && noMemories
+          ? "Every source here is official or press coverage, and no memories were found. Expanding may turn some up: the quotes and jokes live in community discussion rather than in an announcement."
           : "",
       ].filter(Boolean).join(" ") || undefined;
 
