@@ -10,6 +10,7 @@ import { AI_PERSONAS, getPersona, getPersonaDescription } from '../lib/personas'
 import { getProgressionContext, levelBudget, buildTitleSystemPrompt, buildMainTitlePrompt } from '../lib/lorekeeperTitles';
 import { UserManagement } from './UserManagement';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
+import { SEARCH_PROVIDERS, DEFAULT_SEARCH_PROVIDER, searchProviderById } from '../lib/searchProviders';
 import { creativeModel } from '../lib/aiModels';
 import { cn } from '../lib/utils';
 import {
@@ -53,6 +54,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     nanoGptCreativeModel: '',
     geminiApiKey: '',
     nanoGptProvider: '',
+    nanoGptSearchProvider: '',
     imageModel: 'z-image-turbo',
     imageSize: '1024x768',
     imageSteps: 10,
@@ -121,6 +123,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         nanoGptCreativeModel: settings.nanoGptCreativeModel || '',
         geminiApiKey: settings.geminiApiKey || '',
         nanoGptProvider: settings.nanoGptProvider || '',
+        nanoGptSearchProvider: settings.nanoGptSearchProvider || '',
         imageModel: settings.imageModel || 'z-image-turbo',
         imageSize: settings.imageSize || '1024x768',
         imageSteps: settings.imageSteps ?? 10,
@@ -178,7 +181,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             nanoGptCreativeModel: settings.nanoGptCreativeModel || '',
             geminiApiKey: settings.geminiApiKey || '',
             nanoGptProvider: settings.nanoGptProvider || '',
-        imageModel: settings.imageModel || 'z-image-turbo',
+            nanoGptSearchProvider: settings.nanoGptSearchProvider || '',
+            imageModel: settings.imageModel || 'z-image-turbo',
             imageSize: settings.imageSize || '1024x768',
             imageSteps: settings.imageSteps ?? 10,
             imageGuidance: settings.imageGuidance ?? 1.5,
@@ -538,6 +542,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         nanoGptWebModel: formData.nanoGptWebModel,
         nanoGptCreativeModel: formData.nanoGptCreativeModel,
         nanoGptProvider: formData.nanoGptProvider,
+        nanoGptSearchProvider: formData.nanoGptSearchProvider,
         geminiApiKey: formData.geminiApiKey,
         imageModel: formData.imageModel,
         imageSize: formData.imageSize,
@@ -1207,6 +1212,29 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       className="input-field" 
                       placeholder="..."
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Codex research depth</label>
+                    <select
+                      name="nanoGptSearchProvider"
+                      value={formData.nanoGptSearchProvider || DEFAULT_SEARCH_PROVIDER}
+                      onChange={handleChange}
+                      className="input-field"
+                    >
+                      {SEARCH_PROVIDERS.map((p) => (
+                        <option key={p.id} value={p.id}>{p.label} — {p.price}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-zinc-500 mt-1">
+                      {searchProviderById(formData.nanoGptSearchProvider).note}
+                    </p>
+                    <p className="text-[10px] text-zinc-500 mt-1">
+                      Which backend researches a Codex. <strong className="text-zinc-400">Every option here is a deep search</strong> — the
+                      standard, fast and instant modes are deliberately not offered, because a Codex is compiled once and read for the life of
+                      the entry by everything else, and a shallow pass is the difference between thirty-six sources and none. They differ in what
+                      they actually surface: Exa reaches forums and community pages the general crawlers miss, which is where memories live;
+                      Perplexity arrives pre-summarised. Which suits your library best is worth testing.
+                    </p>
                   </div>
                 </div>
 

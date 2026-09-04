@@ -49,6 +49,7 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
         title: media.title,
         mediaType: media.mediaType,
         force: !!(req.body || {}).force,
+        expand: !!(req.body || {}).expand,
       });
       if (!row) return res.status(400).json({ error: "AI is not configured. Add a Nano-GPT API key in Settings." });
       if (row.status === "failed") return res.status(502).json({ error: row.error || "Codex research failed." });
@@ -98,12 +99,12 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
       if (!userId) return;
       // Dormant accounts cost nothing: this call spends tokens.
       if (!activity.requireActive(userId as string, res)) return;
-      const { mediaId, title, mediaType, force } = req.body || {};
+      const { mediaId, title, mediaType, force, expand } = req.body || {};
       if (!mediaId && (!title || !mediaType)) {
         return res.status(400).json({ error: "A mediaId, or a title and mediaType, is required." });
       }
 
-      const row = await codex.ensureCodex(userId, { mediaId, title, mediaType, force: !!force });
+      const row = await codex.ensureCodex(userId, { mediaId, title, mediaType, force: !!force, expand: !!expand });
       if (!row) return res.status(400).json({ error: "AI is not configured. Add a Nano-GPT API key in Settings." });
       if (row.status === "failed") return res.status(502).json({ error: row.error || "Codex research failed." });
       res.json(withPromptBlock(row));

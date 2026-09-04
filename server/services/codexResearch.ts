@@ -656,7 +656,19 @@ function combinedShape(): string {
  * memories brief and got back exactly the weak, explained-instead-of-performed
  * lines that brief had been rewritten four times to prevent.
  */
-export function buildDossierPrompt(subject: CodexSubject, identity?: CodexIdentity | null): string {
+export function buildDossierPrompt(
+  subject: CodexSubject,
+  identity?: CodexIdentity | null,
+  /**
+   * What a previous pass already found, when this run is an expansion.
+   *
+   * Names only, never the whole dossier. A stored dossier is thirty kilobytes
+   * and pasting it back would double the prompt for no gain — what the model
+   * needs is not the old answer but the list of things it must not spend this
+   * pass rediscovering.
+   */
+  alreadyKnown?: string | null,
+): string {
   const title = identity?.title || subject.title;
   const year = identity?.year || subjectYear(subject);
   const aka = (identity?.alsoKnownAs || []).filter(Boolean).slice(0, 8);
@@ -689,6 +701,21 @@ THE WORK: "${title}"${year ? ` (${year})` : ""}${identity?.creator ? `, by ${ide
   }${versionScope(subject)}
 
 Everything this application later generates about this work — artwork, enemies, items, tags, recommendations — is written from this document and from nothing else. Nobody will check it afterwards.
+${alreadyKnown ? `
+=== THIS IS AN EXPANSION. A DOSSIER ALREADY EXISTS. ===
+
+Everything listed below has already been researched and recorded. YOUR JOB IS TO FIND WHAT IS MISSING FROM IT — not to write it again, and not to improve the wording of what is there.
+
+${alreadyKnown}
+
+HOW TO SPEND THIS PASS:
+- Go after the entries NOT in that list. The minor characters, the places named once, the vocabulary further down the wiki page, the objects nobody thinks to write down. That long tail is precisely what a first pass skims and what this pass exists for.
+- Returning an entry that is already listed wastes the slot. If you are unsure whether something is the same as an existing entry under a different name, include it and say so in its description — a duplicate is merged, a miss is lost.
+- Prose sections (the premise, the overview, the art style and so on) are ALREADY WRITTEN and will be kept. Return them only if you have something genuinely new to add; otherwise return them as empty strings and spend the effort on the lists.
+- Memories are the exception worth trying again on even if some exist: they are the hardest section and the most often thin. New ones are merged in alongside.
+
+The result is merged with what is already there, so nothing you leave out is lost.
+` : ""}
 
 === THE RULE THAT OUTRANKS EVERY OTHER ONE ===
 

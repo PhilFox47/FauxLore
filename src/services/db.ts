@@ -297,7 +297,13 @@ export const DatabaseService = {
    * entry that has not been saved yet (Auto Tag from the Add Media form) by
    * passing a title and type instead of an id.
    */
-  async ensureCodex(subject: { mediaId?: string; title?: string; mediaType?: string; force?: boolean }): Promise<MediaCodex> {
+  async ensureCodex(subject: {
+    mediaId?: string; title?: string; mediaType?: string;
+    /** Throw the dossier away and research from scratch. */
+    force?: boolean;
+    /** Research again and ADD to what is already there. */
+    expand?: boolean;
+  }): Promise<MediaCodex> {
     const res = await apiFetch('/api/codex/ensure', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

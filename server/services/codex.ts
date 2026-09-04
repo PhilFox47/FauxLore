@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
-import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
+import { getAiConfig, nanoGenerateText, parseJsonLoose, type AiConfig } from "../lib/ai";
+import { searchProviderById } from "../../src/lib/searchProviders";
 import {
   FACETS, FACET_FLOORS, TYPE_BRIEF,
   buildDossierPrompt,
@@ -968,6 +969,96 @@ export function stripPlaceholders<T>(value: T): T {
   return value;
 }
 
+/** Every list field a dossier carries, and what names its entries. */
+const LIST_FIELDS: { key: string; nameField: "name" | "term" | "text" }[] = [
+  { key: "characters", nameField: "name" },
+  { key: "antagonists", nameField: "name" },
+  { key: "locations", nameField: "name" },
+  { key: "factions", nameField: "name" },
+  { key: "items", nameField: "name" },
+  { key: "terminology", nameField: "term" },
+  { key: "flavorTexts", nameField: "text" },
+];
+
+/**
+ * A short inventory of what a dossier already contains, for an expansion pass.
+ *
+ * Names only. The stored dossier is thirty kilobytes and handing it back would
+ * double the prompt to tell the model things it is not being asked about — what
+ * it needs is the list of entries NOT to spend the pass rediscovering. Prose
+ * sections are reported as present or absent rather than quoted, for the same
+ * reason.
+ */
+export function summariseForExpansion(data: CodexData): string {
+  const lines: string[] = ["ALREADY ON FILE — do not return these again:"];
+
+  for (const { key, nameField } of LIST_FIELDS) {
+    const rows = list((data as any)[key]).filter(Boolean);
+    const names = rows.map((r: any) => String(r?.[nameField] ?? "").trim()).filter(Boolean);
+    if (names.length) lines.push(`  ${key} (${names.length}): ${names.join(" · ")}`);
+    else lines.push(`  ${key}: none yet — this one is wide open`);
+  }
+
+  const prose = ["premise", "overview", "setting", "tone", "structure", "distinctive",
+    "soundAndMusic", "audience", "production", "reception", "worldRules", "everydayLife"];
+  const written = prose.filter((k) => String((data as any)[k] || "").trim());
+  if (written.length) lines.push(`  written prose sections (keep as they are): ${written.join(", ")}`);
+  if ((data as any).artStyle?.form) lines.push(`  the visual identity is already recorded`);
+
+  return lines.join("\n");
+}
+
+/**
+ * Folds an expansion into the dossier it expanded, without losing anything.
+ *
+ * Strictly additive, because that is what the button promises. Entries are
+ * matched on their name case-insensitively and the existing one always wins —
+ * an expansion that describes Vaas differently is not a correction, it is a
+ * second opinion, and the user asked to add to this dossier rather than to
+ * re-roll it. Prose that is already written stays written; an empty field is
+ * fair game. Sources are unioned.
+ */
+export function mergeDossiers(existing: CodexData, addition: CodexData): CodexData {
+  const merged: any = { ...existing };
+
+  for (const { key, nameField } of LIST_FIELDS) {
+    const before = list((existing as any)[key]).filter(Boolean);
+    const incoming = list((addition as any)[key]).filter(Boolean);
+    if (!incoming.length) continue;
+
+    const seen = new Set(before.map((r: any) => String(r?.[nameField] ?? "").trim().toLowerCase()).filter(Boolean));
+    const added = incoming.filter((r: any) => {
+      const name = String(r?.[nameField] ?? "").trim().toLowerCase();
+      if (!name || seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    });
+    merged[key] = [...before, ...added];
+  }
+
+  // Anything scalar: only fills a gap, never overwrites an answer.
+  for (const [k, v] of Object.entries(addition as any)) {
+    if (LIST_FIELDS.some((f) => f.key === k)) continue;
+    if (k === "sources" || k === "sectionConfidence" || k === "identifiedAs") continue;
+    if (v === null || v === undefined || v === "") continue;
+    const current = (merged as any)[k];
+    if (current === null || current === undefined || current === "" ||
+        (Array.isArray(current) && current.length === 0)) {
+      merged[k] = v;
+    } else if (k === "artStyle" && current && typeof current === "object" && typeof v === "object") {
+      merged[k] = { ...(v as any), ...current };
+    }
+  }
+
+  const sources = new Set([...list(existing.sources), ...list(addition.sources)].map(String).filter(Boolean));
+  merged.sources = [...sources];
+
+  // The memories cap is a hard limit on what gets shown, so it is re-applied to
+  // the union rather than to either half.
+  if (merged.flavorTexts) merged.flavorTexts = normalizeFlavorTexts(merged.flavorTexts);
+  return merged as CodexData;
+}
+
 /**
  * What makes a parsed reply an actual dossier rather than merely valid JSON.
  *
@@ -991,10 +1082,7 @@ const DOSSIER_KEYS = [
  *
  * Deep retrieval runs its own iterative queries instead of one, and that is what
  * makes a single call viable: it returns the breadth six separate standard
- * searches were being spent to approximate, without six chances to fail. A deep
- * search is roughly ten times a standard one, so this costs about what seven
- * standard searches did — the same money, spent once, on one attempt that
- * finishes.
+ * searches were being spent to approximate, without six chances to fail.
  *
  * This is used for EVERY title, famous or obscure. There used to be a pass that
  * asked the model how much it already knew and skipped the search where it felt
@@ -1002,10 +1090,15 @@ const DOSSIER_KEYS = [
  * memory, which is how a game every model claims to know ended up with a hostage
  * described as a helicopter pilot.
  *
- * The provider is left unset, which means NanoGPT's default (Linkup, $0.06 for a
- * deep search). Setting it to "tavily" here cuts that to about $0.016.
+ * WHICH backend is a setting, because the crawlers genuinely differ in what they
+ * surface and which is best here is an empirical question. Every option is a
+ * deep one — see SEARCH_PROVIDERS — and an unset setting means Linkup deep,
+ * which is what every Codex built before the setting existed used.
  */
-const DOSSIER_SEARCH = { depth: "deep" as const };
+function dossierSearch(config: AiConfig) {
+  const chosen = searchProviderById(config.searchProvider);
+  return { provider: chosen.provider, depth: chosen.depth };
+}
 
 /** Codex storage plus the on-demand generation the AI features call into. */
 export function createCodexService({ db, onFlavorTexts }: {
@@ -1078,6 +1171,8 @@ export function createCodexService({ db, onFlavorTexts }: {
   async function generate(
     userId: string,
     subject: CodexSubject & { mediaId?: string | null },
+    /** Expand the dossier already on file instead of replacing it. */
+    expand = false,
   ): Promise<CodexRow | null> {
     const aiConfig = getAiConfig(db, userId);
     if (!aiConfig) return null;
@@ -1168,9 +1263,22 @@ export function createCodexService({ db, onFlavorTexts }: {
        * the write. If this call fails, nothing is written and the previous
        * dossier (if any) is kept untouched.
        */
+      /**
+       * The dossier being expanded, read before anything is overwritten.
+       *
+       * Only meaningful when there is one: expanding an entry with no Codex is
+       * simply generating it, which is what the button falls back to.
+       */
+      const priorRow: any = db.prepare("SELECT data FROM media_codex WHERE id = ?").get(id);
+      let prior: CodexData | null = null;
+      if (expand && priorRow?.data && priorRow.data !== "null") {
+        try { prior = JSON.parse(priorRow.data); } catch { prior = null; }
+      }
+      const alreadyKnown = prior ? summariseForExpansion(prior) : null;
+
       const season = subjectSeason(subject);
       console.log(
-        `[codex] Compiling the Codex for "${subject.title}"` +
+        `[codex] ${alreadyKnown ? "Expanding" : "Compiling"} the Codex for "${subject.title}"` +
         `${season ? ` season ${season}` : ""} (${subject.mediaType})` +
         ` — one deep-search pass, typically three to six minutes.`,
       );
@@ -1186,11 +1294,11 @@ export function createCodexService({ db, onFlavorTexts }: {
        * it was run again by hand. Making the user notice and click is not a
        * recovery strategy when the fix is to ask the same question twice.
        */
-      const askForDossier = () => nanoGenerateText(aiConfig, buildDossierPrompt(subject), {
+      const askForDossier = () => nanoGenerateText(aiConfig, buildDossierPrompt(subject, null, alreadyKnown), {
         temperature: 0.2,
         tier: "analytical",
         webSearch: true,
-        search: DOSSIER_SEARCH,
+        search: dossierSearch(aiConfig),
         json: true,
         scope: "codex",
         userId,
@@ -1277,7 +1385,21 @@ export function createCodexService({ db, onFlavorTexts }: {
        * those strings end up in the prompt block every other feature is built
        * from.
        */
-      const data: CodexData = stripPlaceholders({ ...parsed });
+      let data: CodexData = stripPlaceholders({ ...parsed });
+
+      /**
+       * An expansion adds; it never replaces.
+       *
+       * The merge is what makes the button safe to press repeatedly: a pass that
+       * comes back thinner than the dossier it was expanding cannot shrink it,
+       * and a pass that renames something cannot rewrite what is already there.
+       */
+      if (prior) {
+        const before = LIST_FIELDS.reduce((n, f) => n + list((prior as any)[f.key]).length, 0);
+        data = mergeDossiers(prior, data);
+        const after = LIST_FIELDS.reduce((n, f) => n + list((data as any)[f.key]).length, 0);
+        console.log(`[codex] Expansion added ${after - before} entr${after - before === 1 ? "y" : "ies"} to "${subject.title}" (${before} -> ${after}).`);
+      }
 
       const identity: CodexIdentity = {
         ...(parsed.identifiedAs && typeof parsed.identifiedAs === "object" ? parsed.identifiedAs : {}),
@@ -1391,7 +1513,12 @@ export function createCodexService({ db, onFlavorTexts }: {
    */
   async function ensureCodex(
     userId: string,
-    subject: { mediaId?: string | null; title?: string; mediaType?: string; year?: number | null; force?: boolean },
+    subject: {
+      mediaId?: string | null; title?: string; mediaType?: string; year?: number | null;
+      force?: boolean;
+      /** Research again and ADD to what is on file, rather than replacing it. */
+      expand?: boolean;
+    },
   ): Promise<CodexRow | null> {
     const mediaRow = resolveMedia(userId, subject.mediaId);
     const title = (subject.title || mediaRow?.title || "").trim();
@@ -1421,13 +1548,13 @@ export function createCodexService({ db, onFlavorTexts }: {
     const season = subjectSeason(full);
 
     const existing = getCodexRow(userId, { mediaId: subject.mediaId, title, mediaType, year, season });
-    if (existing && existing.status === "ready" && existing.data && !subject.force) return existing;
+    if (existing && existing.status === "ready" && existing.data && !subject.force && !subject.expand) return existing;
 
     const key = `${userId}:${codexTitleKey(title, mediaType, year, season)}`;
     const pending = inFlight.get(key);
-    if (pending && !subject.force) return pending;
+    if (pending && !subject.force && !subject.expand) return pending;
 
-    const run = generate(userId, full).finally(() => {
+    const run = generate(userId, full, !!subject.expand).finally(() => {
       if (inFlight.get(key) === run) inFlight.delete(key);
     });
     inFlight.set(key, run);

@@ -1,13 +1,23 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ScrollText, Sparkles, Palette, Users, Swords, Landmark, MapPin, Gem, BookOpen,
-  Loader2, RefreshCw, AlertTriangle, ExternalLink, Music, Library, Quote,
+  Loader2, RefreshCw, AlertTriangle, ExternalLink, Music, Library, Quote, Plus,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { CodexData, CodexEntity, CodexFlavorText, MediaCodex } from '../types/schema';
 import { DatabaseService } from '../services/db';
 import { cn } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
+
+/**
+ * How many researched entries a dossier holds, so an expansion can say what it
+ * actually added rather than just claiming success.
+ */
+function countEntries(data?: CodexData | null): number {
+  if (!data) return 0;
+  const lists = ['characters', 'antagonists', 'locations', 'factions', 'items', 'terminology', 'flavorTexts'];
+  return lists.reduce((n, k) => n + (Array.isArray((data as any)[k]) ? (data as any)[k].length : 0), 0);
+}
 
 /**
  * The Codex: what the app has researched about a title.
@@ -276,12 +286,35 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
     return () => { if (pollRef.current) clearTimeout(pollRef.current); };
   }, [codex, load]);
 
-  const compile = async (force: boolean) => {
+  /**
+   * The three ways to research a title, which are genuinely different things.
+   *
+   * "compile" is the first pass. "expand" keeps everything on file and goes
+   * looking for what is missing — the minor characters, the places named once,
+   * the vocabulary further down the wiki — so pressing it repeatedly can only
+   * add. "redo" throws the dossier away and starts again, which is what you
+   * want when the research landed on the wrong work or got something wrong.
+   */
+  const research = async (mode: 'compile' | 'expand' | 'redo') => {
     setIsCompiling(true);
     try {
-      const row = await DatabaseService.ensureCodex({ mediaId, title, mediaType, force });
+      const row = await DatabaseService.ensureCodex({
+        mediaId, title, mediaType,
+        force: mode === 'redo',
+        expand: mode === 'expand',
+      });
+      const added = mode === 'expand'
+        ? countEntries(row?.data) - countEntries(codex?.data)
+        : 0;
       setCodex(row);
-      toast.success(force ? 'The Codex has been re-researched.' : 'The Codex has been compiled.');
+      toast.success(
+        mode === 'redo' ? 'The Codex has been researched again from scratch.'
+          : mode === 'expand'
+            ? added > 0
+              ? `The Codex gained ${added} new entr${added === 1 ? 'y' : 'ies'}.`
+              : 'Nothing new turned up — the Codex is unchanged.'
+            : 'The Codex has been compiled.',
+      );
     } catch (e: any) {
       toast.error(e.message || 'Could not compile the Codex.');
       load();
@@ -319,15 +352,26 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
         <h3 className="text-sm font-bold text-zinc-500 tracking-wider uppercase flex items-center gap-2">
           <ScrollText className="w-4 h-4" /> Codex
         </h3>
-        {codex && (
-          <button
-            onClick={() => compile(true)}
-            disabled={isBusy}
-            className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition flex items-center gap-1.5 disabled:opacity-50"
-            title="Research this title again from scratch"
-          >
-            <RefreshCw className={isBusy ? 'w-3 h-3 animate-spin' : 'w-3 h-3'} /> Re-research
-          </button>
+        {codex?.status === 'ready' && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => research('expand')}
+              disabled={isBusy}
+              className="text-[10px] font-black uppercase tracking-widest text-amber-500/80 hover:text-amber-300 transition flex items-center gap-1.5 disabled:opacity-50"
+              title="Research again and add whatever is missing. Nothing already here is lost."
+            >
+              <Plus className={isBusy ? 'w-3 h-3 animate-spin' : 'w-3 h-3'} /> Expand
+            </button>
+            <span className="text-white/10">|</span>
+            <button
+              onClick={() => research('redo')}
+              disabled={isBusy}
+              className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition flex items-center gap-1.5 disabled:opacity-50"
+              title="Throw this dossier away and research the title from scratch"
+            >
+              <RefreshCw className={isBusy ? 'w-3 h-3 animate-spin' : 'w-3 h-3'} /> Redo
+            </button>
+          </div>
         )}
       </div>
 
@@ -341,7 +385,7 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
             piece of loot, and everything generated afterwards is built from it.
           </p>
           <button
-            onClick={() => compile(false)}
+            onClick={() => research('compile')}
             disabled={isCompiling}
             className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-xl text-sm font-bold transition inline-flex items-center gap-2 disabled:opacity-50"
           >
@@ -365,7 +409,7 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
           </div>
           {codex.error && <p className="text-xs text-red-200/70 mb-3 break-words">{codex.error}</p>}
           <button
-            onClick={() => compile(true)}
+            onClick={() => research('redo')}
             disabled={isCompiling}
             className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-200 rounded-lg text-xs font-bold transition inline-flex items-center gap-2 disabled:opacity-50"
           >

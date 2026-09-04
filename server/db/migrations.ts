@@ -132,6 +132,10 @@ export function runMigrations(db: Db) {
   // routes it, which is what every install did before this existed.
   try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptProvider TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN nanoGptProvider TEXT").run(); } catch (e) {}
+  // Which deep-search backend a Codex researches with. Empty means Linkup deep,
+  // which is what every Codex built before this setting existed used.
+  try { db.prepare("ALTER TABLE settings ADD COLUMN nanoGptSearchProvider TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE system_settings ADD COLUMN nanoGptSearchProvider TEXT").run(); } catch (e) {}
   // Time Travel: entries belonging to a chronological watch-through, kept off
   // the main dashboard so a dozen simultaneous series do not bury the handful
   // of things actually being worked through.

@@ -427,6 +427,8 @@ export interface Settings {
   // Image generation (system-wide; merged in from system_settings on the client)
   /** Optional upstream provider pin for text models. Empty = NanoGPT routes. */
   nanoGptProvider?: string;
+  /** Which deep-search backend compiles a Codex. See SEARCH_PROVIDERS. */
+  nanoGptSearchProvider?: string;
   imageModel?: string;
   imageSize?: string;
   imageSteps?: number;

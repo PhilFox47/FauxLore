@@ -1,5 +1,6 @@
 import type { Db } from "../context";
 import { Agent } from "undici";
+import { searchProviderById } from "../../src/lib/searchProviders";
 import { recordAiCall, recordAiCallStart, nextCallId, recordPayload } from "./diagnostics";
 
 /**
@@ -62,6 +63,8 @@ export interface AiConfig {
   provider?: string;
   webModel: string;
   creativeModel: string;
+  /** Which deep-search backend the Codex researches with. See SEARCH_PROVIDERS. */
+  searchProvider?: string;
 }
 
 /** Which job a call is doing, and therefore which model it should land on. */
@@ -69,7 +72,7 @@ export type AiTier = "analytical" | "creative";
 
 /** Reads the NanoGPT key/models for a user, falling back to the system-wide settings. */
 export function getAiConfig(db: Db, userId: string): AiConfig | null {
-  const cols = "nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider";
+  const cols = "nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, nanoGptSearchProvider";
   const userSettings: any = db
     .prepare(`SELECT ${cols} FROM settings WHERE userId = ?`)
     .get(userId);
@@ -95,14 +98,16 @@ export function getAiConfig(db: Db, userId: string): AiConfig | null {
   const provider = (userSettings?.nanoGptProvider || sysSettings?.nanoGptProvider || "").trim();
   const webModel = userSettings?.nanoGptWebModel || sysSettings?.nanoGptWebModel || model;
   const creativeModel = userSettings?.nanoGptCreativeModel || sysSettings?.nanoGptCreativeModel || model;
-  return { apiKey, model, webModel, creativeModel, provider };
+  const searchProvider = (userSettings?.nanoGptSearchProvider || sysSettings?.nanoGptSearchProvider || "").trim();
+  return { apiKey, model, webModel, creativeModel, provider, searchProvider };
 }
 
 export function resolveModel(
   config: AiConfig,
   webSearch: boolean,
   tier: AiTier = "analytical",
-  depth?: "standard" | "deep",
+  /** Whether to reach for a deep backend at all; WHICH one comes from the config. */
+  depth?: string,
 ): string {
   // Search wins over tier: a creative call that still needs to look something up
   // has to run on the model the search results are being injected into.
@@ -121,7 +126,11 @@ export function resolveModel(
      * it is not, so sending both means the request is deep either way instead of
      * silently degrading to a shallower search nobody asked for.
      */
-    return depth === "deep" ? `${base}:online/linkup-deep` : `${base}:online`;
+    // The chosen backend decides the suffix. Unset means Linkup deep, which is
+    // what every Codex before this setting existed was built with.
+    return depth && depth !== "standard"
+      ? `${base}:online/${searchProviderById(config.searchProvider).suffix}`
+      : `${base}:online`;
   }
   return (tier === "creative" ? config.creativeModel : config.model).trim();
 }
@@ -199,7 +208,13 @@ const MAX_ATTEMPTS = 3;
 export interface SearchOptions {
   /** linkup | tavily | brave | sofya | exa | kagi | perplexity | valyu. Empty leaves NanoGPT's default. */
   provider?: string;
-  depth?: "standard" | "deep";
+  /**
+   * A plain string rather than a union, because the providers do not agree on
+   * the vocabulary: most take "standard" or "deep", and Exa's deepest mode is
+   * called "deep-reasoning". Which values are valid is the provider's business,
+   * and SEARCH_PROVIDERS is where the correct pairings live.
+   */
+  depth?: string;
 }
 
 export interface GenerateOptions {

@@ -22,8 +22,8 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
 
       const settings = req.body;
       db.prepare(`
-        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, geminiApiKey, googleBooksApiKey, imageModel, imageSize, imageSteps, imageGuidance, imageNegativePrompt)
-        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @nanoGptProvider, @geminiApiKey, @googleBooksApiKey, @imageModel, @imageSize, @imageSteps, @imageGuidance, @imageNegativePrompt)
+        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, nanoGptSearchProvider, geminiApiKey, googleBooksApiKey, imageModel, imageSize, imageSteps, imageGuidance, imageNegativePrompt)
+        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @nanoGptProvider, @nanoGptSearchProvider, @geminiApiKey, @googleBooksApiKey, @imageModel, @imageSize, @imageSteps, @imageGuidance, @imageNegativePrompt)
         ON CONFLICT(id) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -33,6 +33,7 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
           nanoGptModel=excluded.nanoGptModel,
           nanoGptWebModel=excluded.nanoGptWebModel,
           nanoGptProvider=excluded.nanoGptProvider,
+          nanoGptSearchProvider=excluded.nanoGptSearchProvider,
           nanoGptCreativeModel=excluded.nanoGptCreativeModel,
           geminiApiKey=excluded.geminiApiKey,
           googleBooksApiKey=excluded.googleBooksApiKey,
