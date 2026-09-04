@@ -86,6 +86,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
         // Same rule as the model fields: a non-admin cannot change where their
         // requests are routed, they inherit whatever is already stored.
         nanoGptProvider: isAdmin ? (settings.nanoGptProvider || null) : (oldSettings?.nanoGptProvider || null),
+        nanoGptSearchProvider: isAdmin ? (settings.nanoGptSearchProvider || null) : (oldSettings?.nanoGptSearchProvider || null),
         geminiApiKey: isAdmin ? (settings.geminiApiKey || null) : (oldSettings?.geminiApiKey || null),
         googleBooksApiKey: isAdmin ? (settings.googleBooksApiKey || null) : (oldSettings?.googleBooksApiKey || null),
         timezone: settings.timezone || null,

@@ -51,6 +51,7 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
         nanoGptModel: settings.nanoGptModel || null,
         nanoGptWebModel: settings.nanoGptWebModel || null,
         nanoGptProvider: settings.nanoGptProvider || null,
+        nanoGptSearchProvider: settings.nanoGptSearchProvider || null,
         nanoGptCreativeModel: settings.nanoGptCreativeModel || null,
         geminiApiKey: settings.geminiApiKey || null,
         googleBooksApiKey: settings.googleBooksApiKey || null,
