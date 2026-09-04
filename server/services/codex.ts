@@ -1441,9 +1441,32 @@ export function createCodexService({ db, onFlavorTexts }: {
       data.releaseYear = Number(identity.year) || subjectYear(subject) || undefined;
       data.sectionConfidence = sectionConfidence;
       data.sectionSourcing = sectionSourcing;
+      /**
+       * Whether the research actually reached the web.
+       *
+       * A dossier written from the entry's own description looks exactly like a
+       * researched one, only shorter — and the only tell was buried in the
+       * sources, which listed "Entry text supplied with the research request"
+       * and "Background knowledge". That is a materially different document and
+       * it should say so on its face, because the answer to it is to try again
+       * or to wait until the work has been written about, and neither happens
+       * if nobody notices.
+       */
+      const cited = (data.sources || []).filter((s) => /^https?:\/\//i.test(String(s).trim()));
+      const ungrounded = cited.length === 0;
+      if (ungrounded) {
+        console.warn(
+          `[codex] "${subject.title}" was written without any web sources — the search returned nothing usable. ` +
+          `Sources given: ${(data.sources || []).map((s) => String(s).slice(0, 60)).join(" · ") || "(none)"}`,
+        );
+      }
+
       data.notes = [
         identity.notes,
         problem ? `Could not confirm this is the right work: ${problem}` : "",
+        ungrounded
+          ? "The search returned no usable sources, so this was written from the entry's own description and general knowledge. Expanding or redoing it later — once more has been published about the work — is likely to do better."
+          : "",
       ].filter(Boolean).join(" ") || undefined;
 
       /**
@@ -1462,7 +1485,7 @@ export function createCodexService({ db, onFlavorTexts }: {
        */
       const grades = Object.values(sectionConfidence).filter(Boolean) as string[];
       const tally = (g: string) => grades.filter((x) => x === g).length;
-      data.confidence = problem
+      data.confidence = problem || ungrounded
         ? "low"
         : tally("low") > grades.length / 2 ? "low"
         : tally("high") >= grades.length / 2 ? "high"
