@@ -249,7 +249,11 @@ const REFERENCE_NOT_TEMPLATE = `THIS IS A REFERENCE WORK, NOT A STOCK OF READY-M
  * Where a thing first turns up, so downstream features can be gated on how far
  * the user has actually got rather than on the entry as a whole.
  */
-const INTRODUCED = `"introducedAt" is where this first appears, in the work's own units ("episode 3", "chapter 12", "act 2", "the second route"). "introducedPct" is that as a rough 0-100 percentage of the way through. Both are optional: omit them rather than guessing.`;
+const INTRODUCED = `"introducedAt" is where this first appears, in the work's own units ("episode 3", "chapter 12", "act 2", "mission 14", "the second route"). "introducedPct" is that as a rough 0-100 percentage of the way through.
+
+FILL THESE IN WHENEVER THE WORK IS DIVIDED INTO PARTS. Measured across real dossiers they were present on barely a quarter of entries, and they are the only thing that lets this application avoid spoiling something the user has not reached yet — without them every feature has to assume the reader has finished. For anything episodic or chaptered this is a plain fact on any wiki: the episode a character debuts in, the chapter an object turns up in, the act a place is first seen. Look it up rather than leaving it blank, and derive the percentage from it — episode 3 of 10 is 30.
+
+The instruction to omit rather than guess still stands and still outranks this: a work with no divisions has nothing to record, and an invented episode number is worse than an empty field. But "I did not look" is not the same as "there is nothing to find".`;
 
 export const FACET_SPECS: Record<Facet, FacetSpec> = {
   cast: {
@@ -438,6 +442,8 @@ At most two may be about the format rather than the work. Mark those "scope": "m
 Extra rules for one: no proper nouns, no title, no character — it must still read true for someone who has never touched this work. And it must be a real habit of the format, not an observation you constructed to fill the slot; if nothing about this work points at one, return none, which is much the more common case.
 
 Report honestly on how much you actually found. A work with two real lines and nothing else is a normal result and saying so is more useful than padding. Never invent a quotation: it will be shown to the user as a real line from something they finished.
+
+BUT ZERO IS ALMOST NEVER THE HONEST ANSWER FOR SOMETHING WITH AN AUDIENCE. A flagship television series came back from this section with nothing at all, and Grand Theft Auto V — among the most quoted games ever made — came back with two. That is not a work without memories, that is a search that went to the encyclopedia instead of to the people. Anything with a fandom has a catchphrase, a running joke, a line on a T-shirt or a moment everybody brings up. Before concluding there is nothing, go and look at: the work's own wiki quotes page, the subreddit's most-upvoted threads, "best moments" and "most iconic" video titles and their top comments, and the meme databases. Empty is the right answer for something genuinely obscure with no community at all — and almost nothing else.
 
 Avoid anything that only lands if you know the ending, and avoid the crude and the sexual — these get printed above a library page.`,
     nonFiction: `the lines are the real ones: the presenter's catchphrase, the format's stock phrase, the commentator's famous call, the running joke about the show that its viewers all share. Not the name of a segment, a rule or a trophy — what people actually say about it.`,
@@ -698,6 +704,7 @@ ${REFERENCE_NOT_TEMPLATE}
 
 ${depthRule(identity?.coverage)}
 - Name things. Never write "various characters", "several locations" or "a rich world" — those are worth nothing to the reader of this dossier.
+- A FIELD YOU CANNOT FILL IS LEFT AS AN EMPTY STRING. Do not write "Unknown", "N/A", "Not specified in the sources", "None — …" or any other way of saying you found nothing. Everything here is read by programs that render these values into other prompts, so a faction whose emblem is the words "Not specified in the sources" becomes an instruction to draw that phrase. An empty field already means exactly what you are trying to say.
 - LENGTH IS NOT A PROBLEM. There is no budget to come in under and nothing to be gained by being brief. A long dossier on a work that supports one is the best possible outcome; the only thing worth trimming is repetition.
 - THE LENGTH COMES FROM MORE ENTRIES, NOT MORE WORDS PER ENTRY. That distinction is the whole rule. Every real character, place, faction, term and object that exists is worth adding, however minor — but three sentences restating what one sentence already said are worth nothing, and an entry you are not sure exists is worse than nothing, because it becomes permanent and everything downstream treats it as true.
 - So: as many entries as the work genuinely has, each described concretely and without padding. Stop when you run out of real material, not when the list looks long enough.

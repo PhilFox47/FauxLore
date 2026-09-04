@@ -915,6 +915,60 @@ export function depthGaps(data: CodexData): DepthGap[] {
 }
 
 /**
+ * A field the research filled in with a way of saying it found nothing.
+ *
+ * Measured across eight real dossiers: fifty-four of them. `symbol: "Not
+ * specified in the sources"`, `colors: "Not specified in the sources"`,
+ * `motivation: "None — it is a standard, not a will"`. Every one of those is
+ * rendered into the prompt block that enemies, loot and artwork are written
+ * from, so an image generator is being told the faction's emblem is the phrase
+ * "Not specified in the sources".
+ *
+ * An empty field already means "not found" and reads as nothing at all, which is
+ * exactly right. This is deliberately narrow: "No special combat skills; her
+ * power in the story is domestic and emotional" is a real answer that happens to
+ * begin with "No", and it must survive.
+ */
+const PLACEHOLDER = [
+  /^(none|n\/?a|unknown|unspecified|not applicable|nil|null|tbd|-{1,2}|—|\.)\s*[.!—–-]*$/i,
+  /^not (specified|stated|mentioned|established|given|known|available|applicable|documented|described)\b/i,
+  /^no (information|details?|data|sources?|record)\b/i,
+  /^none\s*[—–-]/i,
+];
+
+function isPlaceholder(value: string): boolean {
+  const v = value.trim();
+  return !!v && PLACEHOLDER.some((p) => p.test(v));
+}
+
+/**
+ * Strips those out, wherever they are, before the dossier is stored.
+ *
+ * Recursive because they turn up at every depth — on a character, inside
+ * `artStyle`, in a bare string field like `soundAndMusic`. Arrays lose the
+ * entries entirely; object fields become absent, which is what every consumer
+ * already handles.
+ */
+export function stripPlaceholders<T>(value: T): T {
+  if (typeof value === "string") return (isPlaceholder(value) ? "" : value) as any;
+  if (Array.isArray(value)) {
+    return value
+      .map((v) => stripPlaceholders(v))
+      .filter((v) => !(typeof v === "string" && v === "") && v !== null && v !== undefined) as any;
+  }
+  if (value && typeof value === "object") {
+    const out: any = {};
+    for (const [k, v] of Object.entries(value as any)) {
+      const cleaned = stripPlaceholders(v);
+      if (typeof cleaned === "string" && cleaned === "") continue;
+      out[k] = cleaned;
+    }
+    return out;
+  }
+  return value;
+}
+
+/**
  * What makes a parsed reply an actual dossier rather than merely valid JSON.
  *
  * `parseJsonLoose` scans for balanced brackets so it can recover an answer a
@@ -1179,24 +1233,6 @@ export function createCodexService({ db, onFlavorTexts }: {
         // it finish slowly beats losing all of it to the clock — and nothing is
         // written unless it succeeds, so a long wait costs only the wait.
         timeoutMs: 1_500_000,
-        /**
-         * Enough thinking to sort the search results out, not enough to spend
-         * the whole answer on it.
-         *
-         * Measured across fourteen real dossiers, reasoning was 48-80% of the
-         * output and averaged 68% — on one run 32,232 of 40,546 tokens were the
-         * model thinking. It is billed as output, it is most of the two-to-six
-         * minutes, and on the three runs that failed the model produced twenty
-         * thousand tokens of it and then wrote `{}`. This is an extraction and
-         * organisation task over material that has already been retrieved, not
-         * a puzzle, so it does not need to be pondered at length.
-         *
-         * "low" rather than "none" on purpose: some judgement is genuinely
-         * wanted here — which sources are about the right version of the work,
-         * which lines clear the memories bar — and that is exactly the kind of
-         * call that goes wrong with no thinking at all.
-         */
-        reasoningEffort: "low",
       });
 
       /**
@@ -1235,7 +1271,13 @@ export function createCodexService({ db, onFlavorTexts }: {
         throw new Error("The research did not come back as a usable dossier, twice.");
       }
 
-      const data: CodexData = { ...parsed };
+      /**
+       * Cleaned before anything reads it. See `stripPlaceholders`: the research
+       * writes "Not specified in the sources" into fields it could not fill, and
+       * those strings end up in the prompt block every other feature is built
+       * from.
+       */
+      const data: CodexData = stripPlaceholders({ ...parsed });
 
       const identity: CodexIdentity = {
         ...(parsed.identifiedAs && typeof parsed.identifiedAs === "object" ? parsed.identifiedAs : {}),
