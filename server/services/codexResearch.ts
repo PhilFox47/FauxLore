@@ -756,6 +756,12 @@ THE WORK: "${title}"${year ? ` (${year})` : ""}${identity?.creator ? `, by ${ide
     subject.description ? `\nTHE ENTRY SAYS: ${String(subject.description).slice(0, 400)}` : ""
   }${versionScope(subject)}${containerScope(subject)}
 
+THIS WORK HAS BEEN RELEASED. That is a guarantee, not an assumption: the application refuses to compile a Codex for anything unreleased, precisely so this brief can tell you so. It is out, people have seen it, and it has been written about somewhere.
+
+So do not hedge about whether it exists. Do not write "announced", "upcoming", "reportedly", "per the entry text" or "not documented in the available record" as a way of holding a released work at arm's length. If it came out this week the coverage is thin but the AUDIENCE is at its loudest — release-week threads, first-reaction posts and early discussion are the richest they will ever be, and that is exactly where the memories are. Recent is a reason to look harder at the community, not a reason to be tentative.
+
+The only honest hedge left is about a specific fact you could not find. That is what an empty field is for.
+
 Everything this application later generates about this work — artwork, enemies, items, tags, recommendations — is written from this document and from nothing else. Nobody will check it afterwards.
 ${alreadyKnown ? `
 === THIS IS AN EXPANSION. A DOSSIER ALREADY EXISTS. ===
@@ -793,7 +799,7 @@ THE AUDIENCE, for what the work is known BY: the subreddit and its most-upvoted 
 
 IF EVERY SOURCE YOU END UP WITH IS THE PUBLISHER'S OWN SITE, A PRESS RELEASE OR LAUNCH COVERAGE, YOU HAVE RESEARCHED THE ANNOUNCEMENT AND NOT THE WORK. That is a failed search, not a thin subject. A season of television that has actually aired has people arguing about it within hours — go and read them. A dossier sourced entirely to aboutamazon.co.uk and a press kit will describe what a show intends to be and nothing about what it turned out to be, and it will have no memories in it at all, because nobody quotes a press release.
 
-The exception is a work that genuinely has not come out yet. Then the announcement IS the record, and an empty memories list is correct.
+There is no "it is too new" exception. Nothing unreleased reaches this brief, so a press-only result always means the search stopped early — for a work that came out days ago the announcement is the EASIEST thing to find and the least worth having.
 
 === HOW MUCH TO WRITE ===
 

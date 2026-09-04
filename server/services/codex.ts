@@ -1608,6 +1608,30 @@ export function createCodexService({ db, onFlavorTexts }: {
     const existing = getCodexRow(userId, { mediaId: subject.mediaId, title, mediaType, year, season });
     if (existing && existing.status === "ready" && existing.data && !subject.force && !subject.expand) return existing;
 
+    /**
+     * Nothing unreleased is ever researched. This is the guarantee, not a
+     * preference.
+     *
+     * Adding an entry already parked one that had not come out, on the grounds
+     * that a Codex compiled from a marketing page is written once and read for
+     * the life of the entry. But the panel's own button went straight past that,
+     * so the rule held only until somebody pressed it.
+     *
+     * Making it absolute is what lets the brief tell the research the work IS
+     * out. Half the hedging in a recent dossier — "not documented in the
+     * available record", "announced", "per the entry text" — comes from a model
+     * unsure whether the thing exists yet, and that uncertainty is now ours to
+     * remove rather than its to carry.
+     */
+    if (String(mediaRow?.status || "").toLowerCase() === "unreleased") {
+      const err: any = new Error(
+        `"${title}" has not been released yet. A Codex is compiled on release, so that the research ` +
+        `describes the work rather than its marketing.`,
+      );
+      err.notYetReleased = true;
+      throw err;
+    }
+
     const key = `${userId}:${codexTitleKey(title, mediaType, year, season)}`;
     const pending = inFlight.get(key);
     if (pending && !subject.force && !subject.expand) return pending;
@@ -1626,7 +1650,14 @@ export function createCodexService({ db, onFlavorTexts }: {
   async function tryEnsureCodex(userId: string, subject: { mediaId?: string | null; title?: string; mediaType?: string }): Promise<CodexRow | null> {
     try {
       return await ensureCodex(userId, subject);
-    } catch (e) {
+    } catch (e: any) {
+      // An unreleased entry is a rule being enforced, not a fault. Everything
+      // downstream simply carries on without a Codex, which is what it does for
+      // any entry that has none.
+      if (e?.notYetReleased) {
+        console.log(`[codex] Skipped "${subject.title || subject.mediaId}" — it has not been released yet.`);
+        return null;
+      }
       console.error("Codex lookup failed", e);
       return null;
     }

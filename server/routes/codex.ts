@@ -31,6 +31,8 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
       });
       res.json(withPromptBlock(row));
     } catch (e: any) {
+      // A deliberate refusal, not a failure: 409 so the UI can tell them apart.
+      if (e?.notYetReleased) return res.status(409).json({ error: String(e.message), notYetReleased: true });
       res.status(500).json({ error: String(e?.message || e) });
     }
   });
@@ -55,6 +57,8 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
       if (row.status === "failed") return res.status(502).json({ error: row.error || "Codex research failed." });
       res.json(withPromptBlock(row));
     } catch (e: any) {
+      // A deliberate refusal, not a failure: 409 so the UI can tell them apart.
+      if (e?.notYetReleased) return res.status(409).json({ error: String(e.message), notYetReleased: true });
       res.status(500).json({ error: String(e?.message || e) });
     }
   });
@@ -89,6 +93,8 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
       }
       res.json(out);
     } catch (e: any) {
+      // A deliberate refusal, not a failure: 409 so the UI can tell them apart.
+      if (e?.notYetReleased) return res.status(409).json({ error: String(e.message), notYetReleased: true });
       res.status(500).json({ error: String(e?.message || e) });
     }
   });
@@ -109,6 +115,8 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
       if (row.status === "failed") return res.status(502).json({ error: row.error || "Codex research failed." });
       res.json(withPromptBlock(row));
     } catch (e: any) {
+      // A deliberate refusal, not a failure: 409 so the UI can tell them apart.
+      if (e?.notYetReleased) return res.status(409).json({ error: String(e.message), notYetReleased: true });
       res.status(500).json({ error: String(e?.message || e) });
     }
   });

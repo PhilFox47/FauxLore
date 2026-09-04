@@ -1010,7 +1010,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
           )}
 
           {/* What the app has researched about this title — and generates from */}
-          <MediaCodexPanel mediaId={item.id} title={item.title} mediaType={item.mediaType} year={item.year} season={item.season} />
+          <MediaCodexPanel mediaId={item.id} title={item.title} mediaType={item.mediaType} year={item.year} season={item.season} status={item.status} />
 
           {/* Enemies faced (World Bosses spawned from this media) */}
           {bossesForItem.length > 0 && (

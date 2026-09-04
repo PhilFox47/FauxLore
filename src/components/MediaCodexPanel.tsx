@@ -257,7 +257,7 @@ function IdentifiedAs({ data, mediaType, year, season }: { data: CodexData; medi
   );
 }
 
-export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { mediaId: string; title: string; mediaType: string; year?: number; season?: number }) {
+export function MediaCodexPanel({ mediaId, title, mediaType, year, season, status }: { mediaId: string; title: string; mediaType: string; year?: number; season?: number; status?: string }) {
   const toast = useToast();
   const [codex, setCodex] = useState<MediaCodex | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -327,6 +327,9 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
 
   const data = codex?.data;
   const isBusy = isCompiling || codex?.status === 'generating';
+  // The server refuses to research an unreleased entry, so the panel should not
+  // offer a button that is going to come back with a 409.
+  const isUnreleased = String(status || '').toLowerCase() === 'unreleased';
 
   // Sections the model wrote from memory rather than looking up. Worth saying
   // out loud: research is skipped where the model claimed to be sure, and on an
@@ -375,8 +378,20 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season }: { m
         )}
       </div>
 
+      {/* Not out yet: the Codex is compiled on release, deliberately. */}
+      {!codex && isUnreleased && (
+        <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-center">
+          <p className="text-sm text-zinc-400 mb-1">Not researched yet — this has not been released.</p>
+          <p className="text-xs text-zinc-600 max-w-md mx-auto">
+            A Codex is compiled once and read for the life of the entry by everything else in the app, so researching
+            an unreleased title would write a marketing page into the record permanently. It is compiled automatically
+            once the entry stops being Unreleased.
+          </p>
+        </div>
+      )}
+
       {/* Never researched yet */}
-      {!codex && (
+      {!codex && !isUnreleased && (
         <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-center">
           <p className="text-sm text-zinc-400 mb-1">No Codex on record for this title.</p>
           <p className="text-xs text-zinc-600 mb-4 max-w-md mx-auto">
