@@ -550,6 +550,38 @@ function depthRule(coverage?: string): string {
 }
 
 /**
+ * What to do when the entry names an index rather than a work.
+ *
+ * A reading order, a continuity guide, an omnibus, a box set, a chapter of a
+ * guide: the user is tracking the STORIES, and the container is only how they
+ * found them. Asked to research "Assemble — Pre-Modern Marvel Continuity Guide,
+ * Chapter 1", the research correctly established that continuityguide.net is a
+ * website with an unnamed author and a friendly opening line, and produced a
+ * dossier whose cast was "The Guide's Author" and whose central tension was
+ * whether to read chronologically. Every word of it was true and none of it was
+ * about comics.
+ *
+ * Deliberately not keyed on a keyword match in the title. The tell is a
+ * contradiction the model is far better placed to notice than a regex: the entry
+ * is filed as a Comic and the thing being described is a web page. So the rule
+ * is stated as a principle and anchored with the case that produced it.
+ */
+function containerScope(subject: CodexSubject): string {
+  const type = TYPE_QUERY_WORD[subject.mediaType] || subject.mediaType.toLowerCase();
+  return `
+
+=== IF THIS ENTRY NAMES A COLLECTION, A READING ORDER OR A GUIDE ===
+
+Somebody tracks what they READ, WATCH or PLAY. They never track the document that indexes it. So if the title, subtitle or franchise names a reading guide, a reading order, a continuity guide, an omnibus, a box set, a "complete collection", an anthology, a numbered chapter of a guide, or any other container — THE SUBJECT OF THIS DOSSIER IS WHAT IS INSIDE IT, not the container.
+
+"Assemble — Pre-Modern Marvel Continuity Guide, Chapter 1" is not a website. It is Marvel's comics from 1961 to 1968: the Fantastic Four, Spider-Man, the Hulk, Thor, Iron Man, the X-Men and the Avengers as they first appeared; Doctor Doom, Magneto and Loki; the Baxter Building and the Negative Zone; "It's clobberin' time" and "with great power there must also come great responsibility". A dossier describing that guide's author, its opening sentence and its advice on where to start has documented the index and skipped the library.
+
+So: work out what the container actually covers — which run, which years, which arc, which volumes — and describe THAT. Its characters, its conflicts, its places, its objects, its memories. Put the container and the range it covers in "identifiedAs.notes" so the scope is on record, and set "identifiedAs.title" to the material rather than to the guide.
+
+THE MEDIA TYPE SETTLES IT. This entry is filed as ${type}. If your research concludes the subject is a website, a wiki, a blog post, a reading order or a guide rather than ${type}, you have followed the index instead of the content — go back and describe the ${type} it points at. A short dossier about a guide is a failure even when every sentence in it is accurate.`;
+}
+
+/**
  * The block that pins the research to ONE version of a title.
  *
  * The failure it prevents is quiet and constant: asked about a season, an
@@ -593,8 +625,26 @@ export function searchQueryLine(subject: CodexSubject, identity: CodexIdentity |
   const season = subjectSeason(subject);
   const year = identity?.year || subjectYear(subject) || "";
   const edition = subjectEdition(subject);
+  /**
+   * The subtitle and franchise carry the disambiguation, and used to be dropped.
+   *
+   * An entry titled "Assemble" is unsearchable on its own; the same entry's
+   * subtitle said "Pre-Modern Marvel Continuity Guide - Chapter 1" and its
+   * franchise said "Marvel", and neither reached the query or the prompt. The
+   * research went looking for a 1961 comic called Assemble with nothing else to
+   * go on, which is exactly as hard as it sounds.
+   *
+   * Skipped when the subtitle merely repeats the season or edition the title
+   * already names, so a "Show - Season 2" entry does not say season twice.
+   */
+  const subtitle = String(subject.subtitle || "").trim();
+  const extra = subtitle && !season && !edition ? subtitle : "";
+  const franchise = (subject.franchises || []).filter(Boolean)[0] || "";
+
   const parts = [
     identity?.title || subject.title,
+    extra,
+    franchise && !new RegExp(franchise, "i").test(`${subject.title} ${extra}`) ? franchise : "",
     season ? `season ${season}` : "",
     edition || "",
     year ? String(year) : "",
@@ -696,9 +746,13 @@ You are the Codex Archivist of FauxLore. Research ONE work thoroughly and return
 
 THE WORK: "${title}"${year ? ` (${year})` : ""}${identity?.creator ? `, by ${identity.creator}` : ""} — ${TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`}.${
     aka.length ? `\nALSO KNOWN AS: ${aka.join(" · ")} — search under these too, especially the original-language title, where the detailed material usually is.` : ""
+  }${subject.subtitle ? `\nSUBTITLE ON THE ENTRY: ${subject.subtitle}` : ""}${
+    (subject.franchises || []).filter(Boolean).length
+      ? `\nFRANCHISE: ${(subject.franchises || []).filter(Boolean).slice(0, 4).join(", ")}`
+      : ""
   }${subject.creator && !identity?.creator ? `\nCREDITED TO: ${subject.creator}` : ""}${
     subject.description ? `\nTHE ENTRY SAYS: ${String(subject.description).slice(0, 400)}` : ""
-  }${versionScope(subject)}
+  }${versionScope(subject)}${containerScope(subject)}
 
 Everything this application later generates about this work — artwork, enemies, items, tags, recommendations — is written from this document and from nothing else. Nobody will check it afterwards.
 ${alreadyKnown ? `
