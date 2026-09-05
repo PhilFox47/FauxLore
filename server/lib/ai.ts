@@ -1,6 +1,6 @@
 import type { Db } from "../context";
 import { Agent } from "undici";
-import { searchProviderById, SEARCH_PROVIDERS } from "../../src/lib/searchProviders";
+import { searchProviderById, searchProviderByProviderAndDepth } from "../../src/lib/searchProviders";
 import { recordAiCall, recordAiCallStart, nextCallId, recordPayload } from "./diagnostics";
 
 /**
@@ -137,7 +137,7 @@ export function resolveModel(
      * defeats the fallback outright.
      */
     const matched = search.provider
-      ? SEARCH_PROVIDERS.find((p) => p.provider === search.provider && p.depth === search.depth)
+      ? searchProviderByProviderAndDepth(search.provider, search.depth)
       : undefined;
     const chosen = matched || searchProviderById(config.searchProvider);
     return `${base}:online/${chosen.suffix}`;

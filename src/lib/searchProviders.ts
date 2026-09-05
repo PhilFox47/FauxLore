@@ -31,15 +31,25 @@ export interface SearchProviderOption {
   price: string;
   note: string;
   /**
-   * A steadier backend to fall back to when this one comes back having
-   * retrieved nothing.
+   * Where to go when this backend comes back having retrieved nothing.
    *
-   * Only "exa-deep-reasoning" has one. It is Exa's most exotic mode — it
-   * reasons between queries rather than firing them all at once — and it is
-   * the one mode observed retrieving zero tokens twice in a row for the same
-   * title that a plainer deep search on the same provider, same day, handled
-   * fine (thirty-six thousand tokens for a different entry). That is a
-   * reliability trait of the mode, not of Exa, so the fallback stays on Exa.
+   * The first version of this pointed `exa-deep-reasoning` at `exa-deep` — the
+   * theory being that the exotic mode was the unreliable part. That theory is
+   * now disproven: for a season that released one day earlier, `exa-deep`
+   * failed exactly the same way `exa-deep-reasoning` had, zero tokens injected
+   * both times, while the SAME setting had returned thirty-six thousand tokens
+   * for a different, long-established title on the same day. That is not a
+   * mode being flaky, it is a provider's index not having a brand-new release
+   * covered yet, and staying inside that provider's other mode does nothing
+   * about it.
+   *
+   * So every backend except Linkup itself now falls back to Linkup, which is
+   * documented as NanoGPT's own default and behaves the most like an ordinary
+   * search engine rather than a curated or neural index — the kind of backend
+   * likeliest to have crawled a page from yesterday. This is inferred from one
+   * observed failure, not confirmed against every provider, and it only ever
+   * fires after a real, already-measured failure, so the cost of being wrong
+   * about it is small: one more attempt, not a worse one.
    */
   fallback?: string;
 }
@@ -62,6 +72,7 @@ export const SEARCH_PROVIDERS: SearchProviderOption[] = [
     depth: "deep",
     price: "$0.016",
     note: "A general crawler at about a quarter of Linkup's price.",
+    fallback: "linkup-deep",
   },
   {
     id: "exa-deep",
@@ -71,6 +82,7 @@ export const SEARCH_PROVIDERS: SearchProviderOption[] = [
     depth: "deep",
     price: "$0.005 + $0.001/page",
     note: "Neural retrieval. Reaches forums and community pages the general crawlers miss.",
+    fallback: "linkup-deep",
   },
   {
     id: "exa-deep-reasoning",
@@ -80,7 +92,7 @@ export const SEARCH_PROVIDERS: SearchProviderOption[] = [
     depth: "deep-reasoning",
     price: "$0.005 + $0.001/page",
     note: "Exa's deepest mode: it reasons about what to look for next between queries.",
-    fallback: "exa-deep",
+    fallback: "linkup-deep",
   },
   {
     id: "perplexity-deep",
@@ -90,6 +102,7 @@ export const SEARCH_PROVIDERS: SearchProviderOption[] = [
     depth: "deep",
     price: "$0.005",
     note: "Arrives already summarised, which can help or can flatten the detail.",
+    fallback: "linkup-deep",
   },
   {
     id: "brave-deep",
@@ -99,6 +112,7 @@ export const SEARCH_PROVIDERS: SearchProviderOption[] = [
     depth: "deep",
     price: "$0.005",
     note: "Brave's own index rather than a re-crawl of somebody else's.",
+    fallback: "linkup-deep",
   },
   {
     id: "valyu-deep",
@@ -108,6 +122,7 @@ export const SEARCH_PROVIDERS: SearchProviderOption[] = [
     depth: "deep",
     price: "~$0.0015/result",
     note: "Priced per result, so the cost moves with how much it finds.",
+    fallback: "linkup-deep",
   },
   {
     id: "kagi-search",
@@ -117,6 +132,7 @@ export const SEARCH_PROVIDERS: SearchProviderOption[] = [
     depth: "deep",
     price: "$0.025",
     note: "Kagi's full search tier. The only one of its modes that is deep.",
+    fallback: "linkup-deep",
   },
 ];
 
@@ -126,4 +142,16 @@ export const DEFAULT_SEARCH_PROVIDER = "linkup-deep";
 export function searchProviderById(id?: string | null): SearchProviderOption {
   const found = SEARCH_PROVIDERS.find((p) => p.id === (id || "").trim());
   return found || SEARCH_PROVIDERS[0];
+}
+
+/**
+ * The reverse lookup: given the provider+depth a request actually sent, which
+ * of these options was that.
+ *
+ * Used wherever a caller has the raw `{ provider, depth }` pair a call was made
+ * with — the retry logic, the model-suffix resolver — and needs to get back to
+ * the option that describes it, to read its label or its own `fallback`.
+ */
+export function searchProviderByProviderAndDepth(provider: string, depth: string): SearchProviderOption | undefined {
+  return SEARCH_PROVIDERS.find((p) => p.provider === provider && p.depth === depth);
 }

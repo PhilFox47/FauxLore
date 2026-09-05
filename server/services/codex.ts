@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose, type AiConfig } from "../lib/ai";
-import { searchProviderById } from "../../src/lib/searchProviders";
+import { searchProviderById, searchProviderByProviderAndDepth } from "../../src/lib/searchProviders";
 import {
   FACETS, FACET_FLOORS, TYPE_BRIEF,
   buildDossierPrompt,
@@ -1511,9 +1511,31 @@ export function createCodexService({ db, onFlavorTexts }: {
 
         if (emptySections.length > 0 || tooFewMemories) {
           const gaps = [...emptySections, tooFewMemories ? "memories" : ""].filter(Boolean).join(", ");
+
+          /**
+           * Do not send the follow-up back to a backend that has already been
+           * measured retrieving nothing.
+           *
+           * `finalSearchUsed` is whichever attempt actually produced `data` —
+           * which, when `noRetrievalOnFinalAttempt` is true, is exactly the one
+           * that got zero tokens back. Asking it the same kind of question again
+           * inherits the same problem the primary retry already exists to route
+           * around, so this reaches for that backend's OWN fallback instead, one
+           * hop further along the same chain rather than back to the start.
+           */
+          let followUpSearch = finalSearchUsed;
+          if (noRetrievalOnFinalAttempt) {
+            const used = searchProviderByProviderAndDepth(finalSearchUsed.provider, finalSearchUsed.depth);
+            if (used?.fallback) {
+              const next = searchProviderById(used.fallback);
+              console.log(`[codex] "${subject.title}" — the follow-up will try ${next.label} instead of repeating a backend that retrieved nothing.`);
+              followUpSearch = { provider: next.provider, depth: next.depth };
+            }
+          }
+
           console.log(`[codex] "${subject.title}" has gaps after research (${gaps}); trying one automatic follow-up.`);
           try {
-            const followUpRaw = await askForDossier(finalSearchUsed, summariseForExpansion(data));
+            const followUpRaw = await askForDossier(followUpSearch, summariseForExpansion(data));
             const followUpParsed = asDossier(followUpRaw);
             if (followUpParsed) {
               const before = LIST_FIELDS.reduce((n, f) => n + list((data as any)[f.key]).length, 0);
