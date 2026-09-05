@@ -1,6 +1,6 @@
 import type { Db } from "../context";
 import { Agent } from "undici";
-import { searchProviderById } from "../../src/lib/searchProviders";
+import { searchProviderById, SEARCH_PROVIDERS } from "../../src/lib/searchProviders";
 import { recordAiCall, recordAiCallStart, nextCallId, recordPayload } from "./diagnostics";
 
 /**
@@ -106,8 +106,8 @@ export function resolveModel(
   config: AiConfig,
   webSearch: boolean,
   tier: AiTier = "analytical",
-  /** Whether to reach for a deep backend at all; WHICH one comes from the config. */
-  depth?: string,
+  /** The actual search options THIS call is making, not the account default. */
+  search?: SearchOptions,
 ): string {
   // Search wins over tier: a creative call that still needs to look something up
   // has to run on the model the search results are being injected into.
@@ -115,6 +115,7 @@ export function resolveModel(
     const base = config.webModel.trim();
     // Don't double-suffix if the configured name already opts in.
     if (/:online\b/.test(base)) return base;
+    if (!search?.depth || search.depth === "standard") return `${base}:online`;
     /**
      * The depth goes on the model name as well as in the request body.
      *
@@ -125,12 +126,21 @@ export function resolveModel(
      * taking precedence when it is honoured, and the suffix is what happens when
      * it is not, so sending both means the request is deep either way instead of
      * silently degrading to a shallower search nobody asked for.
+     *
+     * THE MATCH IS ON `search`, NOT ON THE ACCOUNT DEFAULT. This used to look up
+     * the suffix from `config.searchProvider` regardless of what was actually
+     * being asked for, so a caller that deliberately picked a DIFFERENT backend
+     * for one call — the whole point of a retry that switches to a fallback
+     * after the primary one retrieved nothing — got a request whose body asked
+     * for the fallback and whose model suffix still named the one that had just
+     * failed. Whichever the provider actually honours, sending a mismatched pair
+     * defeats the fallback outright.
      */
-    // The chosen backend decides the suffix. Unset means Linkup deep, which is
-    // what every Codex before this setting existed was built with.
-    return depth && depth !== "standard"
-      ? `${base}:online/${searchProviderById(config.searchProvider).suffix}`
-      : `${base}:online`;
+    const matched = search.provider
+      ? SEARCH_PROVIDERS.find((p) => p.provider === search.provider && p.depth === search.depth)
+      : undefined;
+    const chosen = matched || searchProviderById(config.searchProvider);
+    return `${base}:online/${chosen.suffix}`;
   }
   return (tier === "creative" ? config.creativeModel : config.model).trim();
 }
@@ -279,6 +289,18 @@ export interface GenerateOptions {
    * sending it twice was meant to prevent.
    */
   searchBody?: boolean;
+  /**
+   * Told how much of the search actually landed, once the call succeeds.
+   *
+   * Added after a dossier came back thin twice in a row for The Grand Tour, and
+   * the only way to find out why was to export the raw log and manually subtract
+   * token counts by hand: `injectedTokens` was 0 on both attempts, meaning the
+   * deep search retrieved nothing at all — not "found only official sources",
+   * actually nothing. A caller that can see this number can react to it (retry
+   * with a different depth, say so on the record) instead of every future
+   * instance of this needing the same manual arithmetic again.
+   */
+  onUsage?: (usage: { promptTokens?: number; completionTokens?: number; reasoningTokens?: number; injectedTokens?: number; finishReason?: string }) => void;
 }
 
 /**
@@ -337,7 +359,7 @@ async function postChat(
   opts: GenerateOptions,
   attempt = 1,
 ): Promise<string> {
-  const model = resolveModel(config, !!opts.webSearch, opts.tier, opts.search?.depth);
+  const model = resolveModel(config, !!opts.webSearch, opts.tier, opts.search);
   const promptChars = messages.reduce((n, m) => n + m.content.length, 0);
   const startedAt = Date.now();
   const callId = nextCallId();
@@ -410,7 +432,7 @@ async function postChat(
       ...(config.provider ? { "X-Provider": config.provider } : {}),
     },
     body: JSON.stringify({
-      model: resolveModel(config, !!opts.webSearch, opts.tier, opts.search?.depth),
+      model: resolveModel(config, !!opts.webSearch, opts.tier, opts.search),
       temperature: opts.temperature ?? 0.9,
       messages,
       // The documented body form of the search controls. It takes precedence
@@ -518,6 +540,14 @@ async function postChat(
     finishReason: finishReason || undefined,
     injectedTokens: promptTokens ? Math.max(0, promptTokens - ownPromptTokens) : undefined,
     error: truncated ? "truncated (finish_reason=length)" : text ? undefined : "empty reply",
+  });
+
+  opts.onUsage?.({
+    promptTokens,
+    completionTokens: Number(usage?.completion_tokens) || undefined,
+    reasoningTokens: Number(usage?.completion_tokens_details?.reasoning_tokens) || undefined,
+    injectedTokens: promptTokens ? Math.max(0, promptTokens - ownPromptTokens) : undefined,
+    finishReason: finishReason || undefined,
   });
 
   recordPayload(callId, opts.scope, { reply: text });

@@ -30,6 +30,18 @@ export interface SearchProviderOption {
   /** Roughly what one search costs, for the person choosing. */
   price: string;
   note: string;
+  /**
+   * A steadier backend to fall back to when this one comes back having
+   * retrieved nothing.
+   *
+   * Only "exa-deep-reasoning" has one. It is Exa's most exotic mode — it
+   * reasons between queries rather than firing them all at once — and it is
+   * the one mode observed retrieving zero tokens twice in a row for the same
+   * title that a plainer deep search on the same provider, same day, handled
+   * fine (thirty-six thousand tokens for a different entry). That is a
+   * reliability trait of the mode, not of Exa, so the fallback stays on Exa.
+   */
+  fallback?: string;
 }
 
 export const SEARCH_PROVIDERS: SearchProviderOption[] = [
@@ -68,6 +80,7 @@ export const SEARCH_PROVIDERS: SearchProviderOption[] = [
     depth: "deep-reasoning",
     price: "$0.005 + $0.001/page",
     note: "Exa's deepest mode: it reasons about what to look for next between queries.",
+    fallback: "exa-deep",
   },
   {
     id: "perplexity-deep",

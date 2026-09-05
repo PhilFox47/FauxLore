@@ -1104,6 +1104,22 @@ function dossierSearch(config: AiConfig) {
   return { provider: chosen.provider, depth: chosen.depth };
 }
 
+/**
+ * How little search context counts as "nothing came back."
+ *
+ * Every dossier that visibly worked injected tens of thousands of tokens —
+ * 29,787 on the thinnest of them. The Grand Tour's 2026 season injected exactly
+ * ZERO on two consecutive attempts: `promptTokens` came back lower than this
+ * app's own prompt is estimated at, twice, on `exa-deep-reasoning` specifically.
+ * That mode is documented as reasoning between its own searches rather than
+ * injecting retrieved pages the ordinary way, so it is plausible some of that
+ * work happened inside the 27,000 and 13,000 reasoning tokens those two calls
+ * spent — this is read from the numbers, not confirmed against the provider,
+ * and stated that way rather than as certainty. Whatever the mechanism, zero
+ * visible context is zero visible context, and worth reacting to either way.
+ */
+const NO_RETRIEVAL_THRESHOLD = 500;
+
 /** Codex storage plus the on-demand generation the AI features call into. */
 export function createCodexService({ db, onFlavorTexts }: {
   db: Db;
@@ -1288,7 +1304,7 @@ export function createCodexService({ db, onFlavorTexts }: {
       );
 
       /**
-       * ONE CALL, TRIED TWICE IF THE FIRST ANSWER IS UNUSABLE.
+       * ONE CALL, TRIED TWICE IF THE FIRST ANSWER IS UNUSABLE OR UNGROUNDED.
        *
        * Still one call in the sense that matters — there is no pipeline, no
        * second stage, no other prompt. It is the same request repeated when the
@@ -1297,15 +1313,25 @@ export function createCodexService({ db, onFlavorTexts }: {
        * thirty-four thousand output tokens, and every one of them succeeded when
        * it was run again by hand. Making the user notice and click is not a
        * recovery strategy when the fix is to ask the same question twice.
+       *
+       * The retry now also fires when the first attempt injected nothing at all
+       * (see NO_RETRIEVAL_THRESHOLD), and in that case it does not repeat the
+       * same request: it switches to the configured `fallback` backend, if the
+       * chosen one has one. Repeating the exact call that just retrieved zero
+       * tokens has no reason to retrieve any the second time.
        */
-      const askForDossier = () => nanoGenerateText(aiConfig, buildDossierPrompt(subject, null, alreadyKnown), {
+      const primaryProvider = searchProviderById(aiConfig.searchProvider);
+      let lastUsage: { injectedTokens?: number } | null = null;
+      const askForDossier = (search: { provider: string; depth: string }) =>
+        nanoGenerateText(aiConfig, buildDossierPrompt(subject, null, alreadyKnown), {
         temperature: 0.2,
         tier: "analytical",
         webSearch: true,
-        search: dossierSearch(aiConfig),
+        search,
         json: true,
         scope: "codex",
         userId,
+        onUsage: (u) => { lastUsage = u; },
         /**
          * Room to actually finish, with a lot to spare.
          *
@@ -1361,18 +1387,36 @@ export function createCodexService({ db, onFlavorTexts }: {
         return DOSSIER_KEYS.some((k) => doc[k] != null) ? doc : null;
       };
 
-      let raw = await askForDossier();
+      let raw = await askForDossier({ provider: primaryProvider.provider, depth: primaryProvider.depth });
       let parsed = asDossier(raw);
+      const firstUsage = lastUsage;
+      const firstHadNoRetrieval = !!firstUsage && (firstUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
 
-      if (!parsed) {
-        console.warn(
-          `[codex] "${subject.title}" came back unusable (${raw.length} chars, keys: ` +
-          `${(() => { try { return Object.keys(parseJsonLoose<any>(raw)).join(", ") || "(none)"; } catch { return "unparseable"; } })()}). ` +
-          `Asking once more.`,
-        );
-        raw = await askForDossier();
+      if (!parsed || firstHadNoRetrieval) {
+        const fallback = firstHadNoRetrieval ? primaryProvider.fallback : undefined;
+        const retryProvider = fallback ? searchProviderById(fallback) : primaryProvider;
+
+        if (!parsed) {
+          console.warn(
+            `[codex] "${subject.title}" came back unusable (${raw.length} chars, keys: ` +
+            `${(() => { try { return Object.keys(parseJsonLoose<any>(raw)).join(", ") || "(none)"; } catch { return "unparseable"; } })()}). ` +
+            `Asking once more${fallback ? ` with ${retryProvider.label} instead of ${primaryProvider.label}` : ""}.`,
+          );
+        } else {
+          console.warn(
+            `[codex] "${subject.title}" — ${primaryProvider.label} injected no search context at all ` +
+            `(reasoning spent ${(firstUsage as any)?.injectedTokens ?? 0} tokens on retrieval). ` +
+            `${fallback ? `Retrying with ${retryProvider.label}.` : "No fallback is configured for this backend; asking once more."}`,
+          );
+        }
+
+        raw = await askForDossier({ provider: retryProvider.provider, depth: retryProvider.depth });
         parsed = asDossier(raw);
       }
+
+      // Whether EITHER attempt actually got material back, for the record.
+      const secondHadNoRetrieval = !!lastUsage && (lastUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
+      const noRetrievalOnFinalAttempt = parsed ? secondHadNoRetrieval : firstHadNoRetrieval;
 
       if (!parsed) {
         // Logged in full because the reply itself is the only evidence of why,
@@ -1488,6 +1532,18 @@ export function createCodexService({ db, onFlavorTexts }: {
           `Sources given: ${(data.sources || []).map((s) => String(s).slice(0, 60)).join(" · ") || "(none)"}`,
         );
       }
+      if (noRetrievalOnFinalAttempt && !ungrounded) {
+        // Distinct from `ungrounded`: this dossier DOES cite real URLs, which
+        // means they came from the model's own memory rather than from anything
+        // the search actually returned to it — the search itself measured at
+        // zero. Worth telling apart from `pressOnly`, which assumes retrieval
+        // happened and simply favoured official sources; here there is no
+        // evidence retrieval happened at all.
+        console.warn(
+          `[codex] "${subject.title}" — even the retry's search injected no material (see NO_RETRIEVAL_THRESHOLD); ` +
+          `its sources are recalled rather than retrieved.`,
+        );
+      }
 
       data.notes = [
         identity.notes,
@@ -1495,7 +1551,10 @@ export function createCodexService({ db, onFlavorTexts }: {
         ungrounded
           ? "The search returned no usable sources, so this was written from the entry's own description and general knowledge. Expanding or redoing it later — once more has been published about the work — is likely to do better."
           : "",
-        pressOnly && noMemories
+        noRetrievalOnFinalAttempt && !ungrounded
+          ? "The web search itself did not inject any material into this research, even though it names sources — those came from what the model already knew rather than from anything it looked up. If this keeps happening on recent titles, a different search backend in Settings may fare better."
+          : "",
+        pressOnly && noMemories && !noRetrievalOnFinalAttempt
           ? "Every source here is official or press coverage, and no memories were found. Expanding may turn some up: the quotes and jokes live in community discussion rather than in an announcement."
           : "",
       ].filter(Boolean).join(" ") || undefined;
@@ -1516,7 +1575,7 @@ export function createCodexService({ db, onFlavorTexts }: {
        */
       const grades = Object.values(sectionConfidence).filter(Boolean) as string[];
       const tally = (g: string) => grades.filter((x) => x === g).length;
-      data.confidence = problem || ungrounded
+      data.confidence = problem || ungrounded || noRetrievalOnFinalAttempt
         ? "low"
         : tally("low") > grades.length / 2 ? "low"
         : tally("high") >= grades.length / 2 ? "high"
