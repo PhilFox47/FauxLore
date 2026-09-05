@@ -1600,6 +1600,20 @@ export function createCodexService({ db, onFlavorTexts }: {
        * Skipped when the identification itself is in doubt: spending a call to
        * fill gaps in a dossier about the wrong work only compounds the error.
        */
+      /**
+       * The follow-up's own view of how well-sourced the sections IT worked on
+       * turned out, kept separately from `parsed` because `parsed` is never
+       * reassigned here — only `data` is, by `mergeDossiers`. Without this, a
+       * facet the primary pass rated "low" because it came back empty keeps
+       * that rating in the saved dossier even after the follow-up fills it in
+       * and rates it "high" itself: measured on this exact title, "world" and
+       * "things" went from empty/low on the first pass to fully populated/high
+       * after the follow-up, and the saved confidence still read "low" for
+       * both, dragging the overall grade down to "medium" for a dossier that
+       * ended up with eighteen sources and every list field over its floor.
+       */
+      let followUpSectionConfidence: Record<string, string> | null = null;
+
       if (!problem) {
         const emptySections = LIST_FIELDS
           .filter((f) => f.key !== "flavorTexts")
@@ -1636,6 +1650,9 @@ export function createCodexService({ db, onFlavorTexts }: {
             const followUpRaw = await askForDossier(followUpSearch, summariseForExpansion(data));
             const followUpParsed = asDossier(followUpRaw);
             if (followUpParsed) {
+              if (followUpParsed.sectionConfidence && typeof followUpParsed.sectionConfidence === "object") {
+                followUpSectionConfidence = followUpParsed.sectionConfidence;
+              }
               const before = LIST_FIELDS.reduce((n, f) => n + list((data as any)[f.key]).length, 0);
               data = mergeDossiers(data, stripPlaceholders(followUpParsed));
               const after = LIST_FIELDS.reduce((n, f) => n + list((data as any)[f.key]).length, 0);
@@ -1660,9 +1677,31 @@ export function createCodexService({ db, onFlavorTexts }: {
        * worth more than one overall grade: it is where it admits which parts it
        * could not find much on.
        */
+      /**
+       * A facet's confidence can only go up from a follow-up that filled it in
+       * — never down, since the follow-up only ever ADDS to what is there
+       * (`mergeDossiers` never replaces an existing entry). Ranked rather than
+       * simply overwritten because the follow-up's own briefs only cover the
+       * facets that were actually gappy; a facet it left alone should keep the
+       * primary pass's rating, not lose it to an absent key.
+       */
+      const CONFIDENCE_RANK: Record<string, number> = { low: 1, medium: 2, high: 3 };
+      const betterGrade = (a?: string, b?: string): string | undefined =>
+        !a ? b : !b ? a : (CONFIDENCE_RANK[b] || 0) > (CONFIDENCE_RANK[a] || 0) ? b : a;
+
+      const primaryFacetConfidence: Record<string, string> =
+        parsed.sectionConfidence && typeof parsed.sectionConfidence === "object" ? parsed.sectionConfidence : {};
+      const mergedFacetConfidence: Record<string, string> = { ...primaryFacetConfidence };
+      if (followUpSectionConfidence) {
+        for (const [facet, grade] of Object.entries(followUpSectionConfidence)) {
+          const merged = betterGrade(mergedFacetConfidence[facet], grade);
+          if (merged) mergedFacetConfidence[facet] = merged;
+        }
+      }
+
       const sectionConfidence: CodexSectionConfidence = {
         identity: identity.confidence,
-        ...(parsed.sectionConfidence && typeof parsed.sectionConfidence === "object" ? parsed.sectionConfidence : {}),
+        ...mergedFacetConfidence,
       };
       const sectionSourcing: CodexSectionSourcing = {};
       for (const facet of FACETS) sectionSourcing[facet] = "searched";
