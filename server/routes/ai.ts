@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { getAiConfig } from "../lib/ai";
+import { recordAiCallStart, recordAiCall, nextCallId, recordPayload } from "../lib/diagnostics";
 
 export function registerAiRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, activity } = ctx;
@@ -74,7 +75,31 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
     }
   });
 
+  /**
+   * A raw passthrough, not a wrapper around `nanoGenerateText` — the frontend
+   * (recap titles, loot flavor text, the generic AI-text helpers under
+   * `nanoGptService.ts`) assembles its own OpenAI-shaped body and calls this
+   * directly, entirely bypassing `server/lib/ai.ts`. That is exactly why those
+   * calls were invisible to the Diagnostics panel: every start/end row it shows
+   * comes from `postChat`, which this route never touches. Logged here
+   * instead, on the same `ai` channel with the same start/end pairing, under
+   * `scope: "client"` so it reads distinctly from the server-initiated calls.
+   */
   app.post("/api/nano-gpt/chat/completions", async (req, res) => {
+    const callId = nextCallId();
+    const messages: { role?: string; content?: string }[] = Array.isArray(req.body?.messages) ? req.body.messages : [];
+    const promptChars = messages.reduce((n, m) => n + String(m?.content || "").length, 0);
+    const shape = {
+      callId,
+      model: String(req.body?.model || "?"),
+      scope: "client",
+      webSearch: !!req.body?.webSearch?.enabled || /:online\b/.test(String(req.body?.model || "")),
+      json: !!req.body?.response_format,
+      stream: !!req.body?.stream,
+      attempt: 1,
+      promptChars,
+    };
+    const startedAt = Date.now();
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
@@ -85,17 +110,51 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
          res.status(401).json({ error: "Missing API key" });
          return;
       }
+      recordAiCallStart({ ...shape, userId });
+      recordPayload(callId, "client", { prompt: messages.map((m) => `[${m?.role}]\n${m?.content}`).join("\n\n") });
+
       const remoteRes = await fetch("https://nano-gpt.com/api/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         body: JSON.stringify(req.body)
       });
       const text = await remoteRes.text();
+      recordPayload(callId, "client", { reply: text });
+
+      let usage: any, reply: any, finishReason: string | undefined;
+      try {
+        const parsed = JSON.parse(text);
+        usage = parsed?.usage;
+        reply = parsed?.choices?.[0]?.message?.content;
+        finishReason = parsed?.choices?.[0]?.finish_reason;
+      } catch { /* not JSON, or an error body — the payload capture above still has it */ }
+
+      const ownPromptTokens = Math.ceil(promptChars / 4);
+      recordAiCall({
+        ...shape,
+        userId,
+        durationMs: Date.now() - startedAt,
+        httpStatus: remoteRes.status,
+        promptTokens: usage?.prompt_tokens,
+        completionTokens: usage?.completion_tokens,
+        reasoningTokens: usage?.completion_tokens_details?.reasoning_tokens,
+        injectedTokens: usage?.prompt_tokens != null ? Math.max(0, usage.prompt_tokens - ownPromptTokens) : undefined,
+        finishReason,
+        error: !remoteRes.ok ? `HTTP ${remoteRes.status}` : (!reply ? "empty reply" : undefined),
+      });
+
       res.status(remoteRes.status).send(text);
-    } catch (e: any) { res.status(500).json({ error: String(e) }); }
+    } catch (e: any) {
+      recordAiCall({ ...shape, durationMs: Date.now() - startedAt, error: String(e?.message || e) });
+      res.status(500).json({ error: String(e) });
+    }
   });
 
   app.post("/api/nano-gpt/images/generations", async (req, res) => {
+    const callId = nextCallId();
+    const prompt = String(req.body?.prompt || "");
+    const shape = { callId, model: String(req.body?.model || "?"), scope: "client-image", attempt: 1, promptChars: prompt.length };
+    const startedAt = Date.now();
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
@@ -106,14 +165,30 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
          res.status(401).json({ error: "Missing API key" });
          return;
       }
+      recordAiCallStart({ ...shape, userId });
+      recordPayload(callId, "client-image", { prompt: JSON.stringify(req.body, null, 2) });
+
       const remoteRes = await fetch("https://nano-gpt.com/api/v1/images/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         body: JSON.stringify(req.body)
       });
       const text = await remoteRes.text();
+      recordPayload(callId, "client-image", { reply: text });
+
+      recordAiCall({
+        ...shape,
+        userId,
+        durationMs: Date.now() - startedAt,
+        httpStatus: remoteRes.status,
+        error: !remoteRes.ok ? `HTTP ${remoteRes.status}` : undefined,
+      });
+
       res.status(remoteRes.status).send(text);
-    } catch (e: any) { res.status(500).json({ error: String(e) }); }
+    } catch (e: any) {
+      recordAiCall({ ...shape, durationMs: Date.now() - startedAt, error: String(e?.message || e) });
+      res.status(500).json({ error: String(e) });
+    }
   });
 
   app.delete("/api/ai-text", (req, res) => {

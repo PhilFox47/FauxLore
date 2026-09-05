@@ -4,6 +4,7 @@ import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText } from "../lib/ai";
+import { recordAiCallStart, recordAiCall, nextCallId, recordPayload } from "../lib/diagnostics";
 import { AUTHENTICITY, SHARPNESS, enemyTier, rarityArt } from "../lib/artDirection";
 import { codexArtStyleBlock, codexPromptBlock, type CodexService } from "./codex";
 
@@ -154,14 +155,36 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
    * new one does not serve. Losing image generation over a routing change would
    * be a far worse outcome than a square picture.
    */
-  async function requestImage(apiKey: string, body: Record<string, unknown>, url: string) {
+  /**
+   * `attempt` is 1 for the normalized route and 2 for the legacy fallback, so
+   * the two show up distinctly in the Diagnostics panel rather than looking
+   * like the same call twice — this is the only place server-side image
+   * generation touched NanoGPT at all before this, and none of it was logged.
+   */
+  async function requestImage(apiKey: string, body: Record<string, unknown>, url: string, attempt: 1 | 2 = 1) {
+    const callId = nextCallId();
+    const prompt = String(body.prompt || "");
+    const shape = { callId, model: String(body.model || "?"), scope: "images", attempt, promptChars: prompt.length };
+    const startedAt = Date.now();
+    recordAiCallStart(shape);
+    recordPayload(callId, "images", { prompt: JSON.stringify(body, null, 2) });
+
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`${url} -> ${res.status} ${await res.text()}`);
-    return res.json();
+    const text = await res.text();
+    recordPayload(callId, "images", { reply: text });
+    recordAiCall({
+      ...shape,
+      durationMs: Date.now() - startedAt,
+      httpStatus: res.status,
+      error: !res.ok ? `HTTP ${res.status}` : undefined,
+    });
+
+    if (!res.ok) throw new Error(`${url} -> ${res.status} ${text}`);
+    return JSON.parse(text);
   }
 
   async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = ""): Promise<string> {
@@ -185,7 +208,7 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
         resolution: cfg.size,
         n: 1,
         ...tuning,
-      }, "https://nano-gpt.com/api/v1/images"));
+      }, "https://nano-gpt.com/api/v1/images", 1));
       if (!remoteUrl) throw new Error("no image in the normalized response");
     } catch (e) {
       console.warn(`[images] Normalized route failed, falling back to /generations: ${String((e as any)?.message || e)}`);
@@ -196,7 +219,7 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
         size: cfg.size,
         ...tuning,
         response_format: "url",
-      }, "https://nano-gpt.com/api/v1/images/generations"));
+      }, "https://nano-gpt.com/api/v1/images/generations", 2));
     }
 
     if (!remoteUrl) throw new Error("NanoGPT did not return an image");
