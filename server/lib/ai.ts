@@ -1,7 +1,7 @@
 import type { Db } from "../context";
 import { Agent } from "undici";
 import { searchProviderById, searchProviderByProviderAndDepth } from "../../src/lib/searchProviders";
-import { recordAiCall, recordAiCallStart, nextCallId, recordPayload } from "./diagnostics";
+import { recordAiCall, recordAiCallStart, nextCallId, recordPayload, record, type LogLevel } from "./diagnostics";
 
 /**
  * Server-side text generation via NanoGPT's OpenAI-compatible endpoint.
@@ -622,10 +622,14 @@ export interface DirectWebSearchResult {
  * floor itself, rather than asking the model nicely to search harder for
  * recent coverage and hoping.
  *
- * Raw request and response are recorded through the same diagnostics payload
- * store the chat calls use, under a synthetic callId, specifically because the
+ * Logged through `record()` directly, on the `ai` channel with the same
+ * start/end `callId` pairing `postChat` uses — not `console.log`. A plain
+ * console line is captured with no `detail` at all, so nothing could join it
+ * back to the payload row `recordPayload` wrote: the exchange was being
+ * recorded and was then unreachable from the Diagnostics panel or export, and
+ * this call is in-flight/abandoned-invisible without the pairing too. The
  * exact shape of a provider's `searchResults` items is not documented per
- * field — the first real calls are how that gets confirmed.
+ * field, so seeing the raw exchange is the only way to confirm one.
  */
 export async function directWebSearch(
   config: AiConfig,
@@ -643,12 +647,30 @@ export async function directWebSearch(
     ...(params.includeDomains?.length ? { includeDomains: params.includeDomains } : {}),
     ...(params.excludeDomains?.length ? { excludeDomains: params.excludeDomains } : {}),
   };
+  const model = `${params.provider}:${body.depth} (direct search)`;
+  const shape = { callId, model, scope: opts.scope, attempt: 1, promptChars: params.query.length, userId: opts.userId };
+  const startedAt = Date.now();
 
-  const label = `[${opts.scope || "web"}] direct web search (${params.provider} ${body.depth})`;
-  console.log(`${label} — started: ${params.query}`);
+  record({
+    channel: "ai",
+    level: "debug",
+    scope: opts.scope,
+    userId: opts.userId,
+    message: `${model} — started: ${params.query}`,
+    detail: { ...shape, phase: "start" },
+  });
   recordPayload(callId, opts.scope, { prompt: JSON.stringify(body, null, 2) });
 
-  const startedAt = Date.now();
+  const report = (level: LogLevel, message: string, extra: Record<string, any> = {}) =>
+    record({
+      channel: "ai",
+      level,
+      scope: opts.scope,
+      userId: opts.userId,
+      message,
+      detail: { ...shape, phase: "end", durationMs: Date.now() - startedAt, ...extra },
+    });
+
   let res: Response;
   try {
     res = await fetch(NANO_GPT_WEB_URL, {
@@ -662,7 +684,7 @@ export async function directWebSearch(
       body: JSON.stringify(body),
     } as any);
   } catch (e: any) {
-    console.warn(`${label} — failed to reach NanoGPT: ${e?.message || e}`);
+    report("warn", `${model} — failed to reach NanoGPT: ${e?.message || e}`, { error: String(e?.message || e) });
     throw e;
   }
 
@@ -671,7 +693,10 @@ export async function directWebSearch(
   recordPayload(callId, opts.scope, { reply: text });
 
   if (!res.ok) {
-    console.warn(`${label} — HTTP ${res.status} in ${(durationMs / 1000).toFixed(1)}s: ${text.slice(0, 500)}`);
+    report("warn", `${model} — HTTP ${res.status} in ${(durationMs / 1000).toFixed(1)}s: ${text.slice(0, 500)}`, {
+      httpStatus: res.status,
+      error: `HTTP ${res.status}`,
+    });
     throw new Error(`Direct web search failed (${res.status}): ${text.slice(0, 500)}`);
   }
 
@@ -679,11 +704,16 @@ export async function directWebSearch(
   try {
     json = JSON.parse(text);
   } catch {
+    report("warn", `${model} — returned unparseable JSON in ${(durationMs / 1000).toFixed(1)}s`, { httpStatus: res.status, error: "unparseable" });
     throw new Error("Direct web search returned unparseable JSON.");
   }
 
   const resultCount = Array.isArray(json?.data) ? json.data.length : json?.data ? 1 : 0;
-  console.log(`${label} — ${resultCount} result(s) in ${(durationMs / 1000).toFixed(1)}s, cost $${json?.metadata?.cost ?? "?"}`);
+  report("info", `${model} — ${resultCount} result(s) in ${(durationMs / 1000).toFixed(1)}s, cost $${json?.metadata?.cost ?? "?"}`, {
+    httpStatus: res.status,
+    resultCount,
+    cost: json?.metadata?.cost,
+  });
 
   return { data: json?.data, metadata: json?.metadata };
 }
