@@ -118,6 +118,56 @@ export function subjectYear(subject: CodexSubject): number | null {
 }
 
 /**
+ * A hard freshness floor for a Direct Web Search's `fromDate`, best-effort.
+ *
+ * `expectedReleaseDate` is day-precise but named for the pre-release case — it
+ * is not guaranteed to still hold a real date once a title has shipped, so it
+ * is used when it parses and January 1st of the release year otherwise. That
+ * fallback is a loose floor, not a tight one: it will not exclude stale
+ * coverage from earlier the same year, but it is always computable, and a
+ * loose floor beats none at all for a franchise whose earlier entries would
+ * otherwise dominate the results.
+ */
+export function subjectFromDate(subject: CodexSubject): string | undefined {
+  const explicit = String(subject.expectedReleaseDate || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(explicit)) return explicit;
+  const year = subjectYear(subject);
+  return year ? `${year}-01-01` : undefined;
+}
+
+/**
+ * Turns a Direct Web Search's raw `data` into the plain-text block the dossier
+ * prompt reads as "the retrieved pages".
+ *
+ * The exact shape of a `searchResults` item is not documented per field —
+ * NanoGPT calls it "provider-formatted" — so every plausible key is tried
+ * rather than assuming one. Capped at 40 pages and ~2,000 characters of body
+ * each: enough for a genuinely deep pass (the best single-call runs this
+ * session cited under twenty sources) without letting one long page crowd out
+ * the rest of the prompt budget.
+ */
+export function formatRetrievedSources(data: any): string {
+  const items: any[] = Array.isArray(data) ? data : data && typeof data === "object" ? [data] : [];
+  if (!items.length) return "";
+  let n = 0;
+  return items
+    .slice(0, 40)
+    .map((item) => {
+      const url = item?.url || item?.link || item?.source || item?.sourceUrl || "";
+      const title = item?.title || item?.name || item?.heading || "";
+      const body = item?.content || item?.text || item?.snippet || item?.summary || item?.description || item?.raw_content || item?.rawContent || "";
+      const trimmed = String(body).replace(/\s+/g, " ").trim().slice(0, 2000);
+      // A row with no title, no url and no body is a hole in the response, not
+      // a source — worth skipping rather than handing the model an empty slot.
+      if (!url && !title && !trimmed) return "";
+      n += 1;
+      return `[${n}]${title ? ` ${title}` : ""}${url ? ` — ${url}` : ""}${trimmed ? `\n${trimmed}` : ""}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/**
  * What each of the app's media types means as a *work*, so the search does not
  * wander into an adaptation. The most common failure is grabbing the famous
  * version of a name: the 2010 live-action film when asked for the 2026 animated
@@ -722,6 +772,18 @@ export function buildDossierPrompt(
    * pass rediscovering.
    */
   alreadyKnown?: string | null,
+  /**
+   * Pages already fetched by a Direct Web Search call, formatted as plain text.
+   *
+   * When this is given, the model is not doing its own live retrieval — the
+   * `:online` suffix and `webSearch` body are both left off the call this
+   * prompt goes out in, because the point of fetching separately was getting a
+   * deterministic release-date floor and explicit source list the black-box
+   * chat-completions search never exposed. So the "go and search literally for
+   * this" instructions below, which only make sense for a model doing its own
+   * browsing, are replaced with "here is what was already found."
+   */
+  retrievedSources?: string,
 ): string {
   const title = identity?.title || subject.title;
   const year = identity?.year || subjectYear(subject);
@@ -744,9 +806,39 @@ ${spec.brief}${f === "craft" ? visualNote : ""}${extra}
 IF THIS IS NOT FICTION — a reality or competition show, a documentary, a podcast, a sporting competition — this section still applies, it just means real things: ${spec.nonFiction}`;
   }).join("\n\n");
 
-  return `${searchQueryLine(subject, identity || null, "wiki characters plot setting factions lore art style reception reddit discussion fan reaction quotes memes")}
+  // Two entirely different framings depending on whether a search is about to
+  // happen live inside this same call, or already happened as a separate
+  // Direct Web Search request. The THE-RECORD/THE-AUDIENCE distinction is kept
+  // in both, because it is about how to WEIGH a source, not just how to find
+  // one — but "run a separate literal search" is nonsensical instruction to
+  // give a model that is reading fixed material, not browsing.
+  const whereToResearch = retrievedSources
+    ? `=== YOUR RESEARCH MATERIAL ===
 
-You are the Codex Archivist of FauxLore. Research ONE work thoroughly and return ONE complete reference dossier on it.
+A web search has already been run for this work, and its retrieved pages are below. Write the dossier FROM this material. This pass is not browsing live — there is no "search again" partway through — so a fact these pages do not cover is left as an empty field, exactly as everywhere else in this brief.
+
+TWO KINDS OF SOURCE ARE MIXED TOGETHER BELOW, AND YOU NEED BOTH. THE RECORD — the work's own wiki, Wikipedia, a fan wiki's character and location pages, contemporaneous coverage — is where the cast, the places, the vocabulary and the objects come from. THE AUDIENCE — subreddit threads, forum posts, release-day reactions — is where the memories come from. Read a forum thread's own words as evidence of what people actually said, not as something to summarize into your own paraphrase — a memory is a line someone wrote, not your description of the thread.
+
+IF EVERY SOURCE BELOW IS THE PUBLISHER'S OWN SITE, A PRESS RELEASE OR LAUNCH COVERAGE, SAY SO. Mark coverage and confidence accordingly rather than writing around the gap. A season of television that has actually aired has people arguing about it within hours; if none of that made it into the material below, there are no memories to report, and an empty "flavorTexts" list is the honest answer, not a failure to paper over.
+
+=== THE RETRIEVED PAGES ===
+
+${retrievedSources}`
+    : `=== WHERE TO RESEARCH ===
+
+TWO KINDS OF SOURCE, AND YOU NEED BOTH.
+
+THE RECORD, for what the work contains: its own wiki, Wikipedia, a fan wiki's character and location pages, a completion guide, a database entry, contemporaneous coverage. This is where the cast, the places, the vocabulary and the objects come from.
+
+THE AUDIENCE, for what the work is known BY: the subreddit and its most-upvoted threads, forum and Discourse posts, the comments under "best moments" videos, meme pages, the wiki's own quotes subpage, review threads on release day. This is where the memories come from and it is the half that keeps getting skipped.
+
+RUN A SEPARATE, LITERAL SEARCH FOR THIS HALF. Do not rely on a general query about the work to happen to surface a forum thread — it usually will not, because a wiki page and a press article both rank ahead of a Reddit thread for almost any ordinary phrasing. Search, in so many words, for "[the work's name] reddit", "[the work's name] reaction" and "r/[a guessed subreddit name] [the work's name]". If the first of those returns nothing, try the others before concluding the audience left no record — a launch-day thread from hours ago is exactly the kind of page a general query is likeliest to miss and a literal one is likeliest to find.
+
+IF EVERY SOURCE YOU END UP WITH IS THE PUBLISHER'S OWN SITE, A PRESS RELEASE OR LAUNCH COVERAGE, YOU HAVE RESEARCHED THE ANNOUNCEMENT AND NOT THE WORK. That is a failed search, not a thin subject. A season of television that has actually aired has people arguing about it within hours — go and read them. A dossier sourced entirely to aboutamazon.co.uk and a press kit will describe what a show intends to be and nothing about what it turned out to be, and it will have no memories in it at all, because nobody quotes a press release.
+
+There is no "it is too new" exception. Nothing unreleased reaches this brief, so a press-only result always means the search stopped early — for a work that came out days ago the announcement is the EASIEST thing to find and the least worth having.`;
+
+  return `${retrievedSources ? "" : `${searchQueryLine(subject, identity || null, "wiki characters plot setting factions lore art style reception reddit discussion fan reaction quotes memes")}\n\n`}You are the Codex Archivist of FauxLore. Research ONE work thoroughly and return ONE complete reference dossier on it.
 
 THE WORK: "${title}"${year ? ` (${year})` : ""}${identity?.creator ? `, by ${identity.creator}` : ""} — ${TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`}.${
     aka.length ? `\nALSO KNOWN AS: ${aka.join(" · ")} — search under these too, especially the original-language title, where the detailed material usually is.` : ""
@@ -791,19 +883,7 @@ Prefer what is documented — the official source, the creator's own statements,
 
 ${REFERENCE_NOT_TEMPLATE}
 
-=== WHERE TO RESEARCH ===
-
-TWO KINDS OF SOURCE, AND YOU NEED BOTH.
-
-THE RECORD, for what the work contains: its own wiki, Wikipedia, a fan wiki's character and location pages, a completion guide, a database entry, contemporaneous coverage. This is where the cast, the places, the vocabulary and the objects come from.
-
-THE AUDIENCE, for what the work is known BY: the subreddit and its most-upvoted threads, forum and Discourse posts, the comments under "best moments" videos, meme pages, the wiki's own quotes subpage, review threads on release day. This is where the memories come from and it is the half that keeps getting skipped.
-
-RUN A SEPARATE, LITERAL SEARCH FOR THIS HALF. Do not rely on a general query about the work to happen to surface a forum thread — it usually will not, because a wiki page and a press article both rank ahead of a Reddit thread for almost any ordinary phrasing. Search, in so many words, for "[the work's name] reddit", "[the work's name] reaction" and "r/[a guessed subreddit name] [the work's name]". If the first of those returns nothing, try the others before concluding the audience left no record — a launch-day thread from hours ago is exactly the kind of page a general query is likeliest to miss and a literal one is likeliest to find.
-
-IF EVERY SOURCE YOU END UP WITH IS THE PUBLISHER'S OWN SITE, A PRESS RELEASE OR LAUNCH COVERAGE, YOU HAVE RESEARCHED THE ANNOUNCEMENT AND NOT THE WORK. That is a failed search, not a thin subject. A season of television that has actually aired has people arguing about it within hours — go and read them. A dossier sourced entirely to aboutamazon.co.uk and a press kit will describe what a show intends to be and nothing about what it turned out to be, and it will have no memories in it at all, because nobody quotes a press release.
-
-There is no "it is too new" exception. Nothing unreleased reaches this brief, so a press-only result always means the search stopped early — for a work that came out days ago the announcement is the EASIEST thing to find and the least worth having.
+${whereToResearch}
 
 === HOW MUCH TO WRITE ===
 

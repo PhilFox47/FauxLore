@@ -1,10 +1,10 @@
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
-import { getAiConfig, nanoGenerateText, parseJsonLoose, type AiConfig } from "../lib/ai";
+import { getAiConfig, nanoGenerateText, directWebSearch, parseJsonLoose, type AiConfig } from "../lib/ai";
 import { searchProviderById, searchProviderByProviderAndDepth } from "../../src/lib/searchProviders";
 import {
   FACETS, FACET_FLOORS, TYPE_BRIEF,
-  buildDossierPrompt,
+  buildDossierPrompt, searchQueryLine, formatRetrievedSources, subjectFromDate,
   subjectSeason, subjectYear,
   type CodexIdentity, type CodexSubject, type Facet,
 } from "./codexResearch";
@@ -1133,6 +1133,16 @@ function dossierSearch(config: AiConfig) {
  */
 const NO_RETRIEVAL_THRESHOLD = 500;
 
+/**
+ * How little retrieved text counts as "the direct web search found nothing,"
+ * in the same spirit as `NO_RETRIEVAL_THRESHOLD` above but measured directly
+ * on `formatRetrievedSources`' output rather than inferred from token counts —
+ * this path knows exactly how much real material came back, so it does not
+ * need the injected-tokens heuristic at all. Roughly the same bar in
+ * character terms (500 tokens is about 2,000 characters).
+ */
+const MIN_RETRIEVED_CHARS = 2_000;
+
 /** Codex storage plus the on-demand generation the AI features call into. */
 export function createCodexService({ db, onFlavorTexts }: {
   db: Db;
@@ -1335,18 +1345,38 @@ export function createCodexService({ db, onFlavorTexts }: {
        */
       const primaryProvider = searchProviderById(aiConfig.searchProvider);
       let lastUsage: { injectedTokens?: number } | null = null;
+
+      /**
+       * Linkup only, for now.
+       *
+       * NanoGPT's chat-completions `webSearch` object never exposes
+       * `fromDate`/`toDate` for any provider — only the separate Direct Web
+       * Search endpoint does, which is the whole reason for the extra call:
+       * a deterministic release-date floor instead of asking the model nicely
+       * to search harder for recent coverage. Linkup is the only backend this
+       * session's evidence actually covers, so it is the only one routed
+       * through it; switching the Settings dropdown to any other provider
+       * still behaves exactly as measured, through the old in-call search.
+       */
+      const useDirectSearch = primaryProvider.provider === "linkup";
+
       /**
        * `knownOverride` lets the same request builder serve a later, different
        * purpose: the automatic gap-fill pass below reuses this closure with a
        * fresh inventory of what THIS run found, rather than the `alreadyKnown`
        * a manual Expand started from.
+       *
+       * `retrievedSources`, when given, means the search already happened —
+       * via `directWebSearch` below — so this call carries no `webSearch` at
+       * all, and the prompt is told to write from that material rather than
+       * go looking for it.
        */
-      const askForDossier = (search: { provider: string; depth: string }, knownOverride?: string | null) =>
-        nanoGenerateText(aiConfig, buildDossierPrompt(subject, null, knownOverride !== undefined ? knownOverride : alreadyKnown), {
+      const askForDossier = (search: { provider: string; depth: string }, knownOverride?: string | null, retrievedSources?: string | null) =>
+        nanoGenerateText(aiConfig, buildDossierPrompt(subject, null, knownOverride !== undefined ? knownOverride : alreadyKnown, retrievedSources || undefined), {
         temperature: 0.2,
         tier: "analytical",
-        webSearch: true,
-        search,
+        webSearch: !retrievedSources,
+        search: retrievedSources ? undefined : search,
         json: true,
         scope: "codex",
         userId,
@@ -1407,10 +1437,66 @@ export function createCodexService({ db, onFlavorTexts }: {
       };
 
       let finalSearchUsed = { provider: primaryProvider.provider, depth: primaryProvider.depth };
-      let raw = await askForDossier(finalSearchUsed);
-      let parsed = asDossier(raw);
+      /** Real retrieved text, when `useDirectSearch` got some. Kept in outer scope so a retry that only needs a fresh write-up can reuse it instead of paying for another search. */
+      let retrievedBlock = "";
+      /** Whether the reply that ended up in `parsed` was written from `retrievedBlock`, rather than the model's own in-call search. */
+      let finalUsedDirectSearch = false;
+      let raw: string;
+      let parsed: any;
+      let firstHadNoRetrieval: boolean;
+
+      if (useDirectSearch) {
+        const query = searchQueryLine(subject, null, "wiki characters plot setting factions lore art style reception reddit discussion fan reaction quotes memes");
+        const fromDate = subjectFromDate(subject);
+        const runSearch = (withDateFloor: boolean) =>
+          directWebSearch(aiConfig, {
+            query,
+            provider: primaryProvider.provider,
+            depth: primaryProvider.depth,
+            outputType: "searchResults",
+            ...(withDateFloor && fromDate ? { fromDate } : {}),
+          }, { scope: "codex", userId });
+
+        try {
+          const first = await runSearch(true);
+          retrievedBlock = formatRetrievedSources(first.data);
+        } catch (e: any) {
+          console.warn(`[codex] "${subject.title}" — direct web search failed (${e?.message || e}).`);
+        }
+
+        // A date floor that excluded everything looks identical to a provider
+        // that found nothing. Before falling all the way back to the in-call
+        // search, try once more with no floor at all — the cheaper recovery.
+        if (fromDate && retrievedBlock.length < MIN_RETRIEVED_CHARS) {
+          try {
+            const wider = await runSearch(false);
+            const widerBlock = formatRetrievedSources(wider.data);
+            if (widerBlock.length > retrievedBlock.length) {
+              console.log(`[codex] "${subject.title}" — the ${fromDate} floor found nothing usable; retrying with no date floor.`);
+              retrievedBlock = widerBlock;
+            }
+          } catch {
+            // Keep whatever the dated attempt got, if anything.
+          }
+        }
+
+        if (retrievedBlock.length >= MIN_RETRIEVED_CHARS) {
+          raw = await askForDossier(finalSearchUsed, undefined, retrievedBlock);
+          parsed = asDossier(raw);
+          finalUsedDirectSearch = true;
+          firstHadNoRetrieval = false;
+        } else {
+          console.warn(`[codex] "${subject.title}" — direct web search retrieved nothing usable; falling back to the in-call search.`);
+          raw = await askForDossier(finalSearchUsed);
+          parsed = asDossier(raw);
+          firstHadNoRetrieval = !!lastUsage && (lastUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
+        }
+      } else {
+        raw = await askForDossier(finalSearchUsed);
+        parsed = asDossier(raw);
+        firstHadNoRetrieval = !!lastUsage && (lastUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
+      }
       const firstUsage = lastUsage;
-      const firstHadNoRetrieval = !!firstUsage && (firstUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
 
       if (!parsed || firstHadNoRetrieval) {
         const fallback = firstHadNoRetrieval ? primaryProvider.fallback : undefined;
@@ -1431,12 +1517,24 @@ export function createCodexService({ db, onFlavorTexts }: {
           );
         }
 
-        raw = await askForDossier({ provider: retryProvider.provider, depth: retryProvider.depth });
+        // A bad reply from a search that DID retrieve something real is asked
+        // again from that same material — the search worked, only the
+        // write-up didn't, so there is nothing to gain from paying for a
+        // second one. Only a genuine no-retrieval case reaches for a
+        // different backend.
+        const retryWithSameMaterial = !parsed && finalUsedDirectSearch && retrievedBlock.length >= MIN_RETRIEVED_CHARS;
+        raw = retryWithSameMaterial
+          ? await askForDossier(finalSearchUsed, undefined, retrievedBlock)
+          : await askForDossier({ provider: retryProvider.provider, depth: retryProvider.depth });
         parsed = asDossier(raw);
+        finalUsedDirectSearch = retryWithSameMaterial;
       }
 
       // Whether EITHER attempt actually got material back, for the record.
-      const secondHadNoRetrieval = !!lastUsage && (lastUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
+      // A reply written from `retrievedBlock` already has its own proof of
+      // retrieval — real character count, not an inferred token gap — so the
+      // in-call heuristic below only applies to a reply that went the old way.
+      const secondHadNoRetrieval = finalUsedDirectSearch ? false : !!lastUsage && (lastUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
       const noRetrievalOnFinalAttempt = parsed ? secondHadNoRetrieval : firstHadNoRetrieval;
 
       if (!parsed) {
