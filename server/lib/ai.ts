@@ -1,7 +1,7 @@
 import type { Db } from "../context";
 import { Agent } from "undici";
 import { searchProviderById, searchProviderByProviderAndDepth } from "../../src/lib/searchProviders";
-import { recordAiCall, recordAiCallStart, nextCallId, recordPayload, record, type LogLevel } from "./diagnostics";
+import { recordAiCall, recordAiCallStart, nextCallId, recordPayload } from "./diagnostics";
 
 /**
  * Server-side text generation via NanoGPT's OpenAI-compatible endpoint.
@@ -25,19 +25,6 @@ import { recordAiCall, recordAiCallStart, nextCallId, recordPayload, record, typ
  * that were never in the work, and for the Codex that error is permanent.
  */
 const NANO_GPT_CHAT_URL = "https://nano-gpt.com/api/v1/chat/completions";
-
-/**
- * NanoGPT's Direct Web Search API — a separate endpoint from chat completions,
- * used when the caller wants the actual retrieved pages back rather than
- * letting the provider search invisibly inside a `:online` chat call.
- *
- * Only this endpoint exposes `includeDomains`/`excludeDomains`/`fromDate`/
- * `toDate` — the chat-completions `webSearch` object never gets them, for any
- * provider. That is the entire reason this exists: the Codex wants a
- * deterministic freshness floor (results on or after the work's release date)
- * rather than trusting the provider's own agentic browsing to think of it.
- */
-const NANO_GPT_WEB_URL = "https://nano-gpt.com/api/web";
 
 /**
  * Node's own five-minute cap on a request, removed.
@@ -591,131 +578,6 @@ async function postChat(
   // instead of silently costing a section.
   if (!text) throw new Error("NanoGPT returned an empty reply.");
   return text;
-}
-
-export interface DirectWebSearchParams {
-  query: string;
-  /** linkup | tavily | brave | sofya | exa | kagi | perplexity | valyu */
-  provider: string;
-  depth?: string;
-  /** Only "searchResults" is normalized the same way across every provider. */
-  outputType?: "searchResults" | "sourcedAnswer" | "structured";
-  /** ISO date (YYYY-MM-DD). A hard freshness floor the provider enforces itself. */
-  fromDate?: string;
-  toDate?: string;
-  includeDomains?: string[];
-  excludeDomains?: string[];
-}
-
-export interface DirectWebSearchResult {
-  /** Whatever shape the provider returned — never assumed, only read defensively. */
-  data: any;
-  metadata?: { query?: string; provider?: string; depth?: string; outputType?: string; cost?: number; timestamp?: string };
-}
-
-/**
- * Calls NanoGPT's `/api/web`, not `/v1/chat/completions`.
- *
- * The chat-completions `webSearch` object never exposes `includeDomains`,
- * `excludeDomains`, `fromDate` or `toDate` for any provider — those only exist
- * on this endpoint. Used so a Codex's retrieval step can enforce a release-date
- * floor itself, rather than asking the model nicely to search harder for
- * recent coverage and hoping.
- *
- * Logged through `record()` directly, on the `ai` channel with the same
- * start/end `callId` pairing `postChat` uses — not `console.log`. A plain
- * console line is captured with no `detail` at all, so nothing could join it
- * back to the payload row `recordPayload` wrote: the exchange was being
- * recorded and was then unreachable from the Diagnostics panel or export, and
- * this call is in-flight/abandoned-invisible without the pairing too. The
- * exact shape of a provider's `searchResults` items is not documented per
- * field, so seeing the raw exchange is the only way to confirm one.
- */
-export async function directWebSearch(
-  config: AiConfig,
-  params: DirectWebSearchParams,
-  opts: { scope?: string; userId?: string | null; timeoutMs?: number } = {},
-): Promise<DirectWebSearchResult> {
-  const callId = nextCallId();
-  const body = {
-    query: params.query,
-    provider: params.provider,
-    depth: params.depth || "deep",
-    outputType: params.outputType || "searchResults",
-    ...(params.fromDate ? { fromDate: params.fromDate } : {}),
-    ...(params.toDate ? { toDate: params.toDate } : {}),
-    ...(params.includeDomains?.length ? { includeDomains: params.includeDomains } : {}),
-    ...(params.excludeDomains?.length ? { excludeDomains: params.excludeDomains } : {}),
-  };
-  const model = `${params.provider}:${body.depth} (direct search)`;
-  const shape = { callId, model, scope: opts.scope, attempt: 1, promptChars: params.query.length, userId: opts.userId };
-  const startedAt = Date.now();
-
-  record({
-    channel: "ai",
-    level: "debug",
-    scope: opts.scope,
-    userId: opts.userId,
-    message: `${model} — started: ${params.query}`,
-    detail: { ...shape, phase: "start" },
-  });
-  recordPayload(callId, opts.scope, { prompt: JSON.stringify(body, null, 2) });
-
-  const report = (level: LogLevel, message: string, extra: Record<string, any> = {}) =>
-    record({
-      channel: "ai",
-      level,
-      scope: opts.scope,
-      userId: opts.userId,
-      message,
-      detail: { ...shape, phase: "end", durationMs: Date.now() - startedAt, ...extra },
-    });
-
-  let res: Response;
-  try {
-    res = await fetch(NANO_GPT_WEB_URL, {
-      method: "POST",
-      ...(dispatcher ? { dispatcher } : {}),
-      signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000),
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify(body),
-    } as any);
-  } catch (e: any) {
-    report("warn", `${model} — failed to reach NanoGPT: ${e?.message || e}`, { error: String(e?.message || e) });
-    throw e;
-  }
-
-  const durationMs = Date.now() - startedAt;
-  const text = await res.text();
-  recordPayload(callId, opts.scope, { reply: text });
-
-  if (!res.ok) {
-    report("warn", `${model} — HTTP ${res.status} in ${(durationMs / 1000).toFixed(1)}s: ${text.slice(0, 500)}`, {
-      httpStatus: res.status,
-      error: `HTTP ${res.status}`,
-    });
-    throw new Error(`Direct web search failed (${res.status}): ${text.slice(0, 500)}`);
-  }
-
-  let json: any;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    report("warn", `${model} — returned unparseable JSON in ${(durationMs / 1000).toFixed(1)}s`, { httpStatus: res.status, error: "unparseable" });
-    throw new Error("Direct web search returned unparseable JSON.");
-  }
-
-  const resultCount = Array.isArray(json?.data) ? json.data.length : json?.data ? 1 : 0;
-  report("info", `${model} — ${resultCount} result(s) in ${(durationMs / 1000).toFixed(1)}s, cost $${json?.metadata?.cost ?? "?"}`, {
-    httpStatus: res.status,
-    resultCount,
-    cost: json?.metadata?.cost,
-  });
-
-  return { data: json?.data, metadata: json?.metadata };
 }
 
 /**
