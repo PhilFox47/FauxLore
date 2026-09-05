@@ -34,22 +34,28 @@ export interface SearchProviderOption {
    * Where to go when this backend comes back having retrieved nothing.
    *
    * The first version of this pointed `exa-deep-reasoning` at `exa-deep` — the
-   * theory being that the exotic mode was the unreliable part. That theory is
-   * now disproven: for a season that released one day earlier, `exa-deep`
-   * failed exactly the same way `exa-deep-reasoning` had, zero tokens injected
-   * both times, while the SAME setting had returned thirty-six thousand tokens
-   * for a different, long-established title on the same day. That is not a
-   * mode being flaky, it is a provider's index not having a brand-new release
-   * covered yet, and staying inside that provider's other mode does nothing
-   * about it.
+   * theory being that the exotic mode was the unreliable part. That theory was
+   * disproven: for a season that released one day earlier, `exa-deep` failed
+   * exactly the same way `exa-deep-reasoning` had, zero tokens injected both
+   * times, while the SAME setting had returned thirty-six thousand tokens for a
+   * different, long-established title on the same day.
    *
-   * So every backend except Linkup itself now falls back to Linkup, which is
+   * Reading NanoGPT's own web search docs turned up the actual mechanism: Exa
+   * serves results from its own crawl/index by default, and only fetches a page
+   * live when `livecrawl` asks it to (see `ai.ts`, where every Exa request now
+   * sends `livecrawl: "preferred"`). A title that released hours or a day
+   * earlier can easily exist on the web with nothing in Exa's index yet — not a
+   * flaky mode, a stale-cache miss, which no amount of switching between Exa's
+   * own modes was ever going to fix. This is likely the real root cause; it is
+   * still an inference (we have not re-run the exact failing case with
+   * `livecrawl` set to confirm it), which is why the cross-provider fallback
+   * below stays in place as a safety net rather than being removed.
+   *
+   * So every backend except Linkup itself still falls back to Linkup, which is
    * documented as NanoGPT's own default and behaves the most like an ordinary
-   * search engine rather than a curated or neural index — the kind of backend
-   * likeliest to have crawled a page from yesterday. This is inferred from one
-   * observed failure, not confirmed against every provider, and it only ever
-   * fires after a real, already-measured failure, so the cost of being wrong
-   * about it is small: one more attempt, not a worse one.
+   * search engine rather than a curated or neural index. It only ever fires
+   * after a real, already-measured failure, so the cost of being wrong about it
+   * is small: one more attempt, not a worse one.
    */
   fallback?: string;
 }
@@ -81,7 +87,7 @@ export const SEARCH_PROVIDERS: SearchProviderOption[] = [
     provider: "exa",
     depth: "deep",
     price: "$0.005 + $0.001/page",
-    note: "Neural retrieval. Reaches forums and community pages the general crawlers miss.",
+    note: "Neural retrieval. Reaches forums and community pages the general crawlers miss. Forces a live fetch (livecrawl) rather than relying on Exa's index, so a same-day release has a chance of being found.",
     fallback: "linkup-deep",
   },
   {
@@ -91,7 +97,7 @@ export const SEARCH_PROVIDERS: SearchProviderOption[] = [
     provider: "exa",
     depth: "deep-reasoning",
     price: "$0.005 + $0.001/page",
-    note: "Exa's deepest mode: it reasons about what to look for next between queries.",
+    note: "Exa's deepest mode: it reasons about what to look for next between queries. Same live-fetch behavior as Exa deep.",
     fallback: "linkup-deep",
   },
   {

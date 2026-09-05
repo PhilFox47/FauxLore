@@ -444,6 +444,15 @@ async function postChat(
               enabled: true,
               ...(opts.search.provider ? { provider: opts.search.provider } : {}),
               ...(opts.search.depth ? { depth: opts.search.depth } : {}),
+              // Exa serves search results from its own crawl/index by default,
+              // not a live fetch. That is very likely *why* it came back with
+              // zero injected tokens for a show that released the same day: the
+              // page existed, but Exa's copy of it did not yet. `livecrawl`
+              // documented values are never/fallback/always/preferred — this
+              // asks for a live fetch when the indexed copy would otherwise be
+              // used, without hard-failing if a given URL cannot be fetched live
+              // (the way `always` would).
+              ...(opts.search.provider === "exa" ? { livecrawl: "preferred" } : {}),
             },
           }
         : {}),
