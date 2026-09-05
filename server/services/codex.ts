@@ -1527,24 +1527,37 @@ export function createCodexService({ db, onFlavorTexts }: {
           const gaps = [...emptySections, tooFewMemories ? "memories" : ""].filter(Boolean).join(", ");
 
           /**
-           * Do not send the follow-up back to a backend that has already been
-           * measured retrieving nothing.
+           * Standard depth, not deep — deliberately, and only for this call.
            *
-           * `finalSearchUsed` is whichever attempt actually produced `data` —
-           * which, when `noRetrievalOnFinalAttempt` is true, is exactly the one
-           * that got zero tokens back. Asking it the same kind of question again
-           * inherits the same problem the primary retry already exists to route
-           * around, so this reaches for that backend's OWN fallback instead, one
-           * hop further along the same chain rather than back to the start.
+           * The primary pass is open-ended: find everything about a work it
+           * knows almost nothing about yet, which is exactly what deep's
+           * iterative, ten-round search exists for. This pass is not that. It
+           * runs only when the primary already succeeded and left a handful of
+           * NAMED, SPECIFIC gaps — an empty list field, or memories short of
+           * the floor — and `summariseForExpansion` hands it exactly what is
+           * still missing. A narrow, already-scoped question is the case
+           * standard search is for; paying deep's ~10x fee to re-run the whole
+           * open-ended research question a second time was never what this
+           * call was for in the first place.
+           *
+           * The one exception is `noRetrievalOnFinalAttempt`: if the primary
+           * attempt got zero material back even on deep, a narrower standard
+           * search is not a safe bet either — it inherits the same failure,
+           * only with less searching behind it. That case instead reaches for
+           * the backend's OWN fallback (still at deep), one hop further along
+           * the same chain the primary retry already uses, rather than
+           * repeating a call already measured to retrieve nothing.
            */
-          let followUpSearch = finalSearchUsed;
+          let followUpSearch = { provider: finalSearchUsed.provider, depth: "standard" };
           if (noRetrievalOnFinalAttempt) {
             const used = searchProviderByProviderAndDepth(finalSearchUsed.provider, finalSearchUsed.depth);
-            if (used?.fallback) {
-              const next = searchProviderById(used.fallback);
-              console.log(`[codex] "${subject.title}" — the follow-up will try ${next.label} instead of repeating a backend that retrieved nothing.`);
-              followUpSearch = { provider: next.provider, depth: next.depth };
-            }
+            followUpSearch = used?.fallback
+              ? (() => {
+                  const next = searchProviderById(used.fallback!);
+                  console.log(`[codex] "${subject.title}" — the follow-up will try ${next.label} instead of repeating a backend that retrieved nothing.`);
+                  return { provider: next.provider, depth: next.depth };
+                })()
+              : finalSearchUsed;
           }
 
           console.log(`[codex] "${subject.title}" has gaps after research (${gaps}); trying one automatic follow-up.`);
