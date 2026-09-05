@@ -165,13 +165,20 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           hltbMainExtra,
           hltbCompletionist,
           selectedHltbType: 'mainExtra' as const,
-          // Genres and tags are deliberately absent. Every source names them
-          // differently — IGDB themes, TMDB keywords, MangaDex tags,
+          // Genres, tags and franchises are deliberately absent. Every source
+          // names them differently — IGDB themes, TMDB keywords, MangaDex tags,
           // GameStoryLog's tag cloud — and importing any of them fills the
           // library with terms that are not in the taxonomy. Auto-tagging owns
-          // these two fields; see server/services/autoTag.ts.
+          // genres and tags; see server/services/autoTag.ts. Franchises have no
+          // AI equivalent and no taxonomy at all — they are how the user groups
+          // their own library into universes, and IGDB's own franchise name
+          // ("Fast & Furious") rarely matches what the user already typed for
+          // an earlier entry in the same series, which used to split one
+          // universe into two on the Universes page the moment a new entry was
+          // imported. It is a free-text field with autocomplete against
+          // existing names in MediaFormModal specifically so the user types or
+          // picks it themselves.
           platforms: game.platforms ? game.platforms.map((p: any) => p.name) : [],
-          franchises: game.franchises ? game.franchises.map((f: any) => f.name) : [],
           developer,
           publisher,
           metadataSource: "igdb",
@@ -251,11 +258,6 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
            creator = detail.created_by.map((c: any) => c.name).join(', ');
         }
 
-        let franchises: string[] = [];
-        if (detail.belongs_to_collection) {
-           franchises.push(detail.belongs_to_collection.name);
-        }
-
         const seasons = detail.seasons ? detail.seasons.map((s: any) => ({
           id: s.id.toString(),
           name: s.name,
@@ -300,12 +302,20 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
             ? `S${detail.next_episode_to_air.season_number}E${detail.next_episode_to_air.episode_number}`
             : undefined,
           reviewScore: detail.vote_average ? Math.round(detail.vote_average) / 2 : undefined, // 0-10 -> 0-5
-          // Genres and tags are deliberately absent. Every source names them
-          // differently — IGDB themes, TMDB keywords, MangaDex tags,
+          // Genres, tags and franchises are deliberately absent. Every source
+          // names them differently — IGDB themes, TMDB keywords, MangaDex tags,
           // GameStoryLog's tag cloud — and importing any of them fills the
           // library with terms that are not in the taxonomy. Auto-tagging owns
-          // these two fields; see server/services/autoTag.ts.
-          franchises: franchises,
+          // genres and tags; see server/services/autoTag.ts. Franchises have no
+          // AI equivalent and no taxonomy at all — they are how the user groups
+          // their own library into universes, and TMDB's own
+          // `belongs_to_collection` name ("The Fast and the Furious Collection")
+          // rarely matches what the user already typed for an earlier entry in
+          // the same series, which used to split one universe into two on the
+          // Universes page the moment a new entry was imported. It is a
+          // free-text field with autocomplete against existing names in
+          // MediaFormModal specifically so the user types or picks it
+          // themselves.
           creator: creator,
           totalEpisodes: type === 'tv' ? detail.number_of_episodes : undefined,
           runtimeMinutes: runtimeMinutes,
