@@ -495,13 +495,15 @@ And one that is a real quotation and still fails: a line genuinely spoken in the
 
 === HOW MANY ===
 
-Up to six, and fewer is usually right. There is no minimum.
+Between three and nine. Three is the target to aim for, not a quota to fill by any means — see the paragraph after next about what happens when you cannot reach it honestly.
 
-The reason is the way these are used: the app shows exactly ONE of them at a time, chosen at random. A weak entry is not diluted by the strong ones around it — it simply gets its own turn on the page, alone, as the only thing the user sees. Six entries of which two are padding is not a better answer than two, it is a worse one, because a third of the time it prints the padding.
+The reason for the ceiling is the way these are used: the app shows exactly ONE of them at a time, chosen at random. A weak entry is not diluted by the strong ones around it — it simply gets its own turn on the page, alone, as the only thing the user sees. Nine entries of which four are padding is not a better answer than three, it is a worse one, because nearly half the time it prints the padding.
 
-So: six only for something with a deep, well-documented well of quoted material. Two is a completely normal answer, and the right one for anything recent, niche, quietly regarded, or where you find yourself reaching. One is fine. None is fine. Stop as soon as the next candidate is weaker than the ones you have — that is the signal you are finished, not a problem to solve.
+So: nine only for something with a deep, well-documented well of quoted material — the kind of work whose fandom has been producing this stuff for years. Three to five is a completely normal result for most things. Stop as soon as the next candidate is weaker than the ones you have — that is the signal you are finished, not a problem to solve.
 
-Never pad. Never assemble a line from facts because a slot is empty. A fabricated quote is the single worst thing this research can produce, because it will be shown to the user as a real line from something they finished.
+TREAT FEWER THAN THREE AS A REASON TO LOOK AGAIN BEFORE YOU STOP, NOT AS A FINISHED ANSWER. Almost anything with a real audience has produced at least a catchphrase, a running joke or a piece of trivia somewhere — go back to the sources in "WHERE TO RESEARCH" above, particularly the audience half, before concluding there is nothing. If you still cannot find three after genuinely trying, hand back what you found. A second, automatic pass exists afterward specifically to look harder at whatever came back short — that is what it is for, and it is a far better use of another search than manufacturing the rest by hand.
+
+NEVER PAD TO REACH THE FLOOR. Never assemble a line from facts because a slot is empty. A fabricated quote is the single worst thing this research can produce, because it will be shown to the user as a real line from something they finished — a short honest answer of one or two lines, or none at all, is always the right choice over an invented third one. The floor is a bar for how hard to look, never a bar for what to write down.
 
 ONE EXCEPTION TO THE USUAL RULE, and only for this section: you MAY rephrase. The notes are raw material, and an inside joke recorded as a flat fact has to be written out as somebody saying it before it is worth printing — "Sam wears women's underwear." becomes "Did you know Sam Winchester wears women's underwear?". That is writing, not inventing. What you must NOT do is add a memory the notes do not support, or alter the wording of anything the notes give as a direct quotation: a quote and a meme both have exact wording and it is reproduced character for character, never tidied, translated or trimmed.
 

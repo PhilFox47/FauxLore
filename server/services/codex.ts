@@ -148,7 +148,19 @@ export type FlavorKind = "quote" | "reference" | "joke";
 export type FlavorScope = "work" | "medium";
 
 /** The ceiling the research is told to respect, enforced rather than trusted. */
-export const MAX_FLAVOR_TEXTS = 6;
+export const MAX_FLAVOR_TEXTS = 9;
+
+/**
+ * The floor. Not enforced by inventing anything — enforced by looking again.
+ *
+ * A work with fewer than this after the first pass is what the automatic
+ * follow-up call exists for: `generate()` checks this exact number and spends
+ * one more call specifically hunting for memories (and any other empty
+ * section) before giving up. What is never done is asking the model to pad a
+ * short list to reach it — a fabricated line is worse than an honest two, and
+ * the floor stays a target for research effort, not a quota on the output.
+ */
+export const MIN_FLAVOR_TEXTS = 3;
 
 /**
  * How many of those may be about the format rather than the work.
@@ -210,8 +222,9 @@ export function isBareLabel(text: string): boolean {
  * Every rule here exists because this is the one Codex field shown to the user
  * verbatim, as a real line from something they finished — so a padded list, a
  * quote wrapped in stray punctuation or a paragraph masquerading as a catchphrase
- * is worse than nothing. The research is asked for three to six; this is what
- * makes six actually mean six.
+ * is worse than nothing. The research is asked for three to nine, with three a
+ * target for effort rather than a quota; this is what makes the ceiling actually
+ * mean the ceiling.
  */
 /**
  * The prompt's own worked examples, which have been coming back as answers.
@@ -466,7 +479,7 @@ export interface CodexData {
   items?: CodexEntity[];
   terminology?: CodexTerm[];
   /**
-   * The three to six lines this work is known by.
+   * The three to nine lines this work is known by.
    *
    * Absent on every dossier compiled before this existed, and deliberately not
    * backfilled — the library falls back to its built-in set for those, and they
@@ -1322,8 +1335,14 @@ export function createCodexService({ db, onFlavorTexts }: {
        */
       const primaryProvider = searchProviderById(aiConfig.searchProvider);
       let lastUsage: { injectedTokens?: number } | null = null;
-      const askForDossier = (search: { provider: string; depth: string }) =>
-        nanoGenerateText(aiConfig, buildDossierPrompt(subject, null, alreadyKnown), {
+      /**
+       * `knownOverride` lets the same request builder serve a later, different
+       * purpose: the automatic gap-fill pass below reuses this closure with a
+       * fresh inventory of what THIS run found, rather than the `alreadyKnown`
+       * a manual Expand started from.
+       */
+      const askForDossier = (search: { provider: string; depth: string }, knownOverride?: string | null) =>
+        nanoGenerateText(aiConfig, buildDossierPrompt(subject, null, knownOverride !== undefined ? knownOverride : alreadyKnown), {
         temperature: 0.2,
         tier: "analytical",
         webSearch: true,
@@ -1387,7 +1406,8 @@ export function createCodexService({ db, onFlavorTexts }: {
         return DOSSIER_KEYS.some((k) => doc[k] != null) ? doc : null;
       };
 
-      let raw = await askForDossier({ provider: primaryProvider.provider, depth: primaryProvider.depth });
+      let finalSearchUsed = { provider: primaryProvider.provider, depth: primaryProvider.depth };
+      let raw = await askForDossier(finalSearchUsed);
       let parsed = asDossier(raw);
       const firstUsage = lastUsage;
       const firstHadNoRetrieval = !!firstUsage && (firstUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
@@ -1395,6 +1415,7 @@ export function createCodexService({ db, onFlavorTexts }: {
       if (!parsed || firstHadNoRetrieval) {
         const fallback = firstHadNoRetrieval ? primaryProvider.fallback : undefined;
         const retryProvider = fallback ? searchProviderById(fallback) : primaryProvider;
+        finalSearchUsed = { provider: retryProvider.provider, depth: retryProvider.depth };
 
         if (!parsed) {
           console.warn(
@@ -1459,6 +1480,59 @@ export function createCodexService({ db, onFlavorTexts }: {
       if (problem) console.warn(`Codex may have identified the wrong work for "${subject.title}": ${problem}`);
 
       /**
+       * ONE AUTOMATIC FOLLOW-UP, WHEN SOMETHING CAME BACK EMPTY.
+       *
+       * A different thing from the "Expand" button, though it shares its exact
+       * mechanism: this fires on its own, at most once, whenever the dossier
+       * just researched has a completely empty tracked list — characters,
+       * antagonists, locations, factions, items or terminology — or fewer than
+       * MIN_FLAVOR_TEXTS memories. Both are the sections a single pass leaves
+       * thinnest, and asking again — handing the model exactly what was already
+       * found, so it spends the call on what is missing rather than repeating
+       * itself — is a better use of a second call than saving a visibly
+       * incomplete dossier because nobody happened to press the button.
+       *
+       * Applies whichever path produced `data`: a fresh compile, a Redo, or a
+       * manual Expand that still came up short. Whatever the mode, this adds at
+       * most ONE further call to it, ever, which is the whole point — it is a
+       * safety net for an obvious gap, not a loop chasing a perfect answer. If
+       * the follow-up also comes back short, or fails outright, the dossier is
+       * saved exactly as first researched.
+       *
+       * Skipped when the identification itself is in doubt: spending a call to
+       * fill gaps in a dossier about the wrong work only compounds the error.
+       */
+      if (!problem) {
+        const emptySections = LIST_FIELDS
+          .filter((f) => f.key !== "flavorTexts")
+          .filter((f) => list((data as any)[f.key]).length === 0)
+          .map((f) => f.key);
+        const tooFewMemories = list((data as any).flavorTexts).length < MIN_FLAVOR_TEXTS;
+
+        if (emptySections.length > 0 || tooFewMemories) {
+          const gaps = [...emptySections, tooFewMemories ? "memories" : ""].filter(Boolean).join(", ");
+          console.log(`[codex] "${subject.title}" has gaps after research (${gaps}); trying one automatic follow-up.`);
+          try {
+            const followUpRaw = await askForDossier(finalSearchUsed, summariseForExpansion(data));
+            const followUpParsed = asDossier(followUpRaw);
+            if (followUpParsed) {
+              const before = LIST_FIELDS.reduce((n, f) => n + list((data as any)[f.key]).length, 0);
+              data = mergeDossiers(data, stripPlaceholders(followUpParsed));
+              const after = LIST_FIELDS.reduce((n, f) => n + list((data as any)[f.key]).length, 0);
+              console.log(
+                `[codex] Automatic follow-up added ${after - before} entr${after - before === 1 ? "y" : "ies"} ` +
+                `to "${subject.title}".`,
+              );
+            } else {
+              console.warn(`[codex] Automatic follow-up for "${subject.title}" came back unusable; keeping the dossier as first researched.`);
+            }
+          } catch (e) {
+            console.warn(`[codex] Automatic follow-up for "${subject.title}" failed; keeping the dossier as first researched.`, e);
+          }
+        }
+      }
+
+      /**
        * What the dossier says about its own sourcing.
        *
        * Everything came out of the same searched pass, so every section is
@@ -1473,8 +1547,8 @@ export function createCodexService({ db, onFlavorTexts }: {
       const sectionSourcing: CodexSectionSourcing = {};
       for (const facet of FACETS) sectionSourcing[facet] = "searched";
 
-      // The one field shown to the user word for word, so the three-to-six rule
-      // is enforced here rather than left to the prompt's good manners.
+      // The one field shown to the user word for word, so the count and quality
+      // rules are enforced here rather than left to the prompt's good manners.
       // The only place the prompt-example guard applies: this IS the model's
       // fresh output, so an example coming back is leakage rather than library.
       if (data.flavorTexts) data.flavorTexts = normalizeFlavorTexts(data.flavorTexts, { rejectPromptExamples: true });
