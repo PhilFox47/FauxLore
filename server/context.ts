@@ -45,4 +45,6 @@ export interface ServerContext {
   push: PushService;
   hltbSearch: (query: string) => Promise<any[]>;
   getIgdbToken: (clientId: string, clientSecret: string) => Promise<string>;
+  /** Rebuilds a MangaDex-sourced manga's cover index and, if progress now points at a different volume, its cover. */
+  refreshMangaCovers: (userId: string, row: any) => Promise<void>;
 }

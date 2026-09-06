@@ -152,7 +152,7 @@ async function startServer() {
 
   // Daily metadata refresh: re-check tracked media (Active / On Hold) against their
   // source for new versions. Runs early and off-peak.
-  const { refreshTrackedMedia } = createMetadataRefresh(db, notify, (userId, mediaId) => {
+  const { refreshTrackedMedia, refreshMangaCovers } = createMetadataRefresh(db, notify, (userId, mediaId) => {
     // A released entry finally has something to research. Dormant accounts stay
     // parked: the freeze is about AI spend, and this is the expensive part.
     if (activity.isFrozen(userId)) return;
@@ -228,6 +228,7 @@ async function startServer() {
     activity,
     hltbSearch,
     getIgdbToken,
+    refreshMangaCovers,
   };
 
   // Authorization Routes

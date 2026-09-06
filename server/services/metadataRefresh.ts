@@ -468,5 +468,9 @@ export function createMetadataRefresh(
     }
   };
 
-  return { refreshTrackedMedia, refreshAllUsers };
+  // Exposed on its own — not just used by the daily sweep — so a manga's
+  // cover can be pulled in as soon as it is added (routes/media.ts) or on
+  // demand from a button in its detail view (POST /api/media/:id/refresh-
+  // manga-cover), instead of waiting for tomorrow's scheduled pass.
+  return { refreshTrackedMedia, refreshAllUsers, refreshMangaCovers };
 }

@@ -152,6 +152,14 @@ export const DatabaseService = {
     if (!res.ok) throw new Error('Failed to acknowledge update');
   },
 
+  async refreshMangaCover(mediaId: string): Promise<void> {
+    const res = await apiFetch(`/api/media/${mediaId}/refresh-manga-cover`, { method: 'POST' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Failed to fetch manga covers');
+    }
+  },
+
   async mergeLocations(from: string[], to: string): Promise<{ updated: number }> {
     const res = await apiFetch('/api/logs/merge-locations', {
       method: 'POST',

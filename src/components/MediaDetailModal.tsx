@@ -32,11 +32,12 @@ interface MediaDetailModalProps {
 }
 
 export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogProgress }: MediaDetailModalProps) {
-  const { settings, media, logs: allLogs, worldBosses, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem, generateArtifactImage, acknowledgeUpdate, locationGroups } = useMediaContext();
+  const { settings, media, logs: allLogs, worldBosses, updateLog, deleteLog, artifacts, saveArtifact, saveMediaItem, generateArtifactImage, acknowledgeUpdate, refreshMangaCover, locationGroups } = useMediaContext();
   const locationGroupIndex = useMemo(() => buildGroupIndex(locationGroups), [locationGroups]);
   const toast = useToast();
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [deleteConfirmLogId, setDeleteConfirmLogId] = useState<string | null>(null);
+  const [isRefreshingCover, setIsRefreshingCover] = useState(false);
   const [isLooting, setIsLooting] = useState(false);
   const [pendingLootId, setPendingLootId] = useState<string | null>(null);
   const [lootedArtifact, setLootedArtifact] = useState<Artifact | null>(null);
@@ -221,6 +222,19 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
       toast.success(routeDraft.trim() ? `Route set to "${routeDraft.trim()}".` : 'Route cleared.');
     } catch (e: any) {
       toast.error(e.message || 'Could not save the route.');
+    }
+  };
+
+  const handleRefreshMangaCover = async () => {
+    if (!item || isRefreshingCover) return;
+    setIsRefreshingCover(true);
+    try {
+      await refreshMangaCover(item.id);
+      toast.success('Covers fetched — showing whichever volume matches your progress.');
+    } catch (e: any) {
+      toast.error(e.message || 'Could not fetch covers from MangaDex.');
+    } finally {
+      setIsRefreshingCover(false);
     }
   };
 
@@ -571,6 +585,23 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
                    <ExternalLink className="w-4 h-4" />
                    Open on {getSourceLabel(item.metadataSource)}
                  </a>
+               )}
+
+               {/* Manually pulls in every English (or Japanese, if that's all
+                   MangaDex has) cover for this title and switches to whichever
+                   volume matches current progress — the same thing that
+                   happens automatically when the entry is first added and on
+                   each daily refresh, just on demand. */}
+               {item.mediaType === 'Manga' && item.metadataSource === 'mangadex' && (
+                 <button
+                   onClick={handleRefreshMangaCover}
+                   disabled={isRefreshingCover}
+                   className="w-full py-3 border border-white/10 hover:bg-white/5 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl font-medium flex justify-center items-center gap-2 transition"
+                   title="Fetch every English (or Japanese) cover from MangaDex and match one to your progress"
+                 >
+                   {isRefreshingCover ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                   {isRefreshingCover ? 'Fetching covers…' : 'Fetch Covers from MangaDex'}
+                 </button>
                )}
 
                {/* Logging from here matters most when the detail view was reached

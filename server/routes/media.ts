@@ -14,7 +14,7 @@ import { isRemoteCover } from "../services/coverCache";
 const ADULT_TERMS = new Set(["erotic", "nsfw", "eroge", "sexual content"]);
 
 export function registerMediaRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser, normalizeMedia, safeJsonParse, syncOngoingMediaInBackground, autoTag, activity, coverCache } = ctx;
+  const { db, getAuthUser, normalizeMedia, safeJsonParse, syncOngoingMediaInBackground, autoTag, activity, coverCache, refreshMangaCovers } = ctx;
 
   app.get("/api/public/covers", (req, res) => {
     try {
@@ -76,6 +76,31 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
       }
       const saved = db.prepare('SELECT * FROM media WHERE id = ?').get(req.params.id);
       res.json({ ...result, media: normalizeMedia(saved) });
+    } catch (e: any) { res.status(500).json({ error: String(e?.message || e) }); }
+  });
+
+  /**
+   * Manual "fetch covers now" — the button on a manga's detail view.
+   *
+   * Awaited rather than fire-and-forget, unlike the same call made when a
+   * manga is first added: a button click has someone watching it and
+   * expecting either a result or an error, where the add-media flow has a
+   * dialog to get out of the way of instead.
+   */
+  app.post("/api/media/:id/refresh-manga-cover", async (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const row: any = db.prepare('SELECT * FROM media WHERE id = ? AND userId = ?').get(req.params.id, userId);
+      if (!row) return res.status(404).json({ error: 'Media not found' });
+      if (row.mediaType !== 'Manga' || row.metadataSource !== 'mangadex' || !row.metadataSourceId) {
+        return res.status(400).json({ error: 'This entry has no MangaDex covers to fetch.' });
+      }
+
+      await refreshMangaCovers(userId as string, row);
+
+      const saved = db.prepare('SELECT * FROM media WHERE id = ?').get(req.params.id);
+      res.json(normalizeMedia(saved));
     } catch (e: any) { res.status(500).json({ error: String(e?.message || e) }); }
   });
 
@@ -379,6 +404,20 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
         console.log(
           `[autotag] Skipped "${item.title}" — it arrived already tagged ` +
           `(${(item.genres || []).length} genre(s), ${(item.tags || []).length} tag(s)), so no Codex was compiled.`,
+        );
+      }
+
+      // A manga added from MangaDex gets its English (or, failing that,
+      // Japanese) covers pulled in immediately, rather than waiting for the
+      // next daily sweep — the entry would otherwise sit on whichever single
+      // default cover MangaDex search happened to embed until tomorrow.
+      // Fire-and-forget like the auto-tag queue above: this touches the
+      // network several times (a cover list, an aggregate, one download per
+      // volume) and must not hold up the Add Media dialog.
+      if (isNewEntry && item.mediaType === 'Manga' && item.metadataSource === 'mangadex' && item.metadataSourceId) {
+        const freshRow = db.prepare('SELECT * FROM media WHERE id = ?').get(item.id);
+        refreshMangaCovers(userId as string, freshRow).catch((e) =>
+          console.error(`[media] Could not fetch manga covers for "${item.title}"`, e),
         );
       }
 
