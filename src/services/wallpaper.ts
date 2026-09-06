@@ -56,21 +56,38 @@ const COVER_ASPECT = 1.5; // covers are 2:3
 const SHUFFLE = 0.38;
 
 /**
- * Loads a remote image through our own origin so the canvas stays exportable.
- * Object URLs are same-origin, so nothing here taints it.
+ * Loads a cover so the canvas stays exportable.
+ *
+ * A canvas that has drawn a cross-origin image refuses to export, which is
+ * what /api/image-proxy is for — but a cover already served from our own
+ * origin (everything the cover cache has downloaded, stored as a root-relative
+ * `/uploads/covers/...` path) is same-origin already and does not need it.
+ * Routing one through the proxy anyway used to be silently fatal rather than
+ * merely wasteful: `new URL(raw)` throws on a path with no protocol or host,
+ * so every locally-cached cover failed to load and only whichever titles
+ * still carried an original external URL (not yet cached) made it into the
+ * mosaic — the same handful of posters on every wallpaper, whatever the
+ * period, because the failure was systemic rather than week-specific.
  */
 async function loadProxied(url: string): Promise<HTMLImageElement | null> {
+  const isSameOrigin = url.startsWith('/') && !url.startsWith('//');
   let objectUrl: string | null = null;
   try {
-    const res = await apiFetch(`/api/image-proxy?url=${encodeURIComponent(url)}`);
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    objectUrl = URL.createObjectURL(blob);
+    let src: string;
+    if (isSameOrigin) {
+      src = url;
+    } else {
+      const res = await apiFetch(`/api/image-proxy?url=${encodeURIComponent(url)}`);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      objectUrl = URL.createObjectURL(blob);
+      src = objectUrl;
+    }
     const img = new Image();
     await new Promise<void>((resolve, reject) => {
       img.onload = () => resolve();
       img.onerror = () => reject(new Error('decode failed'));
-      img.src = objectUrl as string;
+      img.src = src;
     });
     await img.decode?.().catch(() => {});
     return img;
