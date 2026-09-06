@@ -757,7 +757,21 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
 
       const mappedResults = await Promise.all(mangaList.map(async (m: any) => {
         const attr = m.attributes;
-        const title = attr.title.en || attr.title.ja || attr.title["ja-ro"] || Object.values(attr.title)[0];
+        // MangaDex's own `title` field is very often the work's native-language
+        // name or its romanization ("Kimi wa Midara na Boku no Joou") rather than
+        // an English one — the community-supplied English name, when there is
+        // one, usually lives in `altTitles` instead, which the old lookup never
+        // checked. Prefer that; fall back to the native/romanized title only
+        // when nothing in English exists anywhere on the record. Either way, the
+        // original title is kept rather than discarded — as the subtitle, once
+        // an English title has taken its place.
+        const altTitles: Record<string, string>[] = Array.isArray(attr.altTitles) ? attr.altTitles : [];
+        const altTitleFor = (locale: string) => altTitles.find((t) => t && typeof t[locale] === "string")?.[locale];
+        const originalTitle: string = attr.title.ja || attr.title["ja-ro"] || (Object.values(attr.title)[0] as string) || "";
+        const englishTitle: string | undefined = attr.title.en || altTitleFor("en");
+
+        const title = englishTitle || originalTitle;
+        const subtitle = englishTitle && originalTitle && originalTitle !== englishTitle ? originalTitle : undefined;
         const description = attr.description.en || Object.values(attr.description || {})[0] || "";
         
         const authorRel = m.relationships.find((r: any) => r.type === "author");
@@ -806,6 +820,7 @@ export function registerSearchRoutes(app: Express, ctx: ServerContext) {
           sourceUrl: `https://mangadex.org/title/${m.id}`,
           id: m.id,
           title,
+          subtitle,
           description: description.replace(/\[\/?\w+\]/g, ""), // Simple BBCode removal
           coverImageUrl,
           year: attr.year,
