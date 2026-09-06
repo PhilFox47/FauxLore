@@ -14,7 +14,7 @@ import { isRemoteCover } from "../services/coverCache";
 const ADULT_TERMS = new Set(["erotic", "nsfw", "eroge", "sexual content"]);
 
 export function registerMediaRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser, normalizeMedia, safeJsonParse, syncOngoingMediaInBackground, autoTag, activity, coverCache, refreshMangaCovers } = ctx;
+  const { db, getAuthUser, normalizeMedia, safeJsonParse, autoTag, activity, coverCache, refreshMangaCovers } = ctx;
 
   app.get("/api/public/covers", (req, res) => {
     try {
@@ -108,9 +108,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
-      // Fire and forget sync
-      syncOngoingMediaInBackground(userId as string);
-      
+
       const rows = db.prepare('SELECT * FROM media WHERE userId = ? ORDER BY updatedAt DESC').all(userId);
       res.json(rows.map(normalizeMedia));
     } catch (e) { res.status(500).json({ error: String(e) }); }

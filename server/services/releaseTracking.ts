@@ -212,6 +212,15 @@ export function releaseFieldsFor(
   if (upstream.nextReleaseAt !== undefined) fields.nextReleaseAt = upstream.nextReleaseAt ?? null;
   if (upstream.nextReleaseLabel !== undefined) fields.nextReleaseLabel = upstream.nextReleaseLabel ?? null;
   if (typeof upstream.availableUnits === "number") fields.availableUnits = upstream.availableUnits;
+  // Previously only ever set once, at import — nothing after that re-checked
+  // whether the source itself still called the work ongoing, so a series that
+  // finished stayed marked "ongoing" in this app forever. Written verbatim
+  // (uppercased) into `releaseStatus`, and boiled down to the `isOngoing` flag
+  // the rest of the app already reads.
+  if (upstream.sourceStatus) {
+    fields.releaseStatus = upstream.sourceStatus.toUpperCase();
+    fields.isOngoing = upstream.sourceStatus.toLowerCase() === "ongoing" ? 1 : 0;
+  }
   return fields;
 }
 

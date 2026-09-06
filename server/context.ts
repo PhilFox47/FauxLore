@@ -24,7 +24,6 @@ export interface ServerContext {
   getAuthUser: (req: any, res?: any) => string | null;
   normalizeMedia: (row: any) => any;
   safeJsonParse: (str: any) => any[];
-  syncOngoingMediaInBackground: (userId: string) => Promise<void>;
   createDatabaseBackup: () => { success: boolean; file?: string; error?: string };
   spawnWorldBoss: (userId: string, throwOnEmpty?: boolean, targetMediaType?: string) => Promise<void>;
   generateEnemy: (userId: string, mediaItem: any, level: number) => Promise<GeneratedEnemy | null>;

@@ -15,7 +15,6 @@ import { initDiagnostics, captureConsole, httpDiagnostics, diag } from "./lib/di
 import { safeJsonParse, normalizeMedia } from "./lib/normalize";
 import { recalcTaxonomyUsageCounts } from "./lib/taxonomyCounts";
 import { createGetAuthUser } from "./services/auth";
-import { createMediaSync } from "./services/mediaSync";
 import { createMetadataRefresh } from "./services/metadataRefresh";
 import { createNotifications } from "./services/notifications";
 import { reportBrowserStatus } from "./integrations/gamestorylog";
@@ -202,7 +201,6 @@ async function startServer() {
 
   // Request-scoped helpers
   const getAuthUser = createGetAuthUser(db);
-  const syncOngoingMediaInBackground = createMediaSync(db);
 
   // Recalculate Taxonomy Usage Counts on startup
   recalcTaxonomyUsageCounts(db);
@@ -214,7 +212,6 @@ async function startServer() {
     getAuthUser,
     normalizeMedia,
     safeJsonParse,
-    syncOngoingMediaInBackground,
     createDatabaseBackup,
     spawnWorldBoss,
     generateEnemy,

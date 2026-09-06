@@ -27,6 +27,14 @@ export interface ReleaseState {
   totalUnits?: number;
   /** Whether the source considers the work finished. */
   ended?: boolean;
+  /**
+   * The source's own status word, verbatim (MangaDex: "ongoing", "completed",
+   * "hiatus", "cancelled"). Kept separate from `ended` — which only means
+   * "stop suggesting Caught Up" — because `releaseFieldsFor` writes this one
+   * straight into `releaseStatus`/`isOngoing`, and a paused series (hiatus)
+   * should read as paused, not lumped in with finished or with running.
+   */
+  sourceStatus?: string;
 }
 
 const isoDay = (v?: string | null): string | undefined => {
@@ -200,12 +208,21 @@ export async function mangadexRelease(
     // Future chapters are the point, so they must not be filtered out.
     includeFuturePublishAt: "1",
   });
-  const res = await fetch(`https://api.mangadex.org/manga/${encodeURIComponent(id)}/feed?${params}`, {
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) throw new Error(`MangaDex ${res.status}`);
-  const body: any = await res.json();
+  const [feedRes, mangaRes] = await Promise.all([
+    fetch(`https://api.mangadex.org/manga/${encodeURIComponent(id)}/feed?${params}`, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(15_000),
+    }),
+    // The feed carries no opinion on the manga's own status (ongoing, completed,
+    // hiatus, cancelled) — that only lives on the manga resource itself, which
+    // otherwise nothing after the initial import ever asks for again.
+    fetch(`https://api.mangadex.org/manga/${encodeURIComponent(id)}`, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(15_000),
+    }),
+  ]);
+  if (!feedRes.ok) throw new Error(`MangaDex ${feedRes.status}`);
+  const body: any = await feedRes.json();
   const chapters: any[] = Array.isArray(body.data) ? body.data : [];
 
   let available = 0;
@@ -223,9 +240,23 @@ export async function mangadexRelease(
     }
   }
 
+  // A failure here costs only the status refresh, not the whole check — the
+  // chapter feed above is the half of this that actually decides Active vs
+  // Caught Up, so it must not be thrown away over a second request hiccuping.
+  let sourceStatus: string | undefined;
+  if (mangaRes.ok) {
+    const mangaBody: any = await mangaRes.json();
+    sourceStatus = mangaBody?.data?.attributes?.status || undefined;
+  }
+
   return {
     availableUnits: chapters.length ? available : undefined,
     nextReleaseAt: next?.at,
     nextReleaseLabel: next?.label,
+    sourceStatus,
+    // Cancelled and completed are both "nothing more is coming"; hiatus is a
+    // pause, not an ending, so being caught up on it should still read as
+    // Caught Up rather than being silently left alone forever.
+    ended: sourceStatus ? sourceStatus === "completed" || sourceStatus === "cancelled" : undefined,
   };
 }
