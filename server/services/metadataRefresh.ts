@@ -2,6 +2,7 @@ import type { Db } from "../context";
 import { getGameDetails } from "../integrations/gamestorylog";
 import { getIgdbToken, igdbCoverUrl } from "../integrations/igdb";
 import { igdbRelease, mangadexRelease, tmdbRelease, type ReleaseState } from "../integrations/releaseFeeds";
+import { buildMangaCoverIndex, pickMangaCoverUrl } from "../integrations/mangadexCovers";
 import type { NewNotification } from "./notifications";
 import type { CoverCache } from "./coverCache";
 import { decideStatus, releaseDateMoved, releaseFieldsFor } from "./releaseTracking";
@@ -226,6 +227,46 @@ export function createMetadataRefresh(
       console.error(`[metadataRefresh] Could not refresh the cover for "${row.title}"`, e);
     }
   }
+
+  /**
+   * Re-fetches every English (or, failing that, Japanese) cover MangaDex has
+   * for a manga, and updates the entry's cover to match its current reading
+   * progress if that changed.
+   *
+   * Runs every sweep, not only when a new chapter was found — a publisher can
+   * upload a volume's cover well before or after the chapter count for that
+   * volume actually changes, so "did the chapter count move" is not the same
+   * question as "is there a cover we did not have yesterday". It is still
+   * cheap on the days nothing changed: `cacheCover` recognises an
+   * already-downloaded file by its URL and does not re-fetch it, so a sweep
+   * that finds nothing new upstream costs one MangaDex list call and one
+   * aggregate call, not a redownload of every volume every day.
+   *
+   * The rest of the day, a chapter logged or un-logged against this entry
+   * updates the shown cover instantly and without any network call at all —
+   * see `syncMangaCoverForProgress` in routes/logs.ts — by reading the index
+   * this stores.
+   */
+  async function refreshMangaCovers(userId: string, row: any) {
+    if (!coverCache || row.mediaType !== "Manga" || row.metadataSource !== "mangadex") return;
+    try {
+      const index = await buildMangaCoverIndex(row.metadataSourceId, coverCache.cacheCover);
+      // Neither language has a single cover on file for this title at all —
+      // leave whatever cover the entry already has rather than clearing it.
+      if (!index) return;
+
+      db.prepare("UPDATE media SET mangaCoverIndex = ? WHERE id = ?").run(JSON.stringify(index), row.id);
+
+      const wanted = pickMangaCoverUrl(index, row.chaptersRead || 0);
+      if (wanted && wanted !== row.coverImageUrl) {
+        db.prepare("UPDATE media SET coverImageUrl = ? WHERE id = ? AND userId = ?").run(wanted, row.id, userId);
+        console.log(`[metadataRefresh] "${row.title}" cover updated (${index.locale}) to match chapter ${row.chaptersRead || 0}.`);
+      }
+    } catch (e) {
+      console.error(`[metadataRefresh] Could not refresh manga covers for "${row.title}"`, e);
+    }
+  }
+
   /**
    * Writes what a source said about dates and instalments, and moves the status
    * if that changed the answer to "is there anything to watch".
@@ -403,6 +444,7 @@ export function createMetadataRefresh(
           }
 
           if (upstream.release) await applyRelease(userId, row, upstream.release);
+          await refreshMangaCovers(userId, row);
         } catch (e) {
           // A single failing item must never abort the sweep (a page may 404 or the
           // markup may have shifted). Stamp lastSyncAt so it backs off either way.

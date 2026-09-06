@@ -422,4 +422,11 @@ export function runMigrations(db: Db) {
       CREATE INDEX IF NOT EXISTS diagnostics_channel ON diagnostics(channel, id DESC);
     `);
   } catch (e) {}
+
+  // Per-volume covers for a MangaDex-sourced Manga entry, in whichever of
+  // English/Japanese was chosen (see server/integrations/mangadexCovers.ts) —
+  // every cover in that language, already taken as a local copy, plus the
+  // chapter->volume map, so the entry's cover can be kept in step with actual
+  // reading progress without hitting MangaDex again on every chapter logged.
+  try { db.prepare("ALTER TABLE media ADD COLUMN mangaCoverIndex TEXT").run(); } catch (e) {}
 }

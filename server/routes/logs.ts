@@ -1,8 +1,35 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
+import { pickMangaCoverUrl, type MangaCoverIndex } from "../integrations/mangadexCovers";
 
 export function registerLogRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, activity, autoTag } = ctx;
+
+  /**
+   * Keeps a manga's cover matched to reading progress as chapters are logged,
+   * edited or removed — entirely locally, from whatever `mangaCoverIndex`
+   * metadataRefresh last stored (see services/metadataRefresh.ts). No
+   * MangaDex call happens here: every cover in the winning language was
+   * already downloaded when the index was built, so picking a different one
+   * is a lookup, not a fetch. An entry with no index yet (not MangaDex-
+   * sourced, or not swept since this existed) is left untouched — it picks
+   * up the right cover on its next daily refresh instead.
+   */
+  function syncMangaCoverForProgress(userId: string, mediaId: string) {
+    try {
+      const row: any = db
+        .prepare("SELECT coverImageUrl, chaptersRead, mangaCoverIndex FROM media WHERE id = ? AND userId = ? AND mediaType = 'Manga'")
+        .get(mediaId, userId);
+      if (!row?.mangaCoverIndex) return;
+      const index: MangaCoverIndex = JSON.parse(row.mangaCoverIndex);
+      const wanted = pickMangaCoverUrl(index, row.chaptersRead || 0);
+      if (wanted && wanted !== row.coverImageUrl) {
+        db.prepare("UPDATE media SET coverImageUrl = ? WHERE id = ? AND userId = ?").run(wanted, mediaId, userId);
+      }
+    } catch (e) {
+      console.error("[logs] Could not sync the manga cover to reading progress", e);
+    }
+  }
 
   app.get("/api/logs", (req, res) => {
     try {
@@ -166,6 +193,7 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
           } else {
             db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, updatedAt = ?, status = ?, userRating = ?, userReview = ?, watched = ? WHERE id = ? AND userId = ?`).run(log.delta, now, newStatus, newUserRating, newUserReview, newWatched, log.mediaId, userId);
           }
+          if (type === 'chaptersRead') syncMangaCoverForProgress(userId, log.mediaId);
         } else {
           if (log.isHistoric) {
             db.prepare(`UPDATE media SET status = ?, userRating = ?, userReview = ?, watched = ? WHERE id = ? AND userId = ?`).run(newStatus, newUserRating, newUserReview, newWatched, log.mediaId, userId);
@@ -316,6 +344,7 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
           const now = new Date().toISOString();
           if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {
             db.prepare(`UPDATE media SET ${type} = IFNULL(${type}, 0) + ?, updatedAt = ? WHERE id = ? AND userId = ?`).run(deltaDiff, now, existingLog.mediaId, userId);
+            if (type === 'chaptersRead') syncMangaCoverForProgress(userId, existingLog.mediaId);
           }
         }
       }
@@ -345,6 +374,7 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
         if (['playtimeHours', 'pagesRead', 'chaptersRead', 'episodesWatched', 'watchCount', 'issuesRead'].includes(type)) {
           // Subtracting the delta, ensuring it doesn't drop below 0
           db.prepare(`UPDATE media SET ${type} = MAX(0, IFNULL(${type}, 0) - ?), updatedAt = ? WHERE id = ? AND userId = ?`).run(existingLog.delta, now, existingLog.mediaId, userId);
+          if (type === 'chaptersRead') syncMangaCoverForProgress(userId, existingLog.mediaId);
         }
       }
 
