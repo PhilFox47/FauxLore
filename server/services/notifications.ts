@@ -20,7 +20,8 @@ export type NotificationType =
   | "media_released"
   | "recap_ready"
   | "boss_expiring"
-  | "inactivity";
+  | "inactivity"
+  | "codex_failed";
 
 export interface NewNotification {
   type: NotificationType;

@@ -125,12 +125,21 @@ async function startServer() {
     console.error("Flavor library seed failed:", e);
   }
 
+  // Created ahead of the Codex service (and everything else that researches)
+  // specifically so a failed compile has somewhere to report to. Push is wired
+  // into the notification writer rather than into each producer, so anything
+  // that records a notification reaches the phone for free — and the dedupe
+  // key that stops the bell repeating itself stops the phone repeating too.
+  const push = createPushService(db);
+  const { notify, runAllChecks, checkInactivity } = createNotifications(db, (userId, n) => push.deliver(userId, n));
+
   const codex = createCodexService({
     db,
     onFlavorTexts: (userId, mediaId, mediaType, title, texts) => {
       try { flavorLibrary.writeEarned(userId, mediaId, mediaType, title, texts); }
       catch (e) { console.error("[flavorLibrary] Could not record researched lines", e); }
     },
+    notify,
   });
   const { generateBossImageBackground, generateArtifactImageBackground, describeImageModel } = createImageService({ db, aiImagesDir, codex });
   const coverCache = createCoverCache({ coversDir });
@@ -143,11 +152,6 @@ async function startServer() {
 
   // Daily metadata refresh: re-check tracked media (Active / On Hold) against their
   // source for new versions. Runs early and off-peak.
-  // Push is wired into the notification writer rather than into each producer,
-  // so anything that records a notification reaches the phone for free — and the
-  // dedupe key that stops the bell repeating itself stops the phone repeating too.
-  const push = createPushService(db);
-  const { notify, runAllChecks, checkInactivity } = createNotifications(db, (userId, n) => push.deliver(userId, n));
   const { refreshTrackedMedia } = createMetadataRefresh(db, notify, (userId, mediaId) => {
     // A released entry finally has something to research. Dormant accounts stay
     // parked: the freeze is about AI spend, and this is the expensive part.

@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose, type AiConfig } from "../lib/ai";
-import { searchProviderById, searchProviderByProviderAndDepth } from "../../src/lib/searchProviders";
+import { searchProviderById } from "../../src/lib/searchProviders";
 import {
   FACETS, FACET_FLOORS, TYPE_BRIEF,
   buildDossierPrompt,
@@ -149,18 +149,6 @@ export type FlavorScope = "work" | "medium";
 
 /** The ceiling the research is told to respect, enforced rather than trusted. */
 export const MAX_FLAVOR_TEXTS = 9;
-
-/**
- * The floor. Not enforced by inventing anything — enforced by looking again.
- *
- * A work with fewer than this after the first pass is what the automatic
- * follow-up call exists for: `generate()` checks this exact number and spends
- * one more call specifically hunting for memories (and any other empty
- * section) before giving up. What is never done is asking the model to pad a
- * short list to reach it — a fabricated line is worse than an honest two, and
- * the floor stays a target for research effort, not a quota on the output.
- */
-export const MIN_FLAVOR_TEXTS = 3;
 
 /**
  * How many of those may be about the format rather than the work.
@@ -1134,7 +1122,7 @@ function dossierSearch(config: AiConfig) {
 const NO_RETRIEVAL_THRESHOLD = 500;
 
 /** Codex storage plus the on-demand generation the AI features call into. */
-export function createCodexService({ db, onFlavorTexts }: {
+export function createCodexService({ db, onFlavorTexts, notify }: {
   db: Db;
   /**
    * Where a dossier's researched lines go so the library can serve them.
@@ -1146,6 +1134,17 @@ export function createCodexService({ db, onFlavorTexts }: {
    * to hang lines off yet.
    */
   onFlavorTexts?: (userId: string, mediaId: string, mediaType: string, title: string, texts: CodexFlavorText[]) => void;
+  /**
+   * Records a persistent notification for a Codex that could not be compiled.
+   *
+   * There is no automatic retry any more — a bad reply is a failure, not
+   * something to fix by spending a second deep-search fee. A toast would have
+   * been enough for someone watching the button they just clicked, but a
+   * Codex is just as often compiled in the background (autotag's queue, a
+   * world boss spawn) with nobody looking, so the failure needs to survive
+   * until someone checks the bell — which is what this is for.
+   */
+  notify?: (userId: string, n: { type: "codex_failed"; title: string; body?: string; mediaId?: string; link?: string; dedupeKey: string }) => boolean;
 }) {
   function publishFlavorTexts(userId: string, row: any) {
     if (!onFlavorTexts || !row?.mediaId || !row?.data) return;
@@ -1317,21 +1316,24 @@ export function createCodexService({ db, onFlavorTexts }: {
       );
 
       /**
-       * ONE CALL, TRIED TWICE IF THE FIRST ANSWER IS UNUSABLE OR UNGROUNDED.
+       * ONE CALL. NO RETRY, NO FALLBACK, NO SECOND SEARCH — EVER.
        *
-       * Still one call in the sense that matters — there is no pipeline, no
-       * second stage, no other prompt. It is the same request repeated when the
-       * reply cannot be used at all, which measured at three failures in
-       * fourteen: every one of them came back as a literal `{}` after twenty to
-       * thirty-four thousand output tokens, and every one of them succeeded when
-       * it was run again by hand. Making the user notice and click is not a
-       * recovery strategy when the fix is to ask the same question twice.
+       * This used to retry once on an unusable reply or on measured
+       * no-retrieval, and separately ran one automatic follow-up call to fill
+       * gaps. Both are gone: every extra call is a second deep-search fee,
+       * which is the expensive part of this request, and doubling that cost on
+       * every occasional bad reply or thin section was worse than the problem
+       * it fixed. Linkup's single pass is good often enough that fixing its
+       * rare misses automatically was not worth doubling the running cost of
+       * every Codex to do it.
        *
-       * The retry now also fires when the first attempt injected nothing at all
-       * (see NO_RETRIEVAL_THRESHOLD), and in that case it does not repeat the
-       * same request: it switches to the configured `fallback` backend, if the
-       * chosen one has one. Repeating the exact call that just retrieved zero
-       * tokens has no reason to retrieve any the second time.
+       * A reply that cannot be used at all is now a hard failure: nothing is
+       * written, the previous dossier (if any) is kept exactly as it was, and
+       * a notification is recorded so it can be noticed and re-run by hand —
+       * see the `catch` block below. A reply that IS usable but leaves a
+       * section thin or short on memories is saved exactly as researched.
+       * "Missing some things" and "unusable" are different outcomes and only
+       * the second one is worth a person's attention.
        */
       const primaryProvider = searchProviderById(aiConfig.searchProvider);
       let lastUsage: { injectedTokens?: number } | null = null;
@@ -1406,46 +1408,18 @@ export function createCodexService({ db, onFlavorTexts }: {
         return DOSSIER_KEYS.some((k) => doc[k] != null) ? doc : null;
       };
 
-      let finalSearchUsed = { provider: primaryProvider.provider, depth: primaryProvider.depth };
-      let raw = await askForDossier(finalSearchUsed);
-      let parsed = asDossier(raw);
-      const firstUsage = lastUsage;
-      const firstHadNoRetrieval = !!firstUsage && (firstUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
-
-      if (!parsed || firstHadNoRetrieval) {
-        const fallback = firstHadNoRetrieval ? primaryProvider.fallback : undefined;
-        const retryProvider = fallback ? searchProviderById(fallback) : primaryProvider;
-        finalSearchUsed = { provider: retryProvider.provider, depth: retryProvider.depth };
-
-        if (!parsed) {
-          console.warn(
-            `[codex] "${subject.title}" came back unusable (${raw.length} chars, keys: ` +
-            `${(() => { try { return Object.keys(parseJsonLoose<any>(raw)).join(", ") || "(none)"; } catch { return "unparseable"; } })()}). ` +
-            `Asking once more${fallback ? ` with ${retryProvider.label} instead of ${primaryProvider.label}` : ""}.`,
-          );
-        } else {
-          console.warn(
-            `[codex] "${subject.title}" — ${primaryProvider.label} injected no search context at all ` +
-            `(reasoning spent ${(firstUsage as any)?.injectedTokens ?? 0} tokens on retrieval). ` +
-            `${fallback ? `Retrying with ${retryProvider.label}.` : "No fallback is configured for this backend; asking once more."}`,
-          );
-        }
-
-        raw = await askForDossier({ provider: retryProvider.provider, depth: retryProvider.depth });
-        parsed = asDossier(raw);
-      }
-
-      // Whether EITHER attempt actually got material back, for the record.
-      const secondHadNoRetrieval = !!lastUsage && (lastUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
-      const noRetrievalOnFinalAttempt = parsed ? secondHadNoRetrieval : firstHadNoRetrieval;
+      const finalSearchUsed = { provider: primaryProvider.provider, depth: primaryProvider.depth };
+      const raw = await askForDossier(finalSearchUsed);
+      const parsed = asDossier(raw);
+      const noRetrievalOnFinalAttempt = !!lastUsage && (lastUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
 
       if (!parsed) {
-        // Logged in full because the reply itself is the only evidence of why,
-        // and by now it has failed twice.
+        // Logged in full because the reply itself is the only evidence of why.
         console.error(
-          `[codex] "${subject.title}" came back unusable twice. Second reply began: ${raw.slice(0, 400)}`,
+          `[codex] "${subject.title}" came back unusable (${raw.length} chars, keys: ` +
+          `${(() => { try { return Object.keys(parseJsonLoose<any>(raw)).join(", ") || "(none)"; } catch { return "unparseable"; } })()}).`,
         );
-        throw new Error("The research did not come back as a usable dossier, twice.");
+        throw new Error("The research did not come back as a usable dossier.");
       }
 
       /**
@@ -1480,143 +1454,18 @@ export function createCodexService({ db, onFlavorTexts }: {
       if (problem) console.warn(`Codex may have identified the wrong work for "${subject.title}": ${problem}`);
 
       /**
-       * ONE AUTOMATIC FOLLOW-UP, WHEN SOMETHING CAME BACK EMPTY.
-       *
-       * A different thing from the "Expand" button, though it shares its exact
-       * mechanism: this fires on its own, at most once, whenever the dossier
-       * just researched has a completely empty tracked list — characters,
-       * antagonists, locations, factions, items or terminology — or fewer than
-       * MIN_FLAVOR_TEXTS memories. Both are the sections a single pass leaves
-       * thinnest, and asking again — handing the model exactly what was already
-       * found, so it spends the call on what is missing rather than repeating
-       * itself — is a better use of a second call than saving a visibly
-       * incomplete dossier because nobody happened to press the button.
-       *
-       * Applies whichever path produced `data`: a fresh compile, a Redo, or a
-       * manual Expand that still came up short. Whatever the mode, this adds at
-       * most ONE further call to it, ever, which is the whole point — it is a
-       * safety net for an obvious gap, not a loop chasing a perfect answer. If
-       * the follow-up also comes back short, or fails outright, the dossier is
-       * saved exactly as first researched.
-       *
-       * Skipped when the identification itself is in doubt: spending a call to
-       * fill gaps in a dossier about the wrong work only compounds the error.
-       */
-      /**
-       * The follow-up's own view of how well-sourced the sections IT worked on
-       * turned out, kept separately from `parsed` because `parsed` is never
-       * reassigned here — only `data` is, by `mergeDossiers`. Without this, a
-       * facet the primary pass rated "low" because it came back empty keeps
-       * that rating in the saved dossier even after the follow-up fills it in
-       * and rates it "high" itself: measured on this exact title, "world" and
-       * "things" went from empty/low on the first pass to fully populated/high
-       * after the follow-up, and the saved confidence still read "low" for
-       * both, dragging the overall grade down to "medium" for a dossier that
-       * ended up with eighteen sources and every list field over its floor.
-       */
-      let followUpSectionConfidence: Record<string, string> | null = null;
-
-      if (!problem) {
-        const emptySections = LIST_FIELDS
-          .filter((f) => f.key !== "flavorTexts")
-          .filter((f) => list((data as any)[f.key]).length === 0)
-          .map((f) => f.key);
-        const tooFewMemories = list((data as any).flavorTexts).length < MIN_FLAVOR_TEXTS;
-
-        if (emptySections.length > 0 || tooFewMemories) {
-          const gaps = [...emptySections, tooFewMemories ? "memories" : ""].filter(Boolean).join(", ");
-
-          /**
-           * Standard depth, not deep — deliberately, and only for this call.
-           *
-           * The primary pass is open-ended: find everything about a work it
-           * knows almost nothing about yet, which is exactly what deep's
-           * iterative, ten-round search exists for. This pass is not that. It
-           * runs only when the primary already succeeded and left a handful of
-           * NAMED, SPECIFIC gaps — an empty list field, or memories short of
-           * the floor — and `summariseForExpansion` hands it exactly what is
-           * still missing. A narrow, already-scoped question is the case
-           * standard search is for; paying deep's ~10x fee to re-run the whole
-           * open-ended research question a second time was never what this
-           * call was for in the first place.
-           *
-           * The one exception is `noRetrievalOnFinalAttempt`: if the primary
-           * attempt got zero material back even on deep, a narrower standard
-           * search is not a safe bet either — it inherits the same failure,
-           * only with less searching behind it. That case instead reaches for
-           * the backend's OWN fallback (still at deep), one hop further along
-           * the same chain the primary retry already uses, rather than
-           * repeating a call already measured to retrieve nothing.
-           */
-          let followUpSearch = { provider: finalSearchUsed.provider, depth: "standard" };
-          if (noRetrievalOnFinalAttempt) {
-            const used = searchProviderByProviderAndDepth(finalSearchUsed.provider, finalSearchUsed.depth);
-            followUpSearch = used?.fallback
-              ? (() => {
-                  const next = searchProviderById(used.fallback!);
-                  console.log(`[codex] "${subject.title}" — the follow-up will try ${next.label} instead of repeating a backend that retrieved nothing.`);
-                  return { provider: next.provider, depth: next.depth };
-                })()
-              : finalSearchUsed;
-          }
-
-          console.log(`[codex] "${subject.title}" has gaps after research (${gaps}); trying one automatic follow-up.`);
-          try {
-            const followUpRaw = await askForDossier(followUpSearch, summariseForExpansion(data));
-            const followUpParsed = asDossier(followUpRaw);
-            if (followUpParsed) {
-              if (followUpParsed.sectionConfidence && typeof followUpParsed.sectionConfidence === "object") {
-                followUpSectionConfidence = followUpParsed.sectionConfidence;
-              }
-              const before = LIST_FIELDS.reduce((n, f) => n + list((data as any)[f.key]).length, 0);
-              data = mergeDossiers(data, stripPlaceholders(followUpParsed));
-              const after = LIST_FIELDS.reduce((n, f) => n + list((data as any)[f.key]).length, 0);
-              console.log(
-                `[codex] Automatic follow-up added ${after - before} entr${after - before === 1 ? "y" : "ies"} ` +
-                `to "${subject.title}".`,
-              );
-            } else {
-              console.warn(`[codex] Automatic follow-up for "${subject.title}" came back unusable; keeping the dossier as first researched.`);
-            }
-          } catch (e) {
-            console.warn(`[codex] Automatic follow-up for "${subject.title}" failed; keeping the dossier as first researched.`, e);
-          }
-        }
-      }
-
-      /**
        * What the dossier says about its own sourcing.
        *
        * Everything came out of the same searched pass, so every section is
        * "searched". The per-section confidence is the model's own, which is
        * worth more than one overall grade: it is where it admits which parts it
-       * could not find much on.
+       * could not find much on. There is no follow-up to merge in any more — a
+       * thin or empty section is left exactly as the single pass reported it,
+       * rather than spending a second search call trying to fix it.
        */
-      /**
-       * A facet's confidence can only go up from a follow-up that filled it in
-       * — never down, since the follow-up only ever ADDS to what is there
-       * (`mergeDossiers` never replaces an existing entry). Ranked rather than
-       * simply overwritten because the follow-up's own briefs only cover the
-       * facets that were actually gappy; a facet it left alone should keep the
-       * primary pass's rating, not lose it to an absent key.
-       */
-      const CONFIDENCE_RANK: Record<string, number> = { low: 1, medium: 2, high: 3 };
-      const betterGrade = (a?: string, b?: string): string | undefined =>
-        !a ? b : !b ? a : (CONFIDENCE_RANK[b] || 0) > (CONFIDENCE_RANK[a] || 0) ? b : a;
-
-      const primaryFacetConfidence: Record<string, string> =
-        parsed.sectionConfidence && typeof parsed.sectionConfidence === "object" ? parsed.sectionConfidence : {};
-      const mergedFacetConfidence: Record<string, string> = { ...primaryFacetConfidence };
-      if (followUpSectionConfidence) {
-        for (const [facet, grade] of Object.entries(followUpSectionConfidence)) {
-          const merged = betterGrade(mergedFacetConfidence[facet], grade);
-          if (merged) mergedFacetConfidence[facet] = merged;
-        }
-      }
-
       const sectionConfidence: CodexSectionConfidence = {
         identity: identity.confidence,
-        ...mergedFacetConfidence,
+        ...(parsed.sectionConfidence && typeof parsed.sectionConfidence === "object" ? parsed.sectionConfidence : {}),
       };
       const sectionSourcing: CodexSectionSourcing = {};
       for (const facet of FACETS) sectionSourcing[facet] = "searched";
@@ -1762,6 +1611,23 @@ export function createCodexService({ db, onFlavorTexts }: {
       if (hasPrevious) {
         console.warn(`Kept the previous Codex for "${subject.title}"; the refresh failed and changed nothing.`);
       }
+
+      // No automatic retry exists to recover from this on its own any more, so
+      // it has to reach the person who can decide to press the button again —
+      // and a toast is not enough, since this fires just as often from a
+      // background queue (autotag, a boss spawn) as from someone watching the
+      // panel. Deduped by day so a background job that keeps retrying the same
+      // broken entry does not fill the bell with copies of the same failure.
+      notify?.(userId, {
+        type: "codex_failed",
+        title: `Codex failed for "${subject.title}"`,
+        body: hasPrevious
+          ? `A refresh attempt failed and the previous Codex was kept as-is. ${message}`
+          : `${message} Run it again manually from the entry's Codex panel when ready.`,
+        mediaId: subject.mediaId || undefined,
+        link: subject.mediaId ? `/library/${encodeURIComponent(subject.mediaType)}` : undefined,
+        dedupeKey: `codex_failed:${id}:${new Date().toISOString().slice(0, 10)}`,
+      });
     }
 
     const finished: any = db.prepare("SELECT * FROM media_codex WHERE id = ?").get(id);
