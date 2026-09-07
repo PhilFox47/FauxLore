@@ -1,7 +1,7 @@
 import type { Db } from "../context";
-import { Agent } from "undici";
 import { searchProviderById, searchProviderByProviderAndDepth } from "../../src/lib/searchProviders";
 import { recordAiCall, recordAiCallStart, nextCallId, recordPayload } from "./diagnostics";
+import { longRequestDispatcher as dispatcher } from "./httpDispatcher";
 
 /**
  * Server-side text generation via NanoGPT's OpenAI-compatible endpoint.
@@ -26,35 +26,9 @@ import { recordAiCall, recordAiCallStart, nextCallId, recordPayload } from "./di
  */
 const NANO_GPT_CHAT_URL = "https://nano-gpt.com/api/v1/chat/completions";
 
-/**
- * Node's own five-minute cap on a request, removed.
- *
- * `fetch` waits 300 seconds for the response headers and then aborts. That is
- * fine for an ordinary API and completely wrong for this one: the request is not
- * streamed, so the provider sends nothing at all until a deep search and a full
- * dossier are finished, and a Codex for a niche title takes longer than five
- * minutes to reach that point. Our own fifteen-minute budget never got a chance
- * to apply — Node killed the connection at 300,783ms first, reported it as
- * "fetch failed", and the retry logic then spent five more minutes twice over on
- * a failure that could never clear.
- *
- * Both timeouts are disabled so `AbortSignal.timeout` is the only clock, which
- * is the one the caller actually set. `connectTimeout` stays short, because
- * failing to reach the host at all is a genuinely different thing and should
- * still fail fast.
- *
- * Imported statically rather than with `require`, which was the first attempt and
- * silently did nothing: this package is ESM, so `require` is not defined, the
- * construction threw, and the dispatcher stayed unset — the five-minute cap was
- * still in force everywhere the server ran from source. Only the bundled build
- * would have worked, which is the worst kind of half-fix.
- */
-let dispatcher: Agent | undefined;
-try {
-  dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0, connectTimeout: 30_000 });
-} catch (e) {
-  console.warn("[ai] Could not raise the HTTP timeout; long requests may be cut off at five minutes", e);
-}
+// The undici Agent that lifts Node's 300s header/body timeout — see
+// lib/httpDispatcher.ts, shared with routes/ai.ts's client-facing proxy,
+// which needs exactly the same fix for exactly the same reason.
 
 export interface AiConfig {
   apiKey: string;

@@ -2,6 +2,7 @@ import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { getAiConfig } from "../lib/ai";
 import { recordAiCallStart, recordAiCall, nextCallId, recordPayload } from "../lib/diagnostics";
+import { longRequestDispatcher } from "../lib/httpDispatcher";
 
 export function registerAiRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, activity } = ctx;
@@ -115,9 +116,16 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
 
       const remoteRes = await fetch("https://nano-gpt.com/api/v1/chat/completions", {
         method: "POST",
+        // Lifts Node's 300s response-header cap — see lib/httpDispatcher.ts.
+        // This route was missing it entirely: a non-streamed generation past
+        // five minutes (recap synthesis over a whole year of logs, easily)
+        // died with a bare "fetch failed" at 300,785ms, the exact failure
+        // this fix was already proven against on the Codex's own calls.
+        ...(longRequestDispatcher ? { dispatcher: longRequestDispatcher } : {}),
+        signal: AbortSignal.timeout(600_000),
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         body: JSON.stringify(req.body)
-      });
+      } as any);
       const text = await remoteRes.text();
       recordPayload(callId, "client", { reply: text });
 
@@ -170,9 +178,14 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
 
       const remoteRes = await fetch("https://nano-gpt.com/api/v1/images/generations", {
         method: "POST",
+        // Same 300s-cap fix as the chat-completions route above, for the
+        // same reason — a slow render should not die with a bare "fetch
+        // failed" just because it crossed Node's default header timeout.
+        ...(longRequestDispatcher ? { dispatcher: longRequestDispatcher } : {}),
+        signal: AbortSignal.timeout(180_000),
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         body: JSON.stringify(req.body)
-      });
+      } as any);
       const text = await remoteRes.text();
       recordPayload(callId, "client-image", { reply: text });
 

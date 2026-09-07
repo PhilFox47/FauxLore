@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText } from "../lib/ai";
 import { recordAiCallStart, recordAiCall, nextCallId, recordPayload } from "../lib/diagnostics";
+import { longRequestDispatcher } from "../lib/httpDispatcher";
 import { AUTHENTICITY, SHARPNESS, enemyTier, rarityArt } from "../lib/artDirection";
 import { codexArtStyleBlock, codexPromptBlock, type CodexService } from "./codex";
 
@@ -171,9 +172,16 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
 
     const res = await fetch(url, {
       method: "POST",
+      // Same 300s Node header-timeout fix as everywhere else this app talks
+      // to NanoGPT — see lib/httpDispatcher.ts. Image renders are usually
+      // well under that, but a slow one should not die with a bare "fetch
+      // failed" for a reason that has nothing to do with the actual timeout
+      // below.
+      ...(longRequestDispatcher ? { dispatcher: longRequestDispatcher } : {}),
+      signal: AbortSignal.timeout(180_000),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(body),
-    });
+    } as any);
     const text = await res.text();
     recordPayload(callId, "images", { reply: text });
     recordAiCall({
