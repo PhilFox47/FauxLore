@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { AI_PERSONAS } from "../../src/lib/personas";
+import { bossTarget } from "../lib/bossTargets";
 
 export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser } = ctx;
@@ -119,23 +120,11 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
       // Update active bosses if difficulty changed
       if (oldDifficulty !== newDifficulty || oldMediaDifficulty !== newMediaDifficulty) {
         const activeBosses = db.prepare(`
-          SELECT wb.id, wb.level, wb.currentProgress, m.mediaType 
+          SELECT wb.id, wb.level, wb.currentProgress, wb.enraged, m.mediaType
           FROM world_bosses wb
           JOIN media m ON wb.mediaId = m.id
           WHERE wb.userId = ? AND wb.status = 'Active'
         `).all(userId) as any[];
-
-        const getBaseTarget = (type: string, lv: number) => {
-          const levels = {
-            'Game': [2, 5, 10, 20, 40],
-            'Visual Novel': [2, 5, 10, 20, 40],
-            'Book': [40, 100, 200, 400, 800],
-            'Manga': [6, 12, 20, 34, 60],
-            'Series': [2, 6, 12, 24, 40],
-            'Comic': [4, 8, 14, 24, 30]
-          }[type] || [90, 180, 360, 720, 1440]; // Fallback to old Master Pages scale
-          return levels[lv - 1];
-        };
 
         for (const boss of activeBosses) {
           let mDiff = 1.0;
@@ -143,8 +132,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
              mDiff = settings.mediaDifficulty[boss.mediaType];
           }
 
-          const baseTarget = getBaseTarget(boss.mediaType, boss.level);
-          const newTarget = Math.max(0.1, baseTarget * newDifficulty * mDiff);
+          const newTarget = bossTarget(boss.mediaType, boss.level, newDifficulty * mDiff, !!boss.enraged);
           
           // Check if the boss is now defeated by this change
           const newStatus = boss.currentProgress >= newTarget ? 'Defeated' : 'Active';

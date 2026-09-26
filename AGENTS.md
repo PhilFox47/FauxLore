@@ -98,6 +98,10 @@ A Codex is a researched per-title dossier that grounds enemy, loot, image and ta
 
 All progress is normalized to "Master Pages" (1 book page = 1 Master Page). Per-type multipliers live in `src/lib/scaling.ts` (`calculateScaledPages` and `calculateScaledDelta`, which duplicate the defaults) and are user-overridable via `settings.masterPageConfig`. `server/routes/logs.ts` repeats some of these defaults for durability/boss progress — keep all copies in sync when changing a default.
 
+### World bosses
+
+Boss targets and units per media type and level live only in `server/lib/bossTargets.ts` (`bossTarget`, `bossUnit`), used by spawning and by the recalculation when difficulty changes. Boss progress is credited in the progress log's native unit (hours for Game/VN/Audiobook, chapters for Manga, …), so the target table must use that same unit. Never add a second copy of the table.
+
 ### Code style
 
 - TypeScript everywhere; match the style of the file you're editing.

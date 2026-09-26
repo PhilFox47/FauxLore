@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
 import { AUTHENTICITY, LEVEL_DESCRIPTIONS, SHARPNESS, enemyTier } from "../lib/artDirection";
+import { bossTarget, bossUnit } from "../lib/bossTargets";
 import { codexPromptBlock, type CodexService } from "./codex";
 
 export interface GeneratedEnemy {
@@ -325,39 +326,8 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
       }
       const mediaItem = entryPool[Math.floor(Math.random() * entryPool.length)];
 
-      const getBaseTarget = (type: string, lv: number) => {
-        const levels = {
-          'Game': [2, 5, 10, 20, 40],
-          'Visual Novel': [2, 5, 10, 20, 40],
-          // Progress for an audiobook boss is credited in logged hours, like
-          // Game/VN. Without an entry here it fell through to the Master Pages
-          // fallback below — a 180-"Units" target filled at 0.33 per 20 minutes.
-          'Audiobook': [2, 5, 10, 20, 40],
-          'Book': [40, 100, 200, 400, 800],
-          'Manga': [6, 12, 20, 34, 60],
-          'Series': [2, 6, 12, 24, 40],
-          'Comic': [4, 8, 14, 24, 30],
-          'Movie': [1, 1, 1, 1, 1]
-        }[type] || [90, 180, 360, 720, 1440]; // Fallback to old Master Pages scale
-
-        return levels[lv - 1];
-      };
-
-      const getUnit = (type: string) => ({
-        'Game': 'Hours',
-        'Visual Novel': 'Hours',
-        'Audiobook': 'Hours',
-        'Book': 'Pages',
-        'Manga': 'Chapters',
-        'Series': 'Episodes',
-        'Comic': 'Issues',
-        'Movie': 'Movies'
-      }[type] || 'Units');
-
-      const baseTarget = getBaseTarget(mediaItem.mediaType, level);
-      // A movie boss is beaten simply by watching the movie once, regardless of difficulty.
-      const target = mediaItem.mediaType === 'Movie' ? 1 : Math.max(0.1, baseTarget * difficulty);
-      const unit = getUnit(mediaItem.mediaType);
+      const target = bossTarget(mediaItem.mediaType, level, difficulty);
+      const unit = bossUnit(mediaItem.mediaType);
 
       const enemy = await generateEnemy(userId, mediaItem, level);
       const fallbackNames = ["Void Stalker", "Doom Herald", "Chaos Reaver", "Eternal Echo"];

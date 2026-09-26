@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
+import { bossTarget, bossUnit } from "../lib/bossTargets";
 
 /**
  * Idempotent, additive migrations (ALTER TABLE ... plus data backfills and seeds).
@@ -451,4 +452,33 @@ export function runMigrations(db: Db) {
     }
     if (stuck.length) console.log(`Rescaled ${stuck.length} audiobook boss(es) from Units to Hours`);
   } catch (e) {}
+
+  // Changing difficulty recalculated live bosses from a copy of the target
+  // table that had no Audiobook or Movie entry, so both were pushed onto the
+  // legacy fallback scale (a 5-hour audiobook boss at 50% became 90 hours; a
+  // movie boss stopped being "watch it once"). Recompute those two types once
+  // from the shared table and the user's current difficulty settings.
+  try {
+    const versionRow = db.prepare("PRAGMA user_version").get() as { user_version: number };
+    if (versionRow.user_version < 2) {
+      const bosses = db.prepare(`
+        SELECT b.id, b.userId, b.level, b.currentProgress, b.enraged, m.mediaType
+        FROM world_bosses b JOIN media m ON m.id = b.mediaId
+        WHERE b.status = 'Active' AND m.mediaType IN ('Audiobook', 'Movie')
+      `).all() as any[];
+      const settingsFor = db.prepare("SELECT enemyDifficulty, mediaDifficulty FROM settings WHERE userId = ?");
+      const fix = db.prepare("UPDATE world_bosses SET targetProgress = ?, status = ?, unit = ? WHERE id = ?");
+      for (const b of bosses) {
+        const s: any = settingsFor.get(b.userId) || {};
+        let mDiff = 1;
+        try { const parsed = s.mediaDifficulty ? JSON.parse(s.mediaDifficulty) : {}; if (parsed[b.mediaType] !== undefined) mDiff = parsed[b.mediaType]; } catch {}
+        const target = bossTarget(b.mediaType, b.level, (s.enemyDifficulty ?? 1) * mDiff, !!b.enraged);
+        fix.run(target, (b.currentProgress || 0) >= target ? 'Defeated' : 'Active', bossUnit(b.mediaType), b.id);
+      }
+      db.prepare("PRAGMA user_version = 2").run();
+      if (bosses.length) console.log(`Recomputed ${bosses.length} audiobook/movie boss target(s) (user_version 2)`);
+    }
+  } catch (e) {
+    console.error("Migration to user_version 2 failed:", e);
+  }
 }
