@@ -429,4 +429,26 @@ export function runMigrations(db: Db) {
   // chapter->volume map, so the entry's cover can be kept in step with actual
   // reading progress without hitting MangaDex again on every chapter logged.
   try { db.prepare("ALTER TABLE media ADD COLUMN mangaCoverIndex TEXT").run(); } catch (e) {}
+
+  // Audiobook bosses used to be spawned on the generic fallback scale
+  // (90/180/360/720/1440 "Units") while progress was credited in logged hours,
+  // so they were effectively unbeatable. Rescale each live one onto the hours
+  // scale, keeping whatever difficulty/enrage multiplier its target already
+  // carried. Guarded on the old unit, so it only ever applies once per boss.
+  try {
+    const oldScale = [90, 180, 360, 720, 1440];
+    const hourScale = [2, 5, 10, 20, 40];
+    const stuck = db.prepare(`
+      SELECT b.id, b.level, b.targetProgress FROM world_bosses b
+      JOIN media m ON m.id = b.mediaId
+      WHERE m.mediaType = 'Audiobook' AND b.status = 'Active' AND (b.unit IS NULL OR b.unit = 'Units')
+    `).all() as { id: string; level: number; targetProgress: number }[];
+    const fix = db.prepare("UPDATE world_bosses SET targetProgress = ?, unit = 'Hours' WHERE id = ?");
+    for (const b of stuck) {
+      const i = Math.min(Math.max((b.level || 1) - 1, 0), 4);
+      const target = Math.max(0.1, Math.round(hourScale[i] * (b.targetProgress / oldScale[i]) * 100) / 100);
+      fix.run(target, b.id);
+    }
+    if (stuck.length) console.log(`Rescaled ${stuck.length} audiobook boss(es) from Units to Hours`);
+  } catch (e) {}
 }

@@ -329,6 +329,10 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
         const levels = {
           'Game': [2, 5, 10, 20, 40],
           'Visual Novel': [2, 5, 10, 20, 40],
+          // Progress for an audiobook boss is credited in logged hours, like
+          // Game/VN. Without an entry here it fell through to the Master Pages
+          // fallback below — a 180-"Units" target filled at 0.33 per 20 minutes.
+          'Audiobook': [2, 5, 10, 20, 40],
           'Book': [40, 100, 200, 400, 800],
           'Manga': [6, 12, 20, 34, 60],
           'Series': [2, 6, 12, 24, 40],
@@ -342,6 +346,7 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
       const getUnit = (type: string) => ({
         'Game': 'Hours',
         'Visual Novel': 'Hours',
+        'Audiobook': 'Hours',
         'Book': 'Pages',
         'Manga': 'Chapters',
         'Series': 'Episodes',
