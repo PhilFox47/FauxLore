@@ -121,6 +121,7 @@ export function MediaCard({ item, onEdit, onLogProgress, onViewDetails }: MediaC
         }
       }
       break;
+    case 'Audiobook':
     case 'Visual Novel':
       if (item.isOngoing) {
         progressText = `${Number((item.playtimeHours || 0).toFixed(1))}h`;
