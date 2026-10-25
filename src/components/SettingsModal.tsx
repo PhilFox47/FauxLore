@@ -507,12 +507,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     </div>
                     
                     <div>
-                     <label className="block text-sm font-medium text-zinc-400 mb-1">Hardcover API Token (Books &amp; Audiobooks)</label>
-                     <input type="password" name="hardcoverApiKey" value={formData.hardcoverApiKey}
-                       onChange={handleChange} className="input-field" placeholder="Hardcover API token..." />
-                     <p className="text-[10px] text-zinc-500 mt-1">Generate a read-only token in your Hardcover API settings. It is used by the server.</p>
-                   </div>
-                   <div>
                       <label className="block text-sm font-medium text-zinc-400 mb-1">AI Persona (Recaps & Oracles)</label>
                       <div className="relative">
                         <select
@@ -896,6 +890,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       className="input-field" 
                       placeholder="eyJhbG..."
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Hardcover API Token (Books &amp; Audiobooks)</label>
+                    <input type="password" name="hardcoverApiKey" value={formData.hardcoverApiKey}
+                      onChange={handleChange} className="input-field" placeholder="Hardcover API token..." />
+                    <p className="text-[10px] text-zinc-500 mt-1">Generate a token with read-only book access in Hardcover account settings. Keep it private.</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-zinc-400 mb-1">Google Books API Key (Books)</label>
