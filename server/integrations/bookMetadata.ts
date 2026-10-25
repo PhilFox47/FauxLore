@@ -93,7 +93,7 @@ export async function searchHardcoverBooks(query: string, token: string): Promis
     const searchInfo = records.find(record => Number(record.id) === id) || {};
     return [{
       id: "hc_" + id,
-      bookWorkId: "hc_" + id,
+      bookWorkId: String(id),
       provider: "hardcover" as const,
       metadataSource: "hardcover" as const,
       metadataSourceId: String(id),
