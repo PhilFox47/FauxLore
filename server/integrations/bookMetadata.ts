@@ -66,6 +66,19 @@ function coverUrl(image: any): string {
   return typeof image?.url === "string" ? image.url : "";
 }
 
+/** Reject a known square/wide cover; the work cover should be book-shaped. */
+function portraitCoverUrl(image: any): string {
+  const url = coverUrl(image);
+  if (!url) return "";
+  const width = Number(image?.width);
+  const height = Number(image?.height);
+  if (width > 0 && height > 0) {
+    const ratio = width / height;
+    if (ratio < 0.45 || ratio > 0.95) return "";
+  }
+  return url;
+}
+
 function authors(book: any): string {
   const names = (book.contributions || [])
     .map((entry: any) => entry.author?.name)
@@ -83,7 +96,7 @@ export async function searchHardcoverBooks(query: string, token: string): Promis
   const ids = validIds(search.ids?.length ? search.ids : records.map(record => record.id));
   if (!ids.length) return [];
   const details = await hardcoverQuery(token,
-    "query BookMatches($ids: [Int!]!) { books(where: {id: {_in: $ids}}) { id title subtitle description release_year rating slug image {url} default_cover_edition {image {url}} contributions(where: {contributor_role: {slug: {_eq: \"author\"}}}) {author {name}} } }",
+    "query BookMatches($ids: [Int!]!) { books(where: {id: {_in: $ids}}) { id title subtitle description release_year rating slug image {url width height} default_physical_edition {image {url width height}} default_cover_edition {image {url width height}} contributions(where: {contributor_role: {slug: {_eq: \"author\"}}}) {author {name}} } }",
     { ids }
   );
   const books = new Map<number, any>((details.books || []).map((book: any) => [book.id, book]));
@@ -104,7 +117,11 @@ export async function searchHardcoverBooks(query: string, token: string): Promis
       description: book.description || searchInfo.description || "",
       year: book.release_year || searchInfo.release_year || undefined,
       reviewScore: book.rating == null ? undefined : Number(book.rating),
-      coverImageUrl: coverUrl(book.default_cover_edition?.image) || coverUrl(book.image),
+      // Work image first, then a physical edition. Never prefer the square
+      // audiobook rendition (and reject non-portrait aspect ratios when known).
+      coverImageUrl: portraitCoverUrl(book.image)
+        || portraitCoverUrl(book.default_physical_edition?.image)
+        || portraitCoverUrl(book.default_cover_edition?.image),
       // The FauxLore taxonomy is managed by auto-tagging, not external categories.
       genres: []
     }];
