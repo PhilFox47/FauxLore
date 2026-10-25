@@ -51,7 +51,7 @@ test("Provider errors do not hide successful Google Books fallback", async () =>
     ok: true, json: async () => ({items: [{id: "google123", volumeInfo: {
       title: "Example", language: "de", imageLinks: {thumbnail: "http://example.test/cover.jpg"}
     }}]})
-  })) as typeof fetch;
+  })) as unknown as typeof fetch;
   try {
     const books = await searchBookProviders("Example", "de", ["hardcover", "googleBooks"]);
     assert.equal(books.length, 1);
