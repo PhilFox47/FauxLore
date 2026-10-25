@@ -7,6 +7,7 @@ import fs from "fs";
 import cron from "node-cron";
 import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcrypt";
+import { getHardcoverEditions, searchBookProviders, BookMetadataProvider } from "./src/services/bookMetadataServer";
 import { calculateRPGState } from "./src/lib/rpgSystem";
 
 dotenv.config();
@@ -2958,152 +2959,55 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
     }
   });
 
-  // Google Books Integration
-  app.get("/api/books/search", async (req, res) => {
+  // Book metadata providers: choose the work first, then its edition.
+  function enabledBookProviders(userId: string): BookMetadataProvider[] {
+    const row: any = db.prepare("SELECT bookMetadataProviders FROM settings WHERE userId = ?").get(userId);
+    if (!row?.bookMetadataProviders) return ["hardcover", "googleBooks"];
     try {
-      const userId = getAuthUser(req, res);
-      if (!userId) return;
-      const userSettings: any = db.prepare('SELECT googleBooksApiKey FROM settings WHERE userId = ?').get(userId) || {};
-      const sysSettings: any = db.prepare('SELECT googleBooksApiKey FROM system_settings WHERE id = ?').get('system') || {};
-      const apiKey = sysSettings.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
+      const parsed = JSON.parse(row.bookMetadataProviders);
+      return Array.isArray(parsed) ? [...new Set(parsed.filter((p: string) => p === "hardcover" || p === "googleBooks"))] as BookMetadataProvider[] : ["hardcover", "googleBooks"];
+    } catch { return ["hardcover", "googleBooks"]; }
+  }
 
-      const query = req.query.q as string;
-      const lang = req.query.lang as string;
+  function bookKeys(userId: string) {
+    const sys: any = db.prepare("SELECT hardcoverApiKey, googleBooksApiKey FROM system_settings WHERE id = ?").get("system") || {};
+    const own: any = db.prepare("SELECT hardcoverApiKey, googleBooksApiKey FROM settings WHERE userId = ?").get(userId) || {};
+    return {
+      hardcover: sys.hardcoverApiKey || own.hardcoverApiKey || process.env.HARDCOVER_API_KEY,
+      google: sys.googleBooksApiKey || own.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY
+    };
+  }
 
-      if (!query) {
-        return res.status(400).json({ error: "Missing search query" });
-      }
-
-      let mappedResults: any[] = [];
-      let fetchSuccess = false;
-
-      // Try Google Books First
-      try {
-        const pages = [0, 40, 80];
-        let allItems: any[] = [];
-
-        for (const startIndex of pages) {
-          let retryCount = 0;
-          let success = false;
-          while (retryCount < 2 && !success) {
-            try {
-              let googleUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=40&startIndex=${startIndex}`;
-              if (lang) {
-                googleUrl += `&langRestrict=${lang}`;
-              }
-              if (apiKey) {
-                googleUrl += `&key=${apiKey}`;
-              }
-              const res = await fetch(googleUrl, {
-                headers: {
-                  'User-Agent': 'FauxLoreMediaTracker/1.0'
-                }
-              });
-
-              if (!res.ok) {
-                if (res.status === 503) {
-                  // Retry on 503
-                  retryCount++;
-                  await new Promise(r => setTimeout(r, 1000));
-                  continue;
-                }
-                console.warn(`Google Books API HTTP Error: ${res.status} at index ${startIndex}`);
-                break; // Stop fetching more pages on other errors
-              }
-              const data = await res.json();
-              if (data.items) {
-                allItems = allItems.concat(data.items);
-              }
-              success = true;
-              if (!data.items || data.items.length < 40) {
-                break; // No more results
-              }
-            } catch (err) {
-              console.error(`Google Books fetch failed at index ${startIndex}:`, err);
-              break; // Network or parsing error, keep what we have
-            }
-          }
-          if (!success) {
-             break; // If we failed all retries for this page, stop fetching more pages
-          }
-        }
-
-        if (allItems.length > 0) {
-          // Deduplicate by ID
-          const uniqueItems = Array.from(new Map(allItems.map(item => [item.id, item])).values());
-          
-          mappedResults = uniqueItems
-            .filter((item: any) => {
-              const l = item.volumeInfo?.language?.toLowerCase();
-              if (lang) {
-                return l === lang.toLowerCase();
-              }
-              return l === 'en' || l === 'de'; // Only English & German by default
-            })
-            .sort((a: any, b: any) => {
-              const titleA = (a.volumeInfo?.title || '').toLowerCase();
-              const titleB = (b.volumeInfo?.title || '').toLowerCase();
-              const queryLower = query.toLowerCase();
-              
-              const aExact = titleA === queryLower ? 1 : 0;
-              const bExact = titleB === queryLower ? 1 : 0;
-              if (aExact !== bExact) return bExact - aExact;
-              
-              const aStarts = titleA.startsWith(queryLower) ? 1 : 0;
-              const bStarts = titleB.startsWith(queryLower) ? 1 : 0;
-              if (aStarts !== bStarts) return bStarts - aStarts;
-
-              const aIncludes = titleA.includes(queryLower) ? 1 : 0;
-              const bIncludes = titleB.includes(queryLower) ? 1 : 0;
-              if (aIncludes !== bIncludes) return bIncludes - aIncludes;
-
-              const aRatingsCount = a.volumeInfo?.ratingsCount || 0;
-              const bRatingsCount = b.volumeInfo?.ratingsCount || 0;
-              return bRatingsCount - aRatingsCount;
-            })
-            .map((item: any) => {
-              const volumeInfo = item.volumeInfo || {};
-            
-            let creator = "Unknown Author";
-            if (volumeInfo.authors && volumeInfo.authors.length > 0) {
-              creator = volumeInfo.authors.join(", ");
-            }
-
-            let coverImageUrl = "";
-            if (volumeInfo.imageLinks) {
-              coverImageUrl = volumeInfo.imageLinks.thumbnail?.replace('http:', 'https:') 
-                || volumeInfo.imageLinks.smallThumbnail?.replace('http:', 'https:') 
-                || "";
-            }
-
-            const year = volumeInfo.publishedDate ? parseInt(volumeInfo.publishedDate.substring(0, 4)) : undefined;
-
-            return {
-              id: `gb_${item.id}`,
-              title: volumeInfo.title || "Unknown Title",
-              subtitle: volumeInfo.subtitle || "",
-              description: volumeInfo.description || "",
-              publisher: volumeInfo.publisher || "",
-              language: volumeInfo.language ? volumeInfo.language.toUpperCase() : "",
-              maturityRating: volumeInfo.maturityRating || "",
-              coverImageUrl: coverImageUrl,
-              year: !isNaN(year as number) ? year : undefined,
-              reviewScore: volumeInfo.averageRating ? Math.round(volumeInfo.averageRating * 2) / 2 : undefined,
-              totalPages: volumeInfo.pageCount,
-              creator: creator,
-              genres: []
-            };
-          });
-        }
-      } catch (err) {
-        console.error(`Google Books search processing failed:`, err);
-        // We do not throw here so we can return empty results instead of crashing
-      }
-
-      res.json(mappedResults);
+  app.get("/api/books/search", async (req, res) => {
+    const userId = getAuthUser(req, res);
+    if (!userId) return;
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    if (!q || q.length > 200) return res.status(400).json({ error: "Provide a search term (1-200 characters)." });
+    const lang = typeof req.query.lang === "string" && /^[a-z]{2,3}$/i.test(req.query.lang) ? req.query.lang : undefined;
+    try {
+      const keys = bookKeys(userId);
+      const matches = await searchBookProviders(q, lang, enabledBookProviders(userId), keys.hardcover, keys.google);
+      res.json(matches);
     } catch (error: any) {
-      console.error("Error searching Google Books:", error);
-      res.status(500).json({ error: error.message || "Failed to fetch metadata from Google Books." });
+      console.error("Book metadata search failed:", error);
+      res.status(502).json({ error: error.message || "Book metadata providers unavailable." });
+    }
+  });
+
+  app.get("/api/books/hardcover/:id/editions", async (req, res) => {
+    const userId = getAuthUser(req, res);
+    if (!userId) return;
+    if (!enabledBookProviders(userId).includes("hardcover")) return res.status(403).json({ error: "Hardcover is disabled in Settings." });
+    const id = Number(req.params.id);
+    if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ error: "Invalid book ID." });
+    const key = bookKeys(userId).hardcover;
+    if (!key) return res.status(503).json({ error: "Configure a Hardcover API key under System & Keys." });
+    try {
+      const mediaType = req.query.mediaType === "Audiobook" ? "Audiobook" : "Book";
+      res.json(await getHardcoverEditions(id, key, mediaType));
+    } catch (error: any) {
+      console.error("Hardcover editions lookup failed:", error);
+      res.status(502).json({ error: error.message || "Could not load editions." });
     }
   });
 
