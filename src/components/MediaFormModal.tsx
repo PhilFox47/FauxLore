@@ -3,6 +3,7 @@ import { MediaItem, MEDIA_TYPES, STATUSES, MediaType } from "../types/schema";
 import { X, Search, Loader2, RefreshCw, BrainCircuit, AlertTriangle, ArrowRight } from "lucide-react";
 import { IntegrationsService, GameMetadata, type BookMetadata, type BookEdition } from "../services/integrations";
 import { findDuplicateMatches } from "../lib/duplicateMatch";
+import { chooseBookEditionCover } from "../lib/bookEditionCover";
 import { cn } from "../lib/utils";
 import { useMediaContext } from "../contexts/MediaContext";
 import { DatabaseService } from "../services/db";
@@ -510,7 +511,13 @@ function releaseFieldsFromMatch(
       creator: selectedBook.creator,
       description: selectedBook.description,
       reviewScore: selectedBook.reviewScore,
-      coverImageUrl: edition.coverImageUrl || selectedBook.coverImageUrl,
+      // Audiobook metadata remains edition-specific, but its often-square
+      // audio artwork must never replace FauxLore's portrait work cover.
+      coverImageUrl: chooseBookEditionCover(
+        formData.mediaType === "Audiobook" ? "Audiobook" : "Book",
+        selectedBook.coverImageUrl,
+        edition.coverImageUrl,
+      ),
       bookWorkId: edition.bookWorkId || selectedBook.metadataSourceId,
       metadataSource: "hardcover",
       metadataSourceId: selectedBook.metadataSourceId,
@@ -896,8 +903,8 @@ function releaseFieldsFromMatch(
                           .map(edition => (
                             <button key={edition.id} type="button" onClick={() => applyBookEdition(edition)}
                               className="flex w-full text-left gap-3 items-center p-2 rounded-lg bg-zinc-900/70 border border-white/5 hover:border-orange-500/30 hover:bg-orange-500/10">
-                              {edition.coverImageUrl ? (
-                                <img src={edition.coverImageUrl} alt="" referrerPolicy="no-referrer"
+                              {chooseBookEditionCover(formData.mediaType === "Audiobook" ? "Audiobook" : "Book", selectedBook.coverImageUrl, edition.coverImageUrl) ? (
+                                <img src={chooseBookEditionCover(formData.mediaType === "Audiobook" ? "Audiobook" : "Book", selectedBook.coverImageUrl, edition.coverImageUrl)} alt="" referrerPolicy="no-referrer"
                                   className="w-12 h-16 object-contain shrink-0 rounded" />
                               ) : <div className="w-12 h-16 bg-zinc-800 shrink-0 rounded" />}
                               <div className="min-w-0">
