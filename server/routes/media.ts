@@ -235,7 +235,8 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
           issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, releaseDateLabel, nextReleaseAt, nextReleaseLabel, availableUnits, language, isOngoing, noEnemies, isHighPriority, noAutoDrop, timeTravel, storyHeavyModifier, route, releaseStatus, lastSyncAt, createdAt, updatedAt,
           subtitle, maturityRating,
-          metadataSource, metadataSourceId, sourceUrl, sourceVersion, installedVersion, sourceVersions, sourceUpdatedAt, updateAvailable, updateSeenAt
+          metadataSource, metadataSourceId, sourceUrl, sourceVersion, installedVersion, sourceVersions, sourceUpdatedAt, updateAvailable, updateSeenAt,
+          bookWorkId, bookEditionId, isbn13, bookFormat
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
           @reviewScore, @averagePlaytime, @hltbMain, @hltbMainExtra, @hltbCompletionist, @selectedHltbType,
@@ -244,7 +245,8 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
           @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @releaseDateLabel, @nextReleaseAt, @nextReleaseLabel, @availableUnits, @language, @isOngoing, @noEnemies, @isHighPriority, @noAutoDrop, @timeTravel, @storyHeavyModifier, @route, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
           @subtitle, @maturityRating,
-          @metadataSource, @metadataSourceId, @sourceUrl, @sourceVersion, @installedVersion, @sourceVersions, @sourceUpdatedAt, @updateAvailable, @updateSeenAt
+          @metadataSource, @metadataSourceId, @sourceUrl, @sourceVersion, @installedVersion, @sourceVersions, @sourceUpdatedAt, @updateAvailable, @updateSeenAt,
+          @bookWorkId, @bookEditionId, @isbn13, @bookFormat
         )
         ON CONFLICT(id) DO UPDATE SET
           userId=excluded.userId, title=excluded.title, mediaType=excluded.mediaType, coverImageUrl=excluded.coverImageUrl,
@@ -273,7 +275,11 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           sourceVersions=COALESCE(excluded.sourceVersions, media.sourceVersions),
           sourceUpdatedAt=COALESCE(excluded.sourceUpdatedAt, media.sourceUpdatedAt),
           updateAvailable=COALESCE(excluded.updateAvailable, media.updateAvailable),
-          updateSeenAt=COALESCE(excluded.updateSeenAt, media.updateSeenAt)
+          updateSeenAt=COALESCE(excluded.updateSeenAt, media.updateSeenAt),
+          bookWorkId=COALESCE(excluded.bookWorkId, media.bookWorkId),
+          bookEditionId=COALESCE(excluded.bookEditionId, media.bookEditionId),
+          isbn13=COALESCE(excluded.isbn13, media.isbn13),
+          bookFormat=COALESCE(excluded.bookFormat, media.bookFormat)
       `);
 
       stmt.run({
@@ -342,6 +348,11 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
         sourceUpdatedAt: item.sourceUpdatedAt || null,
         updateAvailable: item.updateAvailable === undefined ? null : (item.updateAvailable ? 1 : 0),
         updateSeenAt: item.updateSeenAt || null,
+        // Empty strings are explicit clears when switching an edition/source.
+        bookWorkId: item.bookWorkId ?? null,
+        bookEditionId: item.bookEditionId ?? null,
+        isbn13: item.isbn13 ?? null,
+        bookFormat: item.bookFormat ?? null,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt
       });
