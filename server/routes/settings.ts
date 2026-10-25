@@ -24,6 +24,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
         pushEnabled: row.pushEnabled !== 0,
         pushTypes: row.pushTypes ? JSON.parse(row.pushTypes) : undefined,
         inactivityReminderDays: row.inactivityReminderDays ?? 7,
+        bookMetadataProviders: row.bookMetadataProviders ? JSON.parse(row.bookMetadataProviders) : ["hardcover", "googleBooks"],
       });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -37,15 +38,15 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
       const userRec: any = db.prepare('SELECT role FROM users WHERE id = ?').get(userId);
       const isAdmin = userRec?.role === 'Admin';
       
-      const oldSettings: any = db.prepare('SELECT aiPersona, enemyDifficulty, mediaDifficulty, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, nanoGptSearchProvider, geminiApiKey, googleBooksApiKey FROM settings WHERE userId = ?').get(userId);
+      const oldSettings: any = db.prepare('SELECT aiPersona, enemyDifficulty, mediaDifficulty, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, nanoGptSearchProvider, geminiApiKey, googleBooksApiKey, bookMetadataProviders FROM settings WHERE userId = ?').get(userId);
       const oldDifficulty = oldSettings?.enemyDifficulty ?? 1.0;
       const newDifficulty = settings.enemyDifficulty ?? 1.0;
       const oldMediaDifficulty = oldSettings?.mediaDifficulty || null;
       const newMediaDifficulty = settings.mediaDifficulty ? JSON.stringify(settings.mediaDifficulty) : null;
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, nanoGptSearchProvider, geminiApiKey, googleBooksApiKey, timezone, aiPersona, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs, disableAutoDrop, pushEnabled, pushTypes, inactivityReminderDays)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @nanoGptProvider, @nanoGptSearchProvider, @geminiApiKey, @googleBooksApiKey, @timezone, @aiPersona, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs, @disableAutoDrop, @pushEnabled, @pushTypes, @inactivityReminderDays)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, nanoGptSearchProvider, geminiApiKey, googleBooksApiKey, bookMetadataProviders, timezone, aiPersona, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs, disableAutoDrop, pushEnabled, pushTypes, inactivityReminderDays)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @nanoGptProvider, @nanoGptSearchProvider, @geminiApiKey, @googleBooksApiKey, @bookMetadataProviders, @timezone, @aiPersona, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs, @disableAutoDrop, @pushEnabled, @pushTypes, @inactivityReminderDays)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -59,6 +60,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
           nanoGptSearchProvider=excluded.nanoGptSearchProvider,
           geminiApiKey=excluded.geminiApiKey,
           googleBooksApiKey=excluded.googleBooksApiKey,
+          bookMetadataProviders=excluded.bookMetadataProviders,
           timezone=excluded.timezone,
           aiPersona=excluded.aiPersona,
           masterPageConfig=excluded.masterPageConfig,
@@ -90,6 +92,9 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
         nanoGptSearchProvider: isAdmin ? (settings.nanoGptSearchProvider || null) : (oldSettings?.nanoGptSearchProvider || null),
         geminiApiKey: isAdmin ? (settings.geminiApiKey || null) : (oldSettings?.geminiApiKey || null),
         googleBooksApiKey: isAdmin ? (settings.googleBooksApiKey || null) : (oldSettings?.googleBooksApiKey || null),
+        bookMetadataProviders: Array.isArray(settings.bookMetadataProviders)
+          ? JSON.stringify([...new Set(settings.bookMetadataProviders.filter((p: unknown) => p === "hardcover" || p === "googleBooks"))])
+          : (oldSettings?.bookMetadataProviders || JSON.stringify(["hardcover", "googleBooks"])),
         timezone: settings.timezone || null,
         // Keep what is stored unless a recognised persona arrives. This is an
         // upsert of the whole row, so a caller that saves settings without
