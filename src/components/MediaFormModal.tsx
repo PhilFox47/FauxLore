@@ -544,6 +544,7 @@ export function MediaFormModal({
                     <div className="min-w-0 flex-1">
                       <div className="font-bold text-white line-clamp-2 group-hover:text-orange-400 transition-colors">
                         {res.title}{" "}
+                        {res.provider && <span className="text-[10px] text-orange-400/80 font-semibold ml-1">[{res.provider === "hardcover" ? "Hardcover" : "Google Books"}]</span>}{" "}
                         <span className="text-zinc-500 font-normal">
                           ({res.year})
                         </span>
