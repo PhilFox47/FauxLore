@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "server.ts",
+    "src/services/bookMetadataServer.ts",
+    "src/services/bookMetadataServer.test.ts",
+    "src/services/integrations.ts",
+    "src/components/MediaFormModal.tsx",
+    "src/components/SettingsModal.tsx",
+    "src/types/schema.ts"
+  ],
+  "exclude": [
+    "app",
+    "node_modules",
+    "fill_*.ts",
+    "generate_*.cjs",
+    "src/test-*.ts"
+  ]
+}
