@@ -28,6 +28,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     igdbClientSecret: '',
     tmdbApiKey: '',
     googleBooksApiKey: '',
+    hardcoverApiKey: '',
+    bookMetadataProviders: ['hardcover', 'googleBooks'] as ('hardcover' | 'googleBooks')[],
     nanoGptApiKey: '',
     nanoGptModel: '',
     geminiApiKey: '',
@@ -76,6 +78,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         igdbClientSecret: settings.igdbClientSecret || '',
         tmdbApiKey: settings.tmdbApiKey || '',
         googleBooksApiKey: settings.googleBooksApiKey || '',
+        hardcoverApiKey: settings.hardcoverApiKey || '',
+        bookMetadataProviders: Array.isArray(settings.bookMetadataProviders) ? settings.bookMetadataProviders : ['hardcover', 'googleBooks'],
         nanoGptApiKey: settings.nanoGptApiKey || '',
         nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
         geminiApiKey: settings.geminiApiKey || '',
@@ -122,6 +126,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             igdbClientSecret: settings.igdbClientSecret || '',
             tmdbApiKey: settings.tmdbApiKey || '',
             googleBooksApiKey: settings.googleBooksApiKey || '',
+        hardcoverApiKey: settings.hardcoverApiKey || '',
+        bookMetadataProviders: Array.isArray(settings.bookMetadataProviders) ? settings.bookMetadataProviders : ['hardcover', 'googleBooks'],
             nanoGptApiKey: settings.nanoGptApiKey || '',
             nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
             geminiApiKey: settings.geminiApiKey || '',
@@ -350,6 +356,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         igdbClientSecret: formData.igdbClientSecret,
         tmdbApiKey: formData.tmdbApiKey,
         googleBooksApiKey: formData.googleBooksApiKey,
+        hardcoverApiKey: formData.hardcoverApiKey,
+        bookMetadataProviders: formData.bookMetadataProviders,
         nanoGptApiKey: formData.nanoGptApiKey,
         nanoGptModel: formData.nanoGptModel,
         geminiApiKey: formData.geminiApiKey,
@@ -499,6 +507,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     </div>
                     
                     <div>
+                     <label className="block text-sm font-medium text-zinc-400 mb-1">Hardcover API Token (Books &amp; Audiobooks)</label>
+                     <input type="password" name="hardcoverApiKey" value={formData.hardcoverApiKey}
+                       onChange={handleChange} className="input-field" placeholder="Hardcover API token..." />
+                     <p className="text-[10px] text-zinc-500 mt-1">Generate a read-only token in your Hardcover API settings. It is used by the server.</p>
+                   </div>
+                   <div>
                       <label className="block text-sm font-medium text-zinc-400 mb-1">AI Persona (Recaps & Oracles)</label>
                       <div className="relative">
                         <select
@@ -519,10 +533,40 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       </div>
                       <p className="text-[10px] text-zinc-500 mt-1">Change the personality of the Oracle and Weekly Recaps.</p>
                     </div>
+                    <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-4 space-y-3">
+                      <h3 className="text-sm font-semibold text-zinc-200">Book Metadata Providers</h3>
+                      <p className="text-xs text-zinc-500">Choose which sources FauxLore searches for books and audiobooks. Hardcover supports selecting the language and exact edition.</p>
+                      {([
+                        ['hardcover', 'Hardcover', 'Works, translations, editions, ratings and covers'],
+                        ['googleBooks', 'Google Books', 'Alternative search results when enabled']
+                      ] as const).map(([provider, name, description]) => (
+                        <label key={provider} className="flex items-center gap-3 rounded-lg bg-zinc-800/40 p-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={formData.bookMetadataProviders.includes(provider)}
+                            onChange={e => setFormData(prev => ({
+                              ...prev,
+                              bookMetadataProviders: e.target.checked
+                                ? [...prev.bookMetadataProviders, provider]
+                                : prev.bookMetadataProviders.filter(p => p !== provider)
+                            }))}
+                            className="accent-orange-500 w-4 h-4"
+                          />
+                          <span className="flex flex-col">
+                            <span className="text-sm font-medium text-white">{name}</span>
+                            <span className="text-xs text-zinc-500">{description}</span>
+                          </span>
+                        </label>
+                      ))}
+                      {formData.bookMetadataProviders.length === 0 && (
+                        <p className="text-xs text-red-400">Enable at least one provider to search for books.</p>
+                      )}
+                    </div>
                   </div>
                 )}
 
                 {activeTab === 'rpg' && (
+
                   <>
                   <div className="space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-white/5">
