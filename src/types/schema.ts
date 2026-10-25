@@ -12,6 +12,11 @@ export interface MediaItem {
   id: string;
   isReRun?: boolean;
   originalMediaId?: string;
+  /** Concrete selected book publication/edition, separate from the work. */
+  bookWorkId?: string;
+  bookEditionId?: string;
+  isbn13?: string;
+  bookFormat?: string;
   title: string;
   subtitle?: string;
   mediaType: MediaType;
@@ -148,6 +153,9 @@ export interface Settings {
   igdbClientSecret?: string;
   tmdbApiKey?: string;
   googleBooksApiKey?: string;
+  hardcoverApiKey?: string;
+  /** Enabled book metadata providers; user can disable Google Books entirely. */
+  bookMetadataProviders?: ("hardcover" | "googleBooks")[];
   nanoGptApiKey?: string;
   nanoGptModel?: string;
   geminiApiKey?: string;
