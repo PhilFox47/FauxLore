@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { MediaItem, MEDIA_TYPES, STATUSES, MediaType } from "../types/schema";
 import { X, Search, Loader2, RefreshCw, BrainCircuit } from "lucide-react";
-import { IntegrationsService, GameMetadata } from "../services/integrations";
+import { IntegrationsService, GameMetadata, BookMetadata, BookEdition } from "../services/integrations";
 import { cn } from "../lib/utils";
 import { useMediaContext } from "../contexts/MediaContext";
 import { generateAiTagsWithGemini } from "../services/geminiService";
@@ -38,6 +38,11 @@ export function MediaFormModal({
   const [isSearching, setIsSearching] = useState(false);
   const [isAiTagging, setIsAiTagging] = useState(false);
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [selectedBook, setSelectedBook] = useState<BookMetadata | null>(null);
+  const [bookEditions, setBookEditions] = useState<BookEdition[]>([]);
+  const [selectedEditionLanguage, setSelectedEditionLanguage] = useState("");
+  const [isLoadingEditions, setIsLoadingEditions] = useState(false);
+  const [bookPickerError, setBookPickerError] = useState<string | null>(null);
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
   const [platformInput, setPlatformInput] = useState("");
   const [isPlatformDropdownOpen, setIsPlatformDropdownOpen] = useState(false);
@@ -64,6 +69,10 @@ export function MediaFormModal({
     }
     setSearchResults(null);
     setSelectedSeriesForSeasons(null);
+    setSelectedBook(null);
+    setBookEditions([]);
+    setSelectedEditionLanguage("");
+    setBookPickerError(null);
     setIsConfirmingDelete(false);
   }, [initialData, isOpen]);
 
@@ -170,6 +179,8 @@ export function MediaFormModal({
   const handleSearchMetadata = async () => {
     if (!formData.title) return;
     setIsSearching(true);
+    setSelectedBook(null);
+    setBookPickerError(null);
     setSearchResults(null);
     setSelectedSeriesForSeasons(null);
     try {
@@ -252,10 +263,60 @@ export function MediaFormModal({
       runtimeMinutes: match.runtimeMinutes,
       coverImageUrl: match.coverImageUrl,
       originalMediaId: match.id,
+      bookWorkId: match.bookWorkId,
+      bookEditionId: match.bookEditionId,
+      isbn13: match.isbn13,
+      bookFormat: match.bookFormat,
     }));
     setAvailablePlatforms(match.platforms || []);
     setSearchResults(null);
   };
+
+  const openBookEditionPicker = async (book: BookMetadata) => {
+    setSelectedBook(book);
+    setSelectedEditionLanguage("");
+    setBookPickerError(null);
+    setBookEditions([]);
+    setIsLoadingEditions(true);
+    try {
+      const editions = await IntegrationsService.getHardcoverEditions(
+        book.id, formData.mediaType === "Audiobook" ? "Audiobook" : "Book"
+      );
+      setBookEditions(editions);
+      // Keep the chosen language from the media form when possible.
+      const preference = (formData.language || "").toUpperCase();
+      if (preference && editions.some(edition => edition.language === preference)) {
+        setSelectedEditionLanguage(preference);
+      }
+    } catch (error: any) {
+      setBookPickerError(error.message || "Could not load editions");
+    } finally {
+      setIsLoadingEditions(false);
+    }
+  };
+
+  const selectBookEdition = (edition: BookEdition) => {
+    if (!selectedBook) return;
+    applySearchResult({
+      ...selectedBook,
+      ...edition,
+      title: edition.title || selectedBook.title,
+      creator: selectedBook.creator,
+      description: selectedBook.description,
+      genres: selectedBook.genres || [],
+      reviewScore: selectedBook.reviewScore,
+      coverImageUrl: edition.coverImageUrl || selectedBook.coverImageUrl,
+      bookWorkId: selectedBook.id
+    });
+    setSelectedBook(null);
+    setBookEditions([]);
+  };
+
+  const editionLanguages = Array.from(new Set(bookEditions.map(edition => edition.language || "UND")))
+    .sort((a, b) => {
+      const priority = (lang: string) => lang === "DE" ? 0 : lang === "EN" ? 1 : 2;
+      return priority(a) - priority(b) || a.localeCompare(b);
+    });
 
   const applySeason = (series: any, season: any) => {
     setFormData((prev) => ({
@@ -452,7 +513,7 @@ export function MediaFormModal({
             </div>
 
             {/* Autofill Results */}
-            {searchResults && searchResults.length > 0 && (
+            {searchResults && searchResults.length > 0 && !selectedBook && (
               <div className="absolute top-full left-0 w-full mt-2 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl p-2 z-50 flex flex-col gap-1 max-h-64 overflow-y-auto">
                 <div className="flex justify-between items-center px-2 py-1 mb-1">
                   <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
@@ -470,7 +531,7 @@ export function MediaFormModal({
                   <button
                     key={i}
                     type="button"
-                    onClick={() => applySearchResult(res)}
+                    onClick={() => (["Book", "Audiobook"].includes(formData.mediaType) && res.provider === "hardcover") ? openBookEditionPicker(res) : applySearchResult(res)}
                     className="w-full text-left p-2 rounded-lg hover:bg-white/5 transition flex items-center group border border-transparent hover:border-white/5 gap-3"
                   >
                     {res.coverImageUrl ? (
@@ -561,6 +622,80 @@ export function MediaFormModal({
                     </div>
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Hardcover: choose a work, language, then the exact published edition. */}
+            {selectedBook && (
+              <div className="absolute top-full left-0 w-full mt-2 bg-[#18181b] border border-orange-500/30 rounded-xl shadow-2xl p-3 z-50 flex flex-col gap-3 max-h-[24rem] overflow-y-auto">
+                <div className="flex justify-between items-start gap-3">
+                  <div>
+                    <div className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">Book → Language → Edition</div>
+                    <div className="text-sm text-white font-semibold">{selectedBook.title}</div>
+                    <div className="text-xs text-zinc-400">{selectedBook.creator}</div>
+                  </div>
+                  <button type="button" onClick={() => { setSelectedBook(null); setBookEditions([]); }}
+                    className="shrink-0 text-zinc-400 hover:text-white" aria-label="Back to book results">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {isLoadingEditions ? (
+                  <div className="flex items-center gap-2 text-xs text-zinc-400 py-4">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading Hardcover editions...
+                  </div>
+                ) : (
+                  <>
+                    {bookPickerError && <div className="text-xs text-red-400">{bookPickerError}</div>}
+                    {editionLanguages.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">1. Language</div>
+                        <div className="flex flex-wrap gap-2">
+                          {editionLanguages.map(language => (
+                            <button key={language} type="button"
+                              onClick={() => setSelectedEditionLanguage(language)}
+                              className={cn("text-xs px-3 py-1.5 rounded-lg border transition",
+                                selectedEditionLanguage === language
+                                  ? "bg-orange-500/20 text-orange-300 border-orange-500/50"
+                                  : "bg-zinc-900 text-zinc-300 border-white/10 hover:bg-white/10")}>
+                              {language === "DE" ? "Deutsch" : language === "EN" ? "English" : language}
+                              <span className="ml-1 opacity-60">({bookEditions.filter(e => (e.language || "UND") === language).length})</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {selectedEditionLanguage ? (
+                      <div className="space-y-2">
+                        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">2. Exact edition</div>
+                        {bookEditions.filter(edition => (edition.language || "UND") === selectedEditionLanguage).map(edition => (
+                          <button key={edition.id} type="button" onClick={() => selectBookEdition(edition)}
+                            className="w-full text-left p-2 rounded-lg bg-zinc-900/70 hover:bg-orange-500/10 border border-white/5 hover:border-orange-500/30 flex items-center gap-3">
+                            {edition.coverImageUrl ? (
+                              <img src={edition.coverImageUrl} alt="" className="w-12 h-16 object-contain rounded shrink-0" referrerPolicy="no-referrer" />
+                            ) : <div className="w-12 h-16 bg-zinc-800 rounded shrink-0" />}
+                            <div className="min-w-0">
+                              <div className="text-xs font-semibold text-white line-clamp-2">{edition.title || selectedBook.title}</div>
+                              <div className="text-[11px] text-zinc-400">
+                                {[edition.bookFormat, edition.publisher, edition.year, edition.totalPages ? edition.totalPages + " pages" : null,
+                                  edition.runtimeMinutes ? Math.floor(edition.runtimeMinutes / 60) + "h " + edition.runtimeMinutes % 60 + "m" : null]
+                                  .filter(Boolean).join(" • ")}
+                              </div>
+                              {edition.isbn13 && <div className="text-[10px] text-zinc-500">ISBN {edition.isbn13}</div>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : bookEditions.length > 0 ? (
+                      <div className="text-xs text-zinc-500">Choose a language to see the available editions.</div>
+                    ) : !bookPickerError ? (
+                      <div className="text-xs text-zinc-500">No matching editions found for this format.</div>
+                    ) : null}
+                    <button type="button" onClick={() => { applySearchResult(selectedBook); setSelectedBook(null); }}
+                      className="text-xs text-zinc-400 hover:text-orange-400 text-left underline underline-offset-2">
+                      Use book metadata without selecting an edition
+                    </button>
+                  </>
+                )}
               </div>
             )}
 
@@ -1174,6 +1309,14 @@ export function MediaFormModal({
               placeholder="https://..."
             />
           </div>
+
+          {["Book", "Audiobook"].includes(formData.mediaType) && (formData.bookEditionId || formData.isbn13) && (
+            <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-3 text-xs text-zinc-300 space-y-1">
+              <div className="font-semibold text-orange-300">Selected Edition</div>
+              <div>{[formData.bookFormat, formData.language, formData.publisher, formData.year].filter(Boolean).join(" • ")}</div>
+              {formData.isbn13 && <div>ISBN-13: {formData.isbn13}</div>}
+            </div>
+          )}
 
           {/* Dynamic Fields Based on MediaType */}
           <div className="pt-4 border-t border-white/5 space-y-4">
