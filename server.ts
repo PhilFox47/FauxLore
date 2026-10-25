@@ -733,6 +733,10 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       originalMediaId TEXT,
       expectedReleaseDate TEXT,
       language TEXT,
+      isbn13 TEXT,
+      bookWorkId TEXT,
+      bookEditionId TEXT,
+      bookFormat TEXT,
       isOngoing INTEGER,
       noEnemies INTEGER DEFAULT 0,
       releaseStatus TEXT,
@@ -801,6 +805,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       nanoGptModel TEXT,
       geminiApiKey TEXT,
       googleBooksApiKey TEXT,
+      bookMetadataProviders TEXT,
       timezone TEXT,
       masterPageConfig TEXT,
       yearlyGoals TEXT,
@@ -1003,6 +1008,10 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
   try { db.prepare("ALTER TABLE settings ADD COLUMN geminiApiKey TEXT").run(); console.log("Migration: Added geminiApiKey"); } catch (e) {}
   try { db.prepare("ALTER TABLE system_settings ADD COLUMN googleBooksApiKey TEXT").run(); } catch(e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN googleBooksApiKey TEXT").run(); } catch(e) {}
+  try { db.prepare("ALTER TABLE settings ADD COLUMN bookMetadataProviders TEXT").run(); } catch(e) {}
+  for (const column of ["isbn13", "bookWorkId", "bookEditionId", "bookFormat"]) {
+    try { db.prepare("ALTER TABLE media ADD COLUMN " + column + " TEXT").run(); } catch(e) {}
+  }
   try { db.prepare("ALTER TABLE settings ADD COLUMN lastActiveDate TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN currentStreak INTEGER").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE settings ADD COLUMN questOffsets TEXT").run(); } catch (e) {}
@@ -1302,6 +1311,10 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
 
   app.get("/api/system-settings", (req, res) => {
     try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const user: any = db.prepare("SELECT role FROM users WHERE id = ?").get(userId);
+      if (user?.role !== "Admin") return res.status(403).json({error: "Admins only."});
       const sys: any = db.prepare('SELECT * FROM system_settings WHERE id = ?').get('system') || {};
       res.json(sys);
     } catch (e) { res.status(500).json({ error: String(e) }); }
@@ -1538,7 +1551,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
           issuesRead, totalIssues, isReRun, originalMediaId, expectedReleaseDate, language, isOngoing, noEnemies, isHighPriority, storyHeavyModifier, releaseStatus, lastSyncAt, createdAt, updatedAt,
-          subtitle, maturityRating
+          subtitle, maturityRating, isbn13, bookWorkId, bookEditionId, bookFormat
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
           @reviewScore, @averagePlaytime, @hltbMain, @hltbMainExtra, @hltbCompletionist, @selectedHltbType,
@@ -1546,7 +1559,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
           @issuesRead, @totalIssues, @isReRun, @originalMediaId, @expectedReleaseDate, @language, @isOngoing, @noEnemies, @isHighPriority, @storyHeavyModifier, @releaseStatus, @lastSyncAt, @createdAt, @updatedAt,
-          @subtitle, @maturityRating
+          @subtitle, @maturityRating, @isbn13, @bookWorkId, @bookEditionId, @bookFormat
         )
         ON CONFLICT(id) DO UPDATE SET
           userId=excluded.userId, title=excluded.title, mediaType=excluded.mediaType, coverImageUrl=excluded.coverImageUrl,
@@ -1563,7 +1576,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           isReRun=excluded.isReRun, originalMediaId=excluded.originalMediaId, expectedReleaseDate=excluded.expectedReleaseDate,
           language=excluded.language, isOngoing=excluded.isOngoing, noEnemies=excluded.noEnemies, isHighPriority=excluded.isHighPriority, storyHeavyModifier=excluded.storyHeavyModifier,
           releaseStatus=excluded.releaseStatus, lastSyncAt=excluded.lastSyncAt,
-          subtitle=excluded.subtitle, maturityRating=excluded.maturityRating
+          subtitle=excluded.subtitle, maturityRating=excluded.maturityRating,
+          isbn13=excluded.isbn13, bookWorkId=excluded.bookWorkId, bookEditionId=excluded.bookEditionId, bookFormat=excluded.bookFormat
       `);
 
       stmt.run({
@@ -1608,6 +1622,10 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         originalMediaId: item.originalMediaId || null,
         expectedReleaseDate: item.expectedReleaseDate || null,
         language: item.language || null,
+        isbn13: item.isbn13 || null,
+        bookWorkId: item.bookWorkId || null,
+        bookEditionId: item.bookEditionId || null,
+        bookFormat: item.bookFormat || null,
         subtitle: item.subtitle || null,
         maturityRating: item.maturityRating || null,
         isOngoing: item.isOngoing ? 1 : 0,
@@ -1930,7 +1948,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         mediaDifficulty: row.mediaDifficulty ? JSON.parse(row.mediaDifficulty) : undefined,
         questOffsets: row.questOffsets ? JSON.parse(row.questOffsets) : undefined,
         questRerollsUsed: row.questRerollsUsed ? JSON.parse(row.questRerollsUsed) : undefined,
-        questConfigs: row.questConfigs ? JSON.parse(row.questConfigs) : undefined
+        questConfigs: row.questConfigs ? JSON.parse(row.questConfigs) : undefined,
+        bookMetadataProviders: row.bookMetadataProviders ? JSON.parse(row.bookMetadataProviders) : ["hardcover", "googleBooks"]
       });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -1951,8 +1970,8 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
       const newMediaDifficulty = settings.mediaDifficulty ? JSON.stringify(settings.mediaDifficulty) : null;
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, geminiApiKey, googleBooksApiKey, bookMetadataProviders, timezone, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @geminiApiKey, @googleBooksApiKey, @bookMetadataProviders, @timezone, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -1962,6 +1981,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
           nanoGptModel=excluded.nanoGptModel,
           geminiApiKey=excluded.geminiApiKey,
           googleBooksApiKey=excluded.googleBooksApiKey,
+          bookMetadataProviders=excluded.bookMetadataProviders,
           timezone=excluded.timezone,
           masterPageConfig=excluded.masterPageConfig,
           yearlyGoals=excluded.yearlyGoals,
@@ -1982,6 +2002,7 @@ It MUST directly reference "${mediaItem.title}". Do not use generic fantasy name
         nanoGptModel: isAdmin ? (settings.nanoGptModel || null) : (oldSettings?.nanoGptModel || null),
         geminiApiKey: isAdmin ? (settings.geminiApiKey || null) : (oldSettings?.geminiApiKey || null),
         googleBooksApiKey: isAdmin ? (settings.googleBooksApiKey || null) : (oldSettings?.googleBooksApiKey || null),
+        bookMetadataProviders: JSON.stringify(Array.isArray(settings.bookMetadataProviders) ? settings.bookMetadataProviders.filter((p: string) => ["hardcover", "googleBooks"].includes(p)) : ["hardcover", "googleBooks"]),
         timezone: settings.timezone || null,
         masterPageConfig: settings.masterPageConfig ? JSON.stringify(settings.masterPageConfig) : null,
         yearlyGoals: settings.yearlyGoals ? JSON.stringify(settings.yearlyGoals) : null,
