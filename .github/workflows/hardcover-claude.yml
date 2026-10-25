@@ -1,0 +1,67 @@
+name: Hardcover metadata (Claude)
+
+on:
+  pull_request:
+    branches: [claude]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Check Hardcover work / edition mapping with a mocked API
+        shell: bash
+        run: |
+          node --import tsx --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { searchBookProviders, getHardcoverEditions } from './server/integrations/bookMetadata.ts';
+          const original = globalThis.fetch;
+          const queries = [];
+          globalThis.fetch = async (_url, request) => {
+            const body = JSON.parse(request.body);
+            queries.push({ query: body.query, auth: request.headers.Authorization });
+            let data;
+            if (body.query.includes('FindBooks')) data = { search: { ids: [42], results: [{ id: 42 }] } };
+            else if (body.query.includes('BookMatches')) data = { books: [{
+              id: 42, slug: 'a-test-book', title: 'A Test Book', release_year: 2024,
+              rating: 4.2, description: 'Example', image: { url: 'https://example.com/work.jpg' },
+              contributions: [{ author: { name: 'A Writer' } }]
+            }] };
+            else data = { editions: [
+              {id: 91, title: 'Ein Testbuch', language: {code2: 'de'},
+                edition_format: 'Paperback', reading_format_id: 1, pages: 312, isbn_13: '9781234567890',
+                publisher: {name: 'Verlag'}, image: {url: 'https://example.com/de.jpg', width: 800, height: 1200}},
+              {id: 92, title: 'A Test Book', language: {code2: 'en'},
+                edition_format: 'audiobook', reading_format_id: 2, audio_seconds: 7200}
+            ] };
+            return { ok: true, json: async () => ({data}) };
+          };
+          try {
+            const works = await searchBookProviders('A Test Book', undefined, ['hardcover'], 'token');
+            assert.equal(works.length, 1);
+            assert.equal(works[0].metadataSource, 'hardcover');
+            assert.equal(works[0].metadataSourceId, '42');
+            assert.equal(works[0].bookWorkId, '42');
+            const physical = await getHardcoverEditions(42, 'token', 'Book');
+            assert.equal(physical.length, 1);
+            assert.equal(physical[0].bookEditionId, '91');
+            assert.equal(physical[0].language, 'DE');
+            assert.equal(physical[0].totalPages, 312);
+            assert.equal(physical[0].isbn13, '9781234567890');
+            const audio = await getHardcoverEditions(42, 'token', 'Audiobook');
+            assert.equal(audio.length, 1);
+            assert.equal(audio[0].runtimeMinutes, 120);
+            assert.ok(queries.every(item => item.auth === 'Bearer token'));
+            await assert.rejects(searchBookProviders('test', undefined, []), /Enable at least one/);
+          } finally { globalThis.fetch = original; }
+          NODE

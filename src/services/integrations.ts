@@ -20,14 +20,30 @@ export interface GameMetadata {
 
 export interface BookMetadata {
   id: string;
+  provider?: "hardcover" | "googleBooks";
+  metadataSource?: "hardcover" | "googlebooks";
+  metadataSourceId?: string;
+  sourceUrl?: string;
   title: string;
-  creator: string; // Author
+  creator: string;
+  subtitle?: string;
+  description?: string;
+  publisher?: string;
+  language?: string;
   year?: number;
   totalPages?: number;
   reviewScore?: number;
-  description?: string;
-  genres?: string[];
   coverImageUrl?: string;
+  bookWorkId?: string;
+}
+
+export interface BookEdition extends BookMetadata {
+  bookEditionId: string;
+  isbn13?: string;
+  bookFormat?: string;
+  runtimeMinutes?: number;
+  imageWidth?: number;
+  imageHeight?: number;
 }
 
 /**
@@ -119,7 +135,7 @@ export const IntegrationsService = {
   },
 
   /**
-   * Search Hardcover.app API using full-stack proxy route
+   * Search the enabled book metadata sources via the server.
    */
   async searchBookMetadata(query: string, lang?: string): Promise<BookMetadata[]> {
     try {
@@ -143,6 +159,21 @@ export const IntegrationsService = {
       console.error("Error searching book metadata:", e);
       throw e; // Pass to UI so it can display error state
     }
+  },
+
+  /** Select a concrete Hardcover language/edition for a book or audiobook. */
+  async getHardcoverEditions(bookId: string, mediaType: 'Book' | 'Audiobook'): Promise<BookEdition[]> {
+    const match = /^hc_(\d+)$/.exec(bookId);
+    if (!match) throw new Error("Invalid Hardcover book ID");
+    const url = '/api/books/hardcover/' + match[1] + '/editions?mediaType=' + mediaType;
+    const response = await fetch(url, {
+      headers: { Authorization: 'Bearer ' + localStorage.getItem('fauxlore_token') }
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(body?.error || "Failed to fetch Hardcover editions");
+    }
+    return response.json();
   },
 
   /**

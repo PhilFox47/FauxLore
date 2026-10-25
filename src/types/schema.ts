@@ -16,7 +16,7 @@ export type Status = typeof STATUSES[number];
 
 // Metadata providers an item's data can originate from. Items remember their source
 // so they can be re-looked-up for automatic update checks.
-export const METADATA_SOURCES = ['vndb', 'gsl', 'igdb', 'tmdb', 'mangadex', 'googlebooks'] as const;
+export const METADATA_SOURCES = ['vndb', 'gsl', 'igdb', 'tmdb', 'mangadex', 'googlebooks', 'hardcover'] as const;
 export type MetadataSource = typeof METADATA_SOURCES[number];
 
 export const METADATA_SOURCE_LABELS: Record<MetadataSource, string> = {
@@ -26,12 +26,18 @@ export const METADATA_SOURCE_LABELS: Record<MetadataSource, string> = {
   tmdb: 'TMDB',
   mangadex: 'MangaDex',
   googlebooks: 'Google Books',
+  hardcover: 'Hardcover',
 };
 
 export interface MediaItem {
   id: string;
   isReRun?: boolean;
   originalMediaId?: string;
+  /** Stable conceptual work ID and exact published edition identifiers. */
+  bookWorkId?: string;
+  bookEditionId?: string;
+  isbn13?: string;
+  bookFormat?: string;
   title: string;
   subtitle?: string;
   mediaType: MediaType;
@@ -416,6 +422,8 @@ export interface Settings {
   igdbClientSecret?: string;
   tmdbApiKey?: string;
   googleBooksApiKey?: string;
+  hardcoverApiKey?: string;
+  bookMetadataProviders?: ("hardcover" | "googleBooks")[];
   nanoGptApiKey?: string;
   /** Analytical work: classifying, extracting, converting prose to JSON. */
   nanoGptModel?: string;

@@ -48,6 +48,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     igdbClientSecret: '',
     tmdbApiKey: '',
     googleBooksApiKey: '',
+    hardcoverApiKey: '',
+    bookMetadataProviders: ['hardcover', 'googleBooks'] as ('hardcover' | 'googleBooks')[],
     nanoGptApiKey: '',
     nanoGptModel: '',
     nanoGptWebModel: '',
@@ -117,6 +119,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         igdbClientSecret: settings.igdbClientSecret || '',
         tmdbApiKey: settings.tmdbApiKey || '',
         googleBooksApiKey: settings.googleBooksApiKey || '',
+        hardcoverApiKey: settings.hardcoverApiKey || '',
+        bookMetadataProviders: Array.isArray(settings.bookMetadataProviders) ? settings.bookMetadataProviders : ['hardcover', 'googleBooks'],
         nanoGptApiKey: settings.nanoGptApiKey || '',
         nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
         nanoGptWebModel: settings.nanoGptWebModel || '',
@@ -175,6 +179,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             igdbClientSecret: settings.igdbClientSecret || '',
             tmdbApiKey: settings.tmdbApiKey || '',
             googleBooksApiKey: settings.googleBooksApiKey || '',
+        hardcoverApiKey: settings.hardcoverApiKey || '',
+        bookMetadataProviders: Array.isArray(settings.bookMetadataProviders) ? settings.bookMetadataProviders : ['hardcover', 'googleBooks'],
             nanoGptApiKey: settings.nanoGptApiKey || '',
             nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
             nanoGptWebModel: settings.nanoGptWebModel || '',
@@ -537,6 +543,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         igdbClientSecret: formData.igdbClientSecret,
         tmdbApiKey: formData.tmdbApiKey,
         googleBooksApiKey: formData.googleBooksApiKey,
+        hardcoverApiKey: formData.hardcoverApiKey,
+        bookMetadataProviders: formData.bookMetadataProviders,
         nanoGptApiKey: formData.nanoGptApiKey,
         nanoGptModel: formData.nanoGptModel,
         nanoGptWebModel: formData.nanoGptWebModel,
@@ -726,6 +734,31 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       <p className="text-[10px] text-zinc-500 mt-1">
                         {getPersona(formData.aiPersona).hint} Sets the voice of your recaps and quest titles.
                       </p>
+                    </div>
+
+                    <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-4 space-y-3">
+                      <h3 className="text-sm font-semibold text-zinc-200">Book Metadata Providers</h3>
+                      <p className="text-xs text-zinc-500">Enable the sources used for books and audiobooks. Hardcover supports exact language and edition selection. Google Books remains optional.</p>
+                      {([
+                        ['hardcover', 'Hardcover', 'Books, languages, editions, ratings and covers'],
+                        ['googleBooks', 'Google Books', 'Alternative book metadata and cover lookup']
+                      ] as const).map(([provider, label, hint]) => (
+                        <label key={provider} className="flex gap-3 items-center bg-zinc-800/40 rounded-lg p-3 cursor-pointer">
+                          <input type="checkbox" checked={formData.bookMetadataProviders.includes(provider)}
+                            onChange={e => setFormData(prev => ({
+                              ...prev,
+                              bookMetadataProviders: e.target.checked
+                                ? [...prev.bookMetadataProviders, provider]
+                                : prev.bookMetadataProviders.filter(p => p !== provider)
+                            }))}
+                            className="w-4 h-4 accent-orange-500" />
+                          <span className="flex flex-col">
+                            <span className="text-sm font-semibold text-white">{label}</span>
+                            <span className="text-xs text-zinc-500">{hint}</span>
+                          </span>
+                        </label>
+                      ))}
+                      {formData.bookMetadataProviders.length === 0 && <p className="text-xs text-red-400">Enable at least one provider to search books.</p>}
                     </div>
 
                     <div className="pt-2">
@@ -1190,6 +1223,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       className="input-field" 
                       placeholder="eyJhbG..."
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Hardcover API Token (Books / Audiobooks)</label>
+                    <input type="password" name="hardcoverApiKey" value={formData.hardcoverApiKey}
+                      onChange={handleChange} className="input-field" placeholder="Hardcover read-only token" />
+                    <p className="text-[10px] text-zinc-500 mt-1">Generate your token at hardcover.app/account/api. Stored in server settings, not sent to Hardcover from the browser.</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-zinc-400 mb-1">Google Books API Key (Books)</label>
