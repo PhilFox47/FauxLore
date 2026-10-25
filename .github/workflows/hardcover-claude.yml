@@ -19,6 +19,8 @@ jobs:
         run: npm run lint
       - name: Build
         run: npm run build
+      - name: Verify audiobook artwork selection and print-edition cover fallback
+        run: node --import tsx --test src/lib/bookEditionCover.test.ts
       - name: Check Hardcover work / edition mapping with a mocked API
         shell: bash
         run: |
@@ -34,7 +36,9 @@ jobs:
             if (body.query.includes('FindBooks')) data = { search: { ids: [42], results: [{ id: 42 }] } };
             else if (body.query.includes('BookMatches')) data = { books: [{
               id: 42, slug: 'a-test-book', title: 'A Test Book', release_year: 2024,
-              rating: 4.2, description: 'Example', image: { url: 'https://example.com/work.jpg' },
+              rating: 4.2, description: 'Example', image: { url: 'https://example.com/square-audio.jpg', width: 1200, height: 1200 },
+              default_physical_edition: {image: {url: 'https://example.com/portrait-print.jpg', width: 800, height: 1200}},
+              default_cover_edition: {image: {url: 'https://example.com/square-audio.jpg', width: 1200, height: 1200}},
               contributions: [{ author: { name: 'A Writer' } }]
             }] };
             else data = { editions: [
@@ -52,6 +56,7 @@ jobs:
             assert.equal(works[0].metadataSource, 'hardcover');
             assert.equal(works[0].metadataSourceId, '42');
             assert.equal(works[0].bookWorkId, '42');
+            assert.equal(works[0].coverImageUrl, 'https://example.com/portrait-print.jpg');
             const physical = await getHardcoverEditions(42, 'token', 'Book');
             assert.equal(physical.length, 1);
             assert.equal(physical[0].bookEditionId, '91');
