@@ -481,4 +481,11 @@ export function runMigrations(db: Db) {
   } catch (e) {
     console.error("Migration to user_version 2 failed:", e);
   }
+  // Book metadata providers and exact Hardcover edition provenance.
+  // These are additive for existing databases; fresh installs also run migrations.
+  try { db.prepare("ALTER TABLE settings ADD COLUMN bookMetadataProviders TEXT").run(); } catch (e) {}
+  for (const column of ["bookWorkId", "bookEditionId", "isbn13", "bookFormat"]) {
+    try { db.prepare("ALTER TABLE media ADD COLUMN " + column + " TEXT").run(); } catch (e) {}
+  }
+
 }
