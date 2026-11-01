@@ -73,3 +73,37 @@ test("Knowledge Base stores ALL memories; wrapped ignores spoiler-specific entit
   const memoriesCtx=knowledgeTaskBlock(kb,"memory");
   assert.match(memoriesCtx,/Recognizable line 13/);
 });
+
+test("Preserve malformed but meaningful craft data from actual V3 research shapes", () => {
+  const entries = normalizeEntries([
+    {area:"creative techniques",name:"Distinctive technique",
+      details:"A substantial research observation that used a string details field.",
+      sources:["https://example.org/research"],priority:"important"},
+    {area:"mechanics",name:"Central interaction",facts:["Distinctive game mechanic"],
+      sourceUrls:["https://example.org/research"]},
+    {area:"production",name:"Historical production note",details:"A documented production detail."},
+  ],["https://example.org/research"],"craft");
+  assert.deepEqual(entries.map(e=>e.area),["craft","mechanics","production"]);
+  assert.equal(entries[0].facts.length,1);
+  assert.equal(entries[0].sourceStatus,"verified");
+  assert.match(entries[2].facts[0],/production detail/);
+});
+
+test("Unsupported new research categories remain in the full knowledge database", () => {
+  const entry=normalizeEntries([{area:"unexpected-new-area",name:"New research topic",
+    details:"A meaningful finding."}],[],"craft")[0];
+  assert.equal(entry.area,"misc");
+  assert.equal(entry.details.originalArea,"unexpected-new-area");
+  assert.deepEqual(entry.facts,["A meaningful finding."]);
+});
+
+test("V3 converts prose-style faction membership to descriptions, not arrays", () => {
+  const entry=normalizeEntries([{area:"factions",name:"Coven",facts:["An organized group"],
+    details:{members:"Membership is described in prose, not as names.",aliases:"Another name"}}],[],"world");
+  const kb:CodexKnowledge={version:3,identity:{title:"Test",type:"Book"},
+    core:{premise:"A test story"},manifest:[],entries:entry,missing:[],sources:[],notes:[]};
+  const row=toCodexData(kb).factions?.[0];
+  assert.equal(row?.members,undefined);
+  assert.match(row?.description||"",/Membership is described in prose/);
+  assert.deepEqual(row?.aliases,["Another name"]);
+});

@@ -15,23 +15,28 @@ export function loadCodexKnowledge(db:Db,row:CodexRow|null): CodexKnowledge|null
   }catch{return null;}
 }
 const taskAreas:Record<CodexTask,string[]>={
-  enemy:["antagonists","characters","factions","locations","terminology"],
-  loot:["items","terminology","factions","locations"],
-  image:["characters","antagonists","items","locations","factions"],
-  tags:["terminology","factions"],
+  enemy:["antagonists","characters","factions","locations","terminology","mechanics"],
+  loot:["items","terminology","factions","locations","mechanics"],
+  image:["characters","antagonists","items","locations","factions","craft"],
+  tags:["terminology","factions","mechanics","craft","content"],
   wrapped:[],
-  story:["events","characters","locations","factions"],
+  story:["events","characters","locations","factions","mechanics"],
   memory:["flavorTexts"],
 };
 function coreContext(kb:CodexKnowledge,task:CodexTask):string {
   const c=kb.core;
   const basic=[
     `EXACT WORK: ${String(kb.identity.title||"Unknown")} (${String(kb.identity.year||"")}, ${String(kb.identity.type||"")})`,
-    `Premise: ${c.premise||""}`,`Overview: ${c.overview||""}`,
+    `Premise: ${c.premise||""}`,
     `Setting: ${c.setting||""}`,`Tone: ${c.tone||""}`,
     `Themes: ${(c.themes||[]).join("; ")}`,
-    `Distinctive identity: ${c.distinctive||""}`,
-    `Structure: ${c.structure||""}`,
+    // Full overviews and distinctive descriptions can contain spoilers.
+    // Wrapped receives only genre/identity, NEVER plot summaries.
+    ...(task==="wrapped"?[]:[
+      `Overview: ${c.overview||""}`,
+      `Distinctive identity: ${c.distinctive||""}`,
+      `Structure: ${c.structure||""}`,
+    ]),
     `Genres: ${(c.genres||[]).join(", ")}`,
     `Classification signals: ${(c.tags||[]).join(", ")}`,
   ];

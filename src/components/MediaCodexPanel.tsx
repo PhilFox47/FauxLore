@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { CodexData, CodexEntity, CodexFlavorText, MediaCodex } from '../types/schema';
 import { DatabaseService } from '../services/db';
 import { cn } from '../lib/utils';
+import { codexList, codexText } from '../lib/codexDisplay';
 import { useToast } from '../contexts/ToastContext';
 
 /**
@@ -116,16 +117,16 @@ function EntityList({ entries, limit = 12, detailed }: { entries?: CodexEntity[]
           ['Manner', e.personality], ['Connected to', e.relationships], ['Status', e.status],
           ['Feels', e.atmosphere], ['Where', e.whatHappensThere],
           ['Emblem', e.symbol], ['Colours', e.colors],
-          ['Members', (e.members || []).slice(0, 6).join(', ') || undefined],
+          ['Members', codexText(e.members) || undefined],
         ];
-        const shown = detail.filter(([, v]) => v && String(v).trim());
+        const shown = detail.map(([label, val]) => [label, codexText(val)] as const).filter(([, v]) => !!v);
 
         return (
           <div key={`${e.name}-${i}`} className="text-sm leading-snug">
             <div>
               <span className="font-bold text-zinc-200">{e.name}</span>
-              {(e.aliases?.length || 0) > 0 && (
-                <span className="text-zinc-600 text-xs"> aka {e.aliases!.slice(0, 3).join(', ')}</span>
+              {codexList(e.aliases).length > 0 && (
+                <span className="text-zinc-600 text-xs"> aka {codexList(e.aliases).join(', ')}</span>
               )}
               {qualifier && (
                 <span className="text-[10px] uppercase tracking-widest text-amber-500/70 font-black ml-2">{qualifier}</span>
@@ -472,7 +473,7 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
               the work is, who is in it, and what it is about. */}
           {(data.characters?.length || 0) > 0 && (
             <Section icon={<Users className="w-3 h-3" />} title="Cast">
-              <EntityList entries={data.characters} limit={expanded ? 24 : 5} detailed={expanded} />
+              <EntityList entries={data.characters} limit={expanded ? Infinity : 5} detailed={expanded} />
             </Section>
           )}
 
@@ -517,7 +518,7 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
                 )}
                 {(data.signatureMoments?.length || 0) > 0 && (
                   <Section icon={<Sparkles className="w-3 h-3" />} title="Signature moments">
-                    <Lines values={data.signatureMoments} />
+                    <Lines values={data.signatureMoments} limit={Infinity} />
                   </Section>
                 )}
               </Chapter>
@@ -535,12 +536,12 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
                 )}
                 {(data.locations?.length || 0) > 0 && (
                   <Section icon={<MapPin className="w-3 h-3" />} title="Places">
-                    <EntityList entries={data.locations} limit={24} detailed />
+                    <EntityList entries={data.locations} limit={Infinity} detailed />
                   </Section>
                 )}
                 {(data.factions?.length || 0) > 0 && (
                   <Section icon={<Landmark className="w-3 h-3" />} title="Factions & organizations">
-                    <EntityList entries={data.factions} limit={24} detailed />
+                    <EntityList entries={data.factions} limit={Infinity} detailed />
                   </Section>
                 )}
                 {(data.terminology?.length || 0) > 0 && (
@@ -550,7 +551,7 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
                         name: t.term, description: t.meaning, role: t.category,
                         introducedAt: t.introducedAt, introducedPct: t.introducedPct,
                       }))}
-                      limit={24}
+                      limit={Infinity}
                     />
                   </Section>
                 )}
@@ -563,7 +564,7 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
                   <Section icon={<Swords className="w-3 h-3" />} title="Who and what stands in the way">
                     <EntityList
                       entries={data.antagonists?.length ? data.antagonists : data.enemies}
-                      limit={24}
+                      limit={Infinity}
                       detailed
                     />
                   </Section>
@@ -573,7 +574,7 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
               {(data.items?.length || 0) > 0 && (
                 <Chapter title="Objects">
                   <Section icon={<Gem className="w-3 h-3" />} title="Notable objects">
-                    <EntityList entries={data.items} limit={24} detailed />
+                    <EntityList entries={data.items} limit={Infinity} detailed />
                   </Section>
                 </Chapter>
               )}
@@ -684,7 +685,7 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
               {(data.sources?.length || 0) > 0 && (
                 <Section icon={<ExternalLink className="w-3 h-3" />} title="Sources consulted">
                   <div className="flex flex-col gap-1">
-                    {(data.sources || []).slice(0, 6).map((s, i) => (
+                    {(data.sources || []).map((s, i) => (
                       /*
                        * A source is only a link when it is actually a URL.
                        *
