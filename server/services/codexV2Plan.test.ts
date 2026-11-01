@@ -55,3 +55,21 @@ test("research prompts inherit exact work boundary and avoid forced new-book mem
   assert.match(p,/Other book/);
   assert.match(p,/zero-length list/i);
 });
+
+test("spoiler-introduction fields are never copied from an unverified compiler guess",()=>{
+  const dossier=narrowDossier({
+    characters:[
+      {name:"Hero",introducedAt:"final mission",introducedPct:95},
+      {name:"Ally",introducedAt:"Act 1",introducedPct:0},
+    ],
+  },[
+    {id:"e_1",section:"characters",name:"Hero",fact:"Hero participates in the first chapter",
+      sourceUrl:"https://example.org",introducedAt:"first chapter",introducedPct:5},
+    {id:"e_2",section:"characters",name:"Ally",fact:"Ally participates in the original game",
+      sourceUrl:"https://example.org"},
+  ]);
+  assert.equal(dossier.characters?.[0]?.introducedAt,"first chapter");
+  assert.equal(dossier.characters?.[0]?.introducedPct,5);
+  assert.equal(dossier.characters?.[1]?.introducedAt,undefined);
+  assert.equal(dossier.characters?.[1]?.introducedPct,undefined);
+});
