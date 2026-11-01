@@ -1,6 +1,8 @@
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose, type AiConfig } from "../lib/ai";
+import { cliProxyResearch, type CliProxyResearchResult } from "../lib/cliProxyResearch";
+import { nextCallId, recordAiCallStart, recordAiCall, recordPayload } from "../lib/diagnostics";
 import { searchProviderById } from "../../src/lib/searchProviders";
 import {
   FACETS, FACET_FLOORS, TYPE_BRIEF,
@@ -1312,7 +1314,9 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
       console.log(
         `[codex] ${alreadyKnown ? "Expanding" : "Compiling"} the Codex for "${subject.title}"` +
         `${season ? ` season ${season}` : ""} (${subject.mediaType})` +
-        ` — one deep-search pass, typically three to six minutes.`,
+        (aiConfig.backend === "cliProxy"
+          ? ` — native Codex web search via CLIProxyAPI.`
+          : ` — one NanoGPT deep-search pass, typically three to six minutes.`),
       );
 
       /**
@@ -1335,7 +1339,9 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
        * "Missing some things" and "unusable" are different outcomes and only
        * the second one is worth a person's attention.
        */
+      const useCliResearch = aiConfig.backend === "cliProxy";
       const primaryProvider = searchProviderById(aiConfig.searchProvider);
+      let cliResearchResult: CliProxyResearchResult | null = null;
       let lastUsage: { injectedTokens?: number } | null = null;
       /**
        * `knownOverride` lets the same request builder serve a later, different
@@ -1409,9 +1415,52 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
       };
 
       const finalSearchUsed = { provider: primaryProvider.provider, depth: primaryProvider.depth };
-      const raw = await askForDossier(finalSearchUsed);
+      let raw: string;
+      if (useCliResearch) {
+        const model = aiConfig.cliProxyCodexModel || aiConfig.model;
+        const prompt = buildDossierPrompt(subject, null, alreadyKnown);
+        const callId = nextCallId();
+        const startedAt = Date.now();
+        const shape = {
+          callId, model, scope: "codex", tier: "analytical" as const,
+          webSearch: true, searchProvider: "codex-native", searchDepth: "native",
+          stream: true, json: true, attempt: 1, promptChars: prompt.length, userId,
+        };
+        recordAiCallStart(shape);
+        recordPayload(callId, "codex", { prompt });
+        try {
+          const result = await cliProxyResearch({
+            apiKey: aiConfig.apiKey, baseUrl: aiConfig.baseUrl, model,
+          }, prompt);
+          // Do not silently accept a memory-only response as researched material.
+          if (!result.searched || !result.sources.length) {
+            throw new Error(
+              "CLIProxyAPI did not return a completed native web search with verifiable URLs. " +
+              "Codex was not saved; check the model's Responses/web_search support.",
+            );
+          }
+          cliResearchResult = result;
+          raw = result.text;
+          recordPayload(callId, "codex", { reply: raw });
+          console.log(`[codex] CLIProxyAPI verified ${result.sources.length} native web sources for "${subject.title}".`);
+          recordAiCall({
+            ...shape, durationMs: Date.now() - startedAt, httpStatus: 200,
+            promptTokens: result.promptTokens, completionTokens: result.completionTokens,
+            injectedTokens: undefined, finishReason: "stop",
+          });
+        } catch (e: any) {
+          recordAiCall({ ...shape, durationMs: Date.now() - startedAt, error: String(e?.message || e) });
+          throw e;
+        }
+      } else {
+        raw = await askForDossier(finalSearchUsed);
+      }
       const parsed = asDossier(raw);
-      const noRetrievalOnFinalAttempt = !!lastUsage && (lastUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
+      // NanoGPT's "injectedTokens" measures retrieval; Responses has actual
+      // web_search_call and source receipts instead, never use promptTokens as a proxy.
+      const noRetrievalOnFinalAttempt = useCliResearch
+        ? !cliResearchResult?.searched
+        : !!lastUsage && (lastUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
 
       if (!parsed) {
         // Logged in full because the reply itself is the only evidence of why.
@@ -1446,7 +1495,9 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
 
       const identity: CodexIdentity = {
         ...(parsed.identifiedAs && typeof parsed.identifiedAs === "object" ? parsed.identifiedAs : {}),
-        sources: Array.isArray(parsed.sources) ? parsed.sources : undefined,
+        sources: cliResearchResult
+          ? cliResearchResult.sources
+          : Array.isArray(parsed.sources) ? parsed.sources : undefined,
       };
       if (!identity.title) identity.title = subject.title;
 
@@ -1588,7 +1639,8 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
 
       db.prepare(
         `UPDATE media_codex SET data = ?, status = 'ready', error = NULL, model = ?, mediaId = COALESCE(mediaId, ?), updatedAt = ? WHERE id = ?`,
-      ).run(JSON.stringify(data), aiConfig.webModel, subject.mediaId || null, new Date().toISOString(), id);
+      ).run(JSON.stringify(data), useCliResearch ? (aiConfig.cliProxyCodexModel || aiConfig.model) : aiConfig.webModel,
+        subject.mediaId || null, new Date().toISOString(), id);
       console.log(`[codex] Saved the Codex for "${subject.title}" (confidence: ${data.confidence}).`);
     } catch (e: any) {
       console.error(`Codex generation failed for "${subject.title}"`, e);

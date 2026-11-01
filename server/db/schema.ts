@@ -117,7 +117,8 @@ export function initSchema(db: Db) {
       cliProxyApiKey TEXT,
       cliProxyTextModel TEXT,
       cliProxyCreativeModel TEXT,
-      cliProxyImageModel TEXT
+      cliProxyImageModel TEXT,
+      cliProxyCodexModel TEXT
     );
 
     CREATE TABLE IF NOT EXISTS global_taxonomy (

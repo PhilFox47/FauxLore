@@ -58,6 +58,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     cliProxyTextModel: 'gpt-6.1-sol',
     cliProxyCreativeModel: '',
     cliProxyImageModel: 'gpt-image-2',
+    cliProxyCodexModel: 'gpt-6.1-sol',
     nanoGptModel: '',
     nanoGptWebModel: '',
     nanoGptCreativeModel: '',
@@ -136,6 +137,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         cliProxyTextModel: settings.cliProxyTextModel || 'gpt-6.1-sol',
         cliProxyCreativeModel: settings.cliProxyCreativeModel || '',
         cliProxyImageModel: settings.cliProxyImageModel || 'gpt-image-2',
+        cliProxyCodexModel: settings.cliProxyCodexModel || settings.cliProxyTextModel || 'gpt-6.1-sol',
         nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
         nanoGptWebModel: settings.nanoGptWebModel || '',
         nanoGptCreativeModel: settings.nanoGptCreativeModel || '',
@@ -203,6 +205,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             cliProxyTextModel: settings.cliProxyTextModel || 'gpt-6.1-sol',
             cliProxyCreativeModel: settings.cliProxyCreativeModel || '',
             cliProxyImageModel: settings.cliProxyImageModel || 'gpt-image-2',
+            cliProxyCodexModel: settings.cliProxyCodexModel || settings.cliProxyTextModel || 'gpt-6.1-sol',
             nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
             nanoGptWebModel: settings.nanoGptWebModel || '',
             nanoGptCreativeModel: settings.nanoGptCreativeModel || '',
@@ -578,6 +581,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         cliProxyTextModel: formData.cliProxyTextModel,
         cliProxyCreativeModel: formData.cliProxyCreativeModel,
         cliProxyImageModel: formData.cliProxyImageModel,
+        cliProxyCodexModel: formData.cliProxyCodexModel,
         nanoGptModel: formData.nanoGptModel,
         nanoGptWebModel: formData.nanoGptWebModel,
         nanoGptCreativeModel: formData.nanoGptCreativeModel,
@@ -1284,7 +1288,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       placeholder="..."
                     />
                   </div>
-                  <div>
+                  {formData.aiProvider !== 'cliProxy' && (<div>
                     <label className="block text-sm font-medium text-zinc-400 mb-1">Codex research depth</label>
                     <select
                       name="nanoGptSearchProvider"
@@ -1306,7 +1310,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       they actually surface: Exa reaches forums and community pages the general crawlers miss, which is where memories live;
                       Perplexity arrives pre-summarised. Which suits your library best is worth testing.
                     </p>
-                  </div>
+                  </div>)}
                 </div>
 
                 <div className="mt-8 space-y-4">
@@ -1349,7 +1353,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         <label className="block text-sm font-medium text-zinc-400 mb-1">Creative Text Model</label>
                         <input name="cliProxyCreativeModel" value={formData.cliProxyCreativeModel} onChange={handleChange} className="input-field" placeholder="Same as analytical" />
                       </div>
-                      <p className="sm:col-span-2 text-xs text-amber-300/80">Codex deep research and online-search tasks still use NanoGPT, since its deep-search API has different semantics. Keep a NanoGPT key and web model configured if you use these features.</p>
+                      <div className="sm:col-span-2">
+                        <label className="block text-sm font-medium text-zinc-400 mb-1">Codex Research Model (native web search)</label>
+                        <input name="cliProxyCodexModel" value={formData.cliProxyCodexModel}
+                          onChange={handleChange} className="input-field" placeholder="gpt-6.1-sol" />
+                        <p className="text-[10px] text-zinc-500 mt-1">Uses CLIProxyAPI /v1/responses with native web_search. No NanoGPT deep-search request or cost. The Codex is saved only if the upstream confirms an actual web-search call and returns usable sources.</p>
+                      </div>
                     </div>
                   )}
                   <p className="text-xs text-zinc-500">
