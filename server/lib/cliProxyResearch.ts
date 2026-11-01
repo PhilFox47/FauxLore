@@ -140,7 +140,9 @@ export async function cliProxyResearch(
   timeoutMs = 1_500_000,
 ): Promise<CliProxyResearchResult> {
   const url = `${cliProxyBaseUrl(config.baseUrl)}/responses`;
-  const response = await fetch(url, {
+  let response: Response;
+  try {
+    response = await fetch(url, {
     method: "POST",
     signal: AbortSignal.timeout(timeoutMs),
     headers: {
@@ -156,7 +158,12 @@ export async function cliProxyResearch(
       stream: true,
       store: false,
     }),
-  });
+    });
+  } catch (e: any) {
+    const code = e?.cause?.code ? ` [${e.cause.code}]` : "";
+    const detail = e?.cause?.message || e?.message || String(e);
+    throw new Error(`Cannot connect to CLIProxyAPI at ${new URL(url).host}${code}: ${detail}`, { cause: e });
+  }
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 800);
     throw new Error(`CLIProxyAPI Responses web search returned HTTP ${response.status}: ${detail}`);
