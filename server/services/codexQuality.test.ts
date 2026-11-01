@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chooseCodexFollowUp, memoryTopicsOverlap, memoryQuality, duplicatedMemoryTopics, isGenericStructure } from "./codexQuality";
+import { chooseCodexFollowUp, memoryTopicsOverlap, memoryQuality, duplicatedMemoryTopics, isGenericStructure, verifiedResearchSource, distinctScene } from "./codexQuality";
 
 test("two different Mako jokes share one topic without hardcoding the game", () => {
   const a = { text: "*Ascending vertical cliff face noises*", kind: "joke", why: "A fan's Mako impression." };
@@ -28,4 +28,18 @@ test("well documented work gets a dedicated memory pass only if thin", () => {
 test("bibliographic metadata is not a description of the narrative structure", () => {
   assert.equal(isGenericStructure("German thriller novel, 352 pages"), true);
   assert.equal(isGenericStructure("Short chapters and alternating perspectives with cliffhangers"), false);
+});
+
+test("verified sources must be returned by native tool, not only invented by model", () => {
+  assert.equal(verifiedResearchSource("https://example.org/article", ["https://example.org/article?ref=search"]), true);
+  assert.equal(verifiedResearchSource("https://fake.org/post", ["https://example.org/article"]), false);
+  assert.equal(verifiedResearchSource("javascript:alert(1)", ["https://example.org/article"]), false);
+});
+test("new scene cannot be a near-verbatim repetition of an existing blurb beat", () => {
+  assert.equal(distinctScene("The protagonist boards the night train and hears an offer concerning their missing child.", [
+    "The protagonist boards the night train and hears an offer concerning their missing child."
+  ]), false);
+  assert.equal(distinctScene("Short chapters use switching points of view to reframe the narrator's testimony.", [
+    "The protagonist boards the night train and hears an offer concerning their missing child."
+  ]), true);
 });
