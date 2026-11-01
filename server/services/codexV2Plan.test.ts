@@ -16,7 +16,7 @@ test("V2 evidence does not accept an unrelated search receipt", () => {
     sourceUrl:"https://real.test/article?utm_source=search",
   },["https://real.test/article"]),true);
 });
-test("separate stages prefix claim identifiers and verification fails closed",()=>{
+test("stage IDs are unique; only explicitly explained errors are removed",()=>{
   const s:State={
     narrative:{output:{claims:[{id:"1",section:"structure",fact:"Short chapters alternate perspectives",
       sourceUrl:"https://example.org/source"}]},sources:["https://example.org/source"]},
@@ -25,8 +25,10 @@ test("separate stages prefix claim identifiers and verification fails closed",()
   };
   const claims=gathered(s);
   assert.deepEqual(claims.map(c=>c.id),["n_1","e_1"]);
-  assert.deepEqual(approved(claims,{approvedIds:["n_1"],rejectedIds:["e_1"]}).map(c=>c.id),["n_1"]);
-  assert.deepEqual(approved(claims,{approvedIds:[],rejectedIds:[]}),[]);
+  assert.deepEqual(approved(claims,{rejectedIds:["e_1"],reasons:[{id:"e_1",reason:"This character belongs to the second game."}]}).map(c=>c.id),["n_1"]);
+  // Missing approvals and rejection without a reason MUST NOT delete valid data.
+  assert.deepEqual(approved(claims,{approvedIds:[],rejectedIds:["e_1"],reasons:[]}).map(c=>c.id),["n_1","e_1"]);
+  assert.deepEqual(approved(claims,{approvedIds:[],rejectedIds:[],reasons:[]}).map(c=>c.id),["n_1","e_1"]);
 });
 test("compiler cannot introduce sequel-only entities or unsupported memories",()=>{
   const data=narrowDossier({
@@ -72,4 +74,51 @@ test("spoiler-introduction fields are never copied from an unverified compiler g
   assert.equal(dossier.characters?.[0]?.introducedPct,5);
   assert.equal(dossier.characters?.[1]?.introducedAt,undefined);
   assert.equal(dossier.characters?.[1]?.introducedPct,undefined);
+});
+
+test("real Mass Effect-shaped memories survive even with a speaker/name field",()=>{
+  const facts=[
+    {id:"a_1",section:"flavorTexts",name:"Sovereign",
+      fact:"You exist because we allow it. And you will end because we demand it.",
+      kind:"quote",attribution:"Sovereign",sourceUrl:"https://example.org"},
+    {id:"a_2",section:"flavorTexts",name:"Commander Shepard",
+      fact:"I should go.",kind:"quote",attribution:"Shepard",sourceUrl:"https://example.org"},
+    {id:"e_1",section:"characters",name:"Commander Shepard",
+      fact:"Commander Shepard is the human Spectre protagonist",sourceUrl:"https://example.org"},
+    {id:"e_2",section:"characters",name:"Garrus Vakarian",
+      fact:"Garrus is a C-Sec investigator who joins the team",sourceUrl:"https://example.org"},
+    {id:"n_1",section:"signatureMoments",fact:"The Normandy lands on Eden Prime.",
+      sourceUrl:"https://example.org"},
+  ];
+  const output=narrowDossier({
+    characters:[{name:"Commander Shepard"}],
+    flavorTexts:[
+      {text:"You exist because we allow it. And you will end because we demand it.",kind:"quote"},
+      {text:"I should go.",kind:"quote"},
+    ],
+    signatureMoments:[],
+  },facts);
+  assert.deepEqual(output.flavorTexts?.map(m=>m.text),facts.slice(0,2).map(f=>f.fact));
+  assert.deepEqual(output.characters?.map(c=>c.name),["Commander Shepard","Garrus Vakarian"]);
+  assert.deepEqual(output.signatureMoments,["The Normandy lands on Eden Prime."]);
+});
+test("missing 17 reviewer verdicts cannot erase 17 researched Mass Effect facts",()=>{
+  const facts=Array.from({length:77},(_,i)=>({id:`e_${i}`,section:"characters",
+    name:`Character ${i}`,fact:`Original game supporting character ${i}`,sourceUrl:"https://example.org"}));
+  const oldIncompleteReview={
+    approvedIds:facts.slice(0,60).map(c=>c.id),rejectedIds:[],reasons:[],
+  };
+  const survivors=approved(facts,oldIncompleteReview);
+  assert.equal(survivors.length,77);
+  const compiled=narrowDossier({characters:[{name:"Character 0"}]},survivors);
+  assert.equal(compiled.characters?.length,77);
+});
+test("short reviewer prompt contains no per-claim approval instruction or web research",()=>{
+  const subject={title:"Mass Effect",mediaType:"Game",year:2007};
+  const p=researchPrompt("verification",subject,{identity:{output:{title:"Mass Effect",excludedWorks:["Mass Effect 2"]},sources:[]}},
+    [{id:"e_7",section:"characters",name:"Garrus Vakarian",fact:"Original squadmate",sourceUrl:"https://example.org"}]);
+  assert.match(p,/KEEP THEM BY DEFAULT/);
+  assert.match(p,/No web search/);
+  assert.match(p,/Mass Effect 2/);
+  assert.doesNotMatch(p,/explicit verdict for EACH/i);
 });
