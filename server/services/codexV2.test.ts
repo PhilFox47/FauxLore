@@ -33,15 +33,13 @@ const replies={
     {id:"1",section:"flavorTexts",fact:"There is no turning back.",kind:"quote",
       topic:"Hero's warning",sourceUrl:url},
   ]})),
-  verification:good(JSON.stringify({approvedIds:["n_1","n_2","n_3","e_1","a_1"],
-    rejectedIds:["e_2"],reasons:[{id:"e_2",reason:"Only appears in sequel"}],scopeConfidence:"medium"})),
+
 };
 const what=(prompt:string):keyof typeof replies => {
   if(prompt.includes("Identify exactly which work"))return "identity";
   if(prompt.includes("Research the WORK ITSELF"))return "narrative";
   if(prompt.includes("Find specific named people"))return "entities";
   if(prompt.includes("Search fan discussions"))return "audience";
-  if(prompt.includes("INDEPENDENTLY VERIFY EACH CANDIDATE"))return "verification";
   throw new Error("Unknown stage");
 };
 
@@ -57,20 +55,26 @@ test("staged V2 resumes at failed stage, never repeats successful searches and f
       if(phase==="audience"&&fail){fail=false;throw new Error("temporary gateway outage");}
       return replies[phase];
     };
-    const compile=async(_prompt:string)=>JSON.stringify({
-      premise:"A hero investigates a mysterious disappearance",
-      overview:"This is a small original game",
-      characters:[{name:"Hero"},{name:"Sequel-only villain"}],
-      signatureMoments:["The hero confronts an old foe","Unsupported added scene"],
-      flavorTexts:[{text:"There is no turning back.",kind:"quote"},{text:"Invented",kind:"joke"}],
-    });
+    const compile=async(prompt:string)=>prompt.includes("QUICK PLAUSIBILITY REVIEW")
+      ? JSON.stringify({rejectedIds:["e_2"],
+          reasons:[{id:"e_2",reason:"First appears in the sequel, not the original game"}],
+          scopeConfidence:"medium"})
+      : JSON.stringify({
+          premise:"A hero investigates a mysterious disappearance",
+          overview:"This is a small original game",
+          characters:[{name:"Hero"},{name:"Sequel-only villain"}],
+          signatureMoments:["The hero confronts an old foe","Unsupported added scene"],
+          flavorTexts:[{text:"There is no turning back.",kind:"quote"},{text:"Invented",kind:"joke"}],
+        });
     const base={db,codexId:"codex-test",userId:"u1",config,subject,research,compile};
     await assert.rejects(compileCodexV2(base),/audience failed/);
     const saved=db.prepare("SELECT state FROM codex_v2_runs WHERE codexId='codex-test'").get() as {state:string};
     assert.ok(saved);
     assert.deepEqual(Object.keys(JSON.parse(saved.state)),["identity","narrative","entities"]);
     const result=await compileCodexV2(base);
-    assert.deepEqual(counts,{identity:1,narrative:1,entities:1,audience:2,verification:1});
+    assert.deepEqual(counts,{identity:1,narrative:1,entities:1,audience:2});
+    const review = db.prepare("SELECT state FROM codex_v2_runs WHERE codexId='codex-test'").get() as {state:string};
+    assert.deepEqual(JSON.parse(review.state).verification.output.rejectedIds,["e_2"]);
     assert.equal(result.verifiedCount,5);
     assert.deepEqual(result.data.characters?.map(c=>c.name),["Hero"]);
     assert.deepEqual(result.data.flavorTexts?.map(c=>c.text),["There is no turning back."]);

@@ -197,9 +197,9 @@ an undocumented new novel will suddenly have detailed accessible canon.
 When the global AI provider is CLIProxyAPI, **Codex Generation Pipeline** in
 System & Keys can select:
 
-- **V2 (default)**: five narrow native Responses-web_search phases (identity,
-  narrative/craft, canonical entities, audience/memories, independent
-  verification) followed by one **non-search** compilation using the selected
+- **V2 (default)**: four narrow native Responses-web_search phases (identity,
+  narrative/craft, canonical entities, audience/memories), followed by a short
+  **no-search plausibility review** and one **non-search** compilation using the selected
   **Codex Research Model**. Choose `gpt-6.1-sol` for this slot independently
   from analytical/creative `gpt-6.1-terra` models. Model capability and
   quality must be tested on actual dossiers; no guarantee is implied.
@@ -208,8 +208,8 @@ System & Keys can select:
   mode silently routes a failed CLIProxy search through paid NanoGPT.
 
 The existing final `CodexData` shape is unchanged. Every V2 fact must link to
-an actual search receipt, then explicitly pass a **separate search-assisted
-review**. Missing or disputed approvals are dropped. The final no-search
+an actual search receipt. The brief reviewer only flags obvious mistakes;
+**unmentioned claims are kept**, and each rejection needs an explicit reason. The final no-search
 compiler cannot add unapproved named characters, canonical objects, quotes or
 signature moments. This substantially reduces unsupported details, but a
 search result's URL alone still cannot prove every sentence of its page.

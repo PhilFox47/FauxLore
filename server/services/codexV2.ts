@@ -17,7 +17,17 @@ function readState(db: Db, codexId: string, userId: string, hash: string): State
   const r = db.prepare("SELECT fingerprint, state FROM codex_v2_runs WHERE codexId = ? AND userId = ?")
     .get(codexId, userId) as { fingerprint:string; state:string } | undefined;
   if (!r || r.fingerprint !== hash) return {};
-  try { return JSON.parse(r.state); } catch { return {}; }
+  try {
+    const state = JSON.parse(r.state) as State;
+    // A checkpoint saved by the old exhaustive reviewer may contain a
+    // partial approvedIds list. Keep the expensive research, but rerun the
+    // cheap reviewer and compiler using the new non-destructive semantics.
+    if (Array.isArray(state.verification?.output?.approvedIds)) {
+      delete state.verification;
+      delete state.compilation;
+    }
+    return state;
+  } catch { return {}; }
 }
 function saveState(db: Db, codexId: string, userId: string, hash: string, state: State) {
   db.prepare(`INSERT INTO codex_v2_runs (codexId,userId,fingerprint,state,updatedAt)
@@ -67,12 +77,13 @@ export async function compileCodexV2(args: {
     const prompt = phase === "compilation"
       ? compilePrompt(subject,state,selected)
       : researchPrompt(phase,subject,state,candidates,alreadyKnown);
+    const isResearch = phase !== "compilation" && phase !== "verification";
     const callId = nextCallId();
     const began = Date.now();
     const shape = {
       callId,model,scope:"codex",tier:"analytical" as const,userId,
-      searchProvider:phase==="compilation"?undefined:"codex-native",
-      searchDepth:`v2:${phase}`,webSearch:phase!=="compilation",
+      searchProvider:isResearch?"codex-native":undefined,
+      searchDepth:`v2:${phase}`,webSearch:isResearch,
       stream:true,json:true,attempt:CODEX_V2_PHASES.indexOf(phase)+1,
       promptChars:prompt.length,
     };
@@ -83,7 +94,18 @@ export async function compileCodexV2(args: {
       let output: any;
       let sources: string[] = [];
       let usage: {promptTokens?:number;completionTokens?:number} = {};
-      if (phase==="compilation") {
+      if (phase==="verification") {
+        // This pass only spots glaring anomalies. It is a small no-search
+        // text call, NOT another exhaustive research session or rewrite.
+        output=parseStage(await compile(prompt),phase);
+        if (!Array.isArray(output.rejectedIds)) {
+          throw new Error("Quick Codex review did not return a rejectedIds array.");
+        }
+        if (!Array.isArray(output.reasons)) {
+          throw new Error("Quick Codex review did not return rejection reasons.");
+        }
+        console.log(`[codex-v2] ${subject.title}: quick review rejected ${candidates.length-approved(candidates, output).length} of ${candidates.length} candidates.`);
+      } else if (phase==="compilation") {
         if (selected.length<3) throw new Error("Too few independently verified claims to compile a Codex.");
         output=parseStage(await compile(prompt),phase);
         if (!output.premise && !output.overview && !(Array.isArray(output.characters)&&output.characters.length)) {
@@ -125,13 +147,6 @@ export async function compileCodexV2(args: {
           if (typeof output.title!=="string" || output.title.trim().length<2 ||
               !verifiedResearchSource(output.sourceUrl,sources)) {
             throw new Error("Identity was not established with a verified search URL.");
-          }
-        } else if (phase==="verification") {
-          if (!Array.isArray(output.approvedIds) || !Array.isArray(output.rejectedIds)) {
-            throw new Error("Independent reviewer did not return explicit claim verdicts.");
-          }
-          if (approved(candidates,output).length<3) {
-            throw new Error("Independent verification did not approve enough supported claims.");
           }
         } else if (!Array.isArray(output.claims)) {
           throw new Error(`${phase} research did not return a claims array.`);

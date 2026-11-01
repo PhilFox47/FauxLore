@@ -406,7 +406,7 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
                 narrative: 'Story & craft',
                 entities: 'Canonical entities',
                 audience: 'Audience & memories',
-                verification: 'Independent fact-check',
+                verification: 'Quick plausibility check',
                 compilation: 'Final compilation',
                 complete: 'Saving'
               } as Record<string,string>)[codex.researchProgress.current] || codex.researchProgress.current}</span>

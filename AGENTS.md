@@ -85,16 +85,16 @@ A Codex is a researched per-title dossier that grounds enemy, loot, image and
 tag generation. Its final `CodexData` schema is a compatibility contract.
 
 - **CLIProxyAPI V2** (default in selected provider) uses six checkpoints:
-  identity, narrative, entities, audience, independent source review, and
-  final compilation without search. Each earlier phase requires actual native
+  identity, narrative, entities, audience, short no-search plausibility review,
+  and final compilation without search. Each earlier phase requires actual native
   Responses `web_search` receipts and stores the result in `codex_v2_runs`.
 - **Legacy** (selectable in Admin settings) preserves the older complete-dossier
   search and optional focused top-up.
 - **NanoGPT** remains metered single-pass deep research. No automatic paid
   fallback is permitted.
-- Verification approves **claim IDs**, not URL counts. Unknown and disputed
-  claims must fail closed; final compiled entity names and memory lines must
-  match independently approved evidence.
+- Verification only **rejects obviously wrong claim IDs with reasons**.
+  Unmentioned source-backed claims are retained; the final compiler cannot
+  silently drop accepted entities, dialogue memories or signature moments.
 - The Model slot `cliProxyCodexModel` is independent of creative/analytical
   slots. Codex V2 can run on Sol, other generations on Terra.
 - A failure preserves the previous ready Codex and the completed V2 stage

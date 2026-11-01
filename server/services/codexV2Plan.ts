@@ -41,46 +41,89 @@ export function gathered(state: State): Claim[] {
   }
   return result;
 }
+
 export function approved(claims: Claim[], decision: any): Claim[] {
-  const yes = new Set(Array.isArray(decision?.approvedIds) ? decision.approvedIds : []);
-  const no = new Set(Array.isArray(decision?.rejectedIds) ? decision.rejectedIds : []);
-  return claims.filter(c => yes.has(c.id) && !no.has(c.id));
+  // Only EXPLICIT, reasoned blacklist entries delete researched facts.
+  // Missing opinions are NOT rejections: this is a brief sanity review.
+  const explanations = new Map<string, string>();
+  for (const row of (Array.isArray(decision?.reasons) ? decision.reasons : [])) {
+    if (typeof row?.id === "string" && typeof row?.reason === "string" &&
+        row.reason.trim().length >= 12) {
+      explanations.set(row.id, row.reason.trim());
+    }
+  }
+  const rejected = new Set((Array.isArray(decision?.rejectedIds) ? decision.rejectedIds : [])
+    .filter((id: unknown) => typeof id === "string" && explanations.has(id as string)));
+  return claims.filter(c => !rejected.has(c.id));
 }
+
+// The compiler edits the researched claims; it does NOT get to silently
+// destroy them. Recover source-backed entries it omitted, while rejecting
+// any unsupported names or quotes it invented.
 export function narrowDossier(dossier: CodexData, claims: Claim[]): CodexData {
-  const lists: Record<string, "name" | "term" | "text"> = {
+  const listFields: Record<string, "name" | "term" | "text"> = {
     characters: "name", antagonists: "name", locations: "name", factions: "name",
     items: "name", terminology: "term", flavorTexts: "text",
   };
   const clean: any = { ...dossier };
-  for (const [section, field] of Object.entries(lists)) {
-    const allowed = new Map(claims.filter(c => c.section === section)
-      .map(c => [(c.name || c.fact).trim().toLowerCase(), c] as const));
-    clean[section] = (Array.isArray(clean[section]) ? clean[section] : [])
-      .filter((item: any) => typeof item?.[field] === "string" &&
-        allowed.has(item[field].trim().toLowerCase()))
-      .map((item: any) => {
-        const claim = allowed.get(item[field].trim().toLowerCase())!;
-        const entry = { ...item };
-        // First-appearance metadata is safety-critical for spoiler controls.
-        // A compiler's guess is not evidence: only the researched claim may
-        // supply these fields, and zero is not a verified introduction.
-        delete entry.introducedAt;
-        delete entry.introducedPct;
-        if (claim.introducedAt && typeof claim.introducedAt === "string") {
-          entry.introducedAt = claim.introducedAt;
-        }
-        if (Number.isFinite(claim.introducedPct) &&
-            Number(claim.introducedPct) > 0 && Number(claim.introducedPct) <= 100) {
-          entry.introducedPct = claim.introducedPct;
-        }
-        return entry;
-      });
+  const normalized = (value: string): string => value.trim().replace(/\s+/g, " ").toLowerCase();
+
+  for (const [section, field] of Object.entries(listFields)) {
+    const evidence = new Map<string, Claim>();
+    for (const claim of claims.filter(c => c.section === section)) {
+      // A memory is keyed by the actual quote, NEVER its name/speaker.
+      const label = section === "flavorTexts" ? claim.fact : claim.name;
+      if (typeof label === "string" && label.trim()) evidence.set(normalized(label), claim);
+    }
+    const rows: any[] = [];
+    const seen = new Set<string>();
+    for (const item of (Array.isArray(clean[section]) ? clean[section] : [])) {
+      if (typeof item?.[field] !== "string") continue;
+      const key = normalized(item[field]);
+      const claim = evidence.get(key);
+      if (!claim || seen.has(key)) continue;
+      seen.add(key);
+      rows.push(withEvidence(item, claim));
+    }
+    for (const [key, claim] of evidence) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (section === "flavorTexts") {
+        rows.push(withEvidence({
+          text: claim.fact, kind: claim.kind || "reference", scope: "work",
+          attribution: claim.attribution, why: claim.why, topic: claim.topic,
+        }, claim));
+      } else if (section === "terminology") {
+        rows.push(withEvidence({ term: claim.name, meaning: claim.fact }, claim));
+      } else {
+        rows.push(withEvidence({
+          name: claim.name, description: claim.fact, ...(claim.details || {}),
+        }, claim));
+      }
+    }
+    clean[section] = rows;
   }
-  const moments = new Set(claims.filter(c => c.section === "signatureMoments").map(c => c.fact.trim().toLowerCase()));
-  clean.signatureMoments = (Array.isArray(clean.signatureMoments) ? clean.signatureMoments : [])
-    .filter((x: any) => typeof x === "string" && moments.has(x.trim().toLowerCase()));
+  const moments = new Map(claims.filter(c => c.section === "signatureMoments")
+    .map(c => [normalized(c.fact), c.fact] as const));
+  clean.signatureMoments = [...moments.values()];
   return clean;
 }
+
+// Introduction positions must come from sourced claims, not the compiler.
+function withEvidence(item: Record<string, unknown>, claim: Claim): Record<string, unknown> {
+  const entry = { ...item };
+  delete entry.introducedAt;
+  delete entry.introducedPct;
+  if (typeof claim.introducedAt === "string" && claim.introducedAt.trim()) {
+    entry.introducedAt = claim.introducedAt;
+  }
+  if (Number.isFinite(claim.introducedPct) &&
+      Number(claim.introducedPct) > 0 && Number(claim.introducedPct) <= 100) {
+    entry.introducedPct = claim.introducedPct;
+  }
+  return entry;
+}
+
 function subjectInfo(s: CodexSubject): string {
   return [
     `Title: ${s.title}`, `Media: ${s.mediaType}`,
@@ -150,23 +193,31 @@ newly published novel's fandom. A zero-length list is a valid result.
 section ALWAYS flavorTexts; "fact" is the EXACT line, "kind" is quote,
 reference or joke, "topic" must identify an underlying subject.
 ${shape}`;
-  const candidates = claims.map(c => ({ id:c.id, section:c.section,
-    name:c.name, fact:c.fact, sourceUrl:c.sourceUrl,
-    introducedAt:c.introducedAt, introducedPct:c.introducedPct,
-    details:c.details }));
-  return `${subject.title} verify first appearance source evidence franchise canon contradictions
-${prefix}
-INDEPENDENTLY VERIFY EACH CANDIDATE BY NEW WEB SEARCH, not merely by noticing
-its source URL. Check actual claim/source correspondence, sequel-only elements,
-false quotes, and contradictory primary sources. Approve only corroborated facts.
-If you cannot substantiate a claim, reject it. Keep a balanced variety of
-memories, not filler. Return an explicit verdict for EACH candidate ID. Omitted
-IDs are dropped, so don't silently omit vetted ones.
+
+  // Four stages already did research. This is a cheap, no-web plausibility pass.
+  const candidates = claims.map(c => ({
+    id: c.id,
+    section: c.section,
+    label: (c.name || c.fact).slice(0, 75),
+    context: c.fact.slice(0, 110),
+  }));
+  return `QUICK PLAUSIBILITY REVIEW for ${subject.title} (${subjectYear(subject) || ""}, ${subject.mediaType}).
+Scope: ${JSON.stringify(state.identity?.output || {}).slice(0, 1200)}
+You are NOT re-researching or rewriting an encyclopedia. No web search.
+All candidates came from source-backed research. KEEP THEM BY DEFAULT.
+Your ONLY job is to spot OBVIOUS factual mistakes on sight: a character from a
+different sequel, a wrong franchise, a blatantly false first appearance or
+an obvious misattributed quotation. Do not reject for uncertainty, incomplete
+context, lack of a second citation, subjective importance, or unfamiliarity.
+Return ONLY a short blacklist of demonstrably wrong IDs and a specific reason
+for each rejection. No approvedIds or per-claim votes. If nothing is CLEARLY
+wrong, return {"rejectedIds":[],"reasons":[]}.
 CANDIDATES (${candidates.length}):
-${JSON.stringify(candidates).slice(0, 64000)}
-{"approvedIds":["n_1"],"rejectedIds":["e_2"],
-"reasons":[{"id":"e_2","reason":"Only appears in sequel"}],
+${JSON.stringify(candidates)}
+JSON ONLY: {"rejectedIds":["e_4"],"reasons":[{"id":"e_4","reason":"Appears in a sequel, not the original game."}],
 "scopeConfidence":"high | medium | low"}`;
+
+
 }
 export function compilePrompt(subject: CodexSubject, state: State, claims: Claim[]): string {
   return `Compile the final CodexData JSON for EXACTLY this work.
@@ -180,7 +231,7 @@ Return just one JSON object using the existing app schema, which MUST remain
 fully backward compatible with Enemy Forge, Loot, tags and other features.
 Work: ${subjectInfo(subject)}
 Research identity: ${JSON.stringify(state.identity?.output)}
-APPROVED VERIFIED CLAIMS (${claims.length}):
+SOURCE-BACKED CLAIMS AFTER PLAUSIBILITY REVIEW (${claims.length}):
 ${JSON.stringify(claims).slice(0, 90000)}
 JSON SCHEMA TEMPLATE:
 ${combinedShape()}`;
