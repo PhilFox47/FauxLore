@@ -1743,6 +1743,13 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
         : tally("high") >= grades.length / 2 ? "high"
         : "medium";
 
+      // A research editor's medium/low scope verdict must never be promoted
+      // to "high" by the final compiler's optimistic section self-ratings.
+      if (useV2 && identity.confidence && identity.confidence !== "high" &&
+          data.confidence === "high") {
+        data.confidence = identity.confidence;
+      }
+
       // Reported rather than acted on. A short list is what the sources
       // supported, and chasing it costs another call and another chance to lose
       // the dossier that already arrived.
