@@ -91,7 +91,7 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
         cliProxyCreativeModel: settings.cliProxyCreativeModel || null,
         cliProxyImageModel: settings.cliProxyImageModel || null,
         cliProxyCodexModel: settings.cliProxyCodexModel || null,
-        cliProxyCodexPipeline: settings.cliProxyCodexPipeline === 'legacy' ? 'legacy' : 'v2'
+        cliProxyCodexPipeline: ['v3','v2','legacy'].includes(settings.cliProxyCodexPipeline) ? settings.cliProxyCodexPipeline : 'v3'
       });
       res.json({ success: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
