@@ -59,7 +59,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     cliProxyCreativeModel: '',
     cliProxyImageModel: 'gpt-image-2',
     cliProxyCodexModel: 'gpt-6.1-sol',
-    cliProxyCodexPipeline: 'v2' as 'v2' | 'legacy',
+    cliProxyCodexPipeline: 'v3' as 'v3' | 'v2' | 'legacy',
     nanoGptModel: '',
     nanoGptWebModel: '',
     nanoGptCreativeModel: '',
@@ -139,7 +139,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         cliProxyCreativeModel: settings.cliProxyCreativeModel || '',
         cliProxyImageModel: settings.cliProxyImageModel || 'gpt-image-2',
         cliProxyCodexModel: settings.cliProxyCodexModel || settings.cliProxyTextModel || 'gpt-6.1-sol',
-        cliProxyCodexPipeline: settings.cliProxyCodexPipeline === 'legacy' ? 'legacy' as const : 'v2' as const,
+        cliProxyCodexPipeline: settings.cliProxyCodexPipeline === 'legacy' ? 'legacy' as const : settings.cliProxyCodexPipeline === 'v2' ? 'v2' as const : 'v3' as const,
         nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
         nanoGptWebModel: settings.nanoGptWebModel || '',
         nanoGptCreativeModel: settings.nanoGptCreativeModel || '',
@@ -208,7 +208,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             cliProxyCreativeModel: settings.cliProxyCreativeModel || '',
             cliProxyImageModel: settings.cliProxyImageModel || 'gpt-image-2',
             cliProxyCodexModel: settings.cliProxyCodexModel || settings.cliProxyTextModel || 'gpt-6.1-sol',
-            cliProxyCodexPipeline: settings.cliProxyCodexPipeline === 'legacy' ? 'legacy' as const : 'v2' as const,
+            cliProxyCodexPipeline: settings.cliProxyCodexPipeline === 'legacy' ? 'legacy' as const : settings.cliProxyCodexPipeline === 'v2' ? 'v2' as const : 'v3' as const,
             nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
             nanoGptWebModel: settings.nanoGptWebModel || '',
             nanoGptCreativeModel: settings.nanoGptCreativeModel || '',
@@ -1361,9 +1361,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         <label className="block text-sm font-medium text-zinc-400 mb-1">Codex Generation Pipeline</label>
                         <select name="cliProxyCodexPipeline" value={formData.cliProxyCodexPipeline}
                           onChange={(e) => setFormData(prev => ({
-                            ...prev, cliProxyCodexPipeline: e.target.value === 'legacy' ? 'legacy' : 'v2',
+                            ...prev, cliProxyCodexPipeline: e.target.value === 'legacy' ? 'legacy' : e.target.value === 'v2' ? 'v2' : 'v3',
                           }))} className="input-field">
-                          <option value="v2">V2: Staged research + quick plausibility check (recommended)</option>
+                          <option value="v3">V3: Coverage-driven knowledge base (recommended)</option>
+                          <option value="v2">V2: Staged fact collection + quick plausibility check</option>
                           <option value="legacy">Legacy: Single full-dossier search + optional top-up</option>
                         </select>
                         <p className="text-[10px] text-zinc-500 mt-1">
