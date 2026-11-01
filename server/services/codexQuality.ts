@@ -92,3 +92,29 @@ export function isGenericStructure(text: unknown): boolean {
   if (!value) return true;
   return !/(chapter|kapitel|perspectiv|perspektiv|cliffhanger|flashback|rückblend|timeline|chronolog|act\b|akt\b|mission|episode|episod|plot|erzählt|erzähl|narrativ|twist|story|scene|szene|structure|struktur|wechsel|pacing)/i.test(value);
 }
+
+/** Accept only URLs that were actually returned by the native search tool. */
+export function verifiedResearchSource(url: unknown, searchSources: string[]): boolean {
+  if (typeof url !== "string" || !url) return false;
+  const canonical = (value: string) => {
+    try {
+      const u = new URL(value);
+      if (!["http:", "https:"].includes(u.protocol)) return "";
+      return `${u.hostname.toLowerCase()}${u.pathname.replace(/\\/+$/, "")}`;
+    } catch { return ""; }
+  };
+  const candidate = canonical(url);
+  return !!candidate && searchSources.some(source => canonical(source) === candidate);
+}
+
+/** A new scene must add meaningful concrete material instead of restating a blurb beat. */
+export function distinctScene(text: string, known: string[]): boolean {
+  if (text.trim().length < 35) return false;
+  const candidate = new Set(words(text));
+  if (candidate.size < 4) return false;
+  return !known.some(existing => {
+    const old = new Set(words(existing));
+    const shared = [...candidate].filter(w => old.has(w)).length;
+    return shared / Math.max(1, Math.min(candidate.size, old.size)) >= 0.65;
+  });
+}
