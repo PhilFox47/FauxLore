@@ -108,7 +108,11 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
       // Dormant accounts cost nothing: this call spends tokens.
       if (!activity.requireActive(userId as string, res)) return;
       const config = getAiConfig(db, userId as string);
-      const requiresNano = !!req.body?.webSearch?.enabled || /:online\\b/.test(String(req.body?.model || ""));
+      const globalProvider = (db.prepare("SELECT aiProvider FROM system_settings WHERE id = 'system'").get() as any)?.aiProvider;
+      if (globalProvider === "cliProxy" && !config) {
+        return res.status(503).json({ error: "CLIProxyAPI is selected but not configured. No automatic NanoGPT fallback was attempted." });
+      }
+      const requiresNano = !!req.body?.webSearch?.enabled || /:online\b/.test(String(req.body?.model || ""));
       const useCli = config?.backend === "cliProxy" && !requiresNano;
       const apiKey = useCli ? config?.apiKey : req.headers['x-nano-gpt-key'];
       if (!apiKey) {
@@ -184,6 +188,10 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
       // Dormant accounts cost nothing: this call spends tokens.
       if (!activity.requireActive(userId as string, res)) return;
       const config = getAiConfig(db, userId as string);
+      const globalProvider = (db.prepare("SELECT aiProvider FROM system_settings WHERE id = 'system'").get() as any)?.aiProvider;
+      if (globalProvider === "cliProxy" && !config) {
+        return res.status(503).json({ error: "CLIProxyAPI is selected but not configured. No automatic NanoGPT fallback was attempted." });
+      }
       const useCli = config?.backend === "cliProxy";
       const apiKey = useCli ? config?.apiKey : req.headers['x-nano-gpt-key'];
       if (!apiKey) {
@@ -206,7 +214,7 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
         // same reason — a slow render should not die with a bare "fetch
         // failed" just because it crossed Node's default header timeout.
         ...(longRequestDispatcher ? { dispatcher: longRequestDispatcher } : {}),
-        signal: AbortSignal.timeout(180_000),
+        signal: AbortSignal.timeout(useCli ? 600_000 : 180_000),
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         body: JSON.stringify(payload)
       } as any);
