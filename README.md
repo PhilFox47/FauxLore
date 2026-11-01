@@ -132,3 +132,29 @@ networks:
 
 Do not publish CLIProxyAPI's management or authenticated endpoints to the
 internet. The existing loopback-only Windows port mapping can stay unchanged.
+
+
+### CLIProxyAPI native web search for Codex (new)
+
+With the global provider set to **CLIProxyAPI**, Codex compilation now uses the
+**Codex Responses API** (`POST /v1/responses`) with
+`tools: [{ "type": "web_search" }]`, `tool_choice: "required"`,
+`include: ["web_search_call.action.sources"]`, `store: false`, and SSE streaming.
+The **Codex Research Model** setting selects the model independently from
+analytical/creative models (default: `gpt-6.1-sol`).
+
+This mode **does not invoke NanoGPT search or Linkup Deep**. A completed native
+web search with source receipts and a structurally usable dossier is required
+before a Codex will be saved. Model-only responses, missing citations, incomplete
+streams, and API errors are surfaced as failures without a paid fallback.
+When the global provider is **NanoGPT**, the existing deep search still works
+exactly as before. Other non-Codex calls explicitly using NanoGPT-specific
+online-search controls are not switched by this feature.
+
+*Validation*: mocked SSE parser tests cover search-source receipts,
+memory-only responses, split frames and incomplete streams. A real end-to-end
+test requires your locally authenticated CLIProxyAPI container and a model
+that supports native Responses `web_search`. The build/CI cannot validate
+those external conditions. If your gateway version does not forward
+`web_search_call.action.sources`, update CLIProxyAPI and retest before
+loosening source-verification rules.
