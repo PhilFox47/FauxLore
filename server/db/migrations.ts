@@ -482,7 +482,7 @@ export function runMigrations(db: Db) {
     console.error("Migration to user_version 2 failed:", e);
   }
   // Global AI provider selection: NanoGPT remains the default for existing installs.
-  for (const col of ["aiProvider", "cliProxyBaseUrl", "cliProxyApiKey", "cliProxyTextModel", "cliProxyCreativeModel", "cliProxyImageModel"]) {
+  for (const col of ["aiProvider", "cliProxyBaseUrl", "cliProxyApiKey", "cliProxyTextModel", "cliProxyCreativeModel", "cliProxyImageModel", "cliProxyCodexModel"]) {
     try { db.prepare(`ALTER TABLE system_settings ADD COLUMN ${col} TEXT`).run(); } catch (e) {}
   }
 
