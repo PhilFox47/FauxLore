@@ -6,6 +6,7 @@ import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText } from "../lib/ai";
 import { recordAiCallStart, recordAiCall, nextCallId, recordPayload } from "../lib/diagnostics";
 import { longRequestDispatcher } from "../lib/httpDispatcher";
+import { cliProxyBaseUrl, cliProxyImageSize, cliProxyImagePrompt } from "../lib/cliProxy";
 import { AUTHENTICITY, SHARPNESS, enemyTier, rarityArt } from "../lib/artDirection";
 import { codexArtStyleBlock, codexPromptBlock, type CodexService } from "./codex";
 
@@ -108,12 +109,14 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
   function readImageConfig() {
     let row: any = {};
     try {
-      row = db.prepare("SELECT imageModel, imageSize, imageSteps, imageGuidance, imageNegativePrompt FROM system_settings WHERE id = 'system'").get() || {};
+      row = db.prepare("SELECT aiProvider, cliProxyImageModel, imageModel, imageSize, imageSteps, imageGuidance, imageNegativePrompt FROM system_settings WHERE id = 'system'").get() || {};
     } catch (e) { /* columns may not exist yet on very old DBs */ }
-    const model = row.imageModel || IMAGE_DEFAULTS.model;
-    const distilled = isDistilled(model);
+    const useCli = row.aiProvider === "cliProxy";
+    const model = useCli ? (row.cliProxyImageModel || "gpt-image-2") : (row.imageModel || IMAGE_DEFAULTS.model);
+    const distilled = !useCli && isDistilled(model);
     return {
       model,
+      useCli,
       distilled,
       size: normalizeResolution(row.imageSize) || IMAGE_DEFAULTS.size,
       // Only defaulted for the family they were measured on. An explicit setting
@@ -198,6 +201,54 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
   async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = ""): Promise<string> {
     const cfg = readImageConfig();
     const negativePrompt = [cfg.negative, extraNegative].filter(Boolean).join(", ");
+
+    if (cfg.useCli) {
+      const sys: any = db.prepare("SELECT cliProxyBaseUrl FROM system_settings WHERE id = 'system'").get() || {};
+      const baseUrl = cliProxyBaseUrl(sys.cliProxyBaseUrl);
+      const body = {
+        model: cfg.model,
+        prompt: cliProxyImagePrompt(prompt, negativePrompt),
+        size: cliProxyImageSize(cfg.size),
+        n: 1,
+        response_format: "b64_json",
+      };
+      const callId = nextCallId();
+      const shape = { callId, model: cfg.model, scope: "images", attempt: 1, promptChars: body.prompt.length };
+      const startedAt = Date.now();
+      recordAiCallStart(shape);
+      recordPayload(callId, "images", { prompt: JSON.stringify(body) });
+      try {
+        const response = await fetch(`${baseUrl}/images/generations`, {
+          method: "POST",
+          ...(longRequestDispatcher ? { dispatcher: longRequestDispatcher } : {}),
+          signal: AbortSignal.timeout(600_000),
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify(body),
+        } as any);
+        if (!response.ok) {
+          const detail = (await response.text()).slice(0, 500);
+          throw Object.assign(new Error(`CLIProxyAPI image generation HTTP ${response.status}: ${detail}`), { httpStatus: response.status });
+        }
+        const result: any = await response.json();
+        const first = result?.data?.[0];
+        const encoded = first?.b64_json || (typeof first?.url === "string"
+          ? first.url.match(/^data:image\/(?:png|jpeg|webp);base64,(.+)$/)?.[1] : null);
+        if (!encoded) throw new Error("CLIProxyAPI returned no base64 image.");
+        const buffer = Buffer.from(encoded, "base64");
+        const actual = imageSize(buffer);
+        const ext = ({ png: ".png", jpg: ".jpg", jpeg: ".jpg", webp: ".webp" } as Record<string, string>)[String(actual?.type || "").toLowerCase()] || ".png";
+        const fileName = `${uuidv4()}${ext}`;
+        fs.writeFileSync(path.join(aiImagesDir, fileName), buffer);
+        const got = actual?.width && actual?.height ? `${actual.width}x${actual.height}` : "unknown";
+        console.log(`[images] CLIProxyAPI ${cfg.model} requested ${body.size}, returned ${got}`);
+        recordPayload(callId, "images", { reply: `image saved: ${got}; binary redacted` });
+        recordAiCall({ ...shape, durationMs: Date.now() - startedAt, httpStatus: response.status });
+        return `/uploads/ai-images/${fileName}`;
+      } catch (e: any) {
+        recordAiCall({ ...shape, durationMs: Date.now() - startedAt, httpStatus: e?.httpStatus, error: e?.message || String(e) });
+        throw e;
+      }
+    }
 
     // Steps and guidance are not among the API's common fields at all — they are
     // model-specific where they exist — so they only ride along for a model whose
@@ -431,6 +482,15 @@ Return ONLY the final image prompt text, nothing else.`;
    */
   async function describeImageModel() {
     const cfg = readImageConfig();
+    if (cfg.useCli) {
+      return {
+        ok: true,
+        model: cfg.model,
+        configured: { resolution: cliProxyImageSize(cfg.size) },
+        supported_parameters: { size: ["1024x1024", "1536x1024", "1024x1536"] },
+        note: "CLIProxyAPI maps requested aspect ratios to GPT image sizes. Diffusion steps, CFG and negative_prompt are not supported; exclusions are appended as prose.",
+      };
+    }
     const url = `https://nano-gpt.com/api/v1/images/models/${encodeURIComponent(cfg.model)}/endpoints`;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });

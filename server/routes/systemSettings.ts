@@ -7,7 +7,9 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
   app.get("/api/system-settings", (req, res) => {
     try {
       const sys: any = db.prepare('SELECT * FROM system_settings WHERE id = ?').get('system') || {};
-      res.json(sys);
+      // The CLIProxy key is server-only: never ship it to browsers (even admins).
+      const { cliProxyApiKey, ...safe } = sys;
+      res.json({ ...safe, cliProxyApiKeyConfigured: !!(cliProxyApiKey || process.env.CLIPROXY_API_KEY) });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -21,9 +23,23 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
       }
 
       const settings = req.body;
+      const previous: any = db.prepare("SELECT cliProxyApiKey FROM system_settings WHERE id = 'system'").get() || {};
+      const chosenProvider = settings.aiProvider === 'cliProxy' ? 'cliProxy' : 'nanoGpt';
+      // Blank input means retain the stored secret; avoid wiping it on unrelated saves.
+      const nextCliKey = typeof settings.cliProxyApiKey === 'string' && settings.cliProxyApiKey.trim()
+        ? settings.cliProxyApiKey.trim() : (previous.cliProxyApiKey || null);
+      const baseUrl = String(settings.cliProxyBaseUrl || '').trim();
+      if (baseUrl) {
+        try {
+          const url = new URL(baseUrl);
+          if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw Error();
+        } catch {
+          return res.status(400).json({ error: 'CLIProxyAPI Base URL must be an HTTP(S) URL without credentials, query or fragment.' });
+        }
+      }
       db.prepare(`
-        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, nanoGptSearchProvider, geminiApiKey, googleBooksApiKey, imageModel, imageSize, imageSteps, imageGuidance, imageNegativePrompt)
-        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @nanoGptProvider, @nanoGptSearchProvider, @geminiApiKey, @googleBooksApiKey, @imageModel, @imageSize, @imageSteps, @imageGuidance, @imageNegativePrompt)
+        INSERT INTO system_settings (id, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, nanoGptSearchProvider, geminiApiKey, googleBooksApiKey, imageModel, imageSize, imageSteps, imageGuidance, imageNegativePrompt, aiProvider, cliProxyBaseUrl, cliProxyApiKey, cliProxyTextModel, cliProxyCreativeModel, cliProxyImageModel)
+        VALUES ('system', @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @nanoGptProvider, @nanoGptSearchProvider, @geminiApiKey, @googleBooksApiKey, @imageModel, @imageSize, @imageSteps, @imageGuidance, @imageNegativePrompt, @aiProvider, @cliProxyBaseUrl, @cliProxyApiKey, @cliProxyTextModel, @cliProxyCreativeModel, @cliProxyImageModel)
         ON CONFLICT(id) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -41,7 +57,13 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
           imageSize=excluded.imageSize,
           imageSteps=excluded.imageSteps,
           imageGuidance=excluded.imageGuidance,
-          imageNegativePrompt=excluded.imageNegativePrompt
+          imageNegativePrompt=excluded.imageNegativePrompt,
+          aiProvider=excluded.aiProvider,
+          cliProxyBaseUrl=excluded.cliProxyBaseUrl,
+          cliProxyApiKey=excluded.cliProxyApiKey,
+          cliProxyTextModel=excluded.cliProxyTextModel,
+          cliProxyCreativeModel=excluded.cliProxyCreativeModel,
+          cliProxyImageModel=excluded.cliProxyImageModel
       `).run({
         igdbClientId: settings.igdbClientId || null,
         igdbClientSecret: settings.igdbClientSecret || null,
@@ -59,7 +81,13 @@ export function registerSystemSettingsRoutes(app: Express, ctx: ServerContext) {
         imageSize: settings.imageSize || null,
         imageSteps: (settings.imageSteps === undefined || settings.imageSteps === null || settings.imageSteps === '') ? null : Number(settings.imageSteps),
         imageGuidance: (settings.imageGuidance === undefined || settings.imageGuidance === null || settings.imageGuidance === '') ? null : Number(settings.imageGuidance),
-        imageNegativePrompt: settings.imageNegativePrompt || null
+        imageNegativePrompt: settings.imageNegativePrompt || null,
+        aiProvider: chosenProvider,
+        cliProxyBaseUrl: baseUrl || null,
+        cliProxyApiKey: nextCliKey,
+        cliProxyTextModel: settings.cliProxyTextModel || null,
+        cliProxyCreativeModel: settings.cliProxyCreativeModel || null,
+        cliProxyImageModel: settings.cliProxyImageModel || null
       });
       res.json({ success: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }

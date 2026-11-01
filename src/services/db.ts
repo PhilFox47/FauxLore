@@ -212,14 +212,20 @@ export const DatabaseService = {
       if (authRes.ok) {
          const authData = await authRes.json();
          if (authData.user?.role === 'Admin') {
-            await apiFetch('/api/system-settings', {
+            const sysRes = await apiFetch('/api/system-settings', {
                method: 'POST',
                headers: { 'Content-Type': 'application/json' },
                body: JSON.stringify(settings)
             });
+            if (!sysRes.ok) {
+              const detail = await sysRes.json().catch(() => ({}));
+              throw new Error(detail.error || 'Failed to save global AI settings.');
+            }
          }
       }
-    } catch(e) {}
+    } catch(e) {
+      throw e instanceof Error ? e : new Error('Failed to save system settings.');
+    }
 
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));

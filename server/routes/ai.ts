@@ -3,6 +3,7 @@ import type { ServerContext } from "../context";
 import { getAiConfig } from "../lib/ai";
 import { recordAiCallStart, recordAiCall, nextCallId, recordPayload } from "../lib/diagnostics";
 import { longRequestDispatcher } from "../lib/httpDispatcher";
+import { cliProxyImageSize, cliProxyImagePrompt } from "../lib/cliProxy";
 
 export function registerAiRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, activity } = ctx;
@@ -106,15 +107,33 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
       if (!userId) return;
       // Dormant accounts cost nothing: this call spends tokens.
       if (!activity.requireActive(userId as string, res)) return;
-      const apiKey = req.headers['x-nano-gpt-key'];
+      const config = getAiConfig(db, userId as string);
+      const globalProvider = (db.prepare("SELECT aiProvider FROM system_settings WHERE id = 'system'").get() as any)?.aiProvider;
+      if (globalProvider === "cliProxy" && !config) {
+        return res.status(503).json({ error: "CLIProxyAPI is selected but not configured. No automatic NanoGPT fallback was attempted." });
+      }
+      const requiresNano = !!req.body?.webSearch?.enabled || /:online\b/.test(String(req.body?.model || ""));
+      const useCli = config?.backend === "cliProxy" && !requiresNano;
+      const apiKey = useCli ? config?.apiKey : req.headers['x-nano-gpt-key'];
       if (!apiKey) {
-         res.status(401).json({ error: "Missing API key" });
+         res.status(401).json({ error: useCli ? "CLIProxyAPI key is missing" : "NanoGPT API key is missing" });
          return;
       }
-      recordAiCallStart({ ...shape, userId });
+      const payload: any = useCli ? {
+        ...req.body,
+        model: [config?.model, config?.creativeModel].includes(req.body?.model)
+          ? req.body.model : config?.model,
+      } : req.body;
+      if (useCli) {
+        // The Codex proxy doesn't implement NanoGPT's provider-specific knobs.
+        delete payload.response_format;
+        delete payload.webSearch;
+        delete payload.temperature;
+      }
+      recordAiCallStart({ ...shape, model: useCli ? payload.model : shape.model, userId });
       recordPayload(callId, "client", { prompt: messages.map((m) => `[${m?.role}]\n${m?.content}`).join("\n\n") });
 
-      const remoteRes = await fetch("https://nano-gpt.com/api/v1/chat/completions", {
+      const remoteRes = await fetch(useCli ? `${config?.baseUrl}/chat/completions` : "https://nano-gpt.com/api/v1/chat/completions", {
         method: "POST",
         // Lifts Node's 300s response-header cap — see lib/httpDispatcher.ts.
         // This route was missing it entirely: a non-streamed generation past
@@ -124,7 +143,7 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
         ...(longRequestDispatcher ? { dispatcher: longRequestDispatcher } : {}),
         signal: AbortSignal.timeout(600_000),
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-        body: JSON.stringify(req.body)
+        body: JSON.stringify(payload)
       } as any);
       const text = await remoteRes.text();
       recordPayload(callId, "client", { reply: text });
@@ -168,26 +187,40 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
       if (!userId) return;
       // Dormant accounts cost nothing: this call spends tokens.
       if (!activity.requireActive(userId as string, res)) return;
-      const apiKey = req.headers['x-nano-gpt-key'];
+      const config = getAiConfig(db, userId as string);
+      const globalProvider = (db.prepare("SELECT aiProvider FROM system_settings WHERE id = 'system'").get() as any)?.aiProvider;
+      if (globalProvider === "cliProxy" && !config) {
+        return res.status(503).json({ error: "CLIProxyAPI is selected but not configured. No automatic NanoGPT fallback was attempted." });
+      }
+      const useCli = config?.backend === "cliProxy";
+      const apiKey = useCli ? config?.apiKey : req.headers['x-nano-gpt-key'];
       if (!apiKey) {
-         res.status(401).json({ error: "Missing API key" });
+         res.status(401).json({ error: useCli ? "CLIProxyAPI key is missing" : "NanoGPT API key is missing" });
          return;
       }
-      recordAiCallStart({ ...shape, userId });
-      recordPayload(callId, "client-image", { prompt: JSON.stringify(req.body, null, 2) });
+      const payload = useCli ? {
+        model: String((db.prepare("SELECT cliProxyImageModel FROM system_settings WHERE id = 'system'").get() as any)?.cliProxyImageModel || "gpt-image-2"),
+        prompt: cliProxyImagePrompt(prompt, String(req.body?.negative_prompt || "")),
+        size: cliProxyImageSize(req.body?.size),
+        n: 1,
+        response_format: "b64_json",
+      } : req.body;
+      recordAiCallStart({ ...shape, model: String(payload.model || shape.model), userId });
+      recordPayload(callId, "client-image", { prompt: JSON.stringify(payload, null, 2) });
 
-      const remoteRes = await fetch("https://nano-gpt.com/api/v1/images/generations", {
+      const remoteRes = await fetch(useCli ? `${config?.baseUrl}/images/generations` : "https://nano-gpt.com/api/v1/images/generations", {
         method: "POST",
         // Same 300s-cap fix as the chat-completions route above, for the
         // same reason — a slow render should not die with a bare "fetch
         // failed" just because it crossed Node's default header timeout.
         ...(longRequestDispatcher ? { dispatcher: longRequestDispatcher } : {}),
-        signal: AbortSignal.timeout(180_000),
+        signal: AbortSignal.timeout(useCli ? 600_000 : 180_000),
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-        body: JSON.stringify(req.body)
+        body: JSON.stringify(payload)
       } as any);
       const text = await remoteRes.text();
-      recordPayload(callId, "client-image", { reply: text });
+      // Binary base64 image responses can be several megabytes; don't store them in diagnostics.
+      recordPayload(callId, "client-image", { reply: useCli ? `HTTP ${remoteRes.status}; image bytes redacted` : text });
 
       recordAiCall({
         ...shape,
@@ -197,7 +230,17 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
         error: !remoteRes.ok ? `HTTP ${remoteRes.status}` : undefined,
       });
 
-      res.status(remoteRes.status).send(text);
+      if (useCli && remoteRes.ok) {
+        const result = JSON.parse(text);
+        const first = result?.data?.[0];
+        if (!first?.url && first?.b64_json) {
+          first.url = `data:image/png;base64,${first.b64_json}`;
+          delete first.b64_json;
+        }
+        res.status(remoteRes.status).json(result);
+      } else {
+        res.status(remoteRes.status).send(text);
+      }
     } catch (e: any) {
       recordAiCall({ ...shape, durationMs: Date.now() - startedAt, error: String(e?.message || e) });
       res.status(500).json({ error: String(e) });

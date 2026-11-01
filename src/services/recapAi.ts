@@ -131,7 +131,6 @@ export async function generateStructuredRecap(args: {
   context: string;
 }): Promise<StructuredRecap> {
   const { apiKey, model, persona, timeframe, intervalLabel, context } = args;
-  if (!apiKey) throw new Error('Nano-GPT API Key is missing. Please configure it in Settings.');
 
   const system = `You are FauxLore's resident columnist, writing the ${timeframe}ly issue about ONE person's media life. ${getPersonaDescription(persona)}
 

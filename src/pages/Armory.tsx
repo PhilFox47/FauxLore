@@ -161,7 +161,7 @@ export function Armory() {
 
   // Legacy artifact migration
   useEffect(() => {
-    if (!settings?.nanoGptApiKey || isMigrating) return;
+    if ((settings?.aiProvider !== 'cliProxy' && !settings?.nanoGptApiKey) || isMigrating) return;
     
     // Check for artifacts missing targetType
     const legacyArtifacts = artifacts.filter(a => a.targetType === undefined || a.targetType === null);

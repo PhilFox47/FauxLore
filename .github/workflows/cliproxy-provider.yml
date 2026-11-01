@@ -1,0 +1,21 @@
+name: CLIProxyAPI provider integration
+
+on:
+  pull_request:
+    branches: [claude]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - name: Verify gateway URL and image translation
+        run: node --import tsx --test server/lib/cliProxy.test.ts

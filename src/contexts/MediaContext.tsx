@@ -175,7 +175,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     if (inFlight) return inFlight;
 
     // A paused account spends nothing, and neither does one without a key.
-    if (!settings?.nanoGptApiKey || activity?.frozen) return '';
+    if ((settings?.aiProvider !== 'cliProxy' && !settings?.nanoGptApiKey) || activity?.frozen) return '';
 
     const run = (async () => {
       // A per-format alias is about that format's own climb, so it gets that
@@ -187,7 +187,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       });
       const codexBlocks = Object.values(await DatabaseService.getCodexPromptBlocks(ctx.anchors.map((a) => a.id)));
       const text = await generateText(
-        settings.nanoGptApiKey as string,
+        settings.nanoGptApiKey || '',
         creativeModel(settings),
         buildTitleSystemPrompt(getPersonaDescription(settings.aiPersona)),
         buildTitlePrompt({ level, context: ctx.text, anchors: ctx.anchors, codexBlocks, mediaType }),

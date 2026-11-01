@@ -111,7 +111,13 @@ export function initSchema(db: Db) {
       imageSize TEXT,
       imageSteps INTEGER,
       imageGuidance REAL,
-      imageNegativePrompt TEXT
+      imageNegativePrompt TEXT,
+      aiProvider TEXT DEFAULT 'nanoGpt',
+      cliProxyBaseUrl TEXT,
+      cliProxyApiKey TEXT,
+      cliProxyTextModel TEXT,
+      cliProxyCreativeModel TEXT,
+      cliProxyImageModel TEXT
     );
 
     CREATE TABLE IF NOT EXISTS global_taxonomy (
