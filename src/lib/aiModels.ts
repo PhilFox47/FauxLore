@@ -18,10 +18,14 @@ const FALLBACK = 'gpt-4o-mini';
 
 /** Classifying, extracting, summarising, converting to JSON. Invent nothing. */
 export function analyticalModel(settings?: Partial<Settings> | null): string {
-  return settings?.nanoGptModel || FALLBACK;
+  return settings?.aiProvider === 'cliProxy'
+    ? settings.cliProxyTextModel || 'gpt-6.1-sol'
+    : settings?.nanoGptModel || FALLBACK;
 }
 
 /** Anything the user reads as prose: titles, quests, recaps, flavour text. */
 export function creativeModel(settings?: Partial<Settings> | null): string {
-  return settings?.nanoGptCreativeModel || settings?.nanoGptModel || FALLBACK;
+  return settings?.aiProvider === 'cliProxy'
+    ? settings.cliProxyCreativeModel || settings.cliProxyTextModel || 'gpt-6.1-sol'
+    : settings?.nanoGptCreativeModel || settings?.nanoGptModel || FALLBACK;
 }
