@@ -14,7 +14,10 @@ export function stripNativeAnnotations(input: string): string {
     if (next === text) break;
     text = next;
   }
-  return text.replace(/\s{2,}/g, " ").trim();
+  const cleaned=text.replace(/\s{2,}/g, " ").trim();
+  // A Japanese-only quote in parentheses still needs translation. Never
+  // delete its entire text just because it resembles an annotation.
+  return cleaned || input.trim();
 }
 export interface LanguageIssue { path: string; text: string; }
 export interface LanguageFix { path: string; english: string; }
