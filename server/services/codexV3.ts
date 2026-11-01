@@ -11,6 +11,7 @@ import {
   missingManifest, excludeReviewedErrors, toCodexData, V3_VERSION,
 } from "./codexV3Knowledge";
 import { V3_PHASES, v3Fingerprint, v3Prompt, type V3Phase } from "./codexV3Prompts";
+import { collectLanguageIssues, applyLanguageFixes, hasUnwantedScript } from "./codexV3Language";
 
 type PhaseState = {output:any;sources:string[]};
 type State = Partial<Record<V3Phase,PhaseState>>;
@@ -106,7 +107,31 @@ export function assembleKnowledge(state:State,workTitle:string):CodexKnowledge {
   const notes=missing.length?[
     `Coverage manifest still lacks ${missing.length} named target(s); no unsupported filler was fabricated.`
   ]:[];
-  return {version:3,identity,core,manifest,entries,missing,sources:allSources,notes};
+  const knowledge:CodexKnowledge={version:3,identity,core,manifest,entries,missing,sources:allSources,notes};
+  if (!state.review) return knowledge;
+
+  // The existing quick (no-web) review also repairs unavoidable localized
+  // source fragments. No new expensive web-search pass is introduced.
+  const localized=applyLanguageFixes(knowledge,state.review.output?.languageFixes);
+  const remaining=collectLanguageIssues(localized);
+  if (remaining.length) {
+    throw new Error(
+      `Language review left ${remaining.length} non-English-script field(s) untranslated: ` +
+      remaining.slice(0,5).map(x=>x.path).join(", ")
+    );
+  }
+  // Translated original-language dialogue is a reference, not an authenticated
+  // verbatim English quotation. Keep its meaning without misattribution.
+  for(let i=0;i<entries.length;i++){
+    if(entries[i].area!=="flavorTexts" || !hasUnwantedScript(entries[i].name))continue;
+    const repaired=localized.entries[i];
+    if(!repaired)continue;
+    repaired.details={...repaired.details,kind:"reference",
+      why:[typeof repaired.details.why==="string"?repaired.details.why:"",
+        "English rendering of original-language dialogue; not a verified official English quote."]
+        .filter(Boolean).join(" ")};
+  }
+  return localized;
 }
 export async function buildCodexV3(args:{
   db:Db;codexId:string;userId:string;config:AiConfig;
@@ -167,6 +192,9 @@ export async function buildCodexV3(args:{
         output=parseReply(await compile(prompt),phase);
         if(!Array.isArray(output.rejectedIds) || !Array.isArray(output.reasons))
           throw new Error("Quick review did not return its rejection list.");
+        // Fail only the cheap review if the model missed a translation. Keep
+        // every prior searched stage/checkpoint to retry without burning tokens.
+        assembleKnowledge({...state,review:{output,sources:[]}},subject.title);
       }
       state[phase]={output,sources};
       saveState(db,codexId,userId,fingerprint,state);
