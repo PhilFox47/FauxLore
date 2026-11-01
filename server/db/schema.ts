@@ -119,7 +119,7 @@ export function initSchema(db: Db) {
       cliProxyCreativeModel TEXT,
       cliProxyImageModel TEXT,
       cliProxyCodexModel TEXT,
-      cliProxyCodexPipeline TEXT DEFAULT 'v2'
+      cliProxyCodexPipeline TEXT DEFAULT 'v3'
     );
 
     CREATE TABLE IF NOT EXISTS global_taxonomy (
@@ -259,6 +259,24 @@ export function initSchema(db: Db) {
       updatedAt TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_codex_v2_user ON codex_v2_runs(userId, updatedAt);
+    -- V3 resumes source research without publishing an incomplete Codex.
+    CREATE TABLE IF NOT EXISTS codex_v3_runs (
+      codexId TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      state TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+    -- Complete V3 knowledge survives compilation and is task-retrievable.
+    CREATE TABLE IF NOT EXISTS codex_knowledge (
+      codexId TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      data TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_codex_knowledge_user ON codex_knowledge(userId);
+
 
     -- The lines that appear under a library title.
     --
