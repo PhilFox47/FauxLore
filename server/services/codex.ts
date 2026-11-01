@@ -1441,10 +1441,8 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
           }
           cliResearchResult = result;
           raw = result.text;
-          recordPayload(callId, "codex", {
-            reply: raw,
-            searchSources: result.sources.join("\n"),
-          });
+          recordPayload(callId, "codex", { reply: raw });
+          console.log(`[codex] CLIProxyAPI verified ${result.sources.length} native web sources for "${subject.title}".`);
           recordAiCall({
             ...shape, durationMs: Date.now() - startedAt, httpStatus: 200,
             promptTokens: result.promptTokens, completionTokens: result.completionTokens,
