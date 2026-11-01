@@ -281,10 +281,10 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
   // Another task (a boss spawn, an auto-tag) may be compiling this Codex right
   // now, so a 'generating' row is watched until it settles.
   useEffect(() => {
-    if (codex?.status !== 'generating') return;
+    if (!isCompiling && codex?.status !== 'generating') return;
     pollRef.current = setTimeout(() => { load(); }, 4000);
     return () => { if (pollRef.current) clearTimeout(pollRef.current); };
-  }, [codex, load]);
+  }, [isCompiling, codex, load]);
 
   /**
    * The three ways to research a title, which are genuinely different things.
@@ -410,10 +410,30 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
         </div>
       )}
 
-      {codex?.status === 'generating' && (
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-5 flex items-center gap-3 text-sm text-zinc-400">
-          <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
-          Researching “{codex.title}” — this takes a moment.
+      {(isCompiling || codex?.status === 'generating') && (
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-zinc-400 space-y-2">
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+            Researching “{codex?.title || title}”
+            {codex?.researchProgress && (
+              <span className="ml-auto text-xs text-zinc-500">
+                {codex.researchProgress.completed.length}/{codex.researchProgress.total} completed
+              </span>
+            )}
+          </div>
+          {codex?.researchProgress && (
+            <div className="text-xs text-zinc-500">
+              Current phase: <span className="text-amber-300">{({
+                identity: 'Identity & scope',
+                narrative: 'Story & craft',
+                entities: 'Canonical entities',
+                audience: 'Audience & memories',
+                verification: 'Independent fact-check',
+                compilation: 'Final compilation',
+                complete: 'Saving'
+              } as Record<string,string>)[codex.researchProgress.current] || codex.researchProgress.current}</span>
+            </div>
+          )}
         </div>
       )}
 
