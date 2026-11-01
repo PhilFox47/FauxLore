@@ -16,8 +16,26 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
 
   // Auto-tagging embeds the Codex in its own prompt from the browser, so the
   // rendered prompt block ships with it and only one formatter ever exists.
-  const withPromptBlock = (row: CodexRow | null) =>
-    row ? { ...row, promptBlock: codexPromptBlock(row) } : null;
+  const withPromptBlock = (row: CodexRow | null) => {
+    if (!row) return null;
+    const stage: any = db.prepare(
+      "SELECT state FROM codex_v2_runs WHERE codexId = ? AND userId = ?"
+    ).get(row.id, row.userId);
+    let researchProgress: { completed: string[]; current: string; total: number } | undefined;
+    if (stage?.state) {
+      try {
+        const stored = JSON.parse(stage.state);
+        const phases = ["identity","narrative","entities","audience","verification","compilation"];
+        const completed = phases.filter(p => !!stored[p]);
+        researchProgress = {
+          completed,
+          current: phases.find(p => !stored[p]) || "complete",
+          total: phases.length,
+        };
+      } catch {}
+    }
+    return { ...row, promptBlock: codexPromptBlock(row), researchProgress };
+  };
 
   app.get("/api/media/:id/codex", (req, res) => {
     try {
