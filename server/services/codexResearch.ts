@@ -1,5 +1,5 @@
 /**
- * How the Codex is researched: ONE call, with deep retrieval, for every title.
+ * Codex primary research: one complete dossier call per title. A bounded\n * optional CLIProxy follow-up may repair objectively weak sections.
  *
  * It was fifteen. An identify call, then per subject area a research call and a
  * separate structuring call, a pass that decided which of those searches could
