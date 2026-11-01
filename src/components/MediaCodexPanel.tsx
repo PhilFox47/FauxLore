@@ -298,23 +298,11 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
   const research = async (mode: 'compile' | 'expand' | 'redo') => {
     setIsCompiling(true);
     try {
-      const row = await DatabaseService.ensureCodex({
-        mediaId, title, mediaType,
-        force: mode === 'redo',
-        expand: mode === 'expand',
+      await DatabaseService.startCodex({
+        mediaId, force: mode === 'redo', expand: mode === 'expand',
       });
-      const added = mode === 'expand'
-        ? countEntries(row?.data) - countEntries(codex?.data)
-        : 0;
-      setCodex(row);
-      toast.success(
-        mode === 'redo' ? 'The Codex has been researched again from scratch.'
-          : mode === 'expand'
-            ? added > 0
-              ? `The Codex gained ${added} new entr${added === 1 ? 'y' : 'ies'}.`
-              : 'Nothing new turned up — the Codex is unchanged.'
-            : 'The Codex has been compiled.',
-      );
+      await load();
+      toast.success('Codex research started. Progress is shown below; you can leave this page.');
     } catch (e: any) {
       toast.error(e.message || 'Could not compile the Codex.');
       load();
