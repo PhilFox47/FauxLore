@@ -16,6 +16,9 @@ test("romanized Japanese names remain canonical with no native-script annotation
   assert.equal(manifest[0].name,"Junnosuke Tachibana");
   assert.equal(entries[0].name,"Junnosuke Tachibana");
   assert.deepEqual(entries[0].relatesTo,["Nanase Katagiri"]);
+  const untranslated=normalizeEntries([{area:"flavorTexts",name:"（話そ、いっぱい）",facts:["A notable line"]}],[],"audience");
+  assert.equal(untranslated.length,1); // Await translation; do not lose the memory.
+  assert.equal(collectLanguageIssues({entries:untranslated}).length,1);
 });
 
 test("language checks ignore source URLs but find native dialogue and prose",()=>{
