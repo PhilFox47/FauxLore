@@ -18,4 +18,4 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - name: Verify gateway URL and image translation
-        run: node --import tsx --test server/lib/cliProxy.test.ts
+        run: node --import tsx --test server/lib/cliProxy.test.ts server/lib/cliProxyResearch.test.ts
