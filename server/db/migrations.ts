@@ -486,6 +486,20 @@ export function runMigrations(db: Db) {
     try { db.prepare(`ALTER TABLE system_settings ADD COLUMN ${col} TEXT`).run(); } catch (e) {}
   }
 
+  // Separate Codex V2 checkpoint state from the final user-visible dossier.
+  // No existing Codex data is rewritten, and this is safe on every boot.
+  try { db.prepare("ALTER TABLE system_settings ADD COLUMN cliProxyCodexPipeline TEXT DEFAULT 'v2'").run(); } catch (e) {}
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS codex_v2_runs (
+      codexId TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      state TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_codex_v2_user ON codex_v2_runs(userId,updatedAt);
+  `);
+
   // Book metadata providers and exact Hardcover edition provenance.
   // These are additive for existing databases; fresh installs also run migrations.
   try { db.prepare("ALTER TABLE settings ADD COLUMN bookMetadataProviders TEXT").run(); } catch (e) {}
