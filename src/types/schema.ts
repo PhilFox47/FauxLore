@@ -437,6 +437,15 @@ export interface Settings {
   nanoGptProvider?: string;
   /** Which deep-search backend compiles a Codex. See SEARCH_PROVIDERS. */
   nanoGptSearchProvider?: string;
+  /** Global provider: NanoGPT by default, or local CLIProxyAPI. */
+  aiProvider?: 'nanoGpt' | 'cliProxy';
+  cliProxyBaseUrl?: string;
+  /** Intentionally never returned to clients by system-settings GET. */
+  cliProxyApiKey?: string;
+  cliProxyApiKeyConfigured?: boolean;
+  cliProxyTextModel?: string;
+  cliProxyCreativeModel?: string;
+  cliProxyImageModel?: string;
   imageModel?: string;
   imageSize?: string;
   imageSteps?: number;
