@@ -431,6 +431,14 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
         </div>
       )}
 
+      {codex?.status === 'ready' && codex.error && !isBusy && (
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-200">
+          <div className="font-semibold mb-1">The latest research attempt failed. Your previous Codex is safe.</div>
+          <p className="text-xs text-amber-100/70 break-words">{codex.error}</p>
+          <p className="text-xs text-zinc-500 mt-1">Retrying with the same model and work resumes completed V2 phases.</p>
+        </div>
+      )}
+
       {codex?.status === 'ready' && data && (
         <div className="rounded-2xl border border-white/10 bg-black/20 p-5 space-y-5">
           <IdentifiedAs data={data} mediaType={mediaType} year={year} season={season} />
