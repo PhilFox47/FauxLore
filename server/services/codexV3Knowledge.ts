@@ -94,10 +94,10 @@ export function normalizeEntries(raw: unknown, receipts: string[], prefix: strin
     const facts=(Array.isArray(r.facts) ? r.facts : [r.fact])
       .filter((v: unknown)=>typeof v==="string" && !!v.trim())
       .map((v: string)=>v.trim());
-    const urls=(Array.isArray(r.sourceUrls) ? r.sourceUrls : [r.sourceUrl])
-      .filter((v: unknown)=>typeof v==="string" && /^https?:\/\//i.test(v));
+    const urls:string[]=(Array.isArray(r.sourceUrls) ? r.sourceUrls : [r.sourceUrl])
+      .filter((v: unknown):v is string=>typeof v==="string" && /^https?:\/\//i.test(v));
     const status=urls.some((u: string)=>verifiedResearchSource(u,receipts))?"verified":"uncertain";
-    const related=Array.isArray(r.relatesTo) ? r.relatesTo.filter((x: unknown)=>typeof x==="string"&&!!x.trim()) : [];
+    const related:string[]=Array.isArray(r.relatesTo) ? r.relatesTo.filter((x: unknown):x is string=>typeof x==="string"&&!!x.trim()) : [];
     const result:KnowledgeEntry={
       id:`${prefix}_${i}`,area:r.area,name,facts,details:cleanDetails(r.details),
       relatesTo:related,sourceUrls:[...new Set(urls)],sourceStatus:status,
