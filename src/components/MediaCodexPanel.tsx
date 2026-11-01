@@ -10,16 +10,6 @@ import { cn } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
 
 /**
- * How many researched entries a dossier holds, so an expansion can say what it
- * actually added rather than just claiming success.
- */
-function countEntries(data?: CodexData | null): number {
-  if (!data) return 0;
-  const lists = ['characters', 'antagonists', 'locations', 'factions', 'items', 'terminology', 'flavorTexts'];
-  return lists.reduce((n, k) => n + (Array.isArray((data as any)[k]) ? (data as any)[k].length : 0), 0);
-}
-
-/**
  * The Codex: what the app has researched about a title.
  *
  * It is compiled automatically the first time auto-tagging, an enemy or a piece
