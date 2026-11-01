@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose, type AiConfig } from "../lib/ai";
 import { cliProxyResearch, type CliProxyResearchResult } from "../lib/cliProxyResearch";
+import { memoryQuality, memoryTopicsOverlap, chooseCodexFollowUp, isGenericStructure } from "./codexQuality";
 import { nextCallId, recordAiCallStart, recordAiCall, recordPayload } from "../lib/diagnostics";
 import { searchProviderById } from "../../src/lib/searchProviders";
 import {
@@ -144,6 +145,8 @@ export interface CodexFlavorText {
   attribution?: string;
   /** What makes it recognisable. Shown in the Codex, not in the library header. */
   why?: string;
+  /** Subject of a memory, for diversity across the work rather than across wording. */
+  topic?: string;
 }
 
 export type FlavorKind = "quote" | "reference" | "joke";
@@ -272,14 +275,14 @@ const OUTSIDE_THE_WORK = new RegExp(
     "steam page", "official (?:game )?description", "publisher", "promotional", "trailer",
     "interview", "creative director", "game director", "showcase", "summer game fest",
     "developer(?:s)?(?: said| statement| commentary)?", "dev(?:s)? said", "keynote",
-    "pre-?release coverage", "review(?:er|s)?", "ign\\b", "gamespot", "polygon", "kotaku", "eurogamer",
+    "pre-?release coverage", "review(?:er|s)?", "\\bign\\b", "gamespot", "polygon", "kotaku", "eurogamer",
   ].join("|"),
   "i",
 );
 
 export function normalizeFlavorTexts(
   value: any,
-  opts: { rejectPromptExamples?: boolean } = {},
+  opts: { rejectPromptExamples?: boolean; enforceDiversity?: boolean } = {},
 ): CodexFlavorText[] {
   if (!Array.isArray(value)) return [];
   const out: CodexFlavorText[] = [];
@@ -293,7 +296,14 @@ export function normalizeFlavorTexts(
    */
   let outside = 0;
 
-  for (const row of value) {
+  // Only freshly researched memories are re-ranked. Existing curated library
+  // entries keep their hand-selected order and aren't silently rewritten.
+  const candidates = opts.enforceDiversity
+    ? [...value].sort((a: any, b: any) =>
+        memoryQuality({ text: String(b?.text || b?.quote || b || ""), ...b }) -
+        memoryQuality({ text: String(a?.text || a?.quote || a || ""), ...a }))
+    : value;
+  for (const row of candidates) {
     const raw = typeof row === "string" ? row : row?.text ?? row?.quote;
     // Models like to hand back a quote already wrapped in the quotation marks the
     // UI is about to add around it.
@@ -355,7 +365,12 @@ export function normalizeFlavorTexts(
     // model having ignored the rule rather than information worth keeping.
     if (!isMedium && attribution && !/^(unknown|n\/?a|none)$/i.test(attribution)) entry.attribution = attribution;
     if (why && !/^(unknown|n\/?a|none)$/i.test(why)) entry.why = why;
-
+    const topic = String(row?.topic ?? "").trim();
+    if (topic && topic.length <= 80) entry.topic = topic;
+    if (opts.enforceDiversity && out.some(existing => memoryTopicsOverlap(existing, entry))) {
+      console.warn(`[codex] Dropped overlapping memory topic: "${text}" (${entry.topic || entry.why || "unspecified"})`);
+      continue;
+    }
     out.push(entry);
     if (out.length >= MAX_FLAVOR_TEXTS) break;
   }
