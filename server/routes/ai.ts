@@ -172,7 +172,8 @@ export function registerAiRoutes(app: Express, ctx: ServerContext) {
 
       res.status(remoteRes.status).send(text);
     } catch (e: any) {
-      recordAiCall({ ...shape, durationMs: Date.now() - startedAt, error: String(e?.message || e) });
+      const cause = e?.cause?.code ? ` [${e.cause.code}]: ${e.cause.message || ""}` : "";
+      recordAiCall({ ...shape, durationMs: Date.now() - startedAt, error: `${String(e?.message || e)}${cause}` });
       res.status(500).json({ error: String(e) });
     }
   });
