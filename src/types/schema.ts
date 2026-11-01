@@ -448,7 +448,7 @@ export interface Settings {
   cliProxyCreativeModel?: string;
   cliProxyImageModel?: string;
   cliProxyCodexModel?: string;
-  cliProxyCodexPipeline?: 'v2' | 'legacy';
+  cliProxyCodexPipeline?: 'v3' | 'v2' | 'legacy';
   imageModel?: string;
   imageSize?: string;
   imageSteps?: number;
