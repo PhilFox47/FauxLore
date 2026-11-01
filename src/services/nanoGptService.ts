@@ -5,7 +5,6 @@ import { getPersonaDescription } from '../lib/personas';
 export { getPersonaDescription };
 
 export async function generateAiRecapText(apiKey: string, model: string, prompt: string, persona?: string) {
-  if (!apiKey) throw new Error("Nano-GPT API Key is missing. Please configure it in Settings.");
   
   const personaDesc = getPersonaDescription(persona);
   
@@ -110,7 +109,6 @@ export async function generateAiRecapText(apiKey: string, model: string, prompt:
 }
 
 export async function generateAiArtifact(apiKey: string, model: string, item: any) {
-  if (!apiKey) throw new Error("Nano-GPT API Key is missing. Please configure it in Settings.");
 
   // Generate rarity based on distribution
   const rand = Math.random() * 100;
@@ -201,7 +199,6 @@ export async function generateAiArtifact(apiKey: string, model: string, item: an
 }
 
 export async function generateImage(apiKey: string, prompt: string): Promise<string> {
-  if (!apiKey) throw new Error("Nano-GPT API Key is missing.");
 
   const res = await apiFetch("/api/nano-gpt/images/generations", {
     method: "POST",
@@ -236,7 +233,6 @@ export async function generateImage(apiKey: string, prompt: string): Promise<str
 }
 
 export async function generateText(apiKey: string, model: string, systemPrompt: string, prompt: string, temperature: number = 0.9) {
-  if (!apiKey) throw new Error("Nano-GPT API Key is missing. Please configure it in Settings.");
 
   const res = await apiFetch("/api/nano-gpt/chat/completions", {
     method: "POST",
