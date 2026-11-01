@@ -381,6 +381,7 @@ export function normalizeFlavorTexts(
 /** What the research actually landed on, so a wrong match can be spotted. */
 export interface CodexIdentification {
   title?: string;
+  coverage?: "abundant" | "moderate" | "thin";
   year?: number | string;
   /** Which season the research settled on, for series entries. */
   season?: number | string;
