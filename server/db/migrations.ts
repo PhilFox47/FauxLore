@@ -481,6 +481,11 @@ export function runMigrations(db: Db) {
   } catch (e) {
     console.error("Migration to user_version 2 failed:", e);
   }
+  // Global AI provider selection: NanoGPT remains the default for existing installs.
+  for (const col of ["aiProvider", "cliProxyBaseUrl", "cliProxyApiKey", "cliProxyTextModel", "cliProxyCreativeModel", "cliProxyImageModel"]) {
+    try { db.prepare(`ALTER TABLE system_settings ADD COLUMN ${col} TEXT`).run(); } catch (e) {}
+  }
+
   // Book metadata providers and exact Hardcover edition provenance.
   // These are additive for existing databases; fresh installs also run migrations.
   try { db.prepare("ALTER TABLE settings ADD COLUMN bookMetadataProviders TEXT").run(); } catch (e) {}
