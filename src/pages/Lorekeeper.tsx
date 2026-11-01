@@ -139,7 +139,7 @@ export function Lorekeeper() {
   const missingTitleRef = useRef(false);
 
   useEffect(() => {
-    if (!settings?.nanoGptApiKey) return;
+    if (settings?.aiProvider !== 'cliProxy' && !settings?.nanoGptApiKey) return;
     if (isRegeneratingTitle || missingTitleRef.current) return;
     
     if (missingMainTitle || missingMediaTypes.length > 0) {
@@ -148,7 +148,7 @@ export function Lorekeeper() {
         missingTitleRef.current = false;
       });
     }
-  }, [missingMainTitle, missingMediaTypes.length, settings?.nanoGptApiKey]);
+  }, [missingMainTitle, missingMediaTypes.length, settings?.nanoGptApiKey, settings?.aiProvider]);
 
   const getDynamicTitle = () => {
     return aiTextCache[`rpg_title_${rpgState.level}`] || rpgState.className;
@@ -199,7 +199,7 @@ export function Lorekeeper() {
   };
 
   const generateMissingTitles = async (generateMain: boolean, mediaTypesToGenerate: string[], manualRes: boolean = false) => {
-    if (!settings?.nanoGptApiKey) {
+    if (settings?.aiProvider !== 'cliProxy' && !settings?.nanoGptApiKey) {
       if (manualRes) toast.error("Please configure an AI API Key in Settings first.");
       return;
     }
@@ -251,8 +251,8 @@ export function Lorekeeper() {
       });
 
       let titleRes = "";
-      if (settings.nanoGptApiKey) {
-        const apiKey = settings.nanoGptApiKey;
+      if (settings.aiProvider === 'cliProxy' || settings.nanoGptApiKey) {
+        const apiKey = settings.nanoGptApiKey || '';
         const model = creativeModel(settings);
         titleRes = await generateText(apiKey, model, systemPrompt, titlePrompt, 1.2);
       }
@@ -292,7 +292,7 @@ export function Lorekeeper() {
 
 
   const handleRegenerate = async () => {
-    if (!settings?.nanoGptApiKey) {
+    if (settings?.aiProvider !== 'cliProxy' && !settings?.nanoGptApiKey) {
       toast.error("Please configure an AI API Key in Settings first.");
       return;
     }
@@ -316,8 +316,8 @@ export function Lorekeeper() {
 
       const titleKey = `rpg_title_${rpgState.level}`;
       let titleRes = "";
-      if (settings.nanoGptApiKey) {
-        titleRes = await generateText(settings.nanoGptApiKey, creativeModel(settings), titleSystemPrompt, titlePrompt, 1.2);
+      if (settings.aiProvider === 'cliProxy' || settings.nanoGptApiKey) {
+        titleRes = await generateText(settings.nanoGptApiKey || '', creativeModel(settings), titleSystemPrompt, titlePrompt, 1.2);
       }
 
       await saveAiText(titleKey, titleRes);
@@ -345,8 +345,8 @@ export function Lorekeeper() {
         const dPrompt = `Rewrite this Quest Description to sound natural and friendly, like a helpful friend encouraging you to read or play. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Limit the response to 1-2 short sentences. CRITICAL: You MUST explicitly include clear instructions on what needs to be done based on the original description! Example: 'Time to read some good books! Read at least 100 pages this week.'${existingDescsRule} Original: "${quest.description}". Give ONLY the description.`;
         let qDescRes = "";
 
-        if (settings.nanoGptApiKey) {
-          const apiKey = settings.nanoGptApiKey;
+        if (settings.aiProvider === 'cliProxy' || settings.nanoGptApiKey) {
+          const apiKey = settings.nanoGptApiKey || '';
           const model = creativeModel(settings);
           qTitleRes = await generateText(apiKey, model, systemPrompt, tPrompt, 1.2);
           qDescRes = await generateText(apiKey, model, systemPrompt, dPrompt);
@@ -1101,7 +1101,7 @@ function QuestCard({
 
     const needsFetch = 
       (!dynTitleCached || !dynDescCached || (originalStrCached !== undefined && originalStrCached !== currentQuestStr)) &&
-      settings?.nanoGptApiKey &&
+      (settings?.aiProvider === 'cliProxy' || settings?.nanoGptApiKey) &&
       fetchedForRef.current !== currentQuestStr &&
       !quest.isFailed &&
       !quest.isCompleted &&
@@ -1134,8 +1134,8 @@ function QuestCard({
           let qTitleRes = "";
           let qDescRes = "";
 
-          if (settings.nanoGptApiKey) {
-            const apiKey = settings.nanoGptApiKey;
+          if (settings.aiProvider === 'cliProxy' || settings.nanoGptApiKey) {
+            const apiKey = settings.nanoGptApiKey || '';
             const model = creativeModel(settings);
             qTitleRes = await generateText(
               apiKey,
@@ -1204,8 +1204,8 @@ function QuestCard({
         
       let res = "";
       
-      if (settings?.nanoGptApiKey) {
-        res = await generateText(settings.nanoGptApiKey, creativeModel(settings), systemPrompt, prompt, type === 'title' ? 1.2 : 0.9);
+      if (settings?.aiProvider === 'cliProxy' || settings?.nanoGptApiKey) {
+        res = await generateText(settings.nanoGptApiKey || '', creativeModel(settings), systemPrompt, prompt, type === 'title' ? 1.2 : 0.9);
       }
 
       await saveAiText(`quest_${type}_${quest.id}`, res);
