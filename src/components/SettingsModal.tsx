@@ -51,6 +51,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     hardcoverApiKey: '',
     bookMetadataProviders: ['hardcover', 'googleBooks'] as ('hardcover' | 'googleBooks')[],
     nanoGptApiKey: '',
+    aiProvider: 'nanoGpt' as 'nanoGpt' | 'cliProxy',
+    cliProxyBaseUrl: 'http://127.0.0.1:3002/v1',
+    cliProxyApiKey: '',
+    cliProxyApiKeyConfigured: false,
+    cliProxyTextModel: 'gpt-6.1-sol',
+    cliProxyCreativeModel: '',
+    cliProxyImageModel: 'gpt-image-2',
     nanoGptModel: '',
     nanoGptWebModel: '',
     nanoGptCreativeModel: '',
@@ -122,6 +129,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         hardcoverApiKey: settings.hardcoverApiKey || '',
         bookMetadataProviders: Array.isArray(settings.bookMetadataProviders) ? settings.bookMetadataProviders : ['hardcover', 'googleBooks'],
         nanoGptApiKey: settings.nanoGptApiKey || '',
+        aiProvider: settings.aiProvider === 'cliProxy' ? 'cliProxy' as const : 'nanoGpt' as const,
+        cliProxyBaseUrl: settings.cliProxyBaseUrl || 'http://127.0.0.1:3002/v1',
+        cliProxyApiKey: '',
+        cliProxyApiKeyConfigured: !!settings.cliProxyApiKeyConfigured,
+        cliProxyTextModel: settings.cliProxyTextModel || 'gpt-6.1-sol',
+        cliProxyCreativeModel: settings.cliProxyCreativeModel || '',
+        cliProxyImageModel: settings.cliProxyImageModel || 'gpt-image-2',
         nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
         nanoGptWebModel: settings.nanoGptWebModel || '',
         nanoGptCreativeModel: settings.nanoGptCreativeModel || '',
@@ -182,6 +196,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         hardcoverApiKey: settings.hardcoverApiKey || '',
         bookMetadataProviders: Array.isArray(settings.bookMetadataProviders) ? settings.bookMetadataProviders : ['hardcover', 'googleBooks'],
             nanoGptApiKey: settings.nanoGptApiKey || '',
+            aiProvider: settings.aiProvider === 'cliProxy' ? 'cliProxy' as const : 'nanoGpt' as const,
+            cliProxyBaseUrl: settings.cliProxyBaseUrl || 'http://127.0.0.1:3002/v1',
+            cliProxyApiKey: '',
+            cliProxyApiKeyConfigured: !!settings.cliProxyApiKeyConfigured,
+            cliProxyTextModel: settings.cliProxyTextModel || 'gpt-6.1-sol',
+            cliProxyCreativeModel: settings.cliProxyCreativeModel || '',
+            cliProxyImageModel: settings.cliProxyImageModel || 'gpt-image-2',
             nanoGptModel: settings.nanoGptModel || 'gpt-4o-mini',
             nanoGptWebModel: settings.nanoGptWebModel || '',
             nanoGptCreativeModel: settings.nanoGptCreativeModel || '',
@@ -406,8 +427,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   };
 
   const handleTestConnection = async () => {
-    if (!formData.nanoGptApiKey) {
-      setTestResult({ success: false, message: "API Key is required" });
+    if (formData.aiProvider === 'nanoGpt' && !formData.nanoGptApiKey) {
+      setTestResult({ success: false, message: "NanoGPT API Key is required" });
       return;
     }
     setIsTesting(true);
@@ -417,11 +438,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       // Every slot that is actually filled in gets pinged: a typo in the
       // creative model used to surface much later, as a silently missing enemy
       // description. Duplicates are collapsed so the common case is one call.
-      const slots: [string, string][] = [
-        ['Analytical', formData.nanoGptModel || 'gpt-4o-mini'],
-        ['Web search', formData.nanoGptWebModel],
-        ['Creative', formData.nanoGptCreativeModel],
-      ];
+      const slots: [string, string][] = formData.aiProvider === 'cliProxy'
+        ? [
+            ['Analytical', formData.cliProxyTextModel || 'gpt-6.1-sol'],
+            ['Creative', formData.cliProxyCreativeModel],
+          ]
+        : [
+            ['Analytical', formData.nanoGptModel || 'gpt-4o-mini'],
+            ['Web search', formData.nanoGptWebModel],
+            ['Creative', formData.nanoGptCreativeModel],
+          ];
       const seen = new Set<string>();
       const toTest = slots.filter(([, m]) => m && !seen.has(m) && seen.add(m));
       for (const [label, model] of toTest) {
@@ -445,7 +471,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   };
 
   const handleFixFallbacks = async (isForce = false) => {
-    if (!formData.nanoGptApiKey) {
+    if (formData.aiProvider === 'nanoGpt' && !formData.nanoGptApiKey) {
       setError("Please save your Nano-GPT API Key first.");
       return;
     }
@@ -546,6 +572,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         hardcoverApiKey: formData.hardcoverApiKey,
         bookMetadataProviders: formData.bookMetadataProviders,
         nanoGptApiKey: formData.nanoGptApiKey,
+        aiProvider: formData.aiProvider,
+        cliProxyBaseUrl: formData.cliProxyBaseUrl,
+        cliProxyApiKey: formData.cliProxyApiKey,
+        cliProxyTextModel: formData.cliProxyTextModel,
+        cliProxyCreativeModel: formData.cliProxyCreativeModel,
+        cliProxyImageModel: formData.cliProxyImageModel,
         nanoGptModel: formData.nanoGptModel,
         nanoGptWebModel: formData.nanoGptWebModel,
         nanoGptCreativeModel: formData.nanoGptCreativeModel,
@@ -1281,6 +1313,45 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   <div className="flex items-center justify-between pb-2 border-b border-white/5">
                     <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">AI Models (Text)</h3>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Active AI Provider (Global)</label>
+                    <select
+                      name="aiProvider"
+                      value={formData.aiProvider}
+                      onChange={(e) => setFormData(prev => ({ ...prev, aiProvider: e.target.value === 'cliProxy' ? 'cliProxy' : 'nanoGpt' }))}
+                      className="input-field"
+                    >
+                      <option value="nanoGpt">NanoGPT (existing)</option>
+                      <option value="cliProxy">CLIProxyAPI (ChatGPT subscription)</option>
+                    </select>
+                    <p className="text-[10px] text-zinc-500 mt-1">Switch providers without deleting any model settings. An unavailable gateway fails visibly; FauxLore does not silently spend NanoGPT credits. Save before testing.</p>
+                  </div>
+                  {formData.aiProvider === 'cliProxy' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5">
+                      <div className="sm:col-span-2">
+                        <label className="block text-sm font-medium text-zinc-400 mb-1">CLIProxyAPI Base URL</label>
+                        <input name="cliProxyBaseUrl" value={formData.cliProxyBaseUrl} onChange={handleChange}
+                          className="input-field" placeholder="http://cli-proxy-api:8317/v1" />
+                        <p className="text-[10px] text-zinc-500 mt-1">This URL is used by the FauxLore backend, not your browser. In Docker, connect both containers to a shared network and use http://cli-proxy-api:8317/v1; localhost inside FauxLore points to FauxLore itself.</p>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-sm font-medium text-zinc-400 mb-1">Gateway API Key</label>
+                        <input type="password" autoComplete="new-password" name="cliProxyApiKey"
+                          value={formData.cliProxyApiKey} onChange={handleChange}
+                          className="input-field" placeholder={formData.cliProxyApiKeyConfigured ? "Stored (leave blank to keep)" : "Enter local gateway API key"} />
+                        <p className="text-[10px] text-zinc-500 mt-1">The key stays on the server. Leave blank to retain the saved key. CLIProxyAPI must be reachable from the FauxLore server.</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-400 mb-1">Analytical Text Model</label>
+                        <input name="cliProxyTextModel" value={formData.cliProxyTextModel} onChange={handleChange} className="input-field" placeholder="gpt-6.1-sol" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-400 mb-1">Creative Text Model</label>
+                        <input name="cliProxyCreativeModel" value={formData.cliProxyCreativeModel} onChange={handleChange} className="input-field" placeholder="Same as analytical" />
+                      </div>
+                      <p className="sm:col-span-2 text-xs text-amber-300/80">Codex deep research and online-search tasks still use NanoGPT, since its deep-search API has different semantics. Keep a NanoGPT key and web model configured if you use these features.</p>
+                    </div>
+                  )}
                   <p className="text-xs text-zinc-500">
                     FauxLore splits its text generation in two, because no single model is good at both halves.
                     An <span className="text-zinc-300 font-semibold">analytical</span> model classifies, extracts and
@@ -1291,7 +1362,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-zinc-400 mb-1">Analytical Model</label>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">NanoGPT Analytical Model</label>
                       <input
                         type="text"
                         name="nanoGptModel"
@@ -1347,25 +1418,34 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   <div className="flex items-center justify-between pb-2 border-b border-white/5">
                     <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">Image Generation (Enemies &amp; Loot)</h3>
                   </div>
-                  <p className="text-xs text-zinc-500">NanoGPT model &amp; parameters for generated enemy / loot art. Leave a field blank to use the built-in default (z-image-turbo, 1024x1024, 10 steps, CFG 1.5).</p>
+                  <p className="text-xs text-zinc-500">{formData.aiProvider === 'cliProxy'
+                    ? 'CLIProxyAPI uses fixed GPT image sizes. Aspect ratio is mapped to 1024x1024, 1536x1024 or 1024x1536. CFG/steps are NanoGPT-only; exclusions become best-effort natural-language instructions.'
+                    : 'NanoGPT model and parameters for enemy / loot art. Leave fields blank to use the built-in defaults.'}</p>
+                  {formData.aiProvider === 'cliProxy' && (
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">CLIProxyAPI Image Model</label>
+                      <input name="cliProxyImageModel" value={formData.cliProxyImageModel} onChange={handleChange} className="input-field" placeholder="gpt-image-2" />
+                      <p className="text-[10px] text-zinc-500 mt-1">Example: gpt-image-2 or a supported GPT image variant from your gateway's model list.</p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-zinc-400 mb-1">Image Model</label>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">NanoGPT Image Model (kept for fallback)</label>
                       <input name="imageModel" value={formData.imageModel} onChange={handleChange} className="input-field" placeholder="z-image-turbo" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-zinc-400 mb-1">Resolution</label>
                       <input name="imageSize" value={formData.imageSize} onChange={handleChange} className="input-field" placeholder="1024x768" />
                     </div>
-                    <div>
+                    {formData.aiProvider === 'nanoGpt' && (<div>
                       <label className="block text-sm font-medium text-zinc-400 mb-1">Steps</label>
                       <input type="number" min="1" max="60" name="imageSteps" value={formData.imageSteps} onChange={handleChange} className="input-field" placeholder="10" />
-                    </div>
-                    <div>
+                    </div>)}
+                    {formData.aiProvider === 'nanoGpt' && (<div>
                       <label className="block text-sm font-medium text-zinc-400 mb-1">Guidance (CFG)</label>
                       <input type="number" step="0.1" min="0" max="12" name="imageGuidance" value={formData.imageGuidance} onChange={handleChange} className="input-field" placeholder="1.5" />
                       <p className="text-[10px] text-zinc-500 mt-1">Z-Image-Turbo: keep ~1.5. Negative prompts only apply when CFG &gt; 1.</p>
-                    </div>
+                    </div>)}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-zinc-400 mb-1">Base Negative Prompt</label>
@@ -1375,7 +1455,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       className="input-field h-20 resize-none"
                       placeholder="Leave blank for the default (watermark, blurry, soft focus, deformed, ...)"
                     />
-                    <p className="text-[10px] text-zinc-500 mt-1">Enemy- and loot-specific negatives are appended automatically.</p>
+                    <p className="text-[10px] text-zinc-500 mt-1">Enemy- and loot-specific exclusions are added automatically. CLIProxyAPI receives these as text constraints, not as a diffusion negative_prompt parameter.</p>
                   </div>
                 </div>
 
@@ -1388,7 +1468,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-lg transition-colors border border-white/10 disabled:opacity-50"
                     >
                       <RefreshCw className={`w-4 h-4 ${isTesting ? 'animate-spin' : ''}`} />
-                      {isTesting ? 'Testing...' : 'Test Connection'}
+                      {isTesting ? 'Testing...' : 'Test Selected Provider'}
                     </button>
                     {testResult && (
                       <p className={`text-sm font-medium ${testResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
