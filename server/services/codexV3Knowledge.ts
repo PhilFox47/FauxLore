@@ -2,7 +2,7 @@
 import type { CodexData, CodexEntity, CodexFlavorText } from "./codex";
 import { verifiedResearchSource } from "./codexQuality";
 
-export const V3_VERSION = 1;
+export const V3_VERSION = 3;
 export type KnowledgeArea =
   | "characters" | "antagonists" | "locations" | "factions"
   | "items" | "terminology" | "events" | "flavorTexts";
