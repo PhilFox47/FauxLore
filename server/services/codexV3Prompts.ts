@@ -2,6 +2,7 @@
 import { createHash } from "node:crypto";
 import { FACET_SPECS, subjectSeason, subjectYear, type CodexSubject } from "./codexResearch";
 import type { CodexKnowledge, KnowledgeEntry, ManifestTarget } from "./codexV3Knowledge";
+import { collectLanguageIssues } from "./codexV3Language";
 
 export const V3_PHASES = [
   "identity","discovery","core","cast","world","story","craft","audience",
@@ -30,7 +31,24 @@ but do not drop plausible information only because an individual URL is missing.
 Where available, provide full page URLs for traceability. If no source matches a
 particular claim, omit the URL; the record is kept with "uncertain" provenance.
 Do not confuse facts about the work with the user's personal experiences. No invented
-chapter markers or progress percentages. Return only valid JSON.`;
+chapter markers or progress percentages.
+LANGUAGE POLICY (MANDATORY FOR ALL JSON FIELDS, NOT JUST THE SUMMARY):
+- Write the entire Codex in fluent ENGLISH. German is acceptable only when
+  it is genuinely appropriate to a German-language original work (especially
+  an authentic German quote). Do not use any other language for prose,
+  characters, entries, quotes, terms, lists or descriptions.
+- Japanese, Chinese, Korean, Russian etc. sources are allowed for RESEARCH,
+  but do not reproduce their writing systems in the OUTPUT.
+- Use official English/localized names where available, otherwise established
+  romanizations in Latin letters. NEVER append original Japanese spellings in
+  parentheses, including in "name", "relatesTo", credits or inventory.
+- Memories: seek an attested English-localized quotation. If the exact English
+  wording cannot be confirmed, use a concise English REFERENCE describing the
+  recognizable moment, set details.kind="reference", NOT a made-up direct quote.
+- Keep genuine German-language quotations unchanged when they suit the work.
+- Preserve factual meaning and provenance; do not invent canonical translations.
+- Source URLs can retain their original spelling/encoding because they are
+  references, not displayed prose. Return only valid JSON.`;
   const entry=`{"entries":[{"area":"characters | antagonists | locations | factions | items | terminology | events | flavorTexts",
 "name":"canonical name / exact quote","facts":["specific concrete fact 1","distinct fact 2"],
 "details":{"appearance":"precise visual traits","personality":"concrete behavior"},
@@ -139,7 +157,11 @@ the UI's handful of library-header quotes are a separate presentation choice,
 not a research cap. Every candidate should stand alone and be recognizable.
 If nothing genuinely documented exists, return empty entries.
 Return ${entry} using only area "flavorTexts".
-In "name" store the exact memorable line, "facts" why it matters;
+In "name" store the English (or appropriate original German) memorable line.
+Use a verified official English translation for kind="quote". If the only
+known original is Japanese or another language, give an English explanatory
+reference (kind="reference"), never untranslated text or a fabricated quote.
+"facts" explain why it matters;
 "details" include kind (quote|reference|joke), attribution, topic, why.
 Do not copy prompt examples.`;
   if(phase==="coverage")return `${title} exact missing character location item event research
@@ -152,6 +174,7 @@ and meaningful new relations, when sources allow. Do not invent to force a
 complete checklist. A short sourced profile beats an unsourced assertion.
 Return ${entry} for any relevant area except flavorTexts, plus {"sources":[]}
 if helpful. Output should have a top-level entries array.`;
+  const languageIssues=collectLanguageIssues(knowledge);
   const candidates=knowledge.entries.map(e=>({id:e.id,area:e.area,
     name:e.name,facts:e.facts.slice(0,2).map(x=>x.slice(0,165))}));
   return `${scope}\nThis is a FAST NO-WEB SANITY REVIEW, not exhaustive fact-checking
@@ -162,5 +185,14 @@ Give a clear short reason for every explicitly rejected ID.
 Omitted IDs remain ACCEPTED. Do not trim for length, reading quality, or
 lack of a perfectly matching citation. If unsure, leave it.
 ITEMS: ${JSON.stringify(candidates)}
-JSON ONLY {"rejectedIds":[],"reasons":[{"id":"","reason":""}]}`;
+ADDITIONAL LANGUAGE-ONLY REPAIR (do NOT research or rewrite everything):
+The previous native-search phases may have copied non-Latin original language
+text. Provide an ENGLISH rendering for EACH of these field paths, preserving
+proper names by their established Latin-letter spelling. For Japanese-only
+dialogue with no verified published English wording, render it as a brief
+English descriptive reference, NOT a purported verbatim quote. If a field
+is a credit/name, romanize it when reliably possible. Include ALL paths below
+in "languageFixes", even when there are no obvious factual errors.
+LANGUAGE ISSUES: ${JSON.stringify(languageIssues)}
+JSON ONLY {"rejectedIds":[],"reasons":[],"languageFixes":[{"path":"entries.0.name","english":"English rendering"}]}`;
 }
