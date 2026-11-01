@@ -55,6 +55,30 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
     }
   });
 
+  // Long staged research must outlive the initiating HTTP request. The browser
+  // polls the existing GET endpoint while the server carries on independently.
+  app.post("/api/media/:id/codex/start", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      if (!activity.requireActive(userId as string, res)) return;
+      const media: any = db.prepare(
+        "SELECT title, mediaType, status FROM media WHERE id = ? AND userId = ?"
+      ).get(req.params.id, userId);
+      if (!media) return res.status(404).json({ error: "Media not found" });
+      if (String(media.status || "").toLowerCase() === "unreleased") {
+        return res.status(409).json({ error: "Unreleased works cannot be researched." });
+      }
+      void codex.ensureCodex(userId, {
+        mediaId: req.params.id, title: media.title, mediaType: media.mediaType,
+        force: !!req.body?.force, expand: !!req.body?.expand,
+      }).catch(err => console.error("[codex] Background research failed:", err));
+      res.status(202).json({ started: true });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
+
   app.post("/api/media/:id/codex", async (req, res) => {
     try {
       const userId = getAuthUser(req, res);
