@@ -1,0 +1,17 @@
+# Optional override for FauxLore -> CLIProxyAPI inter-container communication.
+# Activate with:
+#   docker compose -f docker-compose.yml -f docker-compose.cliproxy.yml up -d --build
+#
+# The gateway stack must already exist and provide the network
+# "cliproxyapi_default". This file is NOT loaded by default, keeping FauxLore
+# independently deployable when NanoGPT is selected or the gateway is absent.
+services:
+  app:
+    networks:
+      - default
+      - cliproxy
+
+networks:
+  cliproxy:
+    external: true
+    name: cliproxyapi_default
