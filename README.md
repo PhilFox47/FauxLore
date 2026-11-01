@@ -95,10 +95,10 @@ CLIProxyAPI settings:
   1536×1024 or 1024×1536, and negative prompts are phrased as best-effort
   natural-language constraints.
 
-**Deep search exception:** Codex research and any other call explicitly asking
-for NanoGPT's online search continue to use NanoGPT. Keep its key and web model
-configured for these tasks. No silent paid fallback occurs for normal text or
-images when CLIProxyAPI is offline: switch the global provider back to NanoGPT.
+**Provider isolation:** When CLIProxyAPI is selected, ordinary text, image
+generation, and explicit web-search requests use CLIProxyAPI. Codex research
+uses its native Responses web search; no automatic paid NanoGPT fallback.
+Selecting NanoGPT restores its original online-search models and settings.
 
 ### CLIProxyAPI and FauxLore in separate Docker Compose stacks
 
@@ -115,20 +115,17 @@ Then use **`http://cli-proxy-api:8317/v1`** in FauxLore's global CLIProxyAPI
 Base URL setting, and enter the local gateway access key. The network name
 above is from the default CLIProxyAPI Compose project; check `docker network ls`
 if yours differs. A manual `docker network connect` must be repeated after
-recreating the FauxLore container. For a persistent setup, add an external
-network to the FauxLore Compose service:
+recreating the FauxLore container. **Recommended:** use the optional included
+`docker-compose.cliproxy.yml` overlay to keep that connection attached
+across rebuilds:
 
-```yaml
-services:
-  app:
-    networks:
-      - default
-      - cliproxy
-networks:
-  cliproxy:
-    external: true
-    name: cliproxyapi_default
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.cliproxy.yml up -d --build
 ```
+
+Use that same `-f` pair for later `up`, `build` and `down` operations.
+The overlay assumes the CLIProxyAPI Docker network exists. **It is opt-in**
+so FauxLore can still start without CLIProxyAPI when only NanoGPT is used.
 
 Do not publish CLIProxyAPI's management or authenticated endpoints to the
 internet. The existing loopback-only Windows port mapping can stay unchanged.
