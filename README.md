@@ -148,8 +148,10 @@ web search with source receipts and a structurally usable dossier is required
 before a Codex will be saved. Model-only responses, missing citations, incomplete
 streams, and API errors are surfaced as failures without a paid fallback.
 When the global provider is **NanoGPT**, the existing deep search still works
-exactly as before. Other non-Codex calls explicitly using NanoGPT-specific
-online-search controls are not switched by this feature.
+exactly as before. Other AI helpers that request web search (for example missing-art-direction
+research) also use native CLIProxyAPI Responses search while CLIProxyAPI is
+selected. NanoGPT research backends are used **only** when NanoGPT itself is
+selected. The legacy nano-gpt proxy routes remain named for compatibility.
 
 *Validation*: mocked SSE parser tests cover search-source receipts,
 memory-only responses, split frames and incomplete streams. A real end-to-end
