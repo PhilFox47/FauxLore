@@ -71,3 +71,64 @@ scripts/                 one-off data-seeding & API-exploration scripts (not par
 - `npm start` — run the production bundle
 - `npm run lint` — TypeScript type-check (`tsc --noEmit`)
 - `npm run clean` — remove `dist/`
+
+## CLIProxyAPI as an alternative AI provider
+
+The global **Settings → System → API Integrations → AI Models** selector supports
+**NanoGPT** (default, unchanged) and **CLIProxyAPI** (ChatGPT subscription via
+a local Codex OAuth gateway). Analytical text, creative text, and image model IDs
+are configured independently for CLIProxyAPI; the original NanoGPT settings
+remain available when switching back.
+
+CLIProxyAPI settings:
+
+- **Base URL:** The URL visible to the *FauxLore server*, ending in `/v1`.
+- **API Key:** The locally configured gateway access key, not an OpenAI API key.
+  Its saved value is never returned by `/api/system-settings`. Leave the
+  input blank to keep the saved key, or enter a new value to replace it.
+- **Text models:** Use a chat-completions-compatible model returned by CLIProxyAPI
+  (e.g. `gpt-6.1-sol`). The creative slot defaults to the analytical slot.
+- **Image model:** Use a supported image model (e.g. `gpt-image-2`).
+  Image generation uses `/v1/images/generations` with `b64_json`; FauxLore
+  saves the decoded image in its existing local uploads directory. Diffusion
+  step counts and CFG do **not** apply. Image sizes map to 1024×1024,
+  1536×1024 or 1024×1536, and negative prompts are phrased as best-effort
+  natural-language constraints.
+
+**Deep search exception:** Codex research and any other call explicitly asking
+for NanoGPT's online search continue to use NanoGPT. Keep its key and web model
+configured for these tasks. No silent paid fallback occurs for normal text or
+images when CLIProxyAPI is offline: switch the global provider back to NanoGPT.
+
+### CLIProxyAPI and FauxLore in separate Docker Compose stacks
+
+The gateway published on Windows at `127.0.0.1:3002` is **not** reachable from
+inside the FauxLore container via `localhost:3002`. Its internal Docker port is
+8317. Connect both containers to the same Docker network:
+
+```powershell
+docker network ls
+docker network connect cliproxyapi_default fauxlore-app
+```
+
+Then use **`http://cli-proxy-api:8317/v1`** in FauxLore's global CLIProxyAPI
+Base URL setting, and enter the local gateway access key. The network name
+above is from the default CLIProxyAPI Compose project; check `docker network ls`
+if yours differs. A manual `docker network connect` must be repeated after
+recreating the FauxLore container. For a persistent setup, add an external
+network to the FauxLore Compose service:
+
+```yaml
+services:
+  app:
+    networks:
+      - default
+      - cliproxy
+networks:
+  cliproxy:
+    external: true
+    name: cliproxyapi_default
+```
+
+Do not publish CLIProxyAPI's management or authenticated endpoints to the
+internet. The existing loopback-only Windows port mapping can stay unchanged.
