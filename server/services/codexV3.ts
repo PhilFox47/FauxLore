@@ -149,6 +149,17 @@ export async function buildCodexV3(args:{
   const model=config.cliProxyCodexModel||config.model;
   const fingerprint=v3Fingerprint(subject,model,alreadyKnown);
   const state=loadState(db,codexId,userId,fingerprint);
+  // A checkpoint created before the language policy may already contain a
+  // quick review with no translations. Re-run ONLY that cheap phase, never
+  // discard completed native-search research.
+  if(state.review){
+    try{assembleKnowledge(state,subject.title);}
+    catch(err:any){
+      if(!String(err?.message||err).includes("Language review left"))throw err;
+      delete state.review;
+      saveState(db,codexId,userId,fingerprint,state);
+    }
+  }
   const research=args.research||((prompt:string)=>cliProxyResearch({
     apiKey:config.apiKey,baseUrl:config.baseUrl,model,
   },prompt,900_000));
