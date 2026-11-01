@@ -145,7 +145,7 @@ No sequel-only characters, sequel gameplay, remasters or other seasons.
 Source references MUST link to the specific actual page supporting each claim,
 not merely a domain from search results. The facts will eventually feed an AI
 generator, so false facts are worse than missing facts. Avoid ending spoilers.
-Return ONLY valid JSON, no prose or markdown.`;
+Write all returned Codex content in ENGLISH, except authentic original German quotes for German works. Research foreign-language sources if helpful, but output Latin-letter names (established romanizations), never Japanese script or other foreign-script prose. Use a documented English translation for a direct quote, otherwise an English descriptive reference, not a made-up literal translation.\nReturn ONLY valid JSON, no prose or markdown.`;
   if (phase === "identity") return `${scope} first release original creator developer publisher year remake sequel differences
 ${common}
 Identify exactly which work this is, what is excluded (sequels, adaptations,
