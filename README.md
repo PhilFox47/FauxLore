@@ -191,3 +191,44 @@ Source receipts confirm that an URL appeared in a native search. They cannot,
 by themselves, confirm every factual claim on the page; editorial QA is
 best-effort and deliberately conservative. This change does not promise that
 an undocumented new novel will suddenly have detailed accessible canon.
+
+### Codex V2: staged evidence-first research
+
+When the global AI provider is CLIProxyAPI, **Codex Generation Pipeline** in
+System & Keys can select:
+
+- **V2 (default)**: five narrow native Responses-web_search phases (identity,
+  narrative/craft, canonical entities, audience/memories, independent
+  verification) followed by one **non-search** compilation using the selected
+  **Codex Research Model**. Choose `gpt-6.1-sol` for this slot independently
+  from analytical/creative `gpt-6.1-terra` models. Model capability and
+  quality must be tested on actual dossiers; no guarantee is implied.
+- **Legacy**: the pre-V2 one-pass Codex with a possible targeted top-up.
+- **NanoGPT**: remains on its existing single deep-search call. Neither
+  mode silently routes a failed CLIProxy search through paid NanoGPT.
+
+The existing final `CodexData` shape is unchanged. Every V2 fact must link to
+an actual search receipt, then explicitly pass a **separate search-assisted
+review**. Missing or disputed approvals are dropped. The final no-search
+compiler cannot add unapproved named characters, canonical objects, quotes or
+signature moments. This substantially reduces unsupported details, but a
+search result's URL alone still cannot prove every sentence of its page.
+
+V2 saves each completed phase into SQLite (`codex_v2_runs`) and resumes
+after errors/restarts when the **work, model and previous Codex inventory**
+match. Checkpoints are cleared only after the final Codex has been stored.
+A failed regeneration leaves the last ready dossier intact. Existing Codexes
+are never overwritten on deployment.
+
+The Media Codex panel starts long requests **asynchronously** so browser and
+reverse-proxy request timeouts do not interrupt server-side research. The panel
+polls every four seconds and shows the current phase and completed count.
+A typical V2 Codex runs more tool calls and may take noticeably longer than
+Legacy, especially on new or obscure works. Phase and model usage are logged
+separately in Diagnostics.
+
+To compare pipelines, regenerate the **same exact edition** in V2 and Legacy
+(or save diagnostics before replacing the dossier), then compare source
+attribution, factual contamination from other franchise entries, specificity,
+memories and total runtime. The staged method does not justify filling a new
+book's missing memories with invented quotations.
