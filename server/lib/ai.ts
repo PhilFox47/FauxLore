@@ -2,6 +2,7 @@ import type { Db } from "../context";
 import { searchProviderById, searchProviderByProviderAndDepth } from "../../src/lib/searchProviders";
 import { recordAiCall, recordAiCallStart, nextCallId, recordPayload } from "./diagnostics";
 import { longRequestDispatcher as dispatcher } from "./httpDispatcher";
+import { cliProxyBaseUrl } from "./cliProxy";
 
 /**
  * Server-side text generation via NanoGPT's OpenAI-compatible endpoint.
@@ -33,47 +34,45 @@ const NANO_GPT_CHAT_URL = "https://nano-gpt.com/api/v1/chat/completions";
 export interface AiConfig {
   apiKey: string;
   model: string;
-  /** Upstream provider to pin, or "" to let NanoGPT route. */
   provider?: string;
   webModel: string;
   creativeModel: string;
-  /** Which deep-search backend the Codex researches with. See SEARCH_PROVIDERS. */
   searchProvider?: string;
+  backend: "nanoGpt" | "cliProxy";
+  baseUrl?: string;
+  nanoApiKey?: string;
 }
 
-/** Which job a call is doing, and therefore which model it should land on. */
 export type AiTier = "analytical" | "creative";
 
-/** Reads the NanoGPT key/models for a user, falling back to the system-wide settings. */
+/** A global provider switch; NanoGPT's original configuration is kept for rollback. */
 export function getAiConfig(db: Db, userId: string): AiConfig | null {
   const cols = "nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, nanoGptSearchProvider";
-  const userSettings: any = db
-    .prepare(`SELECT ${cols} FROM settings WHERE userId = ?`)
-    .get(userId);
-  const sysSettings: any = db
-    .prepare(`SELECT ${cols} FROM system_settings WHERE id = 'system'`)
-    .get();
+  const user: any = db.prepare(`SELECT ${cols} FROM settings WHERE userId = ?`).get(userId);
+  const sys: any = db.prepare("SELECT * FROM system_settings WHERE id = 'system'").get() || {};
+  const nanoApiKey = user?.nanoGptApiKey || sys.nanoGptApiKey || process.env.NANO_GPT_API_KEY;
+  const nanoModel = user?.nanoGptModel || sys.nanoGptModel || "gpt-4o-mini";
+  const nanoWebModel = user?.nanoGptWebModel || sys.nanoGptWebModel || nanoModel;
+  const nanoCreative = user?.nanoGptCreativeModel || sys.nanoGptCreativeModel || nanoModel;
+  const provider = String(user?.nanoGptProvider || sys.nanoGptProvider || "").trim();
+  const searchProvider = String(user?.nanoGptSearchProvider || sys.nanoGptSearchProvider || "").trim();
 
-  const apiKey = userSettings?.nanoGptApiKey || sysSettings?.nanoGptApiKey || process.env.NANO_GPT_API_KEY;
-  if (!apiKey) return null;
-
-  // Both specialised slots fall back to the analytical model, so an install that
-  // never fills them in behaves exactly as it did before.
-  const model = userSettings?.nanoGptModel || sysSettings?.nanoGptModel || "gpt-4o-mini";
-  /**
-   * Which upstream provider serves the model, when the choice has been made.
-   *
-   * Optional by design: empty means NanoGPT routes the request itself, which is
-   * what every install did before this existed and remains the default. It earns
-   * its place when a model is popular enough that one of its providers is
-   * struggling — pinning a healthy one is the difference between a dossier and a
-   * row of timeouts.
-   */
-  const provider = (userSettings?.nanoGptProvider || sysSettings?.nanoGptProvider || "").trim();
-  const webModel = userSettings?.nanoGptWebModel || sysSettings?.nanoGptWebModel || model;
-  const creativeModel = userSettings?.nanoGptCreativeModel || sysSettings?.nanoGptCreativeModel || model;
-  const searchProvider = (userSettings?.nanoGptSearchProvider || sysSettings?.nanoGptSearchProvider || "").trim();
-  return { apiKey, model, webModel, creativeModel, provider, searchProvider };
+  if (sys.aiProvider === "cliProxy") {
+    const apiKey = sys.cliProxyApiKey || process.env.CLIPROXY_API_KEY;
+    if (!apiKey) return null;
+    const model = sys.cliProxyTextModel || "gpt-6.1-sol";
+    return {
+      backend: "cliProxy", apiKey, baseUrl: cliProxyBaseUrl(sys.cliProxyBaseUrl),
+      model, creativeModel: sys.cliProxyCreativeModel || model,
+      webModel: nanoWebModel, nanoApiKey, provider, searchProvider,
+    };
+  }
+  if (!nanoApiKey) return null;
+  return {
+    backend: "nanoGpt", apiKey: nanoApiKey, model: nanoModel,
+    webModel: nanoWebModel, creativeModel: nanoCreative,
+    nanoApiKey, provider, searchProvider,
+  };
 }
 
 export function resolveModel(
@@ -333,6 +332,10 @@ async function postChat(
   opts: GenerateOptions,
   attempt = 1,
 ): Promise<string> {
+  const useNano = config.backend === "nanoGpt" || !!opts.webSearch;
+  if (opts.webSearch && !config.nanoApiKey) {
+    throw new Error("Codex deep search needs a NanoGPT API key even when CLIProxyAPI is selected.");
+  }
   const model = resolveModel(config, !!opts.webSearch, opts.tier, opts.search);
   const promptChars = messages.reduce((n, m) => n + m.content.length, 0);
   const startedAt = Date.now();
@@ -379,7 +382,7 @@ async function postChat(
 
   let res: Response;
   try {
-    res = await fetch(NANO_GPT_CHAT_URL, {
+    res = await fetch(useNano ? NANO_GPT_CHAT_URL : `${config.baseUrl}/chat/completions`, {
     method: "POST",
     // Lifts Node's 300s response cap; see `dispatcher` above.
     ...(dispatcher ? { dispatcher } : {}),
@@ -394,7 +397,7 @@ async function postChat(
     signal: AbortSignal.timeout(opts.timeoutMs ?? (opts.webSearch ? 600_000 : 180_000)),
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
+      Authorization: `Bearer ${useNano ? config.nanoApiKey : config.apiKey}`,
       // Only sent when one has been chosen. The header is the documented
       // per-request override and is ignored by models that do not support
       // provider selection, so an unsupported pairing degrades to today's
@@ -403,11 +406,11 @@ async function postChat(
       // Note this is the CHAT call only. The image API documents provider
       // options as unsupported and answers `unsupported_provider_options`, so
       // nothing like this belongs on that route.
-      ...(config.provider ? { "X-Provider": config.provider } : {}),
+      ...(useNano && config.provider ? { "X-Provider": config.provider } : {}),
     },
     body: JSON.stringify({
       model: resolveModel(config, !!opts.webSearch, opts.tier, opts.search),
-      temperature: opts.temperature ?? 0.9,
+      ...(useNano ? { temperature: opts.temperature ?? 0.9 } : {}),
       messages,
       // The documented body form of the search controls. It takes precedence
       // over the model's `:online` suffix, which stays on the model name so an
@@ -434,12 +437,12 @@ async function postChat(
       // supported mode, and the shape is already spelled out in the prompt. What
       // it buys is the one failure it was added for — a model narrating its way
       // to an answer, or fencing it, and the reply being discarded as unparseable.
-      ...(opts.json ? { response_format: { type: "json_object" } } : {}),
-      ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
-      ...(opts.reasoningEffort ? { reasoning_effort: opts.reasoningEffort } : {}),
+      ...(opts.json && useNano ? { response_format: { type: "json_object" } } : {}),
+      ...(opts.maxTokens && useNano ? { max_tokens: opts.maxTokens } : {}),
+      ...(opts.reasoningEffort && useNano ? { reasoning_effort: opts.reasoningEffort } : {}),
       // Streaming is not about showing progress here; it is about the connection
       // staying alive. See `stream` in GenerateOptions.
-      ...(opts.stream ? { stream: true, stream_options: { include_usage: true } } : {}),
+      ...(opts.stream ? { stream: true, ...(useNano ? { stream_options: { include_usage: true } } : {}) } : {}),
     }),
     });
   } catch (e: any) {
@@ -452,7 +455,7 @@ async function postChat(
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    const err: any = new Error(`NanoGPT error (${res.status}): ${body.slice(0, 300)}`);
+    const err: any = new Error(`${useNano ? "NanoGPT" : "CLIProxyAPI"} error (${res.status}): ${body.slice(0, 300)}`);
     // Carried so the retry decision can read the status rather than parse it
     // back out of the message.
     err.httpStatus = res.status;
@@ -550,7 +553,7 @@ async function postChat(
   // it is common enough on a loaded model to be worth naming. Every caller
   // treats "" as a failure anyway; throwing here is what lets it be retried
   // instead of silently costing a section.
-  if (!text) throw new Error("NanoGPT returned an empty reply.");
+  if (!text) throw new Error(`${useNano ? "NanoGPT" : "CLIProxyAPI"} returned an empty reply.`);
   return text;
 }
 
