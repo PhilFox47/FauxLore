@@ -97,10 +97,10 @@ export function assembleKnowledge(state:State,workTitle:string):CodexKnowledge {
   let core:Partial<CodexData>={};
   for(const phase of ["core","craft"] as const)core=mergeCore(core,state[phase]?.output?.core);
   const manifest=normalizeManifest(state.discovery?.output?.manifest);
-  let entries=phaseEntries(state);
-  // Entries are retained even when source attribution was incomplete.
-  // Only an explicit reasoned veto in the quick review removes them.
-  entries=excludeReviewedErrors(entries,state.review?.output);
+  const entries=phaseEntries(state);
+  // Keep stable entry indices for the language-review paths. Rejections are
+  // applied AFTER localization, otherwise an unrelated blacklist item could
+  // shift a Japanese quote onto the wrong entry.
   const identity=state.identity?.output?.identity||{title:workTitle};
   const allSources=[...new Set(Object.values(state).flatMap(s=>s?.sources||[]))];
   const missing=missingManifest(manifest,entries);
@@ -131,6 +131,11 @@ export function assembleKnowledge(state:State,workTitle:string):CodexKnowledge {
         "English rendering of original-language dialogue; not a verified official English quote."]
         .filter(Boolean).join(" ")};
   }
+  localized.entries=excludeReviewedErrors(localized.entries,state.review.output);
+  localized.missing=missingManifest(localized.manifest,localized.entries);
+  localized.notes=localized.missing.length?[
+    `Coverage manifest still lacks ${localized.missing.length} named target(s); no unsupported filler was fabricated.`
+  ]:[];
   return localized;
 }
 export async function buildCodexV3(args:{
