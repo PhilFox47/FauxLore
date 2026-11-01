@@ -43,6 +43,7 @@ export interface AiConfig {
   baseUrl?: string;
   nanoApiKey?: string;
   cliProxyCodexModel?: string;
+  cliProxyCodexPipeline?: "v2" | "legacy";
 }
 
 export type AiTier = "analytical" | "creative";
@@ -68,6 +69,7 @@ export function getAiConfig(db: Db, userId: string): AiConfig | null {
       model, creativeModel: sys.cliProxyCreativeModel || model,
       webModel: nanoWebModel, nanoApiKey, provider, searchProvider,
       cliProxyCodexModel: sys.cliProxyCodexModel || model,
+      cliProxyCodexPipeline: sys.cliProxyCodexPipeline === 'legacy' ? 'legacy' : 'v2',
     };
   }
   if (!nanoApiKey) return null;
