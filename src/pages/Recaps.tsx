@@ -29,6 +29,7 @@ import {
 } from '../components/RecapCharts';
 import { AwardsShelf, LookAhead, RecapDek, RecapNarrative, readRecap } from '../components/RecapStory';
 import { generateStructuredRecap } from '../services/recapAi';
+import { DatabaseService } from '../services/db';
 import { groupLogsIntoSessions } from '../lib/sessions';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, AreaChart, Area, Legend } from 'recharts';
 import { creativeModel } from '../lib/aiModels';
@@ -576,7 +577,20 @@ export function Recaps() {
             ? ' [CAUGHT UP — they finished everything released so far and are waiting on the next update]'
             : ' [ON HOLD, parked waiting on the next release]';
 
+      // Media identity enriches the Spotify-Wrapped commentary, but cannot
+      // substitute for the user's activity, ratings, journal notes or choices.
+      const wrappedIds = activeMedia
+        .filter(m => mediaRanking.slice(0, 8).some(r => r.title === m.title && r.type === m.mediaType))
+        .map(m => m.id).slice(0, 8);
+      const wrappedKnowledge = await DatabaseService.getCodexPromptBlocks(wrappedIds, 'wrapped');
+      const wrappedContext = Object.entries(wrappedKnowledge).map(([id, context]) => {
+        const m = activeMedia.find(row => row.id === id);
+        return m ? `- ${m.title}: ${context}` : '';
+      }).filter(Boolean).join('\n');
+
       const promptContext = `
+MEDIA KNOWLEDGE (only work identity and context, NEVER evidence the user experienced particular events):
+${wrappedContext || 'No stored Codex context for the active titles.'}
 Timeframe: ${timeframe} (${formatIntervalLabel()})
 Is First Ever Recap?: ${isFirstRecap ? "YES. Welcome the user to their first recap!" : "NO"}
 Mayor Gaps in Logging: ${maxGapDays >= 3 ? `Yes, max gap of ${Math.round(maxGapDays)} days without playing/reading.` : "No major gaps. Consistent!"}
