@@ -2,6 +2,8 @@ import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { codexPromptBlock, type CodexRow } from "../services/codex";
 import { getAiConfig } from "../lib/ai";
+import { codexTaskContext } from "../services/codexV3Context";
+import { V3_PHASES } from "../services/codexV3Prompts";
 
 /**
  * Codex endpoints.
@@ -19,14 +21,17 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
   // rendered prompt block ships with it and only one formatter ever exists.
   const withPromptBlock = (row: CodexRow | null) => {
     if (!row) return null;
-    const stage: any = db.prepare(
+    const v3: any = db.prepare(
+      "SELECT state FROM codex_v3_runs WHERE codexId=? AND userId=?"
+    ).get(row.id,row.userId);
+    const stage: any = v3 || db.prepare(
       "SELECT state FROM codex_v2_runs WHERE codexId = ? AND userId = ?"
     ).get(row.id, row.userId);
     let researchProgress: { completed: string[]; current: string; total: number } | undefined;
     if (stage?.state) {
       try {
         const stored = JSON.parse(stage.state);
-        const phases = ["identity","narrative","entities","audience","verification","compilation"];
+        const phases: readonly string[] = v3 ? V3_PHASES : ["identity","narrative","entities","audience","verification","compilation"];
         const completed = phases.filter(p => !!stored[p]);
         researchProgress = {
           completed,
@@ -129,11 +134,12 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
       const ids: string[] = Array.isArray(req.body?.mediaIds)
         ? req.body.mediaIds.filter((v: any) => typeof v === "string").slice(0, 8)
         : [];
+      const task = req.body?.task === "wrapped" ? "wrapped" : null;
       const out: Record<string, string> = {};
       for (const mediaId of ids) {
         const row = codex.getCodexRow(userId as string, { mediaId });
         if (row?.status === "ready" && row.data) {
-          const block = codexPromptBlock(row);
+          const block = task ? codexTaskContext(db,row,task) : codexPromptBlock(row);
           if (block) out[mediaId] = block;
         }
       }
