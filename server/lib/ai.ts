@@ -41,6 +41,7 @@ export interface AiConfig {
   backend: "nanoGpt" | "cliProxy";
   baseUrl?: string;
   nanoApiKey?: string;
+  cliProxyCodexModel?: string;
 }
 
 export type AiTier = "analytical" | "creative";
@@ -65,6 +66,7 @@ export function getAiConfig(db: Db, userId: string): AiConfig | null {
       backend: "cliProxy", apiKey, baseUrl: cliProxyBaseUrl(sys.cliProxyBaseUrl),
       model, creativeModel: sys.cliProxyCreativeModel || model,
       webModel: nanoWebModel, nanoApiKey, provider, searchProvider,
+      cliProxyCodexModel: sys.cliProxyCodexModel || model,
     };
   }
   if (!nanoApiKey) return null;
