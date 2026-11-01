@@ -1367,7 +1367,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                           <option value="legacy">Legacy: Single full-dossier search + optional top-up</option>
                         </select>
                         <p className="text-[10px] text-zinc-500 mt-1">
-                          V2 runs up to five targeted web-search phases plus one non-search compilation.
+                          V2 runs four targeted web-search phases, a short no-search plausibility review, and a non-search compilation.
                           Successful phases are checkpointed in SQLite, so a failed run can resume when retried.
                           Legacy stays available for comparisons and faster generations.
                         </p>
