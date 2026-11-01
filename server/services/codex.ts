@@ -1610,17 +1610,23 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
       /**
        * What the dossier says about its own sourcing.
        *
-       * Everything came out of the same searched pass, so every section is
-       * "searched". The per-section confidence is the model's own, which is
-       * worth more than one overall grade: it is where it admits which parts it
-       * could not find much on. There is no follow-up to merge in any more — a
-       * thin or empty section is left exactly as the single pass reported it,
-       * rather than spending a second search call trying to fix it.
+       * Section confidence begins with the model's assessment. Objective
+       * checks downgrade obvious weaknesses (e.g. bibliographic metadata
+       * disguised as a book's narrative structure). A single optional
+       * evidence-backed focused search may have added grounded material.
        */
       const sectionConfidence: CodexSectionConfidence = {
         identity: identity.confidence,
         ...(parsed.sectionConfidence && typeof parsed.sectionConfidence === "object" ? parsed.sectionConfidence : {}),
       };
+      // Model self-assessment is not enough. If the Codex literally reports
+      // only an edition's page count as narrative structure, mark craft weak.
+      if (subject.mediaType === "Book" && isGenericStructure(data.structure)) {
+        sectionConfidence.craft = "low";
+      }
+      if (identity.coverage === "abundant" && (data.flavorTexts || []).length < 3) {
+        sectionConfidence.lore = "low";
+      }
       const sectionSourcing: CodexSectionSourcing = {};
       for (const facet of FACETS) sectionSourcing[facet] = "searched";
 
@@ -1709,6 +1715,12 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
           : "",
         pressOnly && noMemories && !noRetrievalOnFinalAttempt
           ? "Every source here is official or press coverage, and no memories were found. Expanding may turn some up: the quotes and jokes live in community discussion rather than in an announcement."
+          : "",
+        subject.mediaType === "Book" && isGenericStructure(data.structure)
+          ? "Quality warning: publicly sourced information did not establish the narrative structure beyond format or bibliographic metadata. Do not treat the structure section as a description of the storytelling."
+          : "",
+        identity.coverage === "abundant" && (data.flavorTexts || []).length < 3
+          ? "Quality warning: too few distinct, independently recognizable memories for a well-documented work; review or expand this section."
           : "",
       ].filter(Boolean).join(" ") || undefined;
 
