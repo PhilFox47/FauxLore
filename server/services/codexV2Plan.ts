@@ -151,7 +151,9 @@ section ALWAYS flavorTexts; "fact" is the EXACT line, "kind" is quote,
 reference or joke, "topic" must identify an underlying subject.
 ${shape}`;
   const candidates = claims.map(c => ({ id:c.id, section:c.section,
-    name:c.name, fact:c.fact, sourceUrl:c.sourceUrl }));
+    name:c.name, fact:c.fact, sourceUrl:c.sourceUrl,
+    introducedAt:c.introducedAt, introducedPct:c.introducedPct,
+    details:c.details }));
   return `${subject.title} verify first appearance source evidence franchise canon contradictions
 ${prefix}
 INDEPENDENTLY VERIFY EACH CANDIDATE BY NEW WEB SEARCH, not merely by noticing
