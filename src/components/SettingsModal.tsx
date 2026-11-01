@@ -1368,9 +1368,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                           <option value="legacy">Legacy: Single full-dossier search + optional top-up</option>
                         </select>
                         <p className="text-[10px] text-zinc-500 mt-1">
-                          V2 runs four targeted web-search phases, a short no-search plausibility review, and a non-search compilation.
-                          Successful phases are checkpointed in SQLite, so a failed run can resume when retried.
-                          Legacy stays available for comparisons and faster generations.
+                          V3 inventories relevant content, researches core knowledge and specialized sections,
+                          and keeps a detailed SQLite knowledge base for enemies, loot, images, tags and Wrapped recaps.
+                          All completed stages are checkpointed. V2 and Legacy remain available for comparisons.
                         </p>
                       </div>
                       <div className="sm:col-span-2">
