@@ -2,11 +2,13 @@ import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose, type AiConfig } from "../lib/ai";
 import { cliProxyResearch, type CliProxyResearchResult } from "../lib/cliProxyResearch";
+import { memoryQuality, memoryTopicsOverlap, chooseCodexFollowUp, isGenericStructure,
+  verifiedResearchSource, distinctScene } from "./codexQuality";
 import { nextCallId, recordAiCallStart, recordAiCall, recordPayload } from "../lib/diagnostics";
 import { searchProviderById } from "../../src/lib/searchProviders";
 import {
   FACETS, FACET_FLOORS, TYPE_BRIEF,
-  buildDossierPrompt,
+  buildDossierPrompt, buildCodexFollowUpPrompt,
   subjectSeason, subjectYear,
   type CodexIdentity, type CodexSubject, type Facet,
 } from "./codexResearch";
@@ -144,6 +146,8 @@ export interface CodexFlavorText {
   attribution?: string;
   /** What makes it recognisable. Shown in the Codex, not in the library header. */
   why?: string;
+  /** Subject of a memory, for diversity across the work rather than across wording. */
+  topic?: string;
 }
 
 export type FlavorKind = "quote" | "reference" | "joke";
@@ -272,14 +276,14 @@ const OUTSIDE_THE_WORK = new RegExp(
     "steam page", "official (?:game )?description", "publisher", "promotional", "trailer",
     "interview", "creative director", "game director", "showcase", "summer game fest",
     "developer(?:s)?(?: said| statement| commentary)?", "dev(?:s)? said", "keynote",
-    "pre-?release coverage", "review(?:er|s)?", "ign\\b", "gamespot", "polygon", "kotaku", "eurogamer",
+    "pre-?release coverage", "review(?:er|s)?", "\\bign\\b", "gamespot", "polygon", "kotaku", "eurogamer",
   ].join("|"),
   "i",
 );
 
 export function normalizeFlavorTexts(
   value: any,
-  opts: { rejectPromptExamples?: boolean } = {},
+  opts: { rejectPromptExamples?: boolean; enforceDiversity?: boolean } = {},
 ): CodexFlavorText[] {
   if (!Array.isArray(value)) return [];
   const out: CodexFlavorText[] = [];
@@ -293,7 +297,14 @@ export function normalizeFlavorTexts(
    */
   let outside = 0;
 
-  for (const row of value) {
+  // Only freshly researched memories are re-ranked. Existing curated library
+  // entries keep their hand-selected order and aren't silently rewritten.
+  const candidates = opts.enforceDiversity
+    ? [...value].sort((a: any, b: any) =>
+        memoryQuality({ text: String(b?.text || b?.quote || b || ""), ...b }) -
+        memoryQuality({ text: String(a?.text || a?.quote || a || ""), ...a }))
+    : value;
+  for (const row of candidates) {
     const raw = typeof row === "string" ? row : row?.text ?? row?.quote;
     // Models like to hand back a quote already wrapped in the quotation marks the
     // UI is about to add around it.
@@ -355,7 +366,12 @@ export function normalizeFlavorTexts(
     // model having ignored the rule rather than information worth keeping.
     if (!isMedium && attribution && !/^(unknown|n\/?a|none)$/i.test(attribution)) entry.attribution = attribution;
     if (why && !/^(unknown|n\/?a|none)$/i.test(why)) entry.why = why;
-
+    const topic = String(row?.topic ?? "").trim();
+    if (topic && topic.length <= 80) entry.topic = topic;
+    if (opts.enforceDiversity && out.some(existing => memoryTopicsOverlap(existing, entry))) {
+      console.warn(`[codex] Dropped overlapping memory topic: "${text}" (${entry.topic || entry.why || "unspecified"})`);
+      continue;
+    }
     out.push(entry);
     if (out.length >= MAX_FLAVOR_TEXTS) break;
   }
@@ -365,6 +381,7 @@ export function normalizeFlavorTexts(
 /** What the research actually landed on, so a wrong match can be spotted. */
 export interface CodexIdentification {
   title?: string;
+  coverage?: "abundant" | "moderate" | "thin";
   year?: number | string;
   /** Which season the research settled on, for series entries. */
   season?: number | string;
@@ -1270,7 +1287,7 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
 
     try {
       /**
-       * ONE CALL. That is the whole procedure.
+       * One PRIMARY call. An optional focused CLIProxy follow-up is handled below.
        *
        * What used to be here: an identify call, six facets each researched and
        * then separately structured, a self-assessment deciding which of them
@@ -1320,24 +1337,12 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
       );
 
       /**
-       * ONE CALL. NO RETRY, NO FALLBACK, NO SECOND SEARCH — EVER.
-       *
-       * This used to retry once on an unusable reply or on measured
-       * no-retrieval, and separately ran one automatic follow-up call to fill
-       * gaps. Both are gone: every extra call is a second deep-search fee,
-       * which is the expensive part of this request, and doubling that cost on
-       * every occasional bad reply or thin section was worse than the problem
-       * it fixed. Linkup's single pass is good often enough that fixing its
-       * rare misses automatically was not worth doubling the running cost of
-       * every Codex to do it.
-       *
-       * A reply that cannot be used at all is now a hard failure: nothing is
-       * written, the previous dossier (if any) is kept exactly as it was, and
-       * a notification is recorded so it can be noticed and re-run by hand —
-       * see the `catch` block below. A reply that IS usable but leaves a
-       * section thin or short on memories is saved exactly as researched.
-       * "Missing some things" and "unusable" are different outcomes and only
-       * the second one is worth a person's attention.
+       * The primary dossier research is one complete, bounded call. We do not
+       * retry a failed primary call or silently fall back to a paid provider.
+       * After a VALID primary result, CLIProxyAPI may run at most one focused
+       * second native search to address an objectively thin subsection.
+       * That optional search cannot erase the valid primary dossier.
+       * NanoGPT retains the metered single-call path.
        */
       const useCliResearch = aiConfig.backend === "cliProxy";
       const primaryProvider = searchProviderById(aiConfig.searchProvider);
@@ -1493,6 +1498,93 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
         console.log(`[codex] Expansion added ${after - before} entr${after - before === 1 ? "y" : "ies"} to "${subject.title}" (${before} -> ${after}).`);
       }
 
+      // Quality gates happen after the main dossier (and any manual expansion)
+      // but before it is persisted. Only CLIProxyAPI can afford the bounded
+      // extra native search; NanoGPT's metered deep-search behavior stays intact.
+      data.flavorTexts = normalizeFlavorTexts(data.flavorTexts, {
+        rejectPromptExamples: true, enforceDiversity: true,
+      });
+      const focus = useCliResearch ? chooseCodexFollowUp({
+        mediaType: subject.mediaType,
+        coverage: String(parsed?.identifiedAs?.coverage || prior?.identifiedAs?.coverage || ""),
+        characters: data.characters,
+        signatureMoments: data.signatureMoments,
+        flavorTexts: data.flavorTexts,
+      }) : null;
+      if (focus && cliResearchResult) {
+        const model = aiConfig.cliProxyCodexModel || aiConfig.model;
+        const prompt = buildCodexFollowUpPrompt(subject, focus, summariseForExpansion(data));
+        const callId = nextCallId();
+        const startedAt = Date.now();
+        const shape = {
+          callId, model, scope: "codex" as const, tier: "analytical" as const,
+          webSearch: true, searchProvider: "codex-native", searchDepth: "focused",
+          stream: true, json: true, attempt: 2, promptChars: prompt.length, userId,
+        };
+        recordAiCallStart(shape);
+        recordPayload(callId, "codex", { prompt });
+        try {
+          const extra = await cliProxyResearch({
+            apiKey: aiConfig.apiKey, baseUrl: aiConfig.baseUrl, model,
+          }, prompt, 600_000);
+          if (!extra.searched || !extra.sources.length) {
+            throw new Error("Focused Codex search completed without native web-source receipts.");
+          }
+          const result: any = parseJsonLoose<any>(extra.text);
+          if (!result || typeof result !== "object") throw new Error("Focused Codex reply was not valid JSON.");
+          let accepted = 0;
+          if (focus === "memories") {
+            // Per-entry provenance must match actual search receipts. The topic
+            // limiter then removes different phrasings of the same fan joke.
+            const supported = (Array.isArray(result.flavorTexts) ? result.flavorTexts : [])
+              .filter((row: any) => verifiedResearchSource(row?.sourceUrl, extra.sources));
+            const before = data.flavorTexts || [];
+            const next = normalizeFlavorTexts([...before, ...supported], {
+              rejectPromptExamples: true, enforceDiversity: true,
+            });
+            accepted = Math.max(0, next.length - before.length);
+            data.flavorTexts = next;
+          } else {
+            const candidate = String(result.structure || "").trim();
+            if (isGenericStructure(data.structure) && !isGenericStructure(candidate) &&
+                candidate.length >= 55 &&
+                verifiedResearchSource(result.structureSourceUrl, extra.sources)) {
+              data.structure = candidate;
+              accepted++;
+            }
+            const newScenes = (Array.isArray(result.signatureMoments) ? result.signatureMoments : []);
+            const known = [...(data.signatureMoments || [])];
+            for (const row of newScenes) {
+              const scene = String(row?.text || "").trim();
+              if (verifiedResearchSource(row?.sourceUrl, extra.sources) && distinctScene(scene, known)) {
+                known.push(scene);
+                accepted++;
+              }
+            }
+            data.signatureMoments = known;
+            const distinctive = String(result.distinctive || "").trim();
+            if (String(data.distinctive || "").length < 90 && distinctive.length > 90 &&
+                verifiedResearchSource(result.distinctiveSourceUrl, extra.sources)) {
+              data.distinctive = distinctive;
+              accepted++;
+            }
+          }
+          cliResearchResult.sources = [...new Set([...cliResearchResult.sources, ...extra.sources])];
+          recordPayload(callId, "codex", { reply: extra.text });
+          recordAiCall({
+            ...shape, durationMs: Date.now() - startedAt, httpStatus: 200,
+            promptTokens: extra.promptTokens, completionTokens: extra.completionTokens,
+            finishReason: "stop",
+          });
+          console.log(`[codex] Focused ${focus} pass for "${subject.title}": ${accepted} grounded additions.`);
+        } catch (e: any) {
+          // The optional pass must not destroy a valid primary dossier.
+          const error = String(e?.message || e);
+          recordAiCall({ ...shape, durationMs: Date.now() - startedAt, error });
+          console.warn(`[codex] Optional focused ${focus} research for "${subject.title}" failed: ${error}`);
+        }
+      }
+
       const identity: CodexIdentity = {
         ...(parsed.identifiedAs && typeof parsed.identifiedAs === "object" ? parsed.identifiedAs : {}),
         sources: cliResearchResult
@@ -1507,17 +1599,23 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
       /**
        * What the dossier says about its own sourcing.
        *
-       * Everything came out of the same searched pass, so every section is
-       * "searched". The per-section confidence is the model's own, which is
-       * worth more than one overall grade: it is where it admits which parts it
-       * could not find much on. There is no follow-up to merge in any more — a
-       * thin or empty section is left exactly as the single pass reported it,
-       * rather than spending a second search call trying to fix it.
+       * Section confidence begins with the model's assessment. Objective
+       * checks downgrade obvious weaknesses (e.g. bibliographic metadata
+       * disguised as a book's narrative structure). A single optional
+       * evidence-backed focused search may have added grounded material.
        */
       const sectionConfidence: CodexSectionConfidence = {
         identity: identity.confidence,
         ...(parsed.sectionConfidence && typeof parsed.sectionConfidence === "object" ? parsed.sectionConfidence : {}),
       };
+      // Model self-assessment is not enough. If the Codex literally reports
+      // only an edition's page count as narrative structure, mark craft weak.
+      if (subject.mediaType === "Book" && isGenericStructure(data.structure)) {
+        sectionConfidence.craft = "low";
+      }
+      if (identity.coverage === "abundant" && (data.flavorTexts || []).length < 3) {
+        sectionConfidence.lore = "low";
+      }
       const sectionSourcing: CodexSectionSourcing = {};
       for (const facet of FACETS) sectionSourcing[facet] = "searched";
 
@@ -1525,7 +1623,9 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
       // rules are enforced here rather than left to the prompt's good manners.
       // The only place the prompt-example guard applies: this IS the model's
       // fresh output, so an example coming back is leakage rather than library.
-      if (data.flavorTexts) data.flavorTexts = normalizeFlavorTexts(data.flavorTexts, { rejectPromptExamples: true });
+      if (data.flavorTexts) data.flavorTexts = normalizeFlavorTexts(data.flavorTexts, {
+        rejectPromptExamples: true, enforceDiversity: true,
+      });
 
       data.identifiedAs = identity;
       data.sources = identity.sources || [];
@@ -1604,6 +1704,12 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
           : "",
         pressOnly && noMemories && !noRetrievalOnFinalAttempt
           ? "Every source here is official or press coverage, and no memories were found. Expanding may turn some up: the quotes and jokes live in community discussion rather than in an announcement."
+          : "",
+        subject.mediaType === "Book" && isGenericStructure(data.structure)
+          ? "Quality warning: publicly sourced information did not establish the narrative structure beyond format or bibliographic metadata. Do not treat the structure section as a description of the storytelling."
+          : "",
+        identity.coverage === "abundant" && (data.flavorTexts || []).length < 3
+          ? "Quality warning: too few distinct, independently recognizable memories for a well-documented work; review or expand this section."
           : "",
       ].filter(Boolean).join(" ") || undefined;
 

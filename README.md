@@ -157,3 +157,37 @@ that supports native Responses `web_search`. The build/CI cannot validate
 those external conditions. If your gateway version does not forward
 `web_search_call.action.sources`, update CLIProxyAPI and retest before
 loosening source-verification rules.
+
+### Codex editorial quality controls
+
+Codex generation now separates the main research from **at most one optional,
+focused follow-up** when using CLIProxyAPI's native search:
+
+- **Abundant, well-documented work with fewer than five distinct memories:**
+  a separate targeted search asks for distinct in-work quotations, signature
+  interactions and community memories. It must return per-entry source URLs
+  matching the gateway's actual web-search receipts. New memories are deduped
+  against the existing set by subject/topic, not just exact wording. A second
+  Mako joke is not more coverage of Mass Effect.
+- **A book with a shallow early dossier (few characters and plot beats):**
+  a targeted lookup seeks narrative structure and genuinely different verified
+  moments beyond the publisher's synopsis. Only evidence-backed, sufficiently
+  specific material may replace a bibliographic-only structure or supplement
+  scenes. A recent/obscure work with **thin** coverage does not get fabricated
+  memories just to fill a quota.
+- **NanoGPT mode remains single-pass** because each deep-search call is billed.
+  The optional follow-up never silently falls back to NanoGPT.
+- If that follow-up fails, the already valid main dossier is still saved; the
+  error is reported in diagnostics. There is at most one added call.
+- Quality warnings and section-confidence downgrades flag a book whose
+  narrative structure is still mere metadata, or a well-documented work whose
+  memories remain sparse. A list's raw length does not prove correctness.
+- Existing saved Codexes are **not** mutated on app startup. Regenerate or
+  explicitly expand a Codex to apply the new logic. Expanded entries remain
+  additive except that semantically duplicate researched memory lines are
+  pruned; the code does not rewrite previously researched plot events.
+
+Source receipts confirm that an URL appeared in a native search. They cannot,
+by themselves, confirm every factual claim on the page; editorial QA is
+best-effort and deliberately conservative. This change does not promise that
+an undocumented new novel will suddenly have detailed accessible canon.

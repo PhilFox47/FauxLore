@@ -1,5 +1,5 @@
 /**
- * How the Codex is researched: ONE call, with deep retrieval, for every title.
+ * Codex primary research: one complete dossier call per title. A bounded\n * optional CLIProxy follow-up may repair objectively weak sections.
  *
  * It was fifteen. An identify call, then per subject area a research call and a
  * separate structuring call, a pass that decided which of those searches could
@@ -392,7 +392,7 @@ Include the ordinary and the everyday, not only the legendary. A work's most mem
 
 That word is the brief. Not "notable quotations", not "trivia": a memory is a fragment that lands because the reader was there. Somebody who was not there reads it and shrugs, and that is fine — it was never for them.
 
-YOUR JOB HERE IS TO FIND THE MATERIAL, NOT TO POLISH IT. Gather what is actually there and write it down plainly; a later pass does the selecting and the phrasing. What that pass cannot do is invent what you failed to find, so err toward recording more.
+YOUR JOB HERE IS TO FIND DISTINCT, VERIFIABLE MATERIAL AND SELECT THE STRONGEST LINES. There is not an automatic general editing pass after this reply: output only final memories that work standalone. Do not invent a missing quote to satisfy a target count.
 
 THE ONE RULE THAT DECIDES MOST OF THIS: A "quote" IS WORDS FROM INSIDE THE WORK. Dialogue, text on screen, a sign, an interface string — something a person encounters while playing, watching or reading it. Nothing said ABOUT the work is a quote, however well phrased and whoever said it. A developer in an interview, a director at a showcase, a line from the store page, a press release, a review: none of those are quotes, because none of them are in the thing. Filing them as quotes is the commonest way this section goes wrong, and it produces a dossier that reads like a press kit for a work nobody has actually experienced.
 
@@ -406,7 +406,7 @@ WRITE THESE IN THE AUDIENCE'S WORDS, NOT THE CREATOR'S. A fact the creator has c
 
 WHAT THE FANDOM SAYS. The running gag, the affectionate complaint, the meme, the thing everyone who finished it brings up. Record the actual phrasing where there is one — a meme has a canonical wording and paraphrase destroys it. Where there is no fixed phrasing, describe the joke plainly and let the next pass write it.
 
-MEMES ARE THE STRONGEST SIGNAL. A meme is an inside joke that spread far enough to become a format, so if this work produced one it is almost certainly its best memory. Go looking first, not last. Record its exact wording, and say whether the words came from the work or from the fandom — that decides how it is filed later.
+MEMES ARE ONE SIGNAL, NOT THE GOAL. Seek a varied set of genuinely recognizable moments: memorable dialogue, specific gameplay or story experiences, emotional moments, in-world details and fandom jokes. Do not let a frequently repeated joke monopolize the set. At most ONE memory per underlying subject (for example, one vehicle, one villain or one running joke), regardless of wording. If you can find only two strong moments, return two.
 
 === WHERE TO FIND THEM ===
 
@@ -448,7 +448,7 @@ BUT ZERO IS ALMOST NEVER THE HONEST ANSWER FOR SOMETHING WITH AN AUDIENCE. A fla
 Avoid anything that only lands if you know the ending, and avoid the crude and the sexual — these get printed above a library page.`,
     nonFiction: `the lines are the real ones: the presenter's catchphrase, the format's stock phrase, the commentator's famous call, the running joke about the show that its viewers all share. Not the name of a segment, a rule or a trophy — what people actually say about it.`,
     keys: ["flavorTexts"],
-    shape: `{"flavorTexts": [{"text": "the line itself, complete and quotable on its own", "kind": "quote | reference | joke", "scope": "work | medium", "attribution": "who says it, or where it appears", "why": "at most eight words of context for an archivist — NOT an explanation of the line"}]}`,
+    shape: `{"flavorTexts": [{"text": "the line itself, complete and quotable on its own", "kind": "quote | reference | joke", "scope": "work | medium", "topic": "the concrete distinct underlying subject, e.g. name of a character or location", "attribution": "who says it, or where it appears", "why": "at most eight words of context for an archivist — NOT an explanation of the line"}]}`,
     structureNotes: `=== WHAT MAKES ONE GOOD ===
 
 These get printed alone, in italics, under the title of a library. One line, no context, nothing around it. So:
@@ -501,7 +501,7 @@ The reason for the ceiling is the way these are used: the app shows exactly ONE 
 
 So: nine only for something with a deep, well-documented well of quoted material — the kind of work whose fandom has been producing this stuff for years. Three to five is a completely normal result for most things. Stop as soon as the next candidate is weaker than the ones you have — that is the signal you are finished, not a problem to solve.
 
-TREAT FEWER THAN THREE AS A REASON TO LOOK AGAIN BEFORE YOU STOP, NOT AS A FINISHED ANSWER. Almost anything with a real audience has produced at least a catchphrase, a running joke or a piece of trivia somewhere — go back to the sources in "WHERE TO RESEARCH" above, particularly the audience half, before concluding there is nothing. If you still cannot find three after genuinely trying, hand back what you found. A second, automatic pass exists afterward specifically to look harder at whatever came back short — that is what it is for, and it is a far better use of another search than manufacturing the rest by hand.
+TREAT FEWER THAN THREE AS A REASON TO LOOK AGAIN BEFORE YOU STOP, NOT AS A FINISHED ANSWER. Almost anything with a real audience has produced at least a catchphrase, a running joke or a piece of trivia somewhere — go back to the sources in "WHERE TO RESEARCH" above, particularly the audience half, before concluding there is nothing. If you still cannot find three after genuinely trying, hand back what you found. A targeted follow-up MAY be triggered for well-documented works, but is not guaranteed. Never rely on a later pass or manufacture entries to fill a quota.
 
 NEVER PAD TO REACH THE FLOOR. Never assemble a line from facts because a slot is empty. A fabricated quote is the single worst thing this research can produce, because it will be shown to the user as a real line from something they finished — a short honest answer of one or two lines, or none at all, is always the right choice over an invented third one. The floor is a bar for how hard to look, never a bar for what to write down.
 
@@ -550,7 +550,7 @@ function depthRule(coverage?: string): string {
 
 BUT THIN COVERAGE IS NOT PERMISSION FOR AN EMPTY DOSSIER. Whatever the record says, this work still has a form: a medium, a format, a shape, a look, an audience. Describe all of that with confidence — it is not a claim about facts nobody has published, it is a description of the thing in front of you. The sections that must never come back empty for a work that visibly exists are the premise, the overview, the tone, the audience, the structure and the visual identity. What may legitimately be short is the cast list, the places, the objects and the memories, because those are the parts that need somebody to have written them down.`;
   }
-  return `- BREADTH IS THE POINT. The obvious headline entries are the easy part; the value is in the long tail. Aim well past a dozen entries where the work supports it, and include the minor, the regional and the everyday.`;
+  return `- Determine coverage from the sources you actually retrieved in this same request. For well-documented works pursue the long tail; for recent or obscure works prefer specific verified details over unsupported breadth. Do not invent entries to meet a numerical quota.`;
 }
 
 /**
@@ -799,7 +799,7 @@ THE RECORD, for what the work contains: its own wiki, Wikipedia, a fan wiki's ch
 
 THE AUDIENCE, for what the work is known BY: the subreddit and its most-upvoted threads, forum and Discourse posts, the comments under "best moments" videos, meme pages, the wiki's own quotes subpage, review threads on release day. This is where the memories come from and it is the half that keeps getting skipped.
 
-RUN A SEPARATE, LITERAL SEARCH FOR THIS HALF. Do not rely on a general query about the work to happen to surface a forum thread — it usually will not, because a wiki page and a press article both rank ahead of a Reddit thread for almost any ordinary phrasing. Search, in so many words, for "[the work's name] reddit", "[the work's name] reaction" and "r/[a guessed subreddit name] [the work's name]". If the first of those returns nothing, try the others before concluding the audience left no record — a launch-day thread from hours ago is exactly the kind of page a general query is likeliest to miss and a literal one is likeliest to find.
+RUN A DISTINCT, LITERAL WEB QUERY FOR THIS HALF, even inside a single research request. Do not rely on a general query about the work to happen to surface a forum thread — it usually will not, because a wiki page and a press article both rank ahead of a Reddit thread for almost any ordinary phrasing. Search, in so many words, for "[the work's name] reddit", "[the work's name] reaction" and "r/[a guessed subreddit name] [the work's name]". If the first of those returns nothing, try the others before concluding the audience left no record — a launch-day thread from hours ago is exactly the kind of page a general query is likeliest to miss and a literal one is likeliest to find.
 
 IF EVERY SOURCE YOU END UP WITH IS THE PUBLISHER'S OWN SITE, A PRESS RELEASE OR LAUNCH COVERAGE, YOU HAVE RESEARCHED THE ANNOUNCEMENT AND NOT THE WORK. That is a failed search, not a thin subject. A season of television that has actually aired has people arguing about it within hours — go and read them. A dossier sourced entirely to aboutamazon.co.uk and a press kit will describe what a show intends to be and nothing about what it turned out to be, and it will have no memories in it at all, because nobody quotes a press release.
 
@@ -837,4 +837,62 @@ ${combinedShape()}
 ${INTRODUCED}
 
 "coverage" is how much material actually exists about this work, AND IT DECIDES HOW MUCH THIS DOSSIER IS ASKED FOR, so judge it on what you actually found rather than on how obscure the title felt before you looked. "abundant" is the normal answer for anything with a dedicated wiki, a Wikipedia article of any length, reviews in the trade press, or an active community — that includes every mainstream film, game and television series. "moderate" is for something documented but lightly. Reserve "thin" for what it is really for: a small independent release, something very recent, a work with no wiki and almost nothing written about it. A flagship television series rated "thin" tells the rest of this brief to stop early, and the result is a short dossier about a work there was plenty to say about. "confidence" and each "sectionConfidence" entry rate how well-sourced that part genuinely is — be pessimistic, since a wrong "high" corrupts the record and a wrong "low" costs nothing.`;
+}
+
+/**
+ * The original all-in-one dossier prompt is enormous. The *optional* second
+ * native search is deliberately narrow, grounded, and selected by a deterministic
+ * gate rather than rerunning every facet or blindly padding sparse works.
+ */
+export function buildCodexFollowUpPrompt(
+  subject: CodexSubject,
+  focus: "memories" | "facts",
+  existingSummary: string,
+): string {
+  const identity = `"${subject.title}" (${subjectYear(subject) || "year not specified"}, ${subject.mediaType})`;
+  const scope = versionScope(subject);
+  const shared = `Research exactly ${identity}.${scope}
+The work has an existing Codex. Do NOT fabricate quotes, characters, events or sources.
+Prefer original-language and specialist pages when applicable; give only material clearly
+supported by pages found in this search. Preserve the distinction between the original
+work and any adaptation, sequel, remaster or other title. Avoid late-story spoilers.
+Do not repeat known entries:
+${existingSummary.slice(0, 4800)}`;
+  if (focus === "memories") {
+    return `"${subject.title}" (${subjectYear(subject) || ""}) fandom best quotes iconic moments reddit discussion
+
+${shared}
+
+RESEARCH GOAL: The existing memories are sparse or repetitive despite abundant coverage.
+Search specifically for quoted in-work lines and distinct audience discussions.
+Choose at most 6 short, meaningful memories from DIFFERENT subjects or situations:
+a line of dialogue, a memorable scene, a recurrent player experience, a distinctive
+character interaction, and one well-attested meme if there is one. A second joke
+about the same vehicle or mechanic is NOT a distinct memory. Do not write parody
+phrases invented for this request. No creator interview or promotional copy is a
+quote from the work. Provide a source URL for every candidate from this search,
+and label its topic; if not verifiable, omit. Fewer than three is acceptable.
+
+Return ONLY JSON:
+{"flavorTexts":[{"text":"","kind":"quote | joke | reference","scope":"work",
+"topic":"one concrete underlying subject","attribution":"","why":"","sourceUrl":""}]}`;
+  }
+  return `"${subject.title}" (${subjectYear(subject) || ""}) reviews reading sample narrative structure chapters scenes analysis
+
+${shared}
+
+RESEARCH GOAL: An earlier dossier was shallow and may simply repeat the blurb.
+Find concrete, corroborated details about HOW the story is told (pacing, chapters,
+shifts in viewpoint, narrative devices), what distinguishes its construction,
+and genuinely different recognizable beats beyond the publisher's synopsis.
+Prioritize text samples, thoughtful reviews and reader criticism. Do not claim
+to have read the whole book when only promotional material is accessible.
+Do not infer scene details, characters, items or twists from the genre. If the
+public record cannot support stronger specifics, leave the corresponding field
+EMPTY and return an empty list. Each proposed improvement MUST carry the exact
+URL to the source that supports it. Avoid ending spoilers and long quotations.
+
+Return ONLY JSON:
+{"structure":"","structureSourceUrl":"","distinctive":"","distinctiveSourceUrl":"",
+"signatureMoments":[{"text":"","sourceUrl":""}]}`;
 }
