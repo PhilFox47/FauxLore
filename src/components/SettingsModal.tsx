@@ -1363,7 +1363,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                           onChange={(e) => setFormData(prev => ({
                             ...prev, cliProxyCodexPipeline: e.target.value === 'legacy' ? 'legacy' : 'v2',
                           }))} className="input-field">
-                          <option value="v2">V2: Staged research + independent validation (recommended)</option>
+                          <option value="v2">V2: Staged research + quick plausibility check (recommended)</option>
                           <option value="legacy">Legacy: Single full-dossier search + optional top-up</option>
                         </select>
                         <p className="text-[10px] text-zinc-500 mt-1">
