@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { codexPromptBlock, type CodexRow } from "../services/codex";
+import { getAiConfig } from "../lib/ai";
 
 /**
  * Codex endpoints.
@@ -68,6 +69,9 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
       if (!media) return res.status(404).json({ error: "Media not found" });
       if (String(media.status || "").toLowerCase() === "unreleased") {
         return res.status(409).json({ error: "Unreleased works cannot be researched." });
+      }
+      if (!getAiConfig(db, userId)) {
+        return res.status(400).json({ error: "AI is not configured; check your provider and API key in Settings." });
       }
       void codex.ensureCodex(userId, {
         mediaId: req.params.id, title: media.title, mediaType: media.mediaType,
