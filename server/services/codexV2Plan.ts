@@ -53,11 +53,28 @@ export function narrowDossier(dossier: CodexData, claims: Claim[]): CodexData {
   };
   const clean: any = { ...dossier };
   for (const [section, field] of Object.entries(lists)) {
-    const allowed = new Set(claims.filter(c => c.section === section)
-      .map(c => (c.name || c.fact).trim().toLowerCase()));
+    const allowed = new Map(claims.filter(c => c.section === section)
+      .map(c => [(c.name || c.fact).trim().toLowerCase(), c] as const));
     clean[section] = (Array.isArray(clean[section]) ? clean[section] : [])
       .filter((item: any) => typeof item?.[field] === "string" &&
-        allowed.has(item[field].trim().toLowerCase()));
+        allowed.has(item[field].trim().toLowerCase()))
+      .map((item: any) => {
+        const claim = allowed.get(item[field].trim().toLowerCase())!;
+        const entry = { ...item };
+        // First-appearance metadata is safety-critical for spoiler controls.
+        // A compiler's guess is not evidence: only the researched claim may
+        // supply these fields, and zero is not a verified introduction.
+        delete entry.introducedAt;
+        delete entry.introducedPct;
+        if (claim.introducedAt && typeof claim.introducedAt === "string") {
+          entry.introducedAt = claim.introducedAt;
+        }
+        if (Number.isFinite(claim.introducedPct) &&
+            Number(claim.introducedPct) > 0 && Number(claim.introducedPct) <= 100) {
+          entry.introducedPct = claim.introducedPct;
+        }
+        return entry;
+      });
   }
   const moments = new Set(claims.filter(c => c.section === "signatureMoments").map(c => c.fact.trim().toLowerCase()));
   clean.signatureMoments = (Array.isArray(clean.signatureMoments) ? clean.signatureMoments : [])
