@@ -54,7 +54,8 @@ export function normalizeManifest(raw: unknown): ManifestTarget[] {
   const seen = new Set<string>();
   return input.flatMap((r): ManifestTarget[] => {
     if (!r || !AREAS.includes(r.area) || !value(r.name)) return [];
-    const name=stripNativeAnnotations(value(r.name));
+    const rawName=value(r.name);
+    const name=stripNativeAnnotations(rawName) || rawName;
     if (!name) return [];
     const key = `${r.area}:${normalizeKey(name)}`;
     if (seen.has(key)) return [];
@@ -106,7 +107,8 @@ export function normalizeEntries(raw: unknown, receipts: string[], prefix: strin
     const key=originalArea.toLowerCase().replace(/[_-]/g," ").trim();
     const area:KnowledgeArea=AREAS.includes(originalArea as KnowledgeArea)
       ? originalArea as KnowledgeArea : aliases[key] || "misc";
-    const name=stripNativeAnnotations(value(r.name || (area === "flavorTexts" ? r.text : "")));
+    const rawName=value(r.name || (area === "flavorTexts" ? r.text : ""));
+    const name=stripNativeAnnotations(rawName) || rawName;
     if (!name) continue;
     // Some model versions return craft details as a STRING and use "sources"
     // instead of "sourceUrls". Keep the researched prose and URLs.
