@@ -77,6 +77,6 @@ test("staged V2 resumes at failed stage, never repeats successful searches and f
     assert.deepEqual(result.data.signatureMoments,["The hero confronts an old foe"]);
     assert.equal(result.data.identifiedAs?.title,"Original Game");
     clearCodexV2Checkpoint(db,"codex-test","u1");
-    assert.equal(db.prepare("SELECT count(*) AS n FROM codex_v2_runs").get()?.n,0);
+    assert.equal((db.prepare("SELECT count(*) AS n FROM codex_v2_runs").get() as {n:number}).n,0);
   } finally {db.close();}
 });
