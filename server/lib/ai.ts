@@ -3,6 +3,7 @@ import { searchProviderById, searchProviderByProviderAndDepth } from "../../src/
 import { recordAiCall, recordAiCallStart, nextCallId, recordPayload } from "./diagnostics";
 import { longRequestDispatcher as dispatcher } from "./httpDispatcher";
 import { cliProxyBaseUrl } from "./cliProxy";
+import { cliProxyResearch } from "./cliProxyResearch";
 
 /**
  * Server-side text generation via NanoGPT's OpenAI-compatible endpoint.
@@ -334,11 +335,11 @@ async function postChat(
   opts: GenerateOptions,
   attempt = 1,
 ): Promise<string> {
-  const useNano = config.backend === "nanoGpt" || !!opts.webSearch;
-  if (opts.webSearch && !config.nanoApiKey) {
-    throw new Error("Codex deep search needs a NanoGPT API key even when CLIProxyAPI is selected.");
-  }
-  const model = resolveModel(config, !!opts.webSearch, opts.tier, opts.search);
+  const useNano = config.backend === "nanoGpt";
+  const nativeSearch = config.backend === "cliProxy" && !!opts.webSearch;
+  const model = nativeSearch
+    ? (opts.tier === "creative" ? config.creativeModel : config.model)
+    : resolveModel(config, !!opts.webSearch, opts.tier, opts.search);
   const promptChars = messages.reduce((n, m) => n + m.content.length, 0);
   const startedAt = Date.now();
   const callId = nextCallId();
@@ -350,9 +351,9 @@ async function postChat(
     scope: opts.scope,
     tier: opts.tier,
     webSearch: !!opts.webSearch,
-    searchDepth: opts.webSearch ? opts.search?.depth || "standard" : undefined,
-    searchProvider: opts.search?.provider,
-    searchBody: opts.webSearch ? opts.searchBody !== false && !!opts.search : undefined,
+    searchDepth: nativeSearch ? "native" : opts.webSearch ? opts.search?.depth || "standard" : undefined,
+    searchProvider: nativeSearch ? "codex-native" : opts.search?.provider,
+    searchBody: nativeSearch ? false : opts.webSearch ? opts.searchBody !== false && !!opts.search : undefined,
     json: !!opts.json,
     stream: !!opts.stream,
     attempt,
@@ -381,6 +382,37 @@ async function postChat(
    */
   const report = (extra: Partial<Parameters<typeof recordAiCall>[0]>) =>
     recordAiCall({ ...shape, durationMs: Date.now() - startedAt, ...extra });
+
+  // Searches are a different API surface, not a NanoGPT :online suffix. Route
+  // *every* explicitly online call to native search while CLIProxyAPI is active
+  // so image-prompt fallbacks cannot accidentally bill NanoGPT in the background.
+  if (nativeSearch) {
+    try {
+      const prompt = messages.map((m) => `[${m.role}]\n${m.content}`).join("\n\n");
+      const found = await cliProxyResearch({
+        apiKey: config.apiKey, baseUrl: config.baseUrl, model,
+      }, prompt, opts.timeoutMs ?? 600_000);
+      if (!found.searched || !found.sources.length) {
+        throw new Error("CLIProxyAPI returned no verifiable native web-search sources.");
+      }
+      recordPayload(callId, opts.scope, { reply: found.text });
+      report({
+        httpStatus: 200,
+        promptTokens: found.promptTokens,
+        completionTokens: found.completionTokens,
+        finishReason: "stop",
+      });
+      opts.onUsage?.({
+        promptTokens: found.promptTokens,
+        completionTokens: found.completionTokens,
+        finishReason: "stop",
+      });
+      return found.text;
+    } catch (e: any) {
+      report({ error: String(e?.message || e) });
+      throw e;
+    }
+  }
 
   let res: Response;
   try {
