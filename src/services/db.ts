@@ -465,13 +465,13 @@ export const DatabaseService = {
   },
 
   /** Rendered Codex text for entries that already have one. Never generates. */
-  async getCodexPromptBlocks(mediaIds: string[]): Promise<Record<string, string>> {
+  async getCodexPromptBlocks(mediaIds: string[], task?: "wrapped"): Promise<Record<string, string>> {
     try {
       if (!mediaIds.length) return {};
       const res = await apiFetch('/api/codex/prompt-blocks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mediaIds }),
+        body: JSON.stringify({ mediaIds, task }),
       });
       if (!res.ok) return {};
       return res.json();

@@ -3,6 +3,7 @@ import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose, type AiConfig } from "../lib/ai";
 import { cliProxyResearch, type CliProxyResearchResult } from "../lib/cliProxyResearch";
 import { compileCodexV2, clearCodexV2Checkpoint } from "./codexV2";
+import { buildCodexV3, persistCodexV3, type CodexV3Result } from "./codexV3";
 import { memoryQuality, memoryTopicsOverlap, chooseCodexFollowUp, isGenericStructure,
   verifiedResearchSource, distinctScene } from "./codexQuality";
 import { nextCallId, recordAiCallStart, recordAiCall, recordPayload } from "../lib/diagnostics";
@@ -1346,7 +1347,9 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
        * NanoGPT retains the metered single-call path.
        */
       const useCliResearch = aiConfig.backend === "cliProxy";
-      const useV2 = useCliResearch && aiConfig.cliProxyCodexPipeline !== "legacy";
+      const useV2 = useCliResearch && aiConfig.cliProxyCodexPipeline === "v2";
+      const useV3 = useCliResearch && aiConfig.cliProxyCodexPipeline === "v3";
+      let v3Result: CodexV3Result | null = null;
       const primaryProvider = searchProviderById(aiConfig.searchProvider);
       let cliResearchResult: CliProxyResearchResult | null = null;
       let lastUsage: { injectedTokens?: number } | null = null;
@@ -1423,7 +1426,11 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
 
       const finalSearchUsed = { provider: primaryProvider.provider, depth: primaryProvider.depth };
       let raw: string;
-      if (useV2) {
+      if (useV3) {
+        v3Result = await buildCodexV3({db, codexId:id, userId, config:aiConfig, subject, alreadyKnown});
+        raw = JSON.stringify(v3Result.data);
+        console.log(`[codex-v3] "${subject.title}" assembled from ${v3Result.researchedCount} detailed knowledge records.`);
+      } else if (useV2) {
         const staged = await compileCodexV2({
           db, codexId: id, userId, config: aiConfig, subject, alreadyKnown,
         });
@@ -1472,7 +1479,7 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
       // NanoGPT's "injectedTokens" measures retrieval; Responses has actual
       // web_search_call and source receipts instead, never use promptTokens as a proxy.
       const noRetrievalOnFinalAttempt = useCliResearch
-        ? !useV2 && !cliResearchResult?.searched
+        ? !useV2 && !useV3 && !cliResearchResult?.searched
         : !!lastUsage && (lastUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
 
       if (!parsed) {
@@ -1512,7 +1519,7 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
       data.flavorTexts = normalizeFlavorTexts(data.flavorTexts, {
         rejectPromptExamples: true, enforceDiversity: true,
       });
-      const focus = useCliResearch && !useV2 ? chooseCodexFollowUp({
+      const focus = useCliResearch && !useV2 && !useV3 ? chooseCodexFollowUp({
         mediaType: subject.mediaType,
         coverage: String(parsed?.identifiedAs?.coverage || prior?.identifiedAs?.coverage || ""),
         characters: data.characters,
@@ -1758,10 +1765,18 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
         console.log(`[codex] "${subject.title}" is light on ${thin.map((g) => `${g.key} ${g.have}/${g.want}`).join(", ")}.`);
       }
 
-      db.prepare(
-        `UPDATE media_codex SET data = ?, status = 'ready', error = NULL, model = ?, mediaId = COALESCE(mediaId, ?), updatedAt = ? WHERE id = ?`,
-      ).run(JSON.stringify(data), useCliResearch ? (aiConfig.cliProxyCodexModel || aiConfig.model) : aiConfig.webModel,
-        subject.mediaId || null, new Date().toISOString(), id);
+      // Publish the dossier and the extended knowledge atomically. A failed
+      // generator never publishes half-researched material. Switching to
+      // V2/Legacy also clears stale V3 knowledge, so consumers never read
+      // an old world under a new dossier.
+      db.transaction(() => {
+        db.prepare(
+          `UPDATE media_codex SET data = ?, status = 'ready', error = NULL, model = ?, mediaId = COALESCE(mediaId, ?), updatedAt = ? WHERE id = ?`,
+        ).run(JSON.stringify(data), useCliResearch ? (aiConfig.cliProxyCodexModel || aiConfig.model) : aiConfig.webModel,
+          subject.mediaId || null, new Date().toISOString(), id);
+        if (useV3 && v3Result) persistCodexV3(db,id,userId,v3Result.knowledge);
+        else db.prepare("DELETE FROM codex_knowledge WHERE codexId=? AND userId=?").run(id,userId);
+      })();
       if (useV2) clearCodexV2Checkpoint(db, id, userId);
       console.log(`[codex] Saved the Codex for "${subject.title}" (confidence: ${data.confidence}).`);
     } catch (e: any) {

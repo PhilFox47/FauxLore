@@ -232,3 +232,43 @@ To compare pipelines, regenerate the **same exact edition** in V2 and Legacy
 attribution, factual contamination from other franchise entries, specificity,
 memories and total runtime. The staged method does not justify filling a new
 book's missing memories with invented quotations.
+
+
+### Codex V3: durable knowledge base, tags and Wrapped context
+
+With CLIProxyAPI selected, choose **V3: Coverage-driven knowledge base**
+in System & Keys. Its dedicated Codex research model (e.g. gpt-6.1-sol) is
+independent of the Terra text/creative models. V2 and Legacy remain selectable.
+Existing dossiers are not automatically regenerated or overwritten on upgrade.
+
+V3 builds a named **Coverage Manifest** (important characters, locations,
+objects and events), then searches core identity, cast and relationships,
+world/items/technology, story events, visual/cultural design and fandom.
+An optional targeted repair addresses missing essential/important inventory
+targets. A short, no-web plausibility review can reject obvious wrong-work
+facts with reasons. It does not force every claim through a second web search.
+Unknown/uncertain source URLs remain attached with provenance; they do NOT
+delete an important researched item.
+
+Intermediate work is durable in SQLite table codex_v3_runs; completed stages
+resume on retry after a failure. Once finished, the full relationship-rich
+knowledge base is saved atomically to codex_knowledge alongside the existing
+CodexData projection in media_codex. No expensive final model rewrite. The
+user-facing CodexData, enemies, loot, images and existing clients stay compatible.
+
+The task-specific context builder selects the always-relevant core plus
+specialized knowledge for Enemy Forge, Loot Forge, images and Auto Tag.
+Classification is based on Codex themes/genres/tags but is mapped into the
+EXISTING FauxLore taxonomy by autoTag.ts; a research model does not create
+arbitrary library tags. For Spotify-Wrapped-like Recaps, the app retrieves
+only general work identity/tone/genre information about active titles.
+Personal playtime, completion, ratings, journal and achievements are supplied
+strictly by FauxLore's user data, never inferred from the media Codex.
+Spoiler-specific event records are never sent to Wrapped.
+
+No stored content is truncated to fixed cast or memory counts. Task retrieval
+has a character budget to avoid flooding other model calls, but the complete
+knowledge persists for subsequent tasks. A comprehensive V3 run can take
+10-15 minutes or more, depending on the title and gateway. The current
+offline tests cover checkpoint recovery and data preservation; genuine Sol
+quality and usage still require real local gateway tests.

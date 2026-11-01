@@ -403,6 +403,14 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
             <div className="text-xs text-zinc-500">
               Current phase: <span className="text-amber-300">{({
                 identity: 'Identity & scope',
+                 discovery: 'Coverage inventory',
+                 core: 'General media knowledge',
+                 cast: 'Characters & relationships',
+                 world: 'World, locations & objects',
+                 story: 'Story events & narrative',
+                 craft: 'Visual style, sound & taxonomy',
+                 coverage: 'Targeted missing-knowledge search',
+                 review: 'Quick plausibility review',
                 narrative: 'Story & craft',
                 entities: 'Canonical entities',
                 audience: 'Audience & memories',

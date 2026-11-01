@@ -1,7 +1,8 @@
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
 import { AUTHENTICITY, SHARPNESS, rarityArt } from "../lib/artDirection";
-import { codexPromptBlock, type CodexService } from "./codex";
+import { type CodexService } from "./codex";
+import { codexTaskContext } from "./codexV3Context";
 
 /**
  * Loot generation — the item counterpart to services/worldBoss.ts.
@@ -132,7 +133,7 @@ export function createLootService({ db, codex }: { db: Db; codex: CodexService }
       title: mediaItem.title,
       mediaType: mediaItem.mediaType,
     });
-    const codexBlock = codexPromptBlock(codexRow);
+    const codexBlock = codexTaskContext(db,codexRow,"loot");
     const art = rarityArt(attrs.rarity);
     const artStyle = codexRow?.data?.artStyle?.summary;
 

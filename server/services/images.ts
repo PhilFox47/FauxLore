@@ -8,7 +8,8 @@ import { recordAiCallStart, recordAiCall, nextCallId, recordPayload } from "../l
 import { longRequestDispatcher } from "../lib/httpDispatcher";
 import { cliProxyBaseUrl, cliProxyImageSize, cliProxyImagePrompt } from "../lib/cliProxy";
 import { AUTHENTICITY, SHARPNESS, enemyTier, rarityArt } from "../lib/artDirection";
-import { codexArtStyleBlock, codexPromptBlock, type CodexService } from "./codex";
+import { codexArtStyleBlock, type CodexService } from "./codex";
+import { codexTaskContext } from "./codexV3Context";
 
 /**
  * Image-generation defaults, and how they differ by model family.
@@ -366,7 +367,7 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
     if (!aiConfig) return "";
 
     const codexRow = await codex.tryEnsureCodex(userId, { mediaId: boss.mediaId, title: mediaTitle, mediaType });
-    const codexBlock = codexPromptBlock(codexRow);
+    const codexBlock = codexTaskContext(db,codexRow,"image",boss.name);
     const styleBlock = codexArtStyleBlock(codexRow);
     const tier = enemyTier(boss.level || 1);
     const imageCfg = readImageConfig();
@@ -439,7 +440,7 @@ Return ONLY the final image prompt text, nothing else.`;
     if (!aiConfig) return "";
 
     const codexRow = await codex.tryEnsureCodex(userId, { mediaId: artifact.mediaId, title: mediaTitle, mediaType });
-    const codexBlock = codexPromptBlock(codexRow);
+    const codexBlock = codexTaskContext(db,codexRow,"image",artifact.name);
     const styleBlock = codexArtStyleBlock(codexRow);
     const art = rarityArt(artifact.rarity || "Common");
     const imageCfg = readImageConfig();

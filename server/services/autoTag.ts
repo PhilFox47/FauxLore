@@ -1,7 +1,8 @@
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
-import { codexPromptBlock, type CodexService } from "./codex";
+import { type CodexService } from "./codex";
+import { codexTaskContext } from "./codexV3Context";
 
 /**
  * Auto-tagging, on the server.
@@ -290,7 +291,7 @@ export function createAutoTagService({ db, codex }: { db: Db; codex: CodexServic
         title: media.title,
         mediaType: media.mediaType,
       });
-      const codexBlock = codexPromptBlock(codexRow);
+      const codexBlock = codexTaskContext(db,codexRow,"tags");
 
       const systemPrompt = `You are FauxLore's taxonomy system. You classify media using ONE controlled vocabulary shared by the user's whole library.
 

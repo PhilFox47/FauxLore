@@ -3,7 +3,8 @@ import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
 import { AUTHENTICITY, LEVEL_DESCRIPTIONS, SHARPNESS, enemyTier } from "../lib/artDirection";
 import { bossTarget, bossUnit } from "../lib/bossTargets";
-import { codexPromptBlock, type CodexService } from "./codex";
+import { type CodexService } from "./codex";
+import { codexTaskContext } from "./codexV3Context";
 
 export interface GeneratedEnemy {
   name: string;
@@ -63,7 +64,7 @@ export function createWorldBossService(
       title: mediaItem.title,
       mediaType: mediaItem.mediaType,
     });
-    const codexBlock = codexPromptBlock(codexRow);
+    const codexBlock = codexTaskContext(db,codexRow,"enemy");
     const tier = enemyTier(level);
 
     const past = previousEnemies(userId, mediaItem.id);

@@ -79,35 +79,44 @@ taxonomy.json       genre/tag seed data
 - Every AI call must be logged: `recordAiCallStart` / `recordAiCall` / `recordPayload` from `server/lib/diagnostics.ts`, with a paired `callId` and a meaningful `scope`. The Diagnostics panel and exports only show what is logged this way; a new AI code path without it is invisible when debugging.
 - Don't put API keys or secrets into logs or payloads; `diagnostics.ts` redacts known patterns, but don't rely on that.
 
-### The Codex (`server/services/codex.ts`, `codexResearch.ts`, `codexV2*.ts`)
 
-A Codex is a researched per-title dossier that grounds enemy, loot, image and
-tag generation. Its final `CodexData` schema is a compatibility contract.
+### The Codex (`server/services/codex.ts`, `codexV3*.ts`, `codexV2*.ts`)
 
-- **CLIProxyAPI V2** (default in selected provider) uses six checkpoints:
-  identity, narrative, entities, audience, short no-search plausibility review,
-  and final compilation without search. Each earlier phase requires actual native
-  Responses `web_search` receipts and stores the result in `codex_v2_runs`.
-- **Legacy** (selectable in Admin settings) preserves the older complete-dossier
-  search and optional focused top-up.
-- **NanoGPT** remains metered single-pass deep research. No automatic paid
-  fallback is permitted.
-- Verification only **rejects obviously wrong claim IDs with reasons**.
-  Unmentioned source-backed claims are retained; the final compiler cannot
-  silently drop accepted entities, dialogue memories or signature moments.
-- The Model slot `cliProxyCodexModel` is independent of creative/analytical
-  slots. Codex V2 can run on Sol, other generations on Terra.
-- A failure preserves the previous ready Codex and the completed V2 stage
-  checkpoints. Fingerprints invalidate stale research when the selected model,
-  title, edition, or prior-inventory changes.
-- UI research is launched asynchronously, and the Codex panel polls GET with
-  a phase-progress snapshot. Never make the browser await the entire V2
-  pipeline in one HTTP request.
-- Never invent an unreleased work's Codex, or add unsupported entries merely
-  to satisfy target list sizes. Sparse source coverage is legitimate.
-- New V2 tests run in `.github/workflows/cliproxy-provider.yml`. Full live
-  search quality must be checked separately using Mass Effect (2007) and a
-  recent sparse-coverage novel.
+A Codex is the researched truth about ONE work, used by many features. The
+legacy `CodexData` JSON schema stays compatible and is still displayed.
+
+- **CLIProxyAPI V3** is selected by the `cliProxyCodexPipeline` option. It
+  researches Identity, a named Coverage Manifest, general Core Knowledge, deep
+  Cast, World, Events, Craft/Classification, Audience/Memories, an optional
+  targeted inventory repair, and a quick no-web sanity check. No fixed count
+  quotas: target genuinely important named people/places/events instead.
+- Every completed phase survives in `codex_v3_runs` with a work/model
+  fingerprint. Do not lose expensive native-search work after a gateway failure.
+- `codex_knowledge` stores the COMPLETE normalized corpus, including sources,
+  uncertainty, relationships, optional story events, all memories, and
+  researched detail. It is saved atomically with `media_codex` after the entire
+  run. Failed refreshes retain the previous dossier and KB.
+- Missing per-claim source URLs are an uncertainty status, NOT grounds to
+  silently delete characters. The sanity check can blacklist only explicit,
+  reasoned obviously incorrect entries. Avoid hallucinations and sequel bleed.
+- A deterministic projection writes legacy `CodexData`. NEVER use a final
+  LLM to condense every fact or silently destroy researched entities.
+- `codexTaskContext` retrieves a compact ALWAYS-relevant core plus task-specific
+  sections. The complete DB is not trimmed by these per-call budgets.
+  Tasks: enemy, loot, image, tags, wrapped, story, memory.
+- **Auto Tag** must keep the library's existing shared taxonomy! The V3
+  genre/tag signals are research input only. Use `autoTag.ts` to classify.
+- **Wrapped Recaps** are real weekly/monthly/yearly *personal activity*
+  roundups. They may receive cultural/work context ONLY; the user's actual
+  logs, ratings, journaling and status provide all personal facts. Do not
+  inject spoiler-heavy events into Wrapped.
+- V2 and Legacy remain manually selectable. Existing choices must not change
+  silently on upgrade; NanoGPT keeps its own path without paid fallback.
+- User-visible Codex research runs asynchronously with phase progress; future
+  changes must not make the browser wait on a single long request.
+- Keep V3 regression tests in `.github/workflows/cliproxy-provider.yml`. A
+  green offline CI does not certify live Sol search quality. Test a large
+  game and an obscure recent book with Diagnostics before judging output.
 
 ### Metadata imports
 

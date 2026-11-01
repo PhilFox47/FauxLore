@@ -500,6 +500,25 @@ export function runMigrations(db: Db) {
     CREATE INDEX IF NOT EXISTS idx_codex_v2_user ON codex_v2_runs(userId,updatedAt);
   `);
 
+  // Non-destructive V3 migration; existing V2/Legacy selections stay as-is.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS codex_v3_runs (
+      codexId TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      state TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS codex_knowledge (
+      codexId TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      data TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_codex_knowledge_user ON codex_knowledge(userId);
+  `);
+
   // Book metadata providers and exact Hardcover edition provenance.
   // These are additive for existing databases; fresh installs also run migrations.
   try { db.prepare("ALTER TABLE settings ADD COLUMN bookMetadataProviders TEXT").run(); } catch (e) {}
