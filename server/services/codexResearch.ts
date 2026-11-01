@@ -665,7 +665,7 @@ export function searchQueryLine(subject: CodexSubject, identity: CodexIdentity |
  * second copy keeps one source of truth, so a field added to `FACET_SPECS` turns
  * up here without anyone remembering to add it twice.
  */
-function combinedShape(): string {
+export function combinedShape(): string {
   const inner = FACETS.map((f) => {
     const s = FACET_SPECS[f].shape.trim();
     const body = s.replace(/^\{/, "").replace(/\}$/, "").trim().replace(/,$/, "");

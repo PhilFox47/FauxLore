@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { codexPromptBlock, type CodexRow } from "../services/codex";
+import { getAiConfig } from "../lib/ai";
 
 /**
  * Codex endpoints.
@@ -16,8 +17,26 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
 
   // Auto-tagging embeds the Codex in its own prompt from the browser, so the
   // rendered prompt block ships with it and only one formatter ever exists.
-  const withPromptBlock = (row: CodexRow | null) =>
-    row ? { ...row, promptBlock: codexPromptBlock(row) } : null;
+  const withPromptBlock = (row: CodexRow | null) => {
+    if (!row) return null;
+    const stage: any = db.prepare(
+      "SELECT state FROM codex_v2_runs WHERE codexId = ? AND userId = ?"
+    ).get(row.id, row.userId);
+    let researchProgress: { completed: string[]; current: string; total: number } | undefined;
+    if (stage?.state) {
+      try {
+        const stored = JSON.parse(stage.state);
+        const phases = ["identity","narrative","entities","audience","verification","compilation"];
+        const completed = phases.filter(p => !!stored[p]);
+        researchProgress = {
+          completed,
+          current: phases.find(p => !stored[p]) || "complete",
+          total: phases.length,
+        };
+      } catch {}
+    }
+    return { ...row, promptBlock: codexPromptBlock(row), researchProgress };
+  };
 
   app.get("/api/media/:id/codex", (req, res) => {
     try {
@@ -33,6 +52,33 @@ export function registerCodexRoutes(app: Express, ctx: ServerContext) {
     } catch (e: any) {
       // A deliberate refusal, not a failure: 409 so the UI can tell them apart.
       if (e?.notYetReleased) return res.status(409).json({ error: String(e.message), notYetReleased: true });
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
+
+  // Long staged research must outlive the initiating HTTP request. The browser
+  // polls the existing GET endpoint while the server carries on independently.
+  app.post("/api/media/:id/codex/start", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      if (!activity.requireActive(userId as string, res)) return;
+      const media: any = db.prepare(
+        "SELECT title, mediaType, status FROM media WHERE id = ? AND userId = ?"
+      ).get(req.params.id, userId);
+      if (!media) return res.status(404).json({ error: "Media not found" });
+      if (String(media.status || "").toLowerCase() === "unreleased") {
+        return res.status(409).json({ error: "Unreleased works cannot be researched." });
+      }
+      if (!getAiConfig(db, userId)) {
+        return res.status(400).json({ error: "AI is not configured; check your provider and API key in Settings." });
+      }
+      void codex.ensureCodex(userId, {
+        mediaId: req.params.id, title: media.title, mediaType: media.mediaType,
+        force: !!req.body?.force, expand: !!req.body?.expand,
+      }).catch(err => console.error("[codex] Background research failed:", err));
+      res.status(202).json({ started: true });
+    } catch (e: any) {
       res.status(500).json({ error: String(e?.message || e) });
     }
   });

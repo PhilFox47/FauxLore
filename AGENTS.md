@@ -79,13 +79,35 @@ taxonomy.json       genre/tag seed data
 - Every AI call must be logged: `recordAiCallStart` / `recordAiCall` / `recordPayload` from `server/lib/diagnostics.ts`, with a paired `callId` and a meaningful `scope`. The Diagnostics panel and exports only show what is logged this way; a new AI code path without it is invisible when debugging.
 - Don't put API keys or secrets into logs or payloads; `diagnostics.ts` redacts known patterns, but don't rely on that.
 
-### The Codex (`server/services/codex.ts`, `codexResearch.ts`)
+### The Codex (`server/services/codex.ts`, `codexResearch.ts`, `codexV2*.ts`)
 
-A Codex is a researched per-title dossier that grounds enemy, loot, image and tag generation.
+A Codex is a researched per-title dossier that grounds enemy, loot, image and
+tag generation. Its final `CodexData` schema is a compatibility contract.
 
-- **Exactly one deep-search call per Codex** (Linkup deep via NanoGPT `:online/linkup-deep`). No automatic retries, fallbacks or follow-up calls — each extra call doubles the running cost. A thin result is saved as-is; a completely unusable reply fails, keeps any previous Codex, and records a `codex_failed` notification so the user can re-run it manually.
-- Unreleased media never get a Codex.
-- The prompt must never invent facts; empty fields are valid output.
+- **CLIProxyAPI V2** (default in selected provider) uses six checkpoints:
+  identity, narrative, entities, audience, independent source review, and
+  final compilation without search. Each earlier phase requires actual native
+  Responses `web_search` receipts and stores the result in `codex_v2_runs`.
+- **Legacy** (selectable in Admin settings) preserves the older complete-dossier
+  search and optional focused top-up.
+- **NanoGPT** remains metered single-pass deep research. No automatic paid
+  fallback is permitted.
+- Verification approves **claim IDs**, not URL counts. Unknown and disputed
+  claims must fail closed; final compiled entity names and memory lines must
+  match independently approved evidence.
+- The Model slot `cliProxyCodexModel` is independent of creative/analytical
+  slots. Codex V2 can run on Sol, other generations on Terra.
+- A failure preserves the previous ready Codex and the completed V2 stage
+  checkpoints. Fingerprints invalidate stale research when the selected model,
+  title, edition, or prior-inventory changes.
+- UI research is launched asynchronously, and the Codex panel polls GET with
+  a phase-progress snapshot. Never make the browser await the entire V2
+  pipeline in one HTTP request.
+- Never invent an unreleased work's Codex, or add unsupported entries merely
+  to satisfy target list sizes. Sparse source coverage is legitimate.
+- New V2 tests run in `.github/workflows/cliproxy-provider.yml`. Full live
+  search quality must be checked separately using Mass Effect (2007) and a
+  recent sparse-coverage novel.
 
 ### Metadata imports
 

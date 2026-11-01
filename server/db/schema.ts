@@ -118,7 +118,8 @@ export function initSchema(db: Db) {
       cliProxyTextModel TEXT,
       cliProxyCreativeModel TEXT,
       cliProxyImageModel TEXT,
-      cliProxyCodexModel TEXT
+      cliProxyCodexModel TEXT,
+      cliProxyCodexPipeline TEXT DEFAULT 'v2'
     );
 
     CREATE TABLE IF NOT EXISTS global_taxonomy (
@@ -248,6 +249,16 @@ export function initSchema(db: Db) {
       UNIQUE(userId, titleKey)
     );
     CREATE INDEX IF NOT EXISTS idx_media_codex_media ON media_codex(userId, mediaId);
+    -- V2 stage checkpoints survive gateway errors and Docker restarts. Only
+    -- the final assembled dossier is published to media_codex.
+    CREATE TABLE IF NOT EXISTS codex_v2_runs (
+      codexId TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      state TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_codex_v2_user ON codex_v2_runs(userId, updatedAt);
 
     -- The lines that appear under a library title.
     --

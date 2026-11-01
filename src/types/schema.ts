@@ -392,6 +392,7 @@ export interface CodexData {
 }
 
 export interface MediaCodex {
+  researchProgress?: { completed: string[]; current: string; total: number; };
   id: string;
   userId: string;
   mediaId: string | null;
@@ -447,6 +448,7 @@ export interface Settings {
   cliProxyCreativeModel?: string;
   cliProxyImageModel?: string;
   cliProxyCodexModel?: string;
+  cliProxyCodexPipeline?: 'v2' | 'legacy';
   imageModel?: string;
   imageSize?: string;
   imageSteps?: number;

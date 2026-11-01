@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose, type AiConfig } from "../lib/ai";
 import { cliProxyResearch, type CliProxyResearchResult } from "../lib/cliProxyResearch";
+import { compileCodexV2, clearCodexV2Checkpoint } from "./codexV2";
 import { memoryQuality, memoryTopicsOverlap, chooseCodexFollowUp, isGenericStructure,
   verifiedResearchSource, distinctScene } from "./codexQuality";
 import { nextCallId, recordAiCallStart, recordAiCall, recordPayload } from "../lib/diagnostics";
@@ -1345,6 +1346,7 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
        * NanoGPT retains the metered single-call path.
        */
       const useCliResearch = aiConfig.backend === "cliProxy";
+      const useV2 = useCliResearch && aiConfig.cliProxyCodexPipeline !== "legacy";
       const primaryProvider = searchProviderById(aiConfig.searchProvider);
       let cliResearchResult: CliProxyResearchResult | null = null;
       let lastUsage: { injectedTokens?: number } | null = null;
@@ -1421,7 +1423,13 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
 
       const finalSearchUsed = { provider: primaryProvider.provider, depth: primaryProvider.depth };
       let raw: string;
-      if (useCliResearch) {
+      if (useV2) {
+        const staged = await compileCodexV2({
+          db, codexId: id, userId, config: aiConfig, subject, alreadyKnown,
+        });
+        raw = JSON.stringify(staged.data);
+        console.log(`[codex-v2] "${subject.title}" compiled from ${staged.verifiedCount} independently reviewed claims and ${staged.sources.length} sources.`);
+      } else if (useCliResearch) {
         const model = aiConfig.cliProxyCodexModel || aiConfig.model;
         const prompt = buildDossierPrompt(subject, null, alreadyKnown);
         const callId = nextCallId();
@@ -1464,7 +1472,7 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
       // NanoGPT's "injectedTokens" measures retrieval; Responses has actual
       // web_search_call and source receipts instead, never use promptTokens as a proxy.
       const noRetrievalOnFinalAttempt = useCliResearch
-        ? !cliResearchResult?.searched
+        ? !useV2 && !cliResearchResult?.searched
         : !!lastUsage && (lastUsage.injectedTokens ?? 0) < NO_RETRIEVAL_THRESHOLD;
 
       if (!parsed) {
@@ -1504,7 +1512,7 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
       data.flavorTexts = normalizeFlavorTexts(data.flavorTexts, {
         rejectPromptExamples: true, enforceDiversity: true,
       });
-      const focus = useCliResearch ? chooseCodexFollowUp({
+      const focus = useCliResearch && !useV2 ? chooseCodexFollowUp({
         mediaType: subject.mediaType,
         coverage: String(parsed?.identifiedAs?.coverage || prior?.identifiedAs?.coverage || ""),
         characters: data.characters,
@@ -1735,6 +1743,13 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
         : tally("high") >= grades.length / 2 ? "high"
         : "medium";
 
+      // A research editor's medium/low scope verdict must never be promoted
+      // to "high" by the final compiler's optimistic section self-ratings.
+      if (useV2 && identity.confidence && identity.confidence !== "high" &&
+          data.confidence === "high") {
+        data.confidence = identity.confidence;
+      }
+
       // Reported rather than acted on. A short list is what the sources
       // supported, and chasing it costs another call and another chance to lose
       // the dossier that already arrived.
@@ -1747,6 +1762,7 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
         `UPDATE media_codex SET data = ?, status = 'ready', error = NULL, model = ?, mediaId = COALESCE(mediaId, ?), updatedAt = ? WHERE id = ?`,
       ).run(JSON.stringify(data), useCliResearch ? (aiConfig.cliProxyCodexModel || aiConfig.model) : aiConfig.webModel,
         subject.mediaId || null, new Date().toISOString(), id);
+      if (useV2) clearCodexV2Checkpoint(db, id, userId);
       console.log(`[codex] Saved the Codex for "${subject.title}" (confidence: ${data.confidence}).`);
     } catch (e: any) {
       console.error(`Codex generation failed for "${subject.title}"`, e);

@@ -10,16 +10,6 @@ import { cn } from '../lib/utils';
 import { useToast } from '../contexts/ToastContext';
 
 /**
- * How many researched entries a dossier holds, so an expansion can say what it
- * actually added rather than just claiming success.
- */
-function countEntries(data?: CodexData | null): number {
-  if (!data) return 0;
-  const lists = ['characters', 'antagonists', 'locations', 'factions', 'items', 'terminology', 'flavorTexts'];
-  return lists.reduce((n, k) => n + (Array.isArray((data as any)[k]) ? (data as any)[k].length : 0), 0);
-}
-
-/**
  * The Codex: what the app has researched about a title.
  *
  * It is compiled automatically the first time auto-tagging, an enemy or a piece
@@ -281,10 +271,10 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
   // Another task (a boss spawn, an auto-tag) may be compiling this Codex right
   // now, so a 'generating' row is watched until it settles.
   useEffect(() => {
-    if (codex?.status !== 'generating') return;
+    if (!isCompiling && codex?.status !== 'generating') return;
     pollRef.current = setTimeout(() => { load(); }, 4000);
     return () => { if (pollRef.current) clearTimeout(pollRef.current); };
-  }, [codex, load]);
+  }, [isCompiling, codex, load]);
 
   /**
    * The three ways to research a title, which are genuinely different things.
@@ -298,23 +288,11 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
   const research = async (mode: 'compile' | 'expand' | 'redo') => {
     setIsCompiling(true);
     try {
-      const row = await DatabaseService.ensureCodex({
-        mediaId, title, mediaType,
-        force: mode === 'redo',
-        expand: mode === 'expand',
+      await DatabaseService.startCodex({
+        mediaId, force: mode === 'redo', expand: mode === 'expand',
       });
-      const added = mode === 'expand'
-        ? countEntries(row?.data) - countEntries(codex?.data)
-        : 0;
-      setCodex(row);
-      toast.success(
-        mode === 'redo' ? 'The Codex has been researched again from scratch.'
-          : mode === 'expand'
-            ? added > 0
-              ? `The Codex gained ${added} new entr${added === 1 ? 'y' : 'ies'}.`
-              : 'Nothing new turned up — the Codex is unchanged.'
-            : 'The Codex has been compiled.',
-      );
+      await load();
+      toast.success('Codex research started. Progress is shown below; you can leave this page.');
     } catch (e: any) {
       toast.error(e.message || 'Could not compile the Codex.');
       load();
@@ -410,10 +388,30 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
         </div>
       )}
 
-      {codex?.status === 'generating' && (
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-5 flex items-center gap-3 text-sm text-zinc-400">
-          <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
-          Researching “{codex.title}” — this takes a moment.
+      {(isCompiling || codex?.status === 'generating') && (
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-5 text-sm text-zinc-400 space-y-2">
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+            Researching “{codex?.title || title}”
+            {codex?.researchProgress && (
+              <span className="ml-auto text-xs text-zinc-500">
+                {codex.researchProgress.completed.length}/{codex.researchProgress.total} completed
+              </span>
+            )}
+          </div>
+          {codex?.researchProgress && (
+            <div className="text-xs text-zinc-500">
+              Current phase: <span className="text-amber-300">{({
+                identity: 'Identity & scope',
+                narrative: 'Story & craft',
+                entities: 'Canonical entities',
+                audience: 'Audience & memories',
+                verification: 'Independent fact-check',
+                compilation: 'Final compilation',
+                complete: 'Saving'
+              } as Record<string,string>)[codex.researchProgress.current] || codex.researchProgress.current}</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -430,6 +428,14 @@ export function MediaCodexPanel({ mediaId, title, mediaType, year, season, statu
           >
             {isCompiling ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />} Try again
           </button>
+        </div>
+      )}
+
+      {codex?.status === 'ready' && codex.error && !isBusy && (
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-200">
+          <div className="font-semibold mb-1">The latest research attempt failed. Your previous Codex is safe.</div>
+          <p className="text-xs text-amber-100/70 break-words">{codex.error}</p>
+          <p className="text-xs text-zinc-500 mt-1">Retrying with the same model and work resumes completed V2 phases.</p>
         </div>
       )}
 
