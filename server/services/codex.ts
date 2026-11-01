@@ -1287,7 +1287,7 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
 
     try {
       /**
-       * ONE CALL. That is the whole procedure.
+       * One PRIMARY call. An optional focused CLIProxy follow-up is handled below.
        *
        * What used to be here: an identify call, six facets each researched and
        * then separately structured, a self-assessment deciding which of them
@@ -1337,24 +1337,12 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
       );
 
       /**
-       * ONE CALL. NO RETRY, NO FALLBACK, NO SECOND SEARCH — EVER.
-       *
-       * This used to retry once on an unusable reply or on measured
-       * no-retrieval, and separately ran one automatic follow-up call to fill
-       * gaps. Both are gone: every extra call is a second deep-search fee,
-       * which is the expensive part of this request, and doubling that cost on
-       * every occasional bad reply or thin section was worse than the problem
-       * it fixed. Linkup's single pass is good often enough that fixing its
-       * rare misses automatically was not worth doubling the running cost of
-       * every Codex to do it.
-       *
-       * A reply that cannot be used at all is now a hard failure: nothing is
-       * written, the previous dossier (if any) is kept exactly as it was, and
-       * a notification is recorded so it can be noticed and re-run by hand —
-       * see the `catch` block below. A reply that IS usable but leaves a
-       * section thin or short on memories is saved exactly as researched.
-       * "Missing some things" and "unusable" are different outcomes and only
-       * the second one is worth a person's attention.
+       * The primary dossier research is one complete, bounded call. We do not
+       * retry a failed primary call or silently fall back to a paid provider.
+       * After a VALID primary result, CLIProxyAPI may run at most one focused
+       * second native search to address an objectively thin subsection.
+       * That optional search cannot erase the valid primary dossier.
+       * NanoGPT retains the metered single-call path.
        */
       const useCliResearch = aiConfig.backend === "cliProxy";
       const primaryProvider = searchProviderById(aiConfig.searchProvider);
