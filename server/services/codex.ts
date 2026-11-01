@@ -2,12 +2,13 @@ import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose, type AiConfig } from "../lib/ai";
 import { cliProxyResearch, type CliProxyResearchResult } from "../lib/cliProxyResearch";
-import { memoryQuality, memoryTopicsOverlap, chooseCodexFollowUp, isGenericStructure } from "./codexQuality";
+import { memoryQuality, memoryTopicsOverlap, chooseCodexFollowUp, isGenericStructure,
+  verifiedResearchSource, distinctScene } from "./codexQuality";
 import { nextCallId, recordAiCallStart, recordAiCall, recordPayload } from "../lib/diagnostics";
 import { searchProviderById } from "../../src/lib/searchProviders";
 import {
   FACETS, FACET_FLOORS, TYPE_BRIEF,
-  buildDossierPrompt,
+  buildDossierPrompt, buildCodexFollowUpPrompt,
   subjectSeason, subjectYear,
   type CodexIdentity, type CodexSubject, type Facet,
 } from "./codexResearch";
@@ -1508,6 +1509,93 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
         console.log(`[codex] Expansion added ${after - before} entr${after - before === 1 ? "y" : "ies"} to "${subject.title}" (${before} -> ${after}).`);
       }
 
+      // Quality gates happen after the main dossier (and any manual expansion)
+      // but before it is persisted. Only CLIProxyAPI can afford the bounded
+      // extra native search; NanoGPT's metered deep-search behavior stays intact.
+      data.flavorTexts = normalizeFlavorTexts(data.flavorTexts, {
+        rejectPromptExamples: true, enforceDiversity: true,
+      });
+      const focus = useCliResearch ? chooseCodexFollowUp({
+        mediaType: subject.mediaType,
+        coverage: String(parsed?.identifiedAs?.coverage || prior?.identifiedAs?.coverage || ""),
+        characters: data.characters,
+        signatureMoments: data.signatureMoments,
+        flavorTexts: data.flavorTexts,
+      }) : null;
+      if (focus && cliResearchResult) {
+        const model = aiConfig.cliProxyCodexModel || aiConfig.model;
+        const prompt = buildCodexFollowUpPrompt(subject, focus, summariseForExpansion(data));
+        const callId = nextCallId();
+        const startedAt = Date.now();
+        const shape = {
+          callId, model, scope: "codex" as const, tier: "analytical" as const,
+          webSearch: true, searchProvider: "codex-native", searchDepth: "focused",
+          stream: true, json: true, attempt: 2, promptChars: prompt.length, userId,
+        };
+        recordAiCallStart(shape);
+        recordPayload(callId, "codex", { prompt });
+        try {
+          const extra = await cliProxyResearch({
+            apiKey: aiConfig.apiKey, baseUrl: aiConfig.baseUrl, model,
+          }, prompt, 600_000);
+          if (!extra.searched || !extra.sources.length) {
+            throw new Error("Focused Codex search completed without native web-source receipts.");
+          }
+          const result: any = parseJsonLoose<any>(extra.text);
+          if (!result || typeof result !== "object") throw new Error("Focused Codex reply was not valid JSON.");
+          let accepted = 0;
+          if (focus === "memories") {
+            // Per-entry provenance must match actual search receipts. The topic
+            // limiter then removes different phrasings of the same fan joke.
+            const supported = (Array.isArray(result.flavorTexts) ? result.flavorTexts : [])
+              .filter((row: any) => verifiedResearchSource(row?.sourceUrl, extra.sources));
+            const before = data.flavorTexts || [];
+            const next = normalizeFlavorTexts([...before, ...supported], {
+              rejectPromptExamples: true, enforceDiversity: true,
+            });
+            accepted = Math.max(0, next.length - before.length);
+            data.flavorTexts = next;
+          } else {
+            const candidate = String(result.structure || "").trim();
+            if (isGenericStructure(data.structure) && !isGenericStructure(candidate) &&
+                candidate.length >= 55 &&
+                verifiedResearchSource(result.structureSourceUrl, extra.sources)) {
+              data.structure = candidate;
+              accepted++;
+            }
+            const newScenes = (Array.isArray(result.signatureMoments) ? result.signatureMoments : []);
+            const known = [...(data.signatureMoments || [])];
+            for (const row of newScenes) {
+              const scene = String(row?.text || "").trim();
+              if (verifiedResearchSource(row?.sourceUrl, extra.sources) && distinctScene(scene, known)) {
+                known.push(scene);
+                accepted++;
+              }
+            }
+            data.signatureMoments = known;
+            const distinctive = String(result.distinctive || "").trim();
+            if (String(data.distinctive || "").length < 90 && distinctive.length > 90 &&
+                verifiedResearchSource(result.distinctiveSourceUrl, extra.sources)) {
+              data.distinctive = distinctive;
+              accepted++;
+            }
+          }
+          cliResearchResult.sources = [...new Set([...cliResearchResult.sources, ...extra.sources])];
+          recordPayload(callId, "codex", { reply: extra.text });
+          recordAiCall({
+            ...shape, durationMs: Date.now() - startedAt, httpStatus: 200,
+            promptTokens: extra.promptTokens, completionTokens: extra.completionTokens,
+            finishReason: "stop",
+          });
+          console.log(`[codex] Focused ${focus} pass for "${subject.title}": ${accepted} grounded additions.`);
+        } catch (e: any) {
+          // The optional pass must not destroy a valid primary dossier.
+          const error = String(e?.message || e);
+          recordAiCall({ ...shape, durationMs: Date.now() - startedAt, error });
+          console.warn(`[codex] Optional focused ${focus} research for "${subject.title}" failed: ${error}`);
+        }
+      }
+
       const identity: CodexIdentity = {
         ...(parsed.identifiedAs && typeof parsed.identifiedAs === "object" ? parsed.identifiedAs : {}),
         sources: cliResearchResult
@@ -1540,7 +1628,9 @@ export function createCodexService({ db, onFlavorTexts, notify }: {
       // rules are enforced here rather than left to the prompt's good manners.
       // The only place the prompt-example guard applies: this IS the model's
       // fresh output, so an example coming back is leakage rather than library.
-      if (data.flavorTexts) data.flavorTexts = normalizeFlavorTexts(data.flavorTexts, { rejectPromptExamples: true });
+      if (data.flavorTexts) data.flavorTexts = normalizeFlavorTexts(data.flavorTexts, {
+        rejectPromptExamples: true, enforceDiversity: true,
+      });
 
       data.identifiedAs = identity;
       data.sources = identity.sources || [];
