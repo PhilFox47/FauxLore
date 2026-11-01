@@ -97,7 +97,21 @@ export async function compileCodexV2(args: {
           creator:state.identity?.output?.creator || subject.creator,
           type:state.identity?.output?.type || subject.mediaType,
           coverage:state.identity?.output?.coverage || "moderate",
+          // The independent reviewer, not the compiler, owns source confidence.
+          confidence: ["high","medium","low"].includes(state.verification?.output?.scopeConfidence)
+            ? state.verification?.output?.scopeConfidence : "medium",
         };
+        const sectionFields:Record<string,string[]>={
+          cast:["characters"],conflict:["antagonists","conflicts"],
+          world:["locations","factions","terminology","setting","worldRules"],
+          things:["items"],craft:["structure","distinctive","production","artStyle"],
+          lore:["flavorTexts"],
+        };
+        const grades:Record<string,string>={...output.sectionConfidence};
+        for (const [facet,fields] of Object.entries(sectionFields)) {
+          if (!selected.some(c => fields.includes(c.section))) grades[facet]="low";
+        }
+        output.sectionConfidence=grades;
         sources=[...new Set(selected.map(c=>c.sourceUrl))];
         output.sources=sources;
       } else {
