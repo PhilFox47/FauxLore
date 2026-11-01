@@ -18,4 +18,4 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - name: Verify gateway URL and image translation
-        run: node --import tsx --test server/lib/cliProxy.test.ts server/lib/cliProxyResearch.test.ts server/services/codexQuality.test.ts server/services/codexMemories.test.ts server/services/codexV2Plan.test.ts server/services/codexV2.test.ts server/services/codexV3Knowledge.test.ts server/services/codexV3.test.ts src/lib/codexDisplay.test.ts
+        run: node --import tsx --test server/lib/cliProxy.test.ts server/lib/cliProxyResearch.test.ts server/services/codexQuality.test.ts server/services/codexMemories.test.ts server/services/codexV2Plan.test.ts server/services/codexV2.test.ts server/services/codexV3Knowledge.test.ts server/services/codexV3Language.test.ts server/services/codexV3.test.ts src/lib/codexDisplay.test.ts

@@ -50,7 +50,7 @@ function FlavorTexts({ entries, mediaType }: { entries?: CodexFlavorText[]; medi
     <div className="space-y-2.5">
       {rows.map((t, i) => (
         <div key={i} className="border-l-2 border-white/10 pl-3">
-          <p className="text-sm text-zinc-300 italic leading-snug">"{t.text}"</p>
+          <p className="text-sm text-zinc-300 italic leading-snug">{t.kind === "quote" ? `“${t.text}”` : t.text}</p>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
             <span className="text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600">
               {KIND_LABEL[t.kind || 'quote'] || t.kind}

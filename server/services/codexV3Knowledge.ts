@@ -1,6 +1,7 @@
 
 import type { CodexData, CodexEntity, CodexFlavorText } from "./codex";
 import { verifiedResearchSource } from "./codexQuality";
+import { stripNativeAnnotations } from "./codexV3Language";
 
 export const V3_VERSION = 3;
 export type KnowledgeArea =
@@ -53,10 +54,13 @@ export function normalizeManifest(raw: unknown): ManifestTarget[] {
   const seen = new Set<string>();
   return input.flatMap((r): ManifestTarget[] => {
     if (!r || !AREAS.includes(r.area) || !value(r.name)) return [];
-    const key = `${r.area}:${normalizeKey(r.name)}`;
+    const rawName=value(r.name);
+    const name=stripNativeAnnotations(rawName) || rawName;
+    if (!name) return [];
+    const key = `${r.area}:${normalizeKey(name)}`;
     if (seen.has(key)) return [];
     seen.add(key);
-    return [{ name: value(r.name), area: r.area,
+    return [{ name, area: r.area,
       priority: normalizePriority(r.priority), reason: value(r.reason) || undefined }];
   });
 }
@@ -103,7 +107,8 @@ export function normalizeEntries(raw: unknown, receipts: string[], prefix: strin
     const key=originalArea.toLowerCase().replace(/[_-]/g," ").trim();
     const area:KnowledgeArea=AREAS.includes(originalArea as KnowledgeArea)
       ? originalArea as KnowledgeArea : aliases[key] || "misc";
-    const name=value(r.name || (area === "flavorTexts" ? r.text : ""));
+    const rawName=value(r.name || (area === "flavorTexts" ? r.text : ""));
+    const name=stripNativeAnnotations(rawName) || rawName;
     if (!name) continue;
     // Some model versions return craft details as a STRING and use "sources"
     // instead of "sourceUrls". Keep the researched prose and URLs.
@@ -118,7 +123,9 @@ export function normalizeEntries(raw: unknown, receipts: string[], prefix: strin
     const urls:string[]=rawUrls.filter((v: unknown):v is string=>
       typeof v==="string" && /^https?:\/\//i.test(v));
     const status=urls.some((u: string)=>verifiedResearchSource(u,receipts))?"verified":"uncertain";
-    const related:string[]=Array.isArray(r.relatesTo) ? r.relatesTo.filter((x: unknown):x is string=>typeof x==="string"&&!!x.trim()) : [];
+    const related:string[]=Array.isArray(r.relatesTo)
+      ? r.relatesTo.filter((x: unknown):x is string=>typeof x==="string"&&!!x.trim())
+        .map((x: string)=>stripNativeAnnotations(x)) : [];
     const details=cleanDetails(r.details);
     if(area==="misc" || area!==originalArea)details.originalArea=originalArea;
     const result:KnowledgeEntry={
