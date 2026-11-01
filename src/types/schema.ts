@@ -392,6 +392,7 @@ export interface CodexData {
 }
 
 export interface MediaCodex {
+  researchProgress?: { completed: string[]; current: string; total: number; };
   id: string;
   userId: string;
   mediaId: string | null;
