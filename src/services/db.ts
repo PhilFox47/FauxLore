@@ -330,6 +330,19 @@ export const DatabaseService = {
     return res.json();
   },
 
+  /** Start long-running staged research without holding the HTTP request open. */
+  async startCodex(subject: { mediaId: string; force?: boolean; expand?: boolean }): Promise<void> {
+    const res = await apiFetch(`/api/media/${encodeURIComponent(subject.mediaId)}/codex/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force: !!subject.force, expand: !!subject.expand }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to start Codex research');
+    }
+  },
+
   /**
    * Every line this user may see under a library title, keyed by media type:
    * the global starter set plus whatever their own Codexes have earned, with the
