@@ -446,6 +446,7 @@ export interface Settings {
   cliProxyTextModel?: string;
   cliProxyCreativeModel?: string;
   cliProxyImageModel?: string;
+  cliProxyCodexModel?: string;
   imageModel?: string;
   imageSize?: string;
   imageSteps?: number;
