@@ -748,6 +748,8 @@ IF THIS IS NOT FICTION — a reality or competition show, a documentary, a podca
 
 You are the Codex Archivist of FauxLore. Research ONE work thoroughly and return ONE complete reference dossier on it.
 
+LANGUAGE: Output all Codex prose, names (using official English names or Latin-letter romanizations), descriptors and Memories in ENGLISH. Authentic original German dialogue may remain in German for German-language works. Japanese and other foreign-language sites are fine as research sources, but do NOT copy non-Latin script into the JSON. For memories use a documented English-localized quote, otherwise describe the moment in English as kind="reference", never fabricate a verbatim translation. Retain genuine names and source URLs.
+
 THE WORK: "${title}"${year ? ` (${year})` : ""}${identity?.creator ? `, by ${identity.creator}` : ""} — ${TYPE_BRIEF[subject.mediaType] || `a ${subject.mediaType}`}.${
     aka.length ? `\nALSO KNOWN AS: ${aka.join(" · ")} — search under these too, especially the original-language title, where the detailed material usually is.` : ""
   }${subject.subtitle ? `\nSUBTITLE ON THE ENTRY: ${subject.subtitle}` : ""}${
@@ -853,6 +855,7 @@ export function buildCodexFollowUpPrompt(
   const scope = versionScope(subject);
   const shared = `Research exactly ${identity}.${scope}
 The work has an existing Codex. Do NOT fabricate quotes, characters, events or sources.
+Write all new content in ENGLISH, except authentic original German quotes for German-language works. Native Japanese script belongs only in source pages, not in the output. Use established romanized names. If no authoritative English quote translation exists, write an English reference rather than inventing one.
 Prefer original-language and specialist pages when applicable; give only material clearly
 supported by pages found in this search. Preserve the distinction between the original
 work and any adaptation, sequel, remaster or other title. Avoid late-story spoilers.
