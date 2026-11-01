@@ -100,7 +100,7 @@ export function verifiedResearchSource(url: unknown, searchSources: string[]): b
     try {
       const u = new URL(value);
       if (!["http:", "https:"].includes(u.protocol)) return "";
-      return `${u.hostname.toLowerCase()}${u.pathname.replace(/\\/+$/, "")}`;
+      return `${u.hostname.toLowerCase()}${u.pathname.replace(/\/+$/, "")}`;
     } catch { return ""; }
   };
   const candidate = canonical(url);
