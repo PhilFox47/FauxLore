@@ -5,7 +5,8 @@ import { verifiedResearchSource } from "./codexQuality";
 export const V3_VERSION = 3;
 export type KnowledgeArea =
   | "characters" | "antagonists" | "locations" | "factions"
-  | "items" | "terminology" | "events" | "flavorTexts";
+  | "items" | "terminology" | "events" | "flavorTexts"
+  | "craft" | "production" | "mechanics" | "content" | "misc";
 export type KnowledgeUse = "enemy" | "loot" | "image" | "wrapped" | "tags" | "story" | "memory";
 export interface ManifestTarget {
   name: string;
@@ -38,6 +39,7 @@ export interface CodexKnowledge {
 }
 export const AREAS: KnowledgeArea[] = [
   "characters","antagonists","locations","factions","items","terminology","events","flavorTexts",
+  "craft","production","mechanics","content","misc",
 ];
 const value = (v: unknown): string => typeof v === "string" ? v.trim() : "";
 export const normalizeKey = (v: unknown): string =>
@@ -88,18 +90,39 @@ export function normalizeEntries(raw: unknown, receipts: string[], prefix: strin
   const out: KnowledgeEntry[] = [];
   for (let i=0;i<raw.length;i++) {
     const r=raw[i];
-    if (!r || !AREAS.includes(r.area)) continue;
-    const name=value(r.name || (r.area === "flavorTexts" ? r.text : ""));
+    if (!r || typeof r !== "object") continue;
+    const originalArea=value(r.area);
+    if (!originalArea) continue;
+    const aliases:Record<string,KnowledgeArea>={
+      "creative techniques":"craft","creativetechniques":"craft",
+      "techniques":"craft","creative technique":"craft",
+      "gameplay":"mechanics","game mechanics":"mechanics",
+      "themes":"craft","art":"craft","reception":"production",
+      "content warnings":"content",
+    };
+    const key=originalArea.toLowerCase().replace(/[_-]/g," ").trim();
+    const area:KnowledgeArea=AREAS.includes(originalArea as KnowledgeArea)
+      ? originalArea as KnowledgeArea : aliases[key] || "misc";
+    const name=value(r.name || (area === "flavorTexts" ? r.text : ""));
     if (!name) continue;
-    const facts=(Array.isArray(r.facts) ? r.facts : [r.fact])
-      .filter((v: unknown)=>typeof v==="string" && !!v.trim())
-      .map((v: string)=>v.trim());
-    const urls:string[]=(Array.isArray(r.sourceUrls) ? r.sourceUrls : [r.sourceUrl])
-      .filter((v: unknown):v is string=>typeof v==="string" && /^https?:\/\//i.test(v));
+    // Some model versions return craft details as a STRING and use "sources"
+    // instead of "sourceUrls". Keep the researched prose and URLs.
+    const rawFacts=Array.isArray(r.facts) ? r.facts
+      : [r.facts,r.fact,r.description,typeof r.details==="string"?r.details:undefined];
+    const facts:string[]=rawFacts.filter((v:unknown):v is string=>
+      typeof v==="string" && !!v.trim()).map(v=>v.trim());
+    const rawUrls=[
+      ...(Array.isArray(r.sourceUrls)?r.sourceUrls:[r.sourceUrl]),
+      ...(Array.isArray(r.sources)?r.sources:[]),
+    ];
+    const urls:string[]=rawUrls.filter((v: unknown):v is string=>
+      typeof v==="string" && /^https?:\/\//i.test(v));
     const status=urls.some((u: string)=>verifiedResearchSource(u,receipts))?"verified":"uncertain";
     const related:string[]=Array.isArray(r.relatesTo) ? r.relatesTo.filter((x: unknown):x is string=>typeof x==="string"&&!!x.trim()) : [];
+    const details=cleanDetails(r.details);
+    if(area==="misc" || area!==originalArea)details.originalArea=originalArea;
     const result:KnowledgeEntry={
-      id:`${prefix}_${i}`,area:r.area,name,facts,details:cleanDetails(r.details),
+      id:`${prefix}_${i}`,area,name,facts,details,
       relatesTo:related,sourceUrls:[...new Set(urls)],sourceStatus:status,
       priority:normalizePriority(r.priority),
     };
@@ -145,7 +168,13 @@ export function excludeReviewedErrors(entries: KnowledgeEntry[], review: any): K
 
 function asEntity(entry:KnowledgeEntry): CodexEntity {
   const x:any={...entry.details,name:entry.name};
-  if(entry.facts.length)x.description=entry.facts.join(" ");
+  // Canonical CodexEntity expects aliases/members arrays. A descriptive
+  // sentence about membership is prose, not a roster of names.
+  if(typeof x.aliases==="string")x.aliases=[x.aliases];
+  const membersProse=typeof x.members==="string" ? x.members : "";
+  if(membersProse)delete x.members;
+  const prose=[...entry.facts, ...(membersProse?[membersProse]:[])];
+  if(prose.length)x.description=prose.join(" ");
   if(entry.introducedAt)x.introducedAt=entry.introducedAt;
   if(entry.introducedPct)x.introducedPct=entry.introducedPct;
   return x as CodexEntity;
