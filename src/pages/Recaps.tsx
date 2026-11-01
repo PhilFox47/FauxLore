@@ -437,20 +437,20 @@ export function Recaps() {
 
     // A paused account never auto-generates: the server would refuse it, and
     // the point of the freeze is not asking in the first place.
-    if (!isLoading && currentRecap === null && activeLogs.length > 0 && settings?.nanoGptApiKey && !isGenerating && isRecent && !activity?.frozen) {
+    if (!isLoading && currentRecap === null && activeLogs.length > 0 && (settings?.aiProvider === 'cliProxy' || settings?.nanoGptApiKey) && !isGenerating && isRecent && !activity?.frozen) {
       if (!attemptedGenRef.current.has(timeId)) {
         attemptedGenRef.current.add(timeId);
         setTimeout(() => handleGenerateAI(), 100);
       }
     }
-  }, [currentRecap, activeLogs.length, settings?.nanoGptApiKey, isGenerating, timeId, isLoading, offsetOffset, activity?.frozen]);
+  }, [currentRecap, activeLogs.length, settings?.nanoGptApiKey, settings?.aiProvider, isGenerating, timeId, isLoading, offsetOffset, activity?.frozen]);
 
   const handleGenerateAI = async () => {
     if (activity?.frozen) {
       toast.error(`Paused after ${activity.inactivityDays} days without a log. Log some progress and recaps resume.`);
       return;
     }
-    if (!settings?.nanoGptApiKey) {
+    if (settings?.aiProvider !== 'cliProxy' && !settings?.nanoGptApiKey) {
       toast.error("Please configure your Nano-GPT API Key in the Settings menu first.");
       return;
     }
@@ -648,7 +648,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
 `;
 
       const recap = await generateStructuredRecap({
-        apiKey: settings.nanoGptApiKey,
+        apiKey: settings.nanoGptApiKey || '',
         model: creativeModel(settings),
         persona: settings.aiPersona,
         timeframe,
