@@ -32,6 +32,8 @@ import { generateStructuredRecap } from '../services/recapAi';
 import type { StructuredRecap } from '../services/recapAi';
 import { generateRecapAchievements } from '../services/achievementAi';
 import { AchievementCard } from '../components/AchievementCard';
+import { AchievementReveal } from '../components/AchievementReveal';
+import type { AchievementDraft } from '../lib/generatedAchievements';
 import { DatabaseService } from '../services/db';
 import { groupLogsIntoSessions } from '../lib/sessions';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, AreaChart, Area, Legend } from 'recharts';
@@ -100,6 +102,7 @@ export function Recaps() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isForgingAchievement, setIsForgingAchievement] = useState(false);
   const [freshlyUnlocked, setFreshlyUnlocked] = useState<string | null>(null);
+  const [revealedAchievements, setRevealedAchievements] = useState<AchievementDraft[]>([]);
   const attemptedGenRef = useRef<Set<string>>(new Set());
 
   const validLogs = useMemo(() => logs.filter(log => !log.isHistoric && !log.timestamp.startsWith('1970-01-01')), [logs]);
@@ -432,6 +435,7 @@ export function Recaps() {
       await DatabaseService.saveGeneratedAchievements({ timeframe, timeId, generationId, achievements: drafts });
       await refreshAchievements();
       setFreshlyUnlocked(timeframe + ':' + timeId);
+      setRevealedAchievements(drafts);
     } finally {
       setIsForgingAchievement(false);
     }
@@ -2306,6 +2310,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
 
   return (
     <div className="flex flex-col h-full max-h-full overflow-hidden w-full bg-[#080809]">
+      <AchievementReveal achievements={revealedAchievements} onClose={() => setRevealedAchievements([])} />
       <div className="flex-shrink-0 p-4 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 bg-zinc-950/80 sticky top-0 z-10 backdrop-blur-xl">
         <div className="flex items-center gap-4">
           <div className={`p-2.5 rounded-xl ${theme.bg} border ${theme.border}`}>
