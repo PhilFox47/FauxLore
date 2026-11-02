@@ -34,11 +34,23 @@ function cleanDesign(value: any): any {
     mediaIds: ids,
   };
 }
+/** Artwork can be remote OR served by FauxLore's own cover cache.
+ * Cached library covers use /uploads/covers/<content-hash>.webp etc.
+ * Deliberately reject protocol-relative URLs, traversal and script schemes.
+ */
+export function isAllowedArtworkUrl(url: string): boolean {
+  if (/^https?:\/\/[^\s]+$/i.test(url)) return true;
+  if (!url.startsWith('/uploads/') || url.startsWith('//') || url.includes('\\')) return false;
+  if (!/^\/uploads\/[a-zA-Z0-9_./%-]+$/.test(url)) return false;
+  if (url.split('/').some(segment => segment === '.' || segment === '..' || /%2e|%2f|%5c/i.test(segment))) return false;
+  return true;
+}
+
 function cleanArtwork(value: any): any {
   if (!isObject(value) || !string(value.id, 120) || !string(value.title, 300) ||
     !string(value.type, 80)) throw new Error("Invalid Wrapped artwork");
   const url = string(value.cover, 1600);
-  if (url && !/^https?:\/\//i.test(url)) throw new Error("Invalid artwork URL");
+  if (url && !isAllowedArtworkUrl(url)) throw new Error("Invalid artwork URL");
   return { id: value.id.trim(), title: value.title.trim(), type: value.type.trim(),
     ...(url ? { cover: url } : {}) };
 }
@@ -62,6 +74,7 @@ export function validateStory(raw: any): any {
       scene.evidenceIds.some((v: any) => !string(v, 120))) throw new Error("Invalid scene evidence");
     const media = scene.media === undefined ? undefined : scene.media;
     if (media && (!isObject(media) || !string(media.id, 120) || !string(media.title, 300))) throw new Error("Invalid scene media");
+    if (media?.cover && !isAllowedArtworkUrl(media.cover)) throw new Error("Invalid scene media cover");
     const bars = scene.bars === undefined ? undefined : scene.bars;
     if (bars && (!Array.isArray(bars) || bars.length > 6 || bars.some((b: any) =>
       !isObject(b) || !string(b.label, 80) || !string(b.note, 120) ||

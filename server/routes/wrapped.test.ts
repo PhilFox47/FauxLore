@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateStory } from './wrapped';
+import { validateStory, isAllowedArtworkUrl } from './wrapped';
 
 const design = (layout: string, visual = 'none') => ({
   layout, palette: 'cobalt', visual, align: 'left', mediaIds: ['book'],
@@ -39,4 +39,22 @@ test('API rejects invalid layouts, arbitrary CSS and dangerous artwork schemes',
   const bad = story();
   (bad.scenes[1] as any).artworks[0].cover = 'javascript:alert(1)';
   assert.throws(() => validateStory(bad));
+});
+
+test('Local cached media cover paths are allowed, but unsafe URLs remain blocked', () => {
+  const hash = 'a'.repeat(40);
+  const cached = '/uploads/covers/' + hash + '.webp';
+  assert.equal(isAllowedArtworkUrl(cached), true);
+  assert.equal(isAllowedArtworkUrl('https://example.com/art.png'), true);
+  assert.equal(isAllowedArtworkUrl('http://example.com/art.jpg'), true);
+  for (const bad of ['javascript:alert(1)', 'data:image/svg+xml;base64,PHN2Zz4=', '//evil.example/a.jpg',
+    '/uploads/../admin', '/uploads/%2e%2e/admin', '/uploads/covers\\attack.jpg']) {
+    assert.equal(isAllowedArtworkUrl(bad), false, bad);
+  }
+  const withCached = story();
+  withCached.scenes[1].artworks[0].cover = cached;
+  (withCached.scenes[1] as any).media = { id: 'book', title: 'Night Train', cover: cached };
+  const saved = validateStory(withCached);
+  assert.equal(saved.scenes[1].artworks[0].cover, cached);
+  assert.equal(saved.scenes[1].media.cover, cached);
 });

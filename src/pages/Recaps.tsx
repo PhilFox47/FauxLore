@@ -2514,17 +2514,36 @@ ${wrappedContext || 'No background material.'}
                      <div className="space-y-6">
                        {wrapped && storyScenes.length > 0 ? (
                          <>
+                           {wrappedErrors[wrappedKey] && (
+                             <div role="alert" className="rounded-xl border border-rose-400/30 bg-rose-950/30 text-rose-200 px-4 py-3 text-sm">
+                               <strong>Wrapped was not replaced.</strong> {wrappedErrors[wrappedKey]}
+                               <p className="text-rose-200/70 mt-1">The earlier saved story is still shown. You can retry without losing it.</p>
+                             </div>
+                           )}
+                           {wrappedGeneratingKey === wrappedKey && (
+                             <p role="status" className="rounded-xl border border-violet-400/20 bg-violet-950/20 text-violet-200 text-sm px-4 py-3">
+                               Creating a new Wrapped. The previous saved version remains visible until the replacement is stored successfully.
+                             </p>
+                           )}
                            <StoryMode key={wrappedKey + ':' + (wrapped.generatedAt || '')}
                              scenes={storyScenes} timeframe={timeframe} timeId={timeId}
                              achievements={periodAchievements}
                              onDeepDive={() => setViewMode('deep')} />
-                           <div className="flex justify-center">
-                             <button onClick={() => void generateWrapped()}
-                               disabled={!!wrappedGeneratingKey || !canUseAi || !!activity?.frozen}
-                               className="px-5 py-3 flex items-center gap-2 rounded-xl border border-violet-400/20 text-violet-200 bg-violet-400/10 hover:bg-violet-400/20 disabled:opacity-40 text-sm font-bold">
-                               <RefreshCw className={'w-4 h-4 ' + (wrappedGeneratingKey === wrappedKey ? 'animate-spin' : '')} />
-                               {wrappedGeneratingKey === wrappedKey ? 'Directing a new Wrapped...' : 'Reroll the Wrapped story'}
-                             </button>
+                           <div className="flex flex-col items-center gap-3">
+                             <div className="flex flex-wrap justify-center items-center gap-3">
+                               <button onClick={() => void generateWrapped()}
+                                 disabled={!!wrappedGeneratingKey || !canUseAi || !!activity?.frozen}
+                                 className="px-5 py-3 flex items-center gap-2 rounded-xl border border-violet-400/20 text-violet-200 bg-violet-400/10 hover:bg-violet-400/20 disabled:opacity-40 text-sm font-bold">
+                                 <RefreshCw className={'w-4 h-4 ' + (wrappedGeneratingKey === wrappedKey ? 'animate-spin' : '')} />
+                                 {wrappedGeneratingKey === wrappedKey ? 'Directing a new Wrapped...' : 'Reroll the Wrapped story'}
+                               </button>
+                               {wrapped.generatedAt && (
+                                 <span className="text-xs text-zinc-500" title="Last successfully saved Wrapped">
+                                   Saved {new Date(wrapped.generatedAt.replace(' ', 'T') + (wrapped.generatedAt.includes('Z') ? '' : 'Z')).toLocaleString()}
+                                 </span>
+                               )}
+                             </div>
+
                            </div>
                          </>
                        ) : (
