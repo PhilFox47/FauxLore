@@ -1,5 +1,6 @@
 import { apiFetch } from './db';
 import { getPersonaDescription } from '../lib/personas';
+import { FAUXLORE_MECHANICS_CONTEXT } from '../lib/fauxLoreMechanics';
 
 /**
  * The written half of a recap.
@@ -149,6 +150,7 @@ export async function planRecapEditorial(args: {
 }): Promise<EditorialPlan> {
   const instructions = [
     "You are the ruthless editor of an opinionated personal media column. The reader LIVED these events. They know what happened. Find what it MEANS, or what is absurd about it.",
+    FAUXLORE_MECHANICS_CONTEXT,
     "Search the evidence for location-versus-media coincidences, changes of environment, contradictions between taste and behavior, journal opinions, neglected details, cross-media parallels, funny accidents and real patterns.",
     "Privately consider at least six possible angles. Reject obvious milestones, numerical recaps, easy jokes and themes already exhausted by earlier columns. Choose 2-4 genuinely distinct insights; allow just one if evidence is weak. A trivial detail with a brilliant interpretation beats a record with nothing to say.",
     "A single RED THREAD makes the issue cohere, but it must not force every chapter to discuss the same title. Each selected angle must have a different thesis or comic premise.",

@@ -39,10 +39,6 @@ import { GeneratedImage } from "../components/GeneratedImage";
 import { Loader2, Dices } from "lucide-react";
 import { creativeModel } from '../lib/aiModels';
 
-const FAUXLORE_CONTEXT = `\n\nCONTEXT ABOUT FAUXLORE:
-FauxLore is an RPG-themed media-tracking app where the user logs their time/pages/etc on Games, Books, Visual Novels, Manga, Series, Movies, Comics, and Audiobooks to earn "Master Pages" (XP) and level up.
-"Quests" in FauxLore are weekly, monthly, or daily consumption goals (e.g. "Read 200 pages" or "Play 10 hours").
-When generating text, DO NOT treat the user as a literal warrior fighting real monsters. Instead, playfully frame their normal media consumption habits using the chosen persona's style, acknowledging that they are interacting with media (reading, playing, watching).`;
 
 export function Lorekeeper() {
   const {
@@ -300,7 +296,7 @@ export function Lorekeeper() {
     setIsRegenerating(true);
     try {
       const personaDesc = getPersonaDescription(settings?.aiPersona);
-      const systemPrompt = `You are FauxLore's central AI logic core. ${personaDesc}${FAUXLORE_CONTEXT}`;
+      const systemPrompt = `You are FauxLore's central AI logic core. ${personaDesc}`;
 
       // 1. RPG Title (overall earned alias)
       const titleSystemPrompt = buildTitleSystemPrompt(personaDesc);
@@ -333,7 +329,7 @@ export function Lorekeeper() {
         if (generatedQuestTitles.length > 0) {
           existingTitlesRule = `\nCRITICAL RULE: Do NOT use titles similar to these already generated titles: ${generatedQuestTitles.map(d => '"' + d + '"').join(", ")}.`;
         }
-        const tPrompt = `Rewrite this Quest Title to sound natural, conversational and motivating. DON'T use RPG tropes like 'Saga', 'Undying', 'Eternal', 'Valor'. Keep it simple and human. Original: "${quest.title}".${existingTitlesRule} Give ONLY the title.`;
+        const tPrompt = `Rewrite this Quest Title in the SELECTED AI PERSONA voice, while preserving the actual goal it names. DON'T use RPG tropes like 'Saga', 'Undying', 'Eternal', 'Valor'. Keep it simple and human. Original: "${quest.title}".${existingTitlesRule} Give ONLY the title.`;
         let qTitleRes = "";
 
         // Description
@@ -342,7 +338,7 @@ export function Lorekeeper() {
         if (generatedQuestDescs.length > 0) {
           existingDescsRule = `\nCRITICAL RULE: Do NOT start with or use phrases similar to the already generated descriptions. Vary your sentence structure! Previously generated descriptions:\n${generatedQuestDescs.map(d => '- "' + d + '"').join("\n")}.`;
         }
-        const dPrompt = `Rewrite this Quest Description to sound natural and friendly, like a helpful friend encouraging you to read or play. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Limit the response to 1-2 short sentences. CRITICAL: You MUST explicitly include clear instructions on what needs to be done based on the original description! Example: 'Time to read some good books! Read at least 100 pages this week.'${existingDescsRule} Original: "${quest.description}". Give ONLY the description.`;
+        const dPrompt = `Rewrite this Quest Description in the SELECTED AI PERSONA voice while preserving the exact mechanical requirement. Be engaging and clear, but do not invent actions, agency or mechanics. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Limit the response to 1-2 short sentences. CRITICAL: You MUST explicitly include clear instructions on what needs to be done based on the original description! Example: 'Time to read some good books! Read at least 100 pages this week.'${existingDescsRule} Original: "${quest.description}". Give ONLY the description.`;
         let qDescRes = "";
 
         if (settings.aiProvider === 'cliProxy' || settings.nanoGptApiKey) {
@@ -1113,7 +1109,7 @@ function QuestCard({
       setIsGenerating(true);
       (async () => {
         try {
-          const systemPrompt = getPersonaDescription(settings?.aiPersona) + FAUXLORE_CONTEXT;
+          const systemPrompt = getPersonaDescription(settings?.aiPersona) ;
           
           let existingTitlesRule = "";
           let existingDescsRule = "";
@@ -1128,8 +1124,8 @@ function QuestCard({
             }
           }
 
-          const titlePrompt = `Rewrite this Quest Title to sound natural, conversational and motivating. DON'T use RPG tropes like 'Saga', 'Undying', 'Eternal', 'Valor'. Keep it simple and human. Original: "${quest.title}".${existingTitlesRule} Give ONLY the title.`;
-          const descPrompt = `Rewrite this Quest Description to sound natural and friendly, like a helpful friend encouraging you to read or play. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Limit the response to 1-2 short sentences. CRITICAL: You MUST explicitly include clear instructions on what needs to be done based on the original description! Example: 'Time to read some good books! Read at least 100 pages this week.'${existingDescsRule} Original: "${quest.description}". Give ONLY the description.`;
+          const titlePrompt = `Rewrite this Quest Title in the SELECTED AI PERSONA voice, while preserving the actual goal it names. DON'T use RPG tropes like 'Saga', 'Undying', 'Eternal', 'Valor'. Keep it simple and human. Original: "${quest.title}".${existingTitlesRule} Give ONLY the title.`;
+          const descPrompt = `Rewrite this Quest Description in the SELECTED AI PERSONA voice while preserving the exact mechanical requirement. Be engaging and clear, but do not invent actions, agency or mechanics. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Limit the response to 1-2 short sentences. CRITICAL: You MUST explicitly include clear instructions on what needs to be done based on the original description! Example: 'Time to read some good books! Read at least 100 pages this week.'${existingDescsRule} Original: "${quest.description}". Give ONLY the description.`;
 
           let qTitleRes = "";
           let qDescRes = "";
@@ -1188,7 +1184,7 @@ function QuestCard({
   const generateSpecificText = async (type: 'title' | 'desc') => {
     setIsGenerating(true);
     try {
-      const systemPrompt = getPersonaDescription(settings?.aiPersona) + FAUXLORE_CONTEXT;
+      const systemPrompt = getPersonaDescription(settings?.aiPersona) ;
       let existingRule = "";
       if (allQuests) {
         const skipList = allQuests.map(q => aiTextCache[`quest_${type}_${q.id}`]).filter(Boolean);
@@ -1199,8 +1195,8 @@ function QuestCard({
       }
       
       const prompt = type === 'title' 
-        ? `Rewrite this Quest Title to sound natural, conversational and motivating. DON'T use RPG tropes like 'Saga', 'Undying', 'Eternal', 'Valor'. Keep it simple and human. Original: "${quest.title}".${existingRule} Give ONLY the title.`
-        : `Rewrite this Quest Description to sound natural and friendly, like a helpful friend encouraging you to read or play. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Limit the response to 1-2 short sentences. CRITICAL: You MUST explicitly include clear instructions on what needs to be done based on the original description! Example: 'Time to read some good books! Read at least 100 pages this week.'${existingRule} Original: "${quest.description}". Give ONLY the description.`;
+        ? `Rewrite this Quest Title in the SELECTED AI PERSONA voice, while preserving the actual goal it names. DON'T use RPG tropes like 'Saga', 'Undying', 'Eternal', 'Valor'. Keep it simple and human. Original: "${quest.title}".${existingRule} Give ONLY the title.`
+        : `Rewrite this Quest Description in the SELECTED AI PERSONA voice while preserving the exact mechanical requirement. Be engaging and clear, but do not invent actions, agency or mechanics. Avoid flowery RPG language and descriptions of 'infinite glory' or 'transcendence'. Just keep it simple. Limit the response to 1-2 short sentences. CRITICAL: You MUST explicitly include clear instructions on what needs to be done based on the original description! Example: 'Time to read some good books! Read at least 100 pages this week.'${existingRule} Original: "${quest.description}". Give ONLY the description.`;
         
       let res = "";
       

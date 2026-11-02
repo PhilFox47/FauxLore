@@ -775,10 +775,10 @@ Largest log gap: ${Math.round(maxGapDays)} days
 LOREKEEPER LEVELING:
 Current Level: ${rpgStateAtEnd.level} (${finalClassName})
 Levels Gained this ${timeframe}: ${levelUps}
-Quests Completed this ${timeframe}: ${completedQuests.length > 0 ? completedQuests.map(q => `${q.title} - ${q.description}`).join(' | ') : 'None'}
+Quests Completed this ${timeframe} (algorithmic goals satisfied by logged activity; not proof of deliberately choosing the quest): ${completedQuests.length > 0 ? completedQuests.map(q => `${q.title} - ${q.description}`).join(' | ') : 'None'}
 Missed Quests: ${missedQuests.length > 0 ? missedQuests.map(q => `${q.title} - ${q.description} (${q.currentAmount}/${q.targetAmount})`).join(' | ') : 'None'}
 
-BOSSES DEFEATED:
+BOSSES DEFEATED (automatically completed progress targets linked to media; NOT player attacks, kills, or necessarily media completions):
 ${defeatedBosses.length > 0 ? defeatedBosses.map(b => `- ${b.name} (LV ${b.level})`).join('\n') : 'None'}
 
 Total Master Pages (EXP): ${Math.floor(totalMasterPages)} ${isNewPR ? '(personal record; mention only if editorially relevant)' : ''}
@@ -809,7 +809,7 @@ ${franchiseInsights ? [
 TOP RANKED MEDIA (By Engagement/Master Pages):
 ${mediaRanking.slice(0,5).map(m => `- ${m.title} (${Math.round(m.pages)} MP)`).join('\n')}
 
-GATHERED LOOT (Artifacts earned by finishing media!):
+CLAIMED ARTIFACTS (in-app equipment claimed at eligible media milestones; NOT real objects or necessarily enemy drops):
 ${gatheredLoot.length > 0 ? gatheredLoot.map(a => `- ${a.name} (${a.rarity}): ${a.description}`).join('\n') : 'None'}
 
 WHERE THEY WERE (locations, grouped into kinds of place by the user themselves — a group is their own judgement about which places belong together, so it says more than the raw names do):

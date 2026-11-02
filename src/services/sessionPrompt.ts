@@ -1,5 +1,6 @@
 import { apiFetch } from './db';
 import { analyticalModel } from '../lib/aiModels';
+import { FAUXLORE_SESSION_CONTEXT } from '../lib/fauxLoreMechanics';
 import type { MediaItem, ProgressLog, Settings, Status } from '../types/schema';
 
 type QuestionInput = {
@@ -46,7 +47,7 @@ export async function generateSessionQuestion(input: QuestionInput): Promise<str
       model: analyticalModel(settings), temperature: 0.7, max_tokens: 140,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: 'You are a witty, curious journaling companion. Ask exactly ONE short, specific, open-ended question about the just-logged media session. Make it easy to answer in one sentence. React to enjoyment, progress, and recent user reflections when available; ask about a contrast, emotion, detail or surprise. Do NOT invent events or plot points, assume how the user felt, ask a generic "What did you think?", or spoil unknown story content. Never mention numbers mechanically. Return JSON only: {"question":"..."}. Respond in English.' },
+        { role: 'system', content: FAUXLORE_SESSION_CONTEXT + '\n\nYou are a witty, curious journaling companion. Ask exactly ONE short, specific, open-ended question about the just-logged media session. Make it easy to answer in one sentence. React to enjoyment, progress, and recent user reflections when available; ask about a contrast, emotion, detail or surprise. Do NOT invent events or plot points, assume how the user felt, ask a generic "What did you think?", or spoil unknown story content. Never mention numbers mechanically. Return JSON only: {"question":"..."}. Respond in English.' },
         { role: 'user', content: JSON.stringify({
           media: input.item.title, type: input.item.mediaType,
           genres: (input.item.genres || []).slice(0, 4), durationOrProgress: input.delta,

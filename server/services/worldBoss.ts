@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
 import { getPersonaDescription } from "../../src/lib/personas";
+import { FAUXLORE_BOSS_ATTRIBUTION } from '../../src/lib/fauxLoreMechanics';
 import { AUTHENTICITY, LEVEL_DESCRIPTIONS, SHARPNESS, enemyTier } from "../lib/artDirection";
 import { bossTarget, bossUnit } from "../lib/bossTargets";
 import { type CodexService } from "./codex";
@@ -80,6 +81,9 @@ If this work genuinely has nothing left that fits Level ${level}, you may revisi
     const prompt = `You are the Enemy Forge of FauxLore. Your job is to conjure ONE opponent out of a piece of media the player is currently working through, and to make it feel like it genuinely stepped out of that world.
 
 THE SOURCE: "${mediaItem.title}" (${mediaItem.mediaType})
+
+${FAUXLORE_BOSS_ATTRIBUTION}
+This is an AI-selected themed progress challenge, not necessarily a source character already encountered by the player. Never assume the user has fought or killed this opponent in the media work.
 
 ${codexBlock || `(No Codex is on record for this title — rely on your own knowledge of it, and stay faithful to what you actually know.)`}
 
@@ -177,6 +181,7 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
     const prompt = `You are the Enemy Forge of FauxLore, writing the card for one opponent. Another archivist has already researched it and handed you this brief. Your only job is to make it read well.
 
 THE SOURCE: "${mediaItem.title}" (${mediaItem.mediaType})
+${FAUXLORE_BOSS_ATTRIBUTION}
 ${voice}
 ${narratorVoice ? "SELECTED NARRATOR PERSONA: " + narratorVoice : ""}
 

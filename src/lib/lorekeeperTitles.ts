@@ -9,10 +9,6 @@ import { calculateScaledDelta } from './scaling';
  * titles instead of generic ones.
  */
 
-export const FAUXLORE_CONTEXT = `\n\nCONTEXT ABOUT FAUXLORE:
-FauxLore is an RPG-themed media-tracking app where the user logs their time/pages/etc on Games, Books, Visual Novels, Manga, Series, Movies, Comics, and Audiobooks to earn "Master Pages" (XP) and level up.
-"Quests" in FauxLore are weekly, monthly, or daily consumption goals (e.g. "Read 200 pages" or "Play 10 hours").
-When generating text, DO NOT treat the user as a literal warrior fighting real monsters. Instead, playfully frame their normal media consumption habits using the chosen persona's style, acknowledging that they are interacting with media (reading, playing, watching).`;
 
 export function getLevelContext(level: number): string {
   if (level >= 100) return "almost unrealistic, ultimate, mythical";
@@ -203,7 +199,7 @@ const TITLE_GUIDELINES = `WHAT MAKES A GREAT TITLE:
 - 2-6 words, Title Case.`;
 
 export function buildTitleSystemPrompt(personaDesc: string): string {
-  return `You are FauxLore's title-smith. You craft a single, personal "earned alias" for the player that reflects what they have actually been consuming and their current prestige. ${personaDesc}${FAUXLORE_CONTEXT}
+  return `You are FauxLore's title-smith. You craft a single, personal "earned alias" for the player that reflects what they have actually been consuming and their current prestige. ${personaDesc}
 CRITICAL RULE: only the anchor work(s) named in the user message may be referenced. Draw on their world, cast, places and vocabulary freely — that specificity is the whole point — but never name a work that was not given to you.`;
 }
 

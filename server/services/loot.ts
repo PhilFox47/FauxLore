@@ -1,6 +1,7 @@
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
 import { getPersonaDescription } from "../../src/lib/personas";
+import { FAUXLORE_ITEM_ATTRIBUTION } from '../../src/lib/fauxLoreMechanics';
 import { AUTHENTICITY, SHARPNESS, rarityArt } from "../lib/artDirection";
 import { type CodexService } from "./codex";
 import { codexTaskContext } from "./codexV3Context";
@@ -146,6 +147,8 @@ export function createLootService({ db, codex }: { db: Db; codex: CodexService }
 
 THE SOURCE: "${mediaItem.title}" (${mediaItem.mediaType})${mediaItem.creator ? `, by ${mediaItem.creator}` : ""}
 
+${FAUXLORE_ITEM_ATTRIBUTION}
+
 ${codexBlock || `(No Codex is on record for this title — rely on your own knowledge of it and stay faithful to what you actually know.)`}${legacyBrief}
 
 THE DROP (fixed by the game — honour it exactly):
@@ -244,6 +247,7 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
     const prompt = `You are the Loot Master of FauxLore, writing the card for one piece of loot. Another archivist has already chosen it and handed you this brief. Your only job is to make it read well.
 
 THE SOURCE: "${mediaItem.title}" (${mediaItem.mediaType})
+${FAUXLORE_ITEM_ATTRIBUTION}
 ${voice}
 ${narratorVoice ? "SELECTED NARRATOR PERSONA: " + narratorVoice : ""}
 
