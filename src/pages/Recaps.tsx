@@ -2516,6 +2516,7 @@ ${wrappedContext || 'No background material.'}
                          <>
                            <StoryMode key={wrappedKey + ':' + (wrapped.generatedAt || '')}
                              scenes={storyScenes} timeframe={timeframe} timeId={timeId}
+                             achievements={periodAchievements}
                              onDeepDive={() => setViewMode('deep')} />
                            <div className="flex justify-center">
                              <button onClick={() => void generateWrapped()}

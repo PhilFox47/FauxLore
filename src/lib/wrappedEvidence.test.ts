@@ -7,9 +7,9 @@ import type { MediaItem, ProgressLog } from '../types/schema';
 const media: MediaItem[] = [
   { id: 'book', title: 'Train Story', mediaType: 'Book', status: 'Completed',
     genres: ['Thriller'], tags: [], tropes: [], userRating: 4.5, reviewScore: 2.5,
-    createdAt: '2026-01-01', updatedAt: '2026-11-01' },
+    createdAt: '2026-01-01', updatedAt: '2026-11-01', coverImageUrl: 'https://example.com/train.jpg' },
   { id: 'game', title: 'Space Game', mediaType: 'Game', status: 'Active',
-    genres: ['Sci-Fi'], tags: [], tropes: [], createdAt: '2026-01-01', updatedAt: '2026-11-01' },
+    genres: ['Sci-Fi'], tags: [], tropes: [], createdAt: '2026-01-01', updatedAt: '2026-11-01', coverImageUrl: 'https://example.com/space.jpg' },
 ];
 function log(id: string, mediaId: string, date: string, delta: number, note = '', location = ''): ProgressLog {
   return { id, mediaId, timestamp: date, delta, note, location,
@@ -48,15 +48,24 @@ test('AI director authors its own original story and selects verified visuals', 
     title: 'A Reading Paradox',
     dek: 'Why hotels and mysteries suddenly collided.',
     scenes: [
-      { kind: 'opening', title: 'The Hospitality Theory', body: 'A strange hypothesis emerges from your habits.', evidenceIds: [] },
-      { kind: 'taste', title: 'The Critics Lost', body: 'You disagreed with the received wisdom.', evidenceIds: ['taste-book'] },
-      { kind: 'journal', title: 'Your Own Words', body: 'Your own verdict offers a clue.', evidenceIds: ['journal-one'] },
-      { kind: 'closing', title: 'The Unsolved Case', body: 'The story ends with a question worth carrying.', evidenceIds: [] },
+      { kind: 'opening', title: 'The Hospitality Theory', body: 'A strange hypothesis emerges from your habits.', evidenceIds: [],
+        design: { layout: 'cover-hero', palette: 'cobalt', visual: 'cover', mediaIds: ['book'], align: 'left' } },
+      { kind: 'taste', title: 'The Critics Lost', body: 'You disagreed with the received wisdom.', evidenceIds: ['taste-book'],
+        design: { layout: 'infographic', palette: 'amber', visual: 'rings', mediaIds: ['book'], align: 'left' } },
+      { kind: 'journal', title: 'Your Own Words', body: 'Your own verdict offers a clue.', evidenceIds: ['journal-one'],
+        design: { layout: 'quote-poster', palette: 'rose', visual: 'quote', mediaIds: ['book'], align: 'left' } },
+      { kind: 'closing', title: 'The Unsolved Case', body: 'The story ends with a question worth carrying.', evidenceIds: [],
+        design: { layout: 'type-poster', palette: 'monochrome', visual: 'none', mediaIds: [], align: 'center' } },
     ],
   }, evidence, media);
   assert.equal(story.version, 2);
   assert.equal(story.scenes[1].bars?.[0].note, '4.5 / 5');
   assert.equal(story.scenes[2].quote, logs[0].note);
+  assert.equal(story.scenes[1].design?.layout, 'infographic');
+  assert.equal(story.scenes[1].design?.palette, 'amber');
+  assert.equal(story.scenes[1].design?.visual, 'rings');
+  assert.equal(story.scenes[1].media?.id, 'book');
+  assert.ok(story.scenes[0].artworks?.some(m => m.id === 'book'));
   assert.equal(story.scenes[0].body, 'A strange hypothesis emerges from your habits.');
 });
 
@@ -83,5 +92,30 @@ test('The Director must not replace diverse evidence with the same source', () =
     { kind: 'insight', title: 'Same thing', body: 'One.', evidenceIds: ['overview'] },
     { kind: 'insight', title: 'Same again', body: 'Two.', evidenceIds: ['overview'] },
     { kind: 'closing', title: 'Finish', body: 'Finish.', evidenceIds: [] },
+  ] }, evidence, media));
+});
+
+test('Director cannot select unsupported layouts or invent images', () => {
+  const evidence = buildWrappedEvidence(args);
+  const basic = { title: 'Story', dek: 'Hook', scenes: [
+    { kind: 'opening', title: 'Start', body: 'An intro.', evidenceIds: [],
+      design: { layout: 'cover-hero', palette: 'cobalt', visual: 'cover', mediaIds: [] } },
+    { kind: 'location', title: 'Hotel', body: 'An observation.', evidenceIds: ['place-0'],
+      design: { layout: 'cover-wall', palette: 'cyan', visual: 'mosaic', mediaIds: ['game','book','nonexistent'] } },
+    { kind: 'insight', title: 'A second angle', body: 'An independent insight.', evidenceIds: ['overview'],
+      design: { layout: 'type-poster', palette: 'rose', visual: 'none', mediaIds: [] } },
+    { kind: 'closing', title: 'End', body: 'An ending.', evidenceIds: [],
+      design: { layout: 'type-poster', palette: 'monochrome', visual: 'none', mediaIds: [] } },
+  ] };
+  const normalized = normalizeWrappedStory(basic, evidence, media);
+  assert.ok(normalized.scenes[1].artworks?.length === 2);
+  assert.deepEqual(normalized.scenes[1].design?.mediaIds?.sort(), ['book','game']);
+  assert.throws(() => normalizeWrappedStory({ ...basic, scenes: [
+    { ...basic.scenes[0], design: { ...basic.scenes[0].design, layout: 'raw-html' } },
+    ...basic.scenes.slice(1),
+  ] }, evidence, media));
+  assert.throws(() => normalizeWrappedStory({ ...basic, scenes: [
+    { ...basic.scenes[0], design: undefined },
+    ...basic.scenes.slice(1),
   ] }, evidence, media));
 });

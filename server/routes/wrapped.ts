@@ -12,7 +12,38 @@ const string = (value: unknown, limit: number): string | null =>
   typeof value === "string" && value.trim() && value.length <= limit ? value.trim() : null;
 const isObject = (value: any): boolean => !!value && typeof value === "object" && !Array.isArray(value);
 
-function validateStory(raw: any): any {
+
+const allowedLayouts = new Set(["cover-hero","split-feature","cover-wall","infographic","quote-poster","type-poster","timeline-film","editorial"]);
+const allowedPalettes = new Set(["violet","cobalt","amber","rose","emerald","cyan","monochrome"]);
+const allowedVisuals = new Set(["auto","cover","mosaic","bars","rings","tiles","timeline","quote","none"]);
+function cleanDesign(value: any): any {
+  if (value === undefined || value === null) return undefined; // legacy Wrapped rows
+  if (!isObject(value) || !allowedLayouts.has(value.layout) ||
+    !allowedPalettes.has(value.palette) || !allowedVisuals.has(value.visual)) {
+    throw new Error("Invalid Wrapped visual composition");
+  }
+  const ids = value.mediaIds === undefined ? [] : value.mediaIds;
+  if (!Array.isArray(ids) || ids.length > 6 || ids.some((id: unknown) => !string(id, 120))) {
+    throw new Error("Invalid Wrapped artwork references");
+  }
+  return {
+    layout: value.layout,
+    palette: value.palette,
+    visual: value.visual,
+    align: value.align === "center" ? "center" : "left",
+    mediaIds: ids,
+  };
+}
+function cleanArtwork(value: any): any {
+  if (!isObject(value) || !string(value.id, 120) || !string(value.title, 300) ||
+    !string(value.type, 80)) throw new Error("Invalid Wrapped artwork");
+  const url = string(value.cover, 1600);
+  if (url && !/^https?:\/\//i.test(url)) throw new Error("Invalid artwork URL");
+  return { id: value.id.trim(), title: value.title.trim(), type: value.type.trim(),
+    ...(url ? { cover: url } : {}) };
+}
+
+export function validateStory(raw: any): any {
   if (!isObject(raw) || raw.version !== 2 || !string(raw.title, 180) || !string(raw.dek, 500) ||
     !Array.isArray(raw.scenes) || raw.scenes.length < 3 || raw.scenes.length > 14) {
     throw new Error("Invalid Wrapped story");
@@ -39,6 +70,12 @@ function validateStory(raw: any): any {
     if (beats && (!Array.isArray(beats) || beats.length > 16 || beats.some((b: any) =>
       !isObject(b) || !string(b.label, 80) || !string(b.title, 220) || !string(b.detail, 220)))) throw new Error("Invalid timeline");
     if (scene.quote !== undefined && !string(scene.quote, 3000)) throw new Error("Invalid quote");
+    const design = cleanDesign(scene.design);
+    const artworks = scene.artworks;
+    if (artworks !== undefined && (!Array.isArray(artworks) || artworks.length > 6)) {
+      throw new Error("Invalid artwork collection");
+    }
+    const cleanArtworks = artworks?.map(cleanArtwork);
     return {
       id, kind: scene.kind, eyebrow, title, body, evidenceIds: scene.evidenceIds,
       ...(string(scene.detail, 1200) ? { detail: scene.detail.trim() } : {}),
@@ -47,6 +84,8 @@ function validateStory(raw: any): any {
       ...(media ? { media: { id: media.id, title: media.title,
         cover: string(media.cover, 1500) || undefined, type: string(media.type, 80) || "Media" } } : {}),
       ...(bars ? { bars } : {}), ...(beats ? { beats } : {}),
+      ...(design ? { design } : {}),
+      ...(cleanArtworks?.length ? { artworks: cleanArtworks } : {}),
     };
   });
   return { version: 2, title: raw.title.trim(), dek: raw.dek.trim(), scenes };

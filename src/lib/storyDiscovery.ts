@@ -7,6 +7,19 @@ import type { GeneratedAchievement } from './generatedAchievements';
 export type StoryPeriod = 'week' | 'month' | 'year';
 export type StoryKind = 'opening' | 'insight' | 'outlier' | 'location' | 'journal' | 'spotlight' | 'taste' | 'return' | 'timeline' | 'rhythm' | 'achievement' | 'closing';
 
+export type StoryLayout =
+  | 'cover-hero' | 'split-feature' | 'cover-wall' | 'infographic'
+  | 'quote-poster' | 'type-poster' | 'timeline-film' | 'editorial';
+export type StoryPalette = 'violet' | 'cobalt' | 'amber' | 'rose' | 'emerald' | 'cyan' | 'monochrome';
+export type StoryVisual = 'auto' | 'cover' | 'mosaic' | 'bars' | 'rings' | 'tiles' | 'timeline' | 'quote' | 'none';
+/** Director-controlled visual direction, with a finite safe renderer vocabulary. */
+export interface StoryDesign {
+  layout: StoryLayout;
+  palette: StoryPalette;
+  visual: StoryVisual;
+  align?: 'left' | 'center';
+  mediaIds?: string[];
+}
 export interface StoryMedia { id: string; title: string; cover?: string; type: string }
 export interface StoryBar { label: string; value: number; note: string }
 export interface StoryBeat { label: string; title: string; detail: string }
@@ -23,6 +36,8 @@ export interface StoryScene {
   quote?: string;
   sourceLabel?: string;
   achievement?: GeneratedAchievement;
+  design?: StoryDesign;
+  artworks?: StoryMedia[];
 }
 
 export interface StoryInput {

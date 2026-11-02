@@ -9,6 +9,7 @@ export interface WrappedFact {
   title: string;
   evidence: string;
   mediaId?: string;
+  mediaIds?: string[];
   quote?: string;
   bars?: StoryBar[];
   beats?: StoryBeat[];
@@ -108,7 +109,7 @@ export function buildWrappedEvidence(args: {
   [...places].sort((a, b) => b[1].length - a[1].length).slice(0, 12).forEach(([place, matches], i) => {
     const titles = [...new Set(matches.map(l => l.mediaId))].map(id => byId.get(id)?.title).filter(Boolean);
     const dates = [...new Set(matches.map(l => format(subHours(parseISO(l.timestamp), 5), 'yyyy-MM-dd')))];
-    add({ id: 'place-' + i, kind: 'location', title: 'Recorded place: ' + place, mediaId: matches[0]?.mediaId,
+    add({ id: 'place-' + i, kind: 'location', title: 'Recorded place: ' + place, mediaId: matches[0]?.mediaId, mediaIds: [...new Set(matches.map(l => l.mediaId))],
       evidence: 'User explicitly logged activity at "' + place + '" on ' + dates.length + ' different dates, with ' + titles.length +
         ' titles: ' + titles.slice(0, 10).join(', ') + '. The place label does NOT prove travel purpose or emotional state.' });
   });
@@ -120,7 +121,7 @@ export function buildWrappedEvidence(args: {
     dates.get(date)!.add(l.mediaId);
   }
   [...dates].filter(([, v]) => v.size >= 2).slice(0, 12).forEach(([date, ids], i) => {
-    add({ id: 'crossover-' + i, kind: 'insight', title: 'Different worlds on ' + date,
+    add({ id: 'crossover-' + i, kind: 'insight', title: 'Different worlds on ' + date, mediaIds: [...ids],
       evidence: 'On ' + date + ' the user logged ' + [...ids].map(id => byId.get(id)?.title).filter(Boolean).join(' and ') +
         '. Co-occurrence alone does not establish why the user switched.' });
   });
