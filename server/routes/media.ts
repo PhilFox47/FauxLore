@@ -229,7 +229,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
       const stmt = db.prepare(`
         INSERT INTO media (
           id, userId, title, mediaType, coverImageUrl, description, creator, publisher, year, 
-          reviewScore, averagePlaytime, hltbMain, hltbMainExtra, hltbCompletionist, selectedHltbType,
+          reviewScore, averagePlaytime, totalDurationHours, hltbMain, hltbMainExtra, hltbCompletionist, selectedHltbType,
           status, userRating, userReview, dropReason, genres, tags, tropes, platforms, franchises,
           playtimeHours, pagesRead, totalPages, chaptersRead, totalChapters,
           season, episodesWatched, totalEpisodes, watched, watchCount, runtimeMinutes,
@@ -239,7 +239,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           bookWorkId, bookEditionId, isbn13, bookFormat
         ) VALUES (
           @id, @userId, @title, @mediaType, @coverImageUrl, @description, @creator, @publisher, @year, 
-          @reviewScore, @averagePlaytime, @hltbMain, @hltbMainExtra, @hltbCompletionist, @selectedHltbType,
+          @reviewScore, @averagePlaytime, @totalDurationHours, @hltbMain, @hltbMainExtra, @hltbCompletionist, @selectedHltbType,
           @status, @userRating, @userReview, @dropReason, @genres, @tags, @tropes, @platforms, @franchises,
           @playtimeHours, @pagesRead, @totalPages, @chaptersRead, @totalChapters,
           @season, @episodesWatched, @totalEpisodes, @watched, @watchCount, @runtimeMinutes,
@@ -251,7 +251,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
         ON CONFLICT(id) DO UPDATE SET
           userId=excluded.userId, title=excluded.title, mediaType=excluded.mediaType, coverImageUrl=excluded.coverImageUrl,
           description=excluded.description, creator=excluded.creator, publisher=excluded.publisher,
-          year=excluded.year, reviewScore=excluded.reviewScore, averagePlaytime=excluded.averagePlaytime,
+          year=excluded.year, reviewScore=excluded.reviewScore, averagePlaytime=excluded.averagePlaytime, totalDurationHours=COALESCE(excluded.totalDurationHours, media.totalDurationHours),
           hltbMain=excluded.hltbMain, hltbMainExtra=excluded.hltbMainExtra, hltbCompletionist=excluded.hltbCompletionist,
           selectedHltbType=excluded.selectedHltbType,
           status=excluded.status, userRating=excluded.userRating, userReview=excluded.userReview, dropReason=excluded.dropReason, genres=excluded.genres,
@@ -294,6 +294,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
         year: item.year || null,
         reviewScore: item.reviewScore || null,
         averagePlaytime: item.averagePlaytime || null,
+        totalDurationHours: item.totalDurationHours === undefined ? null : (Number(item.totalDurationHours) > 0 ? Number(item.totalDurationHours) : 0),
         hltbMain: item.hltbMain || null,
         hltbMainExtra: item.hltbMainExtra || null,
         hltbCompletionist: item.hltbCompletionist || null,

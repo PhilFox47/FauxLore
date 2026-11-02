@@ -541,7 +541,7 @@ export function Recaps() {
       'Dropped during period: ' + droppedMedia.map(m => m.title).join(', '),
       'Logs: ' + JSON.stringify(activeLogs.map(l => ({
         date: l.timestamp, title: media.find(m => m.id === l.mediaId)?.title,
-        metric: l.metricType, progress: l.delta, note: l.note, location: l.location
+        metric: l.metricType, progress: l.delta, notes: l.note, thoughts: l.thoughts, prompt: l.thoughtPrompt, enjoyment: l.sessionEnjoyment, location: l.location
       }))),
     ].join('\n');
     try {
@@ -754,8 +754,15 @@ ${Array.from(new Set(activeLogs.map(l => (l.location || '').trim()).filter(Boole
   return `- ${location}: ${here.length} logs on ${dates.length} day(s), ${dates[0]} to ${dates[dates.length-1]}; media: ${titles.slice(0, 12).join(', ')}`;
 }).join('\n') || 'No locations recorded.'}
 
-USER'S WORDS AND REACTIONS (especially important):
-${sampleAcross(activeLogs.filter(l => (l.note || '').trim()), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}${l.location ? ' @ ' + l.location : ''}: ${l.note}`).join('\n') || 'No notes.'}
+PERSONAL JOURNAL REFLECTIONS (the user's actual thoughts; prioritize these):
+${sampleAcross(activeLogs.filter(l => (l.thoughts || '').trim()), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}${l.location ? ' @ ' + l.location : ''}${l.thoughtPrompt ? ' [Question: '+l.thoughtPrompt+']' : ''}: ${l.thoughts}`).join('\n') || 'No personal thoughts recorded.'}
+STATUS TRANSITIONS (structured system events, NOT journal reactions):
+${sampleAcross(activeLogs.filter(l => l.metricType === 'statusChange' && (l.note || '').trim()), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${l.note}`).join('\n') || 'No status transitions recorded.'}
+SESSION NOTES (factual or organizational labels, NOT user opinions or journal entries):
+${sampleAcross(activeLogs.filter(l => l.metricType !== 'statusChange' && (l.note || '').trim()), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${l.note}`).join('\n') || 'No session reference notes.'}
+
+SESSION ENJOYMENT (individual-session 1-5 scores, distinct from full-media rating):
+${sampleAcross(activeLogs.filter(l => typeof l.sessionEnjoyment === 'number'), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${l.sessionEnjoyment}/5`).join('\n') || 'No session enjoyment ratings.'}
 ${activeMedia.filter(m => (m.userReview || '').trim() || (m.dropReason || '').trim()).map(m => `- ${m.title}: ${m.userReview ? 'Review: ' + m.userReview : ''} ${m.dropReason ? 'Drop reason: ' + m.dropReason : ''}`).join('\n') || 'No reviews.'}
 
 CHRONOLOGICAL CLUES (analyze patterns, never retell this as a log):

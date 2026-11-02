@@ -814,7 +814,7 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     },
     () => { // 15. Scribe's Duty
       const target = getQTarget("Scribe's Duty", timeframe, timeframe === 'monthly' ? 10 : 3, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const current = logs.filter(l => l.note && l.note.trim().length >= 10).length;
+      const current = logs.filter(l => l.metricType !== 'statusChange' && l.thoughts && l.thoughts.trim().length >= 10).length;
       return { title: "Scribe's Duty", desc: `Write ${target} meaningful journal entries (10+ characters) attaching them to progress logs`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
     () => { // 16. The Critic's Eye
@@ -1045,8 +1045,8 @@ function generateIntervalQuests(quests: Quest[], logs: ProgressLog[], media: Med
     () => { // 31. Journalist
       if (timeframe !== 'weekly') return null;
       const target = getQTarget("Journalist", timeframe, 2, settings, typeof rng !== 'undefined' ? rng : undefined);
-      const current = logs.filter(l => l.note && l.note.trim().length >= 10).length;
-      return { title: "Journalist", desc: `Embody the Lorekeeper. Write ${target} progress notes (10+ characters) attaching them to your progress logs`, target, current, type: 'entries' as const, reward: baseReward * 2 };
+      const current = logs.filter(l => l.metricType !== 'statusChange' && l.thoughts && l.thoughts.trim().length >= 10).length;
+      return { title: "Journalist", desc: `Embody the Lorekeeper. Write ${target} journal reflections (10+ characters) attached to sessions`, target, current, type: 'entries' as const, reward: baseReward * 2 };
     },
 
     // ---- Engagement challenges ------------------------------------------------

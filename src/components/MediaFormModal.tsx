@@ -1581,6 +1581,16 @@ function releaseFieldsFromMatch(
                   }
                 />
               </div>
+              {formData.mediaType === "Audiobook" && (
+                <div className="col-span-1 sm:col-span-2">
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">Confirmed full duration (hours)</label>
+                  <input type="number" min="0" step="0.01" className="input-field"
+                    value={formData.totalDurationHours && formData.totalDurationHours > 0 ? formData.totalDurationHours : ""}
+                    onChange={e => setFormData(prev => ({ ...prev, totalDurationHours: e.target.value === "" ? 0 : Number(e.target.value) })) }
+                    placeholder="Only fill if the full audiobook duration is known" />
+                  <p className="text-xs text-zinc-500 mt-1">Used for automatic completion. Estimates and average playtimes are never used.</p>
+                </div>
+              )}
               {(formData.mediaType === "Book" ||
                 formData.mediaType === "Manga") && (
                 <>

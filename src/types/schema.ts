@@ -49,6 +49,8 @@ export interface MediaItem {
   maturityRating?: string;
   reviewScore?: number; // 0-5
   averagePlaytime?: number; // hours
+  /** Explicitly confirmed FULL audiobook duration in hours; never inferred from averagePlaytime. */
+  totalDurationHours?: number;
   hltbMain?: number;
   hltbMainExtra?: number;
   hltbCompletionist?: number;
@@ -153,7 +155,10 @@ export interface ProgressLog {
   timestamp: string; // ISO string
   metricType: MetricType;
   delta: number; // e.g., +2
-  note?: string;
+  note?: string; // factual/organizational context. Legacy note values remain notes.
+  thoughts?: string; // explicit journal reflection, NEVER inferred from note.
+  thoughtPrompt?: string; // AI question that elicited thoughts.
+  sessionEnjoyment?: number; // optional 1-5; null/absent means NOT rated.
   location?: string;
   isHistoric?: boolean;
   bonusMultiplier?: number; // Artifact/Armory EXP bonus banked at log creation (only applies to this log)

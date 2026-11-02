@@ -79,19 +79,41 @@ export function buildWrappedEvidence(args: {
     });
   });
   // Explicit opinions and diary moments, not automatic statusChange strings.
-  const notes = progress.filter(l => !!l.note?.trim() && byId.has(l.mediaId))
-    .sort((a, b) => Math.min(b.note!.length, 350) - Math.min(a.note!.length, 350));
+  const notes = progress.filter(l => !!l.thoughts?.trim() && byId.has(l.mediaId))
+    .sort((a, b) => Math.min(b.thoughts!.length, 350) - Math.min(a.thoughts!.length, 350));
   const usedNoteMedia = new Set<string>();
   notes.forEach(l => {
     if (facts.filter(f => f.kind === 'journal').length >= (timeframe === 'year' ? 20 : 12)) return;
     if (usedNoteMedia.has(l.mediaId) && notes.length > 8 && facts.filter(f => f.kind === 'journal' && f.mediaId === l.mediaId).length >= 2) return;
     usedNoteMedia.add(l.mediaId);
     const m = byId.get(l.mediaId)!;
-    const quote = l.note!.trim().slice(0, 2000);
+    const quote = l.thoughts!.trim().slice(0, 2000);
     add({ id: 'journal-' + l.id, kind: 'journal', title: 'Journal: ' + m.title, mediaId: m.id,
-      evidence: 'On ' + stamp(l) + (l.location ? ' at ' + l.location : '') + ', user wrote about ' + m.title + ': ' + quote,
+      evidence: 'On ' + stamp(l) + (l.location ? ' at ' + l.location : '') + ', reflected on ' + m.title + (l.thoughtPrompt ? ' in reply to '+l.thoughtPrompt.slice(0,160) : '') + ': ' + quote,
       quote });
   });
+  // Factual notes are context, not quotes from the user's journal.
+  progress.filter(l => !!l.note?.trim() && byId.has(l.mediaId)).slice(0, 20).forEach(l => {
+    const m = byId.get(l.mediaId)!;
+    add({ id: 'reference-' + l.id, kind: 'insight', title: 'Session reference: ' + m.title, mediaId: m.id,
+      evidence: 'On ' + stamp(l) + ', organizational note for ' + m.title + ': ' + l.note!.trim().slice(0, 450) +
+        '. This is contextual metadata, NOT a personal opinion.' });
+  });
+  const ratings = new Map<string, { score: number; date: string }[]>();
+  for (const l of progress) if (typeof l.sessionEnjoyment === 'number' &&
+    l.sessionEnjoyment >= 1 && l.sessionEnjoyment <= 5) {
+    ratings.set(l.mediaId, [...(ratings.get(l.mediaId) || []),
+      { score: l.sessionEnjoyment, date: stamp(l) }]);
+  }
+  for (const [mediaId, sessions] of ratings) {
+    const m = byId.get(mediaId);
+    if (!m) continue;
+    const average = sessions.reduce((sum, s) => sum + s.score, 0) / sessions.length;
+    add({ id: 'session-enjoyment-' + mediaId, kind: 'insight', title: 'Session enjoyment: ' + m.title, mediaId,
+      evidence: sessions.length + ' separately rated sessions, average ' + round(average) + '/5. Chronological session scores: ' +
+        sessions.map(s => s.date + '=' + s.score + '/5').join(', ') +
+        '. These are individual-session reactions and NOT the full-work rating.' });
+  }
   touched.filter(m => m.userRating != null && m.reviewScore != null)
     .sort((a, b) => Math.abs((b.userRating || 0) - (b.reviewScore || 0)) - Math.abs((a.userRating || 0) - (a.reviewScore || 0)))
     .slice(0, 8).forEach(m => add({ id: 'taste-' + m.id, kind: 'taste', title: 'Taste versus critics: ' + m.title, mediaId: m.id,

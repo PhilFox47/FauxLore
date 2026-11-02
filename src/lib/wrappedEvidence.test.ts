@@ -16,7 +16,7 @@ function log(id: string, mediaId: string, date: string, delta: number, note = ''
     metricType: mediaId === 'book' ? 'pagesRead' : 'playtimeHours' };
 }
 const logs = [
-  log('one','book','2026-10-20T12:00:00Z',160,'I enjoyed this mystery far more than I expected.','Hotel'),
+  { ...log('one','book','2026-10-20T12:00:00Z',160,'Chapter 12','Hotel'), thoughts: 'I enjoyed this mystery far more than I expected.', thoughtPrompt: 'What surprised you?', sessionEnjoyment: 5 },
   log('two','book','2026-10-21T12:00:00Z',110,'','Train'),
   log('three','game','2026-10-22T12:00:00Z',2,'The atmosphere was memorable.','Hotel'),
 ];
@@ -26,6 +26,9 @@ test('Wrapped evidence is independent of recap content', () => {
   const evidence = buildWrappedEvidence(args);
   assert.equal(evidence.timeId, '2026-W43');
   assert.ok(evidence.facts.some(f => f.kind === 'journal' && f.quote?.includes('mystery')));
+  assert.ok(evidence.facts.some(f => f.id === 'session-enjoyment-book' && f.evidence.includes('5/5')));
+  assert.ok(evidence.facts.some(f => f.id === 'reference-one' && f.evidence.includes('Chapter 12')));
+  assert.ok(!evidence.facts.some(f => f.kind === 'journal' && f.quote?.includes('Chapter 12')));
   assert.ok(evidence.facts.some(f => f.kind === 'location' && f.evidence.includes('Hotel')));
   assert.ok(evidence.facts.some(f => f.kind === 'taste' && f.bars?.length === 2));
   assert.equal(evidence.facts.filter(f => f.kind === 'outlier').length, 0);
@@ -60,7 +63,7 @@ test('AI director authors its own original story and selects verified visuals', 
   }, evidence, media);
   assert.equal(story.version, 2);
   assert.equal(story.scenes[1].bars?.[0].note, '4.5 / 5');
-  assert.equal(story.scenes[2].quote, logs[0].note);
+  assert.equal(story.scenes[2].quote, logs[0].thoughts);
   assert.equal(story.scenes[1].design?.layout, 'infographic');
   assert.equal(story.scenes[1].design?.palette, 'amber');
   assert.equal(story.scenes[1].design?.visual, 'rings');
@@ -118,4 +121,12 @@ test('Director cannot select unsupported layouts or invent images', () => {
     { ...basic.scenes[0], design: undefined },
     ...basic.scenes.slice(1),
   ] }, evidence, media));
+});
+
+test('Organizational notes and old legacy notes are not personal journal entries', () => {
+  const data = buildWrappedEvidence({ ...args, logs: [
+    log('legacy','game','2026-10-22T12:00:00Z',2,'Mexico GP','Home'),
+  ] });
+  assert.equal(data.facts.filter(f => f.kind === 'journal').length, 0);
+  assert.ok(data.facts.some(f => f.id === 'reference-legacy' && f.evidence.includes('Mexico GP')));
 });

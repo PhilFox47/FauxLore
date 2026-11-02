@@ -10,6 +10,12 @@ import { bossTarget, bossUnit } from "../lib/bossTargets";
  * production databases: every step is wrapped in try/catch and only adds.
  */
 export function runMigrations(db: Db) {
+  // Logging V2: additive, non-destructive. Historical note stays a legacy note, never guessed as a journal.
+  try { db.exec("ALTER TABLE logs ADD COLUMN thoughts TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE logs ADD COLUMN thoughtPrompt TEXT"); } catch (e) {}
+  try { db.exec("ALTER TABLE logs ADD COLUMN sessionEnjoyment INTEGER"); } catch (e) {}
+  try { db.exec("ALTER TABLE media ADD COLUMN totalDurationHours REAL"); } catch (e) {}
+
   // Automatic Migrations
   try { db.exec("ALTER TABLE media ADD COLUMN language TEXT"); } catch (e) { /* Ignore if it exists */ }
   try { db.exec("ALTER TABLE media ADD COLUMN isOngoing INTEGER"); } catch (e) { /* Ignore if it exists */ }

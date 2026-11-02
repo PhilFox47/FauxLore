@@ -1,3 +1,4 @@
+import { suggestLogStatus } from '../../src/lib/logStatus';
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { pickMangaCoverUrl, type MangaCoverIndex } from "../integrations/mangadexCovers";
@@ -93,9 +94,15 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
       // Read before the insert: this log is what thaws the account, so the state
       // afterwards would always say "active" and the transition would be invisible.
       const wasFrozen = activity.isFrozen(userId as string);
+      const validEnjoyment = log.sessionEnjoyment == null ? null : Number(log.sessionEnjoyment);
+      if (validEnjoyment !== null && (!Number.isInteger(validEnjoyment) || validEnjoyment < 1 || validEnjoyment > 5)) {
+        return res.status(400).json({ error: 'Session enjoyment must be a whole number between 1 and 5.' });
+      }
+      const safeText = (value: unknown, max: number) =>
+        typeof value === 'string' ? value.slice(0, max) : null;
       db.prepare(`
-        INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note, location, isHistoric, createdAt)
-        VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note, @location, @isHistoric, @createdAt)
+        INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note, thoughts, thoughtPrompt, sessionEnjoyment, location, isHistoric, createdAt)
+        VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note, @thoughts, @thoughtPrompt, @sessionEnjoyment, @location, @isHistoric, @createdAt)
       `).run({
         id: log.id,
         userId: userId,
@@ -103,7 +110,10 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
         timestamp: log.timestamp,
         metricType: log.metricType,
         delta: log.delta,
-        note: log.note || null,
+        note: safeText(log.note, 4000),
+        thoughts: safeText(log.thoughts, 6000),
+        thoughtPrompt: safeText(log.thoughtPrompt, 1000),
+        sessionEnjoyment: validEnjoyment,
         location: log.location || null,
         isHistoric: log.isHistoric ? 1 : 0,
         // When the entry was written, as opposed to the moment it records.
@@ -164,9 +174,13 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
         const type = log.metricType;
         const now = new Date().toISOString();
         
-        let newStatus = log.status !== undefined ? log.status : mediaRow.status;
-        if (newStatus === 'Planning' && log.delta > 0) {
-           newStatus = 'Active';
+        // Client preview and backend persist the same policy. Explicitly
+        // selected status is authoritative; an historical log cannot auto-close.
+        const newStatus = log.status !== undefined
+          ? log.status
+          : suggestLogStatus(mediaRow, Number(log.delta), !!log.isHistoric);
+        if (!['Planning','Active','Extras','On Hold','Caught Up','Completed','Dropped','Unreleased'].includes(newStatus)) {
+          return res.status(400).json({ error: 'Invalid media status' });
         }
         
         if (newStatus !== mediaRow.status && mediaRow.status !== undefined) {
@@ -324,15 +338,48 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
 
       const newTimestamp = updates.timestamp !== undefined ? updates.timestamp : existingLog.timestamp;
       const newNote = updates.note !== undefined ? updates.note : existingLog.note;
+      const newThoughts = updates.thoughts !== undefined ? updates.thoughts : existingLog.thoughts;
+      const newThoughtPrompt = updates.thoughtPrompt !== undefined ? updates.thoughtPrompt : existingLog.thoughtPrompt;
+      const newEnjoyment = updates.sessionEnjoyment !== undefined ? updates.sessionEnjoyment : existingLog.sessionEnjoyment;
+      if (newEnjoyment != null && (!Number.isInteger(Number(newEnjoyment)) || Number(newEnjoyment) < 1 || Number(newEnjoyment) > 5)) {
+        return res.status(400).json({ error: 'Session enjoyment must be between 1 and 5.' });
+      }
+      if (newThoughts != null && (typeof newThoughts !== 'string' || newThoughts.length > 6000) ||
+          newThoughtPrompt != null && (typeof newThoughtPrompt !== 'string' || newThoughtPrompt.length > 1000)) {
+        return res.status(400).json({ error: 'Invalid journal text' });
+      }
+      if (updates.userRating !== undefined &&
+        (updates.userRating !== null && (!Number.isFinite(updates.userRating) || updates.userRating < 0 || updates.userRating > 5))) {
+        return res.status(400).json({ error: 'Rating must be 0-5.' });
+      }
+      if (updates.userReview !== undefined && (typeof updates.userReview !== 'string' || updates.userReview.length > 8000)) {
+        return res.status(400).json({ error: 'Invalid review' });
+      }
       const newDelta = updates.delta !== undefined ? updates.delta : existingLog.delta;
       const newLocation = updates.location !== undefined ? updates.location : existingLog.location;
       
       const deltaDiff = newDelta - existingLog.delta;
 
-      db.prepare(`
-        UPDATE logs SET timestamp = ?, delta = ?, note = ?, location = ?
-        WHERE id = ? AND userId = ?
-      `).run(newTimestamp, newDelta, newNote, newLocation, logId, userId);
+      // Guard the review *before* writing anything, then save the journal and
+      // any full-work review atomically so a failed step 2 never half-applies.
+      const hasReview = updates.userRating !== undefined || updates.userReview !== undefined;
+      if (hasReview) {
+        const mediaRow = db.prepare('SELECT status FROM media WHERE id = ? AND userId = ?')
+          .get(existingLog.mediaId, userId) as { status: string } | undefined;
+        if (mediaRow?.status !== 'Completed') {
+          return res.status(400).json({ error: 'Full-work review requires a completed title.' });
+        }
+      }
+      db.transaction(() => {
+        db.prepare(`
+          UPDATE logs SET timestamp = ?, delta = ?, note = ?, thoughts = ?, thoughtPrompt = ?, sessionEnjoyment = ?, location = ?
+          WHERE id = ? AND userId = ?
+        `).run(newTimestamp, newDelta, newNote, newThoughts, newThoughtPrompt, newEnjoyment, newLocation, logId, userId);
+        if (hasReview) {
+          db.prepare('UPDATE media SET userRating = COALESCE(?, userRating), userReview = COALESCE(?, userReview), updatedAt = ? WHERE id = ? AND userId = ?')
+            .run(updates.userRating ?? null, updates.userReview ?? null, new Date().toISOString(), existingLog.mediaId, userId);
+        }
+      })();
 
       // Skip clearing AI recaps automatically
 

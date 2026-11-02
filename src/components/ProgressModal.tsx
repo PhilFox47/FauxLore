@@ -1,536 +1,354 @@
-import React, { useState, useEffect } from 'react';
-import { MediaItem, getMetricForType, MEDIA_COLORS } from '../types/schema';
-import { X, Plus, Minus, Calendar, History, Check, Clock, MapPin } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { calculateLogExp } from '../lib/rpgSystem';
+import React, { useState, useEffect, useRef } from 'react';
+import type { MediaItem, ProgressLog, MetricType, Status } from '../types/schema';
+import { getMetricForType, MEDIA_COLORS } from '../types/schema';
+import { X, Plus, Minus, History, Check, Clock, MapPin, ArrowRight, Sparkles, Star, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useMediaContext } from '../contexts/MediaContext';
-import { buildGroupIndex, groupsFor } from '../lib/locationGroups';
 import { logSpan, formatDuration } from '../lib/logDuration';
+import { suggestLogStatus } from '../lib/logStatus';
+import { generateSessionQuestion, fallbackSessionQuestion } from '../services/sessionPrompt';
 
 interface ProgressModalProps {
   isOpen: boolean;
   item: MediaItem | null;
   onClose: () => void;
-  onLog: (mediaId: string, metricType: any, delta: number, note?: string, timestamp?: string, location?: string, isHistoric?: boolean, extraUpdates?: any) => void;
+  onLog: (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string,
+    location?: string, isHistoric?: boolean, extraUpdates?: any) => Promise<ProgressLog>;
 }
 
+const inputStyle = 'w-full rounded-xl border border-white/10 bg-black/50 px-3 py-2.5 text-sm text-white outline-none focus:border-violet-400/60';
+const buttonStyle = 'rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white hover:bg-white/10 disabled:opacity-40';
+
 export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalProps) {
-  const { saveMediaItem, logs, settings, artifacts, locationGroups } = useMediaContext();
-  const locationGroupIndex = React.useMemo(() => buildGroupIndex(locationGroups), [locationGroups]);
+  const { logs, settings, updateLog } = useMediaContext();
+  const [step, setStep] = useState<1 | 2>(1);
   const [mode, setMode] = useState<'set' | 'add'>('set');
   const [inputValue, setInputValue] = useState<number | ''>(1);
+  const [manualStatus, setManualStatus] = useState<Status | null>(null);
+  const [location, setLocation] = useState('');
+  const [showLocations, setShowLocations] = useState(false);
+  const [logDate, setLogDate] = useState('');
+  const [logTime, setLogTime] = useState('');
+  const [isHistorical, setIsHistorical] = useState(false);
+  const [enjoyment, setEnjoyment] = useState<number | null>(null);
   const [note, setNote] = useState('');
-  const [location, setLocation] = useState(localStorage.getItem('fauxlore_last_location') || '');
-  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
-  const [status, setStatus] = useState<MediaItem['status']>('Active');
-
-  const uniqueLocations = Array.from(new Set(logs.map(l => l.location).filter(Boolean))) as string[];
-  const filteredLocations = uniqueLocations.filter(loc => loc.toLowerCase().includes(location.toLowerCase()) && loc !== location);
+  const [thoughts, setThoughts] = useState('');
+  const [question, setQuestion] = useState('');
+  const [asking, setAsking] = useState(false);
   const [userRating, setUserRating] = useState<number | ''>('');
   const [userReview, setUserReview] = useState('');
-  const [logDate, setLogDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-  const [logTime, setLogTime] = useState<string>(format(new Date(), 'HH:mm'));
-  const [isHistorical, setIsHistorical] = useState(false);
-
-  const [currentVal, setCurrentVal] = useState(0);
+  const [savedLog, setSavedLog] = useState<ProgressLog | null>(null);
+  const [savedStatus, setSavedStatus] = useState<Status>('Active');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const abortRef = useRef<AbortController | null>(null);
+  const saveRef = useRef(false);
+  const openItemId = item?.id;
   const metricType = item ? getMetricForType(item.mediaType) : null;
+  const currentVal = item && metricType ? Number(item[metricType as keyof MediaItem]) || 0 : 0;
   const colors = item ? MEDIA_COLORS[item.mediaType] : null;
+  const isTimed = item && ['Game','Visual Novel','Audiobook'].includes(item.mediaType);
+  const uniqueLocations = Array.from(new Set(logs.map(l => l.location).filter((x): x is string => !!x)));
+  const filteredLocations = uniqueLocations.filter(l => l.toLowerCase().includes(location.toLowerCase()) && l !== location).slice(0, 7);
 
   useEffect(() => {
-    if (isOpen && item) {
-      const metric = getMetricForType(item.mediaType);
-      const cv = metric ? Number(item[metric as keyof MediaItem]) || 0 : 0;
-      setCurrentVal(cv);
-      
-      setMode('set');
-      if (item.mediaType === 'Movie') {
-        setInputValue(item.watched || cv > 0 ? 1 : 1); // For movies, default to 1 (checked) to easily mark as watched
-      } else {
-        setInputValue(cv + 1); // UX Default: One increment above current total
-      }
-      setNote('');
-      setStatus(item.status);
-      setUserRating(item.userRating ?? '');
-      setUserReview(item.userReview ?? '');
-      
-      let defaultLocation = localStorage.getItem('fauxlore_last_location') || '';
-      const itemLogs = logs.filter(l => l.mediaId === item.id && l.location && l.location.trim().length > 0);
-      if (itemLogs.length > 0) {
-        const sortedLogs = [...itemLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        defaultLocation = sortedLogs[0].location as string;
-      }
-      setLocation(defaultLocation);
+    if (!isOpen || !item) return;
+    abortRef.current?.abort();
+    saveRef.current = false;
+    setStep(1);
+    setMode('set');
+    const metric = getMetricForType(item.mediaType);
+    const val = metric ? Number(item[metric as keyof MediaItem]) || 0 : 0;
+    setInputValue(item.mediaType === 'Movie' ? 1 : Number((val + 1).toFixed(2)));
+    setManualStatus(null);
+    const itemLocation = logs.filter(l => l.mediaId === item.id && l.location)
+      .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.location;
+    setLocation(itemLocation || localStorage.getItem('fauxlore_last_location') || '');
+    setShowLocations(false);
+    setLogDate(format(new Date(), 'yyyy-MM-dd'));
+    setLogTime(format(new Date(), 'HH:mm'));
+    setIsHistorical(false);
+    setEnjoyment(null);
+    setNote(''); setThoughts(''); setQuestion(''); setAsking(false);
+    setUserRating(item.userRating ?? '');
+    setUserReview(item.userReview || '');
+    setSavedLog(null);
+    setSavedStatus(item.status);
+    setSaving(false);
+    setError('');
+    // Only reset when opening or selecting a DIFFERENT item; NOT when logs
+    // refresh between step 1 and 2.
+  }, [isOpen, openItemId]);
 
-      const now = new Date();
-      setLogDate(format(now, 'yyyy-MM-dd'));
-      setLogTime(format(now, 'HH:mm'));
-      setIsHistorical(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, item]);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
-  // Status is only ever changed by the user via the manual dropdown below.
-  // (Auto-completing media when logged progress reached its total was removed.)
+  if (!isOpen || !item || !metricType || !colors) return null;
+  const deltaRaw = item.mediaType === 'Movie' ? (inputValue === 1 ? 1 : 0) :
+    typeof inputValue === 'number' ? (mode === 'set' ? inputValue - currentVal : inputValue) : 0;
+  const delta = Number(deltaRaw.toFixed(3));
+  const automaticStatus = suggestLogStatus(item, delta, isHistorical);
+  const selectedStatus = manualStatus || automaticStatus;
+  const reviewAvailable = savedStatus === 'Completed';
+  const previousLogs = logs.filter(l => l.mediaId === item.id && l.metricType !== 'statusChange' && !l.isHistoric);
 
-  if (!isOpen || !item || !colors) return null;
-
-  const getMetricLabel = () => {
-    switch (metricType) {
-      case 'playtimeHours': return 'Hours Played';
-      case 'pagesRead': return 'Pages Read';
-      case 'chaptersRead': return 'Chapters Read';
-      case 'episodesWatched': return 'Episodes Watched';
-      case 'watchCount': return 'Times Watched (Movie)';
-      case 'issuesRead': return 'Issues Read';
-      default: return 'Progress';
-    }
-  }
-
-  const handleModeChange = (newMode: 'set' | 'add') => {
-    if (mode === newMode) return;
-    setMode(newMode);
-    if (newMode === 'add') {
-      setInputValue(1);
-    } else {
-      setInputValue(currentVal + 1);
-    }
+  const dateTime = () => {
+    if (isHistorical) return '1970-01-01T00:00:00.000Z';
+    const d = new Date(logDate + 'T' + (logTime || '12:00') + ':00');
+    if (Number.isNaN(d.getTime())) throw new Error('Please enter a valid date and time.');
+    return d.toISOString();
   };
+  const previewSpan = !isHistorical && !!logDate && delta > 0 ? logSpan({
+    delta, metricType, timestamp: new Date(logDate + 'T' + (logTime || '12:00') + ':00').toISOString(),
+  }, item, settings) : null;
 
-  /**
-   * The stretch this log will represent. A log is not an instant — eight hours
-   * entered at 22:00 ran from 14:00, and every time-of-day chart reads it that
-   * way — so the span is shown before saving rather than inferred afterwards.
-   */
-  const pendingSpan = (() => {
-    if (typeof inputValue !== 'number' || !item) return null;
-    const delta = mode === 'set' ? inputValue - currentVal : inputValue;
-    if (delta <= 0) return null;
-    const at = isHistorical ? new Date() : (() => {
-      const d = new Date(logDate);
-      if (logTime) { const [h, m] = logTime.split(':').map(Number); d.setHours(h, m, 0, 0); }
-      return d;
-    })();
-    const span = logSpan({ delta, metricType: metricType || 'pagesRead', timestamp: at.toISOString() } as any, item, settings);
-    return span.minutes > 0 ? span : null;
-  })();
-
-  const handleLog = () => {
-    if (typeof inputValue !== 'number' || !metricType) return;
-    
-    let delta = 0;
-    if (mode === 'set') {
-      delta = (inputValue) - currentVal;
-    } else {
-      delta = inputValue;
-    }
-
-    if (delta === 0 && !note && status === item.status && item.mediaType !== 'Movie') return; // Ignore completely blank submits
-    
-    // Convert YYYY-MM-DD + HH:mm input to full ISO timestamp
-    let finalTimestamp = new Date().toISOString();
-    
-    if (isHistorical) {
-      finalTimestamp = new Date('1970-01-01T00:00:00.000Z').toISOString();
-    } else if (logDate) {
-      const selectedDate = new Date(logDate);
-      if (logTime) {
-        const [hours, minutes] = logTime.split(':').map(Number);
-        selectedDate.setHours(hours, minutes, 0, 0);
-      }
-      finalTimestamp = selectedDate.toISOString();
-    }
-    
-    if (location) {
-      localStorage.setItem('fauxlore_last_location', location);
-    }
-    
-    // For movies, if delta is 0 but we want to assure watched is true
-    let modifiedDelta = delta;
-    if (item.mediaType === 'Movie' && inputValue === 1 && currentVal === 0) {
-      modifiedDelta = 1;
-    }
-
-    let extraUpdates: any = {};
-    
-    if (item.mediaType === 'Movie' && inputValue === 1 && !item.watched) {
-      extraUpdates.watched = true;
-    } else if (item.mediaType === 'Movie' && inputValue === 0 && item.watched) {
-      extraUpdates.watched = false;
-    }
-
-    // Status only changes when the user manually picks a different one in the
-    // dropdown; logging progress never auto-completes a media item.
-    const finalStatus = status;
-
-    if (finalStatus !== item.status) {
-      extraUpdates.status = finalStatus;
-    }
-    
-    if (finalStatus === 'Completed' || finalStatus === 'Extras') {
-      const finalRating = userRating === '' ? 5 : userRating;
-      if (finalRating !== item.userRating) {
-        extraUpdates.userRating = finalRating;
-      }
-      if (userReview !== item.userReview) {
-        extraUpdates.userReview = userReview;
-      }
-    }
-
-    if (modifiedDelta !== 0 || note || Object.keys(extraUpdates).length > 0) {
-      onLog(item.id, metricType, modifiedDelta, note, finalTimestamp, location, isHistorical, extraUpdates);
-    }
-    
+  const close = () => {
+    abortRef.current?.abort();
     onClose();
   };
 
+  const startReflection = async () => {
+    if (saveRef.current || !Number.isFinite(delta) || (!delta && selectedStatus === item.status)) {
+      setError('Add some progress or change the status to create a session.');
+      return;
+    }
+    saveRef.current = true;
+    setSaving(true); setError('');
+    try {
+      const stamp = dateTime();
+      const saved = await onLog(item.id, metricType, delta, undefined, stamp, location, isHistorical, {
+        status: selectedStatus,
+        ...(item.mediaType === 'Movie' && delta > 0 ? { watched: true } : {}),
+        sessionEnjoyment: enjoyment,
+      });
+      if (location) localStorage.setItem('fauxlore_last_location', location);
+      setSavedLog(saved);
+      setSavedStatus(selectedStatus);
+      setStep(2);
+      setSaving(false);
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setAsking(true);
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      void generateSessionQuestion({
+        item, delta, metricType, enjoyment, statusBefore: item.status, statusAfter: selectedStatus,
+        location, previousLogs, settings, signal: controller.signal,
+      }).then(result => {
+        if (!controller.signal.aborted) setQuestion(result);
+      }).catch(() => {
+        if (!controller.signal.aborted) setQuestion(fallbackSessionQuestion({
+          item, delta, metricType, enjoyment, statusBefore: item.status,
+          statusAfter: selectedStatus, location, previousLogs, settings,
+        }));
+        else setQuestion(fallbackSessionQuestion({
+          item, delta, metricType, enjoyment, statusBefore: item.status,
+          statusAfter: selectedStatus, location, previousLogs, settings,
+        }));
+      }).finally(() => { clearTimeout(timeout); setAsking(false); });
+    } catch (e: any) {
+      setError(e?.message || 'Could not save this log. Nothing has changed.');
+      saveRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  const finish = async () => {
+    if (!savedLog || saving) return;
+    const changes: Partial<ProgressLog> & { userRating?: number; userReview?: string } = {};
+    if (note.trim()) changes.note = note.trim();
+    if (thoughts.trim()) {
+      changes.thoughts = thoughts.trim();
+      if (question) changes.thoughtPrompt = question;
+    }
+    if (reviewAvailable) {
+      if (userRating !== '' && userRating !== item.userRating) changes.userRating = userRating;
+      if (userReview !== (item.userReview || '')) changes.userReview = userReview;
+    }
+    if (!Object.keys(changes).length) { close(); return; }
+    setSaving(true); setError('');
+    try {
+      await updateLog(savedLog.id, changes);
+      close();
+    } catch (e: any) {
+      setError(e?.message || 'Could not save reflection. The progress log itself is safe.');
+      setSaving(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 font-sans">
-      <div className="bg-gradient-to-b from-zinc-900 to-black border-2 border-white/10 rounded-[1.5rem] w-full max-w-lg overflow-hidden shadow-[0_0_50px_rgba(0,0,0,1)] flex flex-col max-h-[90vh] relative">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-        {/* Header */}
-        <div className={cn("px-5 py-4 sm:px-6 sm:py-5 flex items-center justify-between relative overflow-hidden", `bg-${colors.bg.split('-')[1]}-950/40`)}>
-           <div className={cn("absolute inset-0 opacity-[0.1]", `bg-gradient-to-br from-${colors.bg.split('-')[1]}-500 to-transparent pointer-events-none`)}></div>
-           <div className="relative z-10 flex-1">
-              <div className="text-[10px] font-black uppercase tracking-[0.3em] font-display flex items-center gap-2 mb-1.5" style={{color: `var(--color-${colors.bg.split('-')[1]}-400, #fff)`}}>
-                 Log progress
-                 <div className="flex-1 h-px bg-white/10 ml-2"></div>
+    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+      <div className="relative w-full max-w-xl max-h-[94vh] overflow-hidden flex flex-col rounded-[2rem] border border-white/15 bg-gradient-to-b from-zinc-900 to-[#07070b] shadow-2xl">
+        <header className="flex items-center gap-4 px-5 sm:px-7 py-5 border-b border-white/10">
+          {item.coverImageUrl && <img src={item.coverImageUrl} alt="" referrerPolicy="no-referrer" className="w-12 h-16 rounded-lg object-cover border border-white/10" />}
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] text-violet-300 uppercase tracking-[.2em] font-black">Session log · {step} / 2</p>
+            <h2 className="text-lg sm:text-2xl text-white font-black truncate">{item.title}</h2>
+            <p className="text-xs text-zinc-400">{step === 1 ? 'The facts, first.' : 'Your thoughts, if you feel like sharing.'}</p>
+          </div>
+          <button type="button" onClick={close} aria-label="Close log" className="p-2 rounded-full border border-white/10 text-zinc-400 hover:text-white"><X className="w-5 h-5" /></button>
+        </header>
+        <div className="flex gap-1 px-5 sm:px-7 pt-4">
+          <div className="flex-1 h-1.5 bg-violet-400 rounded-full" />
+          <div className={'flex-1 h-1.5 rounded-full ' + (step === 2 ? 'bg-violet-400' : 'bg-white/15')} />
+        </div>
+        <div className="overflow-y-auto flex-1 px-5 sm:px-7 py-5 space-y-5">
+          {step === 1 ? <>
+            <section className="rounded-2xl p-4 bg-white/[.045] border border-white/10 space-y-4">
+              {item.mediaType !== 'Movie' && <div className="flex gap-2">
+                {(['set','add'] as const).map(m => <button key={m} type="button"
+                  onClick={() => { setMode(m); setInputValue(m === 'add' ? 1 : Number((currentVal + 1).toFixed(2))); }}
+                  className={'flex-1 py-2 text-xs font-bold rounded-lg border ' + (mode === m ? 'bg-violet-500/20 border-violet-400/40 text-white' : 'border-white/10 text-zinc-400')}>
+                  {m === 'set' ? 'Set total' : 'Add progress'}
+                </button>)}
+              </div>}
+              <div className="flex justify-between items-center gap-3">
+                <div>
+                  <p className="text-xs text-zinc-400 font-bold uppercase tracking-widest">{item.mediaType === 'Movie' ? 'Movie watched' : mode === 'set' ? 'New total' : 'Progress to add'}</p>
+                  {item.mediaType !== 'Movie' && mode === 'set' && <p className="text-xs text-zinc-500 mt-1">Currently: {currentVal}</p>}
+                </div>
+                {delta !== 0 && <span className={'text-xs font-bold px-3 py-1 rounded-full ' + (delta > 0 ? 'bg-emerald-400/10 text-emerald-300' : 'bg-rose-400/10 text-rose-300')}>{delta > 0 ? '+' : ''}{delta} {isTimed ? 'hours' : 'units'}</span>}
               </div>
-              <h2 className="text-lg sm:text-xl font-black text-white truncate drop-shadow-md">
-                {item.title}
-              </h2>
-           </div>
-           <button onClick={onClose} className="relative z-10 text-white/50 hover:text-white transition-colors bg-black/50 hover:bg-black rounded-full p-2 border border-white/10 flex-shrink-0 ml-4 shadow-inner">
-             <X className="w-5 h-5" />
-           </button>
+              {item.mediaType === 'Movie' ?
+                <label className="flex items-center gap-3 cursor-pointer text-white font-bold text-sm">
+                  <input type="checkbox" checked={inputValue === 1} onChange={e => setInputValue(e.target.checked ? 1 : 0)} className="accent-violet-500 w-5 h-5"/>
+                  I watched this movie
+                </label> :
+                <div className="flex items-stretch gap-2">
+                  <button type="button" className={buttonStyle} aria-label="Decrease progress" onClick={() => setInputValue(v => typeof v === 'number' ? Number((v - 1).toFixed(2)) : 0)}><Minus size={16}/></button>
+                  {isTimed ? <div className="grid grid-cols-2 gap-2 flex-1">
+                    <label className="text-[10px] text-zinc-400 uppercase font-bold text-center">Hours
+                      <input type="number" min="0" className={inputStyle + ' text-center text-xl font-black mt-1'}
+                        value={typeof inputValue === 'number' ? Math.floor(inputValue) : ''}
+                        onChange={e => {
+                          const hours = Math.max(0, Number(e.target.value) || 0);
+                          const mins = typeof inputValue === 'number' ? Math.round((inputValue % 1)*60) : 0;
+                          setInputValue(Number((hours + mins/60).toFixed(4)));
+                        }}/>
+                    </label>
+                    <label className="text-[10px] text-zinc-400 uppercase font-bold text-center">Minutes
+                      <input type="number" min="0" max="59" className={inputStyle + ' text-center text-xl font-black mt-1'}
+                        value={typeof inputValue === 'number' ? Math.round((inputValue % 1)*60) : ''}
+                        onChange={e => {
+                          const minutes = Math.max(0, Math.min(59, Number(e.target.value) || 0));
+                          const hours = typeof inputValue === 'number' ? Math.floor(inputValue) : 0;
+                          setInputValue(Number((hours + minutes/60).toFixed(4)));
+                        }}/>
+                    </label>
+                  </div> : <input type="number" min="0" value={inputValue} onChange={e => setInputValue(e.target.value === '' ? '' : Number(e.target.value))}
+                    className={inputStyle + ' flex-1 min-w-0 text-center text-2xl font-black'}/>}
+                  <button type="button" className={buttonStyle} aria-label="Increase progress" onClick={() => setInputValue(v => typeof v === 'number' ? Number((v + 1).toFixed(2)) : 1)}><Plus size={16}/></button>
+                </div>}
+              {previewSpan && previewSpan.minutes > 0 && <p className="text-xs text-zinc-500 flex items-center gap-2"><Clock size={13}/>
+                {previewSpan.start.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} – {previewSpan.end.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} · {formatDuration(previewSpan.minutes)}
+              </p>}
+            </section>
+
+            <section className="grid grid-cols-2 gap-3">
+              <label className="text-xs text-zinc-400 font-bold">Date
+                <input type="date" disabled={isHistorical} value={logDate} onChange={e => setLogDate(e.target.value)} className={inputStyle + ' mt-1'}/>
+              </label>
+              <label className="text-xs text-zinc-400 font-bold">End time
+                <input type="time" disabled={isHistorical} value={logTime} onChange={e => setLogTime(e.target.value)} className={inputStyle + ' mt-1'}/>
+              </label>
+              <label className="col-span-2 text-xs text-zinc-400 flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={isHistorical} onChange={e => setIsHistorical(e.target.checked)} className="accent-amber-500"/>
+                <History size={14}/> Undated historical entry (no automatic status change)
+              </label>
+            </section>
+
+            <section className="space-y-2">
+              <label className="text-xs text-zinc-400 font-bold flex gap-2 items-center"><MapPin size={13}/> Location</label>
+              <div className="relative">
+                <input value={location} onChange={e => {setLocation(e.target.value);setShowLocations(true);}}
+                  onFocus={()=>setShowLocations(true)} onBlur={()=>setTimeout(()=>setShowLocations(false),150)}
+                  placeholder="Where were you?" className={inputStyle} />
+                {showLocations && filteredLocations.length > 0 && <div className="absolute z-30 top-full mt-1 w-full bg-zinc-900 rounded-xl border border-white/10 max-h-32 overflow-auto shadow-xl">
+                  {filteredLocations.map(l => <button type="button" key={l} className="block text-left w-full px-3 py-2 text-xs text-zinc-200 hover:bg-white/10" onMouseDown={e=>e.preventDefault()} onClick={()=>{setLocation(l);setShowLocations(false);}}>{l}</button>)}
+                </div>}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-white/10 bg-white/[.035] p-4 space-y-3">
+              <div className="flex justify-between gap-3 items-baseline">
+                <h3 className="font-bold text-white text-sm">Session enjoyment</h3><span className="text-xs text-zinc-500">Optional · not the full-work rating</span>
+              </div>
+              <div className="grid grid-cols-5 gap-2" role="group" aria-label="Rate this session 1 to 5">
+                {[1,2,3,4,5].map(n => <button type="button" key={n}
+                  aria-pressed={enjoyment === n} onClick={()=>setEnjoyment(enjoyment===n?null:n)}
+                  className={'rounded-xl py-3 border flex flex-col items-center gap-1 ' + (enjoyment === n ? 'border-amber-400/70 bg-amber-400/15' : 'border-white/10 bg-black/30 hover:bg-white/10')}>
+                  <Star size={20} className={enjoyment !== null && enjoyment >= n ? 'fill-amber-400 text-amber-400' : 'text-zinc-500'}/>
+                  <span className="text-xs text-zinc-300">{n}</span>
+                </button>)}
+              </div>
+              <p className="text-xs text-zinc-500 text-center">{enjoyment === null ? 'Leave blank if you would rather not rate' : ['','Bad','Not great','Okay','Really good','Amazing'][enjoyment]}</p>
+            </section>
+
+            <section className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-bold text-white text-sm">Status</h3>
+                {!manualStatus && selectedStatus !== item.status && <span className="text-emerald-300 text-xs">Auto: {item.status} → {selectedStatus}</span>}
+              </div>
+              <select value={selectedStatus} onChange={e => setManualStatus(e.target.value as Status)} className={inputStyle}>
+                {(['Planning','Active','On Hold','Caught Up','Completed','Extras','Dropped','Unreleased'] as Status[]).map(s=>
+                  <option key={s} value={s}>{s}</option>)}
+              </select>
+              {selectedStatus === 'Completed' && item.status !== 'Completed' && <p className="text-xs text-amber-200/80">You can review the complete work on the next page.</p>}
+            </section>
+          </> : <>
+            <section className="rounded-2xl bg-emerald-500/10 border border-emerald-400/20 p-4 flex gap-3">
+              <Check className="text-emerald-300 shrink-0" size={20}/>
+              <div><p className="text-white font-bold">Progress saved</p>
+                <p className="text-xs text-zinc-400">Your session is safe. Everything on this page is optional.</p>
+              </div>
+            </section>
+            <section className="space-y-2">
+              <h3 className="text-white font-bold text-sm">Notes <span className="font-normal text-zinc-500">· factual / organizational</span></h3>
+              <textarea rows={2} className={inputStyle + ' resize-y'} placeholder="Episode number, Grand Prix, comic issue, chapter..."
+                value={note} onChange={e => setNote(e.target.value)} />
+            </section>
+            <section className="rounded-2xl border border-violet-400/20 bg-violet-500/5 p-4 space-y-3">
+              <div className="flex items-center gap-2 text-violet-200 font-black text-xs uppercase tracking-wider"><Sparkles size={16}/> A question just for you</div>
+              {asking && !question ?
+                <p className="flex gap-2 items-center text-sm text-zinc-400"><Loader2 size={16} className="animate-spin"/> Finding one good question...</p> :
+                <p className="text-base sm:text-lg text-white font-bold leading-snug">{question || fallbackSessionQuestion({
+                  item,delta,metricType,enjoyment,statusBefore:item.status,statusAfter:savedStatus,location,previousLogs,settings,
+                })}</p>}
+              <p className="text-xs text-zinc-500">One sentence is enough. You can ignore the question and write whatever matters to you.</p>
+            </section>
+            <section className="space-y-2">
+              <h3 className="text-sm text-white font-bold">Journal <span className="font-normal text-zinc-500">· your actual thoughts</span></h3>
+              <textarea rows={4} className={inputStyle + ' resize-y'} placeholder="What stood out? What changed? How did it feel?"
+                value={thoughts} onChange={e => setThoughts(e.target.value)} />
+            </section>
+            {reviewAvailable && <section className="rounded-2xl border border-amber-400/30 bg-amber-500/5 p-4 space-y-3">
+              <h3 className="text-amber-200 font-black text-sm">Completed · Full-work review</h3>
+              <p className="text-zinc-400 text-xs">Separate from your enjoyment of this particular session.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {[0.5,1,1.5,2,2.5,3,3.5,4,4.5,5].map(n=><button type="button" key={n}
+                  onClick={()=>setUserRating(userRating===n?'':n)}
+                  className={'px-2.5 py-2 rounded-lg text-xs font-bold border ' +
+                    (userRating === n ? 'bg-amber-400/20 text-amber-200 border-amber-400/50':'text-zinc-400 border-white/10 hover:text-white')}>{n}</button>)}
+                {userRating !== '' && <button type="button" onClick={()=>setUserRating('')} className="text-xs text-zinc-400 underline">Clear</button>}
+              </div>
+              <textarea rows={3} className={inputStyle+' resize-y'} value={userReview} onChange={e=>setUserReview(e.target.value)}
+                placeholder="Your final review of the entire work (optional)" />
+            </section>}
+          </>}
+          {error && <div role="alert" className="rounded-xl border border-rose-400/30 bg-rose-950/30 p-3 text-rose-200 text-sm">{error}</div>}
         </div>
-
-        {/* Content Body */}
-        <div className="p-5 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto flex-1 no-scrollbar">
-          
-          {/* Set-total vs add-progress toggle */}
-          {item.mediaType !== 'Movie' && (
-            <div className="flex gap-2">
-              <button
-                 type="button"
-                 onClick={() => handleModeChange('set')}
-                 className={cn(
-                   "flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border shadow-inner", 
-                   mode === 'set' 
-                     ? "text-white bg-white/10 border-white/20 shadow-[inset_0_2px_10px_rgba(255,255,255,0.05)]" 
-                     : "text-zinc-500 bg-transparent border-transparent hover:text-white/70 hover:bg-white/5"
-                 )}
-              >
-                Set total
-              </button>
-              <button
-                 type="button"
-                 onClick={() => handleModeChange('add')}
-                 className={cn(
-                   "flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border shadow-inner", 
-                   mode === 'add' 
-                     ? "text-white bg-white/10 border-white/20 shadow-[inset_0_2px_10px_rgba(255,255,255,0.05)]" 
-                     : "text-zinc-500 bg-transparent border-transparent hover:text-white/70 hover:bg-white/5"
-                 )}
-              >
-                Add progress
-              </button>
-            </div>
-          )}
-
-          {/* The number being logged */}
-          <div className="bg-zinc-950/50 border border-white/5 rounded-2xl p-4 sm:p-5 relative group overflow-hidden">
-             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.05] mix-blend-screen pointer-events-none"></div>
-             
-             {item.mediaType === 'Movie' ? (
-                 <label className="flex items-center gap-4 cursor-pointer relative z-10 p-2">
-                   <div className="relative">
-                      <input 
-                        type="checkbox" 
-                        className="peer sr-only"
-                        checked={inputValue === 1}
-                        onChange={(e) => setInputValue(e.target.checked ? 1 : 0)}
-                      />
-                      <div className={cn("w-8 h-8 rounded-lg border-2 border-white/20 flex items-center justify-center transition-all peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-white/20", inputValue === 1 ? `bg-${colors.bg.split('-')[1]}-500 border-${colors.bg.split('-')[1]}-400` : "bg-black")}>
-                         {inputValue === 1 && <Check className="w-5 h-5 text-white" />}
-                      </div>
-                   </div>
-                   <div className="flex-1">
-                      <div className="text-zinc-200 font-bold text-base">Mark as Viewed</div>
-                      <div className="text-[9px] text-zinc-500 uppercase tracking-widest font-black">Counts as one watch</div>
-                   </div>
-                 </label>
-             ) : (
-               <div className="relative z-10">
-                 <div className="flex justify-between items-end mb-4">
-                   <label className="block text-xs font-black uppercase tracking-[0.2em] text-zinc-400 font-display">
-                     {mode === 'set' ? `New total (${getMetricLabel()})` : `${getMetricLabel()} to add`}
-                   </label>
-                   {mode === 'set' && (
-                     <div className="text-[10px] text-zinc-500 font-mono font-bold bg-black/40 px-3 py-1 rounded shadow-inner border border-white/5">
-                        Currently: {metricType === 'playtimeHours' ? Number(currentVal.toFixed(1)) : currentVal}
-                     </div>
-                   )}
-                 </div>
-                 
-                 <div className="flex items-stretch gap-2.5">
-                   <button 
-                     type="button"
-                     onClick={() => setInputValue(prev => typeof prev === 'number' ? prev - 1 : -1)}
-                     className="shrink-0 w-12 flex items-center justify-center bg-black rounded-xl border border-white/10 hover:bg-white/5 text-zinc-400 hover:text-white transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)]"
-                   >
-                     <Minus className="w-4 h-4" />
-                   </button>
-                   {['Game', 'Visual Novel', 'Audiobook'].includes(item.mediaType) ? (
-                      <div className="flex-1 flex gap-2">
-                        <div className="flex-1 min-w-0 flex flex-col relative bg-black border-2 border-white/10 rounded-xl shadow-inner transition-colors focus-within:border-white/30">
-                          <span className="text-[9px] uppercase text-zinc-500 font-bold absolute top-1.5 left-0 right-0 text-center z-10 pointer-events-none">Hours</span>
-                          <input 
-                            type="number"
-                            min="0"
-                            value={typeof inputValue === 'number' ? Math.floor(inputValue) : ''}
-                            onChange={(e) => {
-                               const h = e.target.value === '' ? 0 : Number(e.target.value);
-                               const curM = typeof inputValue === 'number' ? Math.round((inputValue % 1) * 60) : 0;
-                               setInputValue(Number((h + (curM/60)).toFixed(2)));
-                            }}
-                            className={cn("w-full bg-transparent px-2 pt-5 pb-1 text-center text-xl sm:text-2xl font-black text-white focus:outline-none font-display")}
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0 flex flex-col relative bg-black border-2 border-white/10 rounded-xl shadow-inner transition-colors focus-within:border-white/30">
-                          <span className="text-[9px] uppercase text-zinc-500 font-bold absolute top-1.5 left-0 right-0 text-center z-10 pointer-events-none">Mins</span>
-                          <input 
-                            type="number"
-                            min="0"
-                            max="59"
-                            value={typeof inputValue === 'number' ? Math.round((inputValue % 1) * 60) : ''}
-                            onChange={(e) => {
-                               const m = e.target.value === '' ? 0 : Number(e.target.value);
-                               const curH = typeof inputValue === 'number' ? Math.floor(inputValue) : 0;
-                               setInputValue(Number((curH + (m/60)).toFixed(2)));
-                            }}
-                            className={cn("w-full bg-transparent px-2 pt-5 pb-1 text-center text-xl sm:text-2xl font-black text-white focus:outline-none font-display")}
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <input 
-                        type="number"
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value === '' ? '' : Number(e.target.value))}
-                        className={cn("flex-1 min-w-0 bg-black border-2 border-white/10 rounded-xl px-3 py-2 text-center text-2xl font-black text-white focus:outline-none font-display shadow-inner transition-colors", `focus:border-${colors.bg.split('-')[1]}-500`)}
-                      />
-                    )}
-                   <button 
-                     type="button"
-                     onClick={() => setInputValue(prev => typeof prev === 'number' ? prev + 1 : 1)}
-                     className="shrink-0 w-12 flex items-center justify-center bg-black rounded-xl border border-white/10 hover:bg-white/5 text-zinc-400 hover:text-white transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)]"
-                   >
-                     <Plus className="w-4 h-4" />
-                   </button>
-                 </div>
-                 
-                 {mode === 'set' && typeof inputValue === 'number' && (inputValue - currentVal) !== 0 && (
-                    <div className="mt-4 flex flex-col items-center justify-center gap-2">
-                       <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest">
-                          <span className={cn("px-2 py-0.5 rounded", inputValue > currentVal ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400")}>
-                            {inputValue > currentVal ? '+' : ''}{inputValue - currentVal}
-                          </span>
-                          <span className="text-zinc-600">Change</span>
-                       </div>
-                       {inputValue > currentVal && (
-                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 uppercase font-black bg-zinc-900/50 px-3 py-1 rounded-full border border-white/5 shadow-inner">
-                             <span>You'll earn:</span>
-                             <span className="text-emerald-400 font-mono">+{Math.floor(calculateLogExp(inputValue - currentVal, item, settings, artifacts?.filter(a => a?.isEquipped) || []))} EXP</span>
-                          </div>
-                       )}
-                       {pendingSpan && (
-                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 uppercase font-black bg-zinc-900/50 px-3 py-1 rounded-full border border-white/5 shadow-inner">
-                             <Clock className="w-3 h-3" />
-                             <span className="font-mono text-zinc-300">
-                               {pendingSpan.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}–{pendingSpan.end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                             </span>
-                             <span className="text-zinc-600">· {formatDuration(pendingSpan.minutes)}</span>
-                          </div>
-                       )}
-                    </div>
-                 )}
-                 {mode === 'add' && typeof inputValue === 'number' && inputValue > 0 && (
-                    <div className="mt-4 flex flex-col items-center justify-center gap-2">
-                       <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 uppercase font-black bg-zinc-900/50 px-3 py-1 rounded-full border border-white/5 shadow-inner">
-                          <span>You'll earn:</span>
-                          <span className="text-emerald-400 font-mono">+{Math.floor(calculateLogExp(inputValue, item, settings, artifacts?.filter(a => a?.isEquipped) || []))} EXP</span>
-                       </div>
-                       {pendingSpan && (
-                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 uppercase font-black bg-zinc-900/50 px-3 py-1 rounded-full border border-white/5 shadow-inner">
-                             <Clock className="w-3 h-3" />
-                             <span className="font-mono text-zinc-300">
-                               {pendingSpan.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}–{pendingSpan.end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                             </span>
-                             <span className="text-zinc-600">· {formatDuration(pendingSpan.minutes)}</span>
-                          </div>
-                       )}
-                    </div>
-                 )}
-               </div>
-             )}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-             {/* Date & Historic Options */}
-             <div className="space-y-3">
-                <label className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest font-display">Date &amp; time</label>
-                
-                {!isHistorical && (
-                   <div className="space-y-2">
-                     <div className="relative">
-                       <input 
-                         type="date"
-                         value={logDate}
-                         onChange={(e) => setLogDate(e.target.value)}
-                         className="w-full bg-black border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none text-xs font-mono cursor-pointer shadow-inner focus:border-white/30 transition-colors"
-                       />
-                     </div>
-                     <div className="relative w-full">
-                       <input 
-                         type="time"
-                         value={logTime}
-                         onChange={(e) => setLogTime(e.target.value)}
-                         className="w-full bg-black border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none text-xs font-mono cursor-pointer shadow-inner focus:border-white/30 transition-colors [&::-webkit-calendar-picker-indicator]:opacity-0"
-                       />
-                     </div>
-                   </div>
-                )}
-
-                <button 
-                  type="button"
-                  onClick={() => setIsHistorical(!isHistorical)}
-                  className={cn(
-                    "w-full px-3 py-2 rounded-xl border flex flex-col items-center justify-center transition-all text-[9px] font-black uppercase tracking-widest", 
-                    isHistorical 
-                       ? "bg-amber-950/60 border-amber-500/40 text-amber-500 shadow-[inset_0_2px_10px_rgba(245,158,11,0.1)]" 
-                       : "bg-black/50 border-white/5 text-zinc-600 hover:text-zinc-400 hover:border-white/10 shadow-inner"
-                  )}
-                >
-                   <History className="w-4 h-4 mb-1 opacity-80" />
-                   {isHistorical ? "Backdated entry (no date)" : "Log without a date"}
-                </button>
-             </div>
-
-             {/* Meta inputs */}
-             <div className="space-y-3">
-                <div>
-                   <label className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest font-display mb-1.5">Notes</label>
-                   <textarea 
-                     value={note}
-                     onChange={(e) => setNote(e.target.value)}
-                     placeholder="Thoughts, highlights, where you got to..."
-                     className="w-full bg-black border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none min-h-[64px] sm:min-h-[80px] resize-none text-xs font-mono shadow-inner focus:border-white/30 transition-colors"
-                   />
-                </div>
-                <div>
-                   <label className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest font-display mb-1.5">Location</label>
-                   <div className="relative">
-                     <MapPin className="w-3.5 h-3.5 text-zinc-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                     <input 
-                       type="text"
-                       value={location}
-                       onChange={(e) => { setLocation(e.target.value); setShowLocationDropdown(true); }}
-                       onFocus={() => setShowLocationDropdown(true)}
-                       onBlur={() => setTimeout(() => setShowLocationDropdown(false), 200)}
-                       placeholder="e.g. Home, Commute..."
-                       className="w-full bg-black border border-white/10 rounded-xl pl-8 pr-3 py-2 text-white focus:outline-none text-xs font-mono shadow-inner focus:border-white/30 transition-colors"
-                     />
-                     {showLocationDropdown && filteredLocations.length > 0 && (
-                       <div className="absolute z-20 w-full mt-1 bg-zinc-900 border border-white/10 rounded-xl shadow-xl overflow-hidden max-h-32 overflow-y-auto">
-                          {filteredLocations.map((loc, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setLocation(loc);
-                                setShowLocationDropdown(false);
-                              }}
-                              className="w-full text-left px-3 py-2 text-xs font-mono text-zinc-300 hover:bg-white/10 hover:text-white transition-colors border-b border-white/5 last:border-0 flex items-center gap-2"
-                            >
-                              <span className="truncate">{loc}</span>
-                              <span className="ml-auto flex items-center gap-1 shrink-0">
-                                {groupsFor(loc, locationGroupIndex).slice(0, 2).map(g => (
-                                  <span key={g.id} className="w-2 h-2 rounded-full" title={g.name} style={{ backgroundColor: g.color || '#71717a' }} />
-                                ))}
-                              </span>
-                            </button>
-                          ))}
-                       </div>
-                     )}
-                   </div>
-                </div>
-             </div>
-          </div>
-
-          <div className="bg-zinc-950/50 border border-white/5 rounded-2xl p-4 sm:p-5">
-             <label className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest font-display mb-2">Status</label>
-             <select
-               value={status}
-               onChange={(e) => setStatus(e.target.value as MediaItem['status'])}
-               className="w-full bg-black border border-white/10 rounded-xl px-3 py-2.5 text-white font-bold text-xs sm:text-sm appearance-none cursor-pointer shadow-inner focus:outline-none focus:border-white/30 transition-colors"
-             >
-               <option value="Active">Active — currently playing/reading</option>
-               <option value="Planning">Planning — not started yet</option>
-               <option value="On Hold">On Hold — waiting for an update or new release</option>
-               <option value="Caught Up">Caught Up — finished everything released so far</option>
-               <option value="Extras">Extras — finished, on post-game/bonus content</option>
-               <option value="Completed">Completed — finished it</option>
-               <option value="Dropped">Dropped — stopped for good</option>
-               {/* Keep any other current status selectable (e.g. Unreleased), so the
-                   dropdown always shows the item's real status instead of silently
-                   falling back to the first option. */}
-               {!['Active', 'Planning', 'On Hold', 'Caught Up', 'Extras', 'Completed', 'Dropped'].includes(status) && (
-                 <option value={status}>{status}</option>
-               )}
-             </select>
-
-             {(status === 'Completed' || status === 'Extras') && (
-               <div className="mt-3 space-y-3 p-4 bg-gradient-to-b from-amber-500/10 to-transparent border-t border-amber-500/20 rounded-b-xl relative">
-                 <div>
-                   <label className="flex items-center justify-between text-[9px] font-black text-amber-500/70 uppercase tracking-widest font-display mb-1.5">
-                     <span>Your rating</span>
-                     {userRating !== '' && <span className="text-amber-400">Score: {userRating}/5</span>}
-                   </label>
-                   <input
-                     type="range"
-                     min="0"
-                     max="5"
-                     step="0.5"
-                     value={userRating === '' ? 5 : userRating}
-                     onChange={(e) => setUserRating(Number(e.target.value))}
-                     className="w-full h-1.5 bg-black rounded-lg appearance-none cursor-pointer accent-amber-500 shadow-inner"
-                   />
-                 </div>
-                 <div>
-                   <label className="block text-[9px] font-black text-amber-500/70 uppercase tracking-widest font-display mb-1.5">Your review</label>
-                   <textarea
-                     value={userReview}
-                     onChange={(e) => setUserReview(e.target.value)}
-                     placeholder="What did you think of it?"
-                     className="w-full bg-black border border-amber-500/20 rounded-xl px-3 py-2 text-white text-xs font-mono min-h-[60px] focus:outline-none focus:border-amber-500/50 resize-none shadow-inner transition-colors"
-                   />
-                 </div>
-               </div>
-             )}
-          </div>
-        </div>
-
-        {/* Footer (Actions) */}
-        <div className="p-4 sm:px-6 sm:py-5 border-t border-white/5 bg-[#0a0a0c] flex gap-3">
-          <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl border border-white/10 font-black uppercase tracking-widest text-[10px] sm:text-xs text-zinc-400 hover:text-white hover:bg-white/5 hover:border-white/20 transition-all font-display">
-            Cancel
-          </button>
-          <button type="button" onClick={handleLog} className={cn("flex-1 px-4 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] sm:text-xs text-white transition-all shadow-[inset_0_2px_10px_rgba(255,255,255,0.3)] font-display hover:-translate-y-0.5", colors.bg, `shadow-[0_10px_20px_-10px_var(--color-${colors.bg.split('-')[1]}-600)]`)}>
-            Save log
-          </button>
-        </div>
+        <footer className="px-5 sm:px-7 py-4 border-t border-white/10 bg-black/30 flex items-center gap-3">
+          {step === 1 ? <>
+            <button type="button" className={buttonStyle + ' flex-1'} onClick={close}>Cancel</button>
+            <button type="button" onClick={()=>void startReflection()} disabled={saving || saveRef.current}
+              className="flex-[2] flex items-center justify-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 px-4 py-3 font-black text-white disabled:opacity-50">
+              {saving ? <Loader2 className="animate-spin" size={17}/> : <ArrowRight size={17}/>} Save & Continue
+            </button>
+          </> : <>
+            <button type="button" onClick={close} className={buttonStyle + ' flex-1'}>Skip reflection</button>
+            <button type="button" onClick={()=>void finish()} disabled={saving} className="flex-[2] flex items-center gap-2 justify-center rounded-xl px-4 py-3 bg-violet-600 hover:bg-violet-500 text-white font-black disabled:opacity-50">
+              {saving ? <Loader2 size={17} className="animate-spin"/> : <Check size={17}/>} Complete log
+            </button>
+          </>}
+        </footer>
       </div>
     </div>
   );

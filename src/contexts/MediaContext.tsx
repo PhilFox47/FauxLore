@@ -29,7 +29,7 @@ interface MediaContextType {
   refreshData: () => Promise<void>;
   saveMediaItem: (item: Partial<MediaItem> & { title: string, mediaType: MediaType, status: MediaItem['status'] }) => Promise<void>;
   deleteMediaItem: (id: string) => Promise<void>;
-  addLog: (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string, location?: string, isHistoric?: boolean, extraUpdates?: any) => Promise<void>;
+  addLog: (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string, location?: string, isHistoric?: boolean, extraUpdates?: any) => Promise<ProgressLog>;
   updateLog: (id: string, updates: Partial<ProgressLog>) => Promise<void>;
   deleteLog: (id: string) => Promise<void>;
   mergeLocations: (from: string[], to: string) => Promise<number>;
@@ -281,8 +281,9 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [refreshData]);
 
   const addLog = useCallback(async (mediaId: string, metricType: MetricType, delta: number, note?: string, timestamp?: string, location?: string, isHistoric?: boolean, extraUpdates?: any) => {
-    await DatabaseService.addProgressLog(mediaId, metricType, delta, note, timestamp, location, isHistoric, extraUpdates);
+    const log = await DatabaseService.addProgressLog(mediaId, metricType, delta, note, timestamp, location, isHistoric, extraUpdates);
     await refreshData();
+    return log;
   }, [refreshData]);
 
   const updateLog = useCallback(async (id: string, updates: Partial<ProgressLog>) => {

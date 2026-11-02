@@ -246,9 +246,9 @@ export function analyzeTimeTraveler(data: RecapAnalyticsData) {
 export function extractJournals(data: RecapAnalyticsData) {
   const journals: { note: string, media: MediaItem, date: string }[] = [];
   data.logs.forEach(l => {
-     if (l.note && l.note.length > 10) {
+     if (l.metricType !== 'statusChange' && l.thoughts && l.thoughts.trim().length > 0) {
         const m = data.allMedia.find(x => x.id === l.mediaId);
-        if (m) journals.push({ note: l.note, media: m, date: l.timestamp });
+        if (m) journals.push({ note: l.thoughts!, media: m, date: l.timestamp });
      }
   });
   
@@ -466,7 +466,7 @@ export function buildArchetypeStats(data: RecapAnalyticsData): ArchetypeStats {
       if (classify.isHome(loc)) homeLogs += 1;
       if (classify.isTransit(loc)) transitLogs += 1;
     }
-    const note = (log.note || '').trim();
+    const note = (log.thoughts || '').trim();
     if (note.length > 0) {
       noteCount += 1;
       longestNote = Math.max(longestNote, note.length);
@@ -894,7 +894,7 @@ const ARCHETYPES: Archetype[] = [
     reason: (s) => `Every logged session, same place: ${s.topLocation}.` },
   { id: 'diarist', name: 'The Diarist', tier: 2, family: 'journal',
     when: (s) => s.logCount >= 5 && s.noteShare > 0.5,
-    reason: (s) => `You wrote a note on ${pct(s.noteShare)}% of your logs.` },
+    reason: (s) => `You recorded journal thoughts on ${pct(s.noteShare)}% of your logs.` },
   { id: 'essayist', name: 'The Essayist', tier: 3, family: 'journal',
     when: (s) => s.longestNote >= 250,
     reason: (s) => `One of your journal notes ran to ${s.longestNote} characters. That's an essay.` },

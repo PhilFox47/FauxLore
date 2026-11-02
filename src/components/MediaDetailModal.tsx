@@ -49,10 +49,12 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
   const [editLogData, setEditLogData] = useState<{
     delta: number;
     note: string;
+    thoughts: string;
+    sessionEnjoyment: number | null;
     location: string;
     logDate: string;
     logTime: string;
-  }>({ delta: 0, note: '', location: '', logDate: '', logTime: '' });
+  }>({ delta: 0, note: '', thoughts: '', sessionEnjoyment: null, location: '', logDate: '', logTime: '' });
 
   const { currentMediaStreak, maxMediaStreak, activeDays, startDate, chartData, dailyData } = React.useMemo(() => {
     const historicalLogs = logs.filter(l => !l.timestamp.startsWith('1970-01-01'));
@@ -264,7 +266,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
   // which just repeated what the log list already showed; it is now a filter on
   // that one list.
   const hasJournalEntry = (l: ProgressLog) =>
-    !!l.note && l.note.trim().length > 0 && l.metricType !== 'statusChange' && !l.timestamp.startsWith('1970-01-01');
+    !!l.thoughts && l.thoughts.trim().length > 0 && l.metricType !== 'statusChange' && !l.timestamp.startsWith('1970-01-01');
   const journalEntries = logs
     .filter(hasJournalEntry)
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -420,6 +422,8 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
     setEditLogData({
       delta: log.delta,
       note: log.note || '',
+      thoughts: log.thoughts || '',
+      sessionEnjoyment: log.sessionEnjoyment ?? null,
       location: log.location || '',
       logDate: format(d, 'yyyy-MM-dd'),
       logTime: format(d, 'HH:mm'),
@@ -440,6 +444,8 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
     await updateLog(logId, {
       delta: editLogData.delta,
       note: editLogData.note,
+      thoughts: editLogData.thoughts,
+      sessionEnjoyment: editLogData.sessionEnjoyment,
       location: editLogData.location,
       timestamp: finalTimestamp
     });
@@ -1229,12 +1235,25 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
                         </div>
                         <div className="flex gap-2 w-full mt-2">
                           <div className="flex-1">
-                            <label className="block text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider">Note</label>
+                            <label className="block text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider">Notes (organizational)</label>
                             <textarea 
                               value={editLogData.note}
                               onChange={(e) => setEditLogData({ ...editLogData, note: e.target.value })}
                               className="w-full bg-[#18181b] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-orange-500 resize-none min-h-[60px]"
                             />
+                            <label className="block text-xs font-bold text-violet-300 mb-1 mt-3 uppercase tracking-wider">Journal thoughts</label>
+                            <textarea
+                              value={editLogData.thoughts}
+                              onChange={e => setEditLogData({ ...editLogData, thoughts: e.target.value })}
+                              className="w-full bg-[#18181b] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-400 resize-none min-h-[70px]"
+                            />
+                            <label className="block text-xs font-bold text-zinc-500 mb-1 mt-3 uppercase tracking-wider">Session enjoyment</label>
+                            <select value={editLogData.sessionEnjoyment ?? ''}
+                              onChange={e => setEditLogData({ ...editLogData, sessionEnjoyment: e.target.value ? Number(e.target.value) : null })}
+                              className="w-full bg-[#18181b] border border-white/10 rounded-lg px-3 py-2 text-white">
+                              <option value="">Not rated</option>
+                              {[1,2,3,4,5].map(n => <option value={n} key={n}>{n}/5</option>)}
+                            </select>
                           </div>
                           <div className="flex-1 relative">
                             <label className="block text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider pl-1">Location</label>
@@ -1354,7 +1373,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
                             <Edit2 className="w-3 h-3" />
                           </button>
                         </div>
-                        {(log.note || log.location) && (
+                        {(log.note || log.thoughts || log.location || log.sessionEnjoyment != null) && (
                           <div className="pl-4 relative z-10 mt-3 flex flex-col gap-1">
                             {log.note && (
                               <p className={cn(
@@ -1364,6 +1383,9 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
                                 {log.metricType === 'statusChange' ? log.note : `"${log.note}"`}
                               </p>
                             )}
+                            {log.thoughts && <p className="text-sm italic text-violet-200">Journal: “{log.thoughts}”</p>}
+                            {log.thoughtPrompt && log.thoughts && <p className="text-xs text-zinc-500">Prompt: {log.thoughtPrompt}</p>}
+                            {log.sessionEnjoyment != null && <p className="text-xs text-amber-300">Session enjoyment: {log.sessionEnjoyment}/5</p>}
                             {log.location && <p className="text-xs text-zinc-500 flex items-center gap-1"><MapPin className="w-3 h-3" /> {log.location}</p>}
                           </div>
                         )}
