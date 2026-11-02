@@ -709,9 +709,9 @@ export function Recaps() {
         lootDist[a.rarity] = (lootDist[a.rarity] || 0) + 1;
       });
 
-      // "On Hold" here means waiting on the world — the next season, volume or
-      // patch — not procrastination. Without saying so, the columnist reads a
-      // parked title as neglect and prescribes it as homework the user cannot do.
+      // On Hold and Caught Up represent deliberately parked entries, usually
+      // awaiting external releases. On Hold can also be a voluntary return-later
+      // pause, such as stopping a subscription temporarily. Do not guess why.
       const parkedMedia = media.filter(isWaitingOnRelease);
       const unblockedMedia = media.filter(m => (m.status === 'On Hold' || m.status === 'Caught Up') && hasNewContent(m));
       const holdNote = (m: MediaItem) =>
@@ -719,7 +719,7 @@ export function Recaps() {
           : hasNewContent(m) ? ` [${m.status === 'Caught Up' ? 'CAUGHT UP' : 'ON HOLD'}, but new content has shipped]`
           : m.status === 'Caught Up'
             ? ' [CAUGHT UP — they finished everything released so far and are waiting on the next update]'
-            : ' [ON HOLD, parked waiting on the next release]';
+            : ' [ON HOLD, deliberately parked; usually awaiting a release or access, sometimes taking a planned break; reason unconfirmed]';
 
       // Media identity enriches the Spotify-Wrapped commentary, but cannot
       // substitute for the user's activity, ratings, journal notes or choices.
@@ -787,13 +787,13 @@ Total Logs: ${activeLogs.length}
 MEDIA IN PROGRESS:
 ${inProgressMedia.map(m => `- ${m.title} (${m.mediaType})${holdNote(m)}: [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres (ordered by importance): ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags (ordered by importance): ' + m.tags.join(', ') : ''}`).join('\n') || 'None'}
 
-PARKED, WAITING ON NEW RELEASES (On Hold with nothing new upstream. They are not being neglected — there is literally nothing to consume. NEVER tell them to pick these up, and never count them as a backlog they are avoiding):
+PARKED MEDIA (Caught Up = all available installments consumed; On Hold = paused, usually for new releases/updates, occasionally for a planned personal break such as a suspended subscription. Reasons are NOT known unless separately recorded. Do not call these neglected, abandoned, or overdue; do not nag the user to resume them simply because of inactivity):
 ${parkedMedia.length > 0 ? parkedMedia.map(m => `- ${m.title} (${m.mediaType})`).join('\n') : 'None'}
 
 UNBLOCKED (was parked, and new content has since shipped — these ARE fair to point at):
 ${unblockedMedia.length > 0 ? unblockedMedia.map(m => `- ${m.title} (${m.mediaType}): ${newContentReason(m)}`).join('\n') : 'None'}
 
-MEDIA DROPPED OR ABANDONED:
+MEDIA MOVED TO DROPPED (may be manual or automatic after 50 days inactivity; FauxLore does not reliably record the cause; no drop reason means motive UNKNOWN, not rejection or dislike):
 ${droppedMedia.length > 0 ? droppedMedia.map(m => `- ${m.title} (${m.mediaType}): ${m.dropReason ? `[Drop Reason: ${m.dropReason}]` : '[No reason specified]'}`).join('\n') : 'None'}
 
 MEDIA COMPLETED:

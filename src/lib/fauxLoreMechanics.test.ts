@@ -14,6 +14,9 @@ test('every configured narrative persona receives the same game-mechanics contra
     assert.match(system, /LOOT AND ARMORY/i);
     assert.match(system, /ESTIMATED from pages/i);
     assert.match(system, /Atlas groups/i);
+    assert.match(system, /same generic status-change log/i);
+    assert.match(system, /voluntary break with firm intention to return/i);
+    assert.match(system, /50 days/i);
   }
 });
 

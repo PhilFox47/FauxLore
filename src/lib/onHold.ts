@@ -3,18 +3,16 @@ import { MediaItem } from '../types/schema';
 /**
  * What "On Hold" actually means here.
  *
- * It is not "paused because I lost interest" — that is what Dropped is for.
- * On Hold means the entry is parked *waiting on the world*: the next season,
- * the next volume, the next patch. Until something new ships there is nothing
- * to pick up, so nudging the user toward it is noise at best and wrong at
- * worst ("you've been ignoring this for 90 days" — no, it hasn't updated in 90
- * days).
+ * On Hold is a deliberate park with an intention to return. Most often it
+ * means waiting for external content (episode/volume/patch); occasionally it
+ * also means a voluntary break, for example pausing an MMO subscription.
+ * Caught Up is specifically an ongoing work consumed through the latest
+ * available content. Neither status indicates lost interest or laziness.
  *
- * So anything that suggests, nags, ranks or quests over what to consume next
- * runs its candidates through here first. The rule is deliberately strict: an
- * On Hold entry only re-enters the suggestion pool once there is concrete
- * evidence of new content. No evidence means no suggestion, because a wrong
- * nudge costs more than a missed one.
+ * Recommendation logic conservatively parks both until new content is known.
+ * This is a UX heuristic, NOT evidence that the user could not play/read, and
+ * NOT proof of the user's reason for the break. Subscription resumption can be
+ * manually initiated without a metadata release signal.
  */
 
 /**
