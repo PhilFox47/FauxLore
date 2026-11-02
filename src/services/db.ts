@@ -1,6 +1,7 @@
 import { MediaItem, ProgressLog, MetricType, MediaType, Artifact, MediaCodex } from '../types/schema';
 import type { FlavorText } from '../lib/flavorTexts';
 import type { GeneratedAchievement, AchievementDraft, AchievementPeriod } from '../lib/generatedAchievements';
+import type { WrappedStory } from './wrappedAi';
 import { v4 as uuidv4 } from 'uuid';
 
 /** See `getEarnedFlavorTexts`. Short enough that finishing something shows up. */
@@ -244,6 +245,34 @@ export const DatabaseService = {
       console.error(e);
       return [];
     }
+  },
+
+  /** Wrapped is persisted entirely separately from the prose recap. */
+  async getWrappedStory(timeframe: 'week' | 'month' | 'year', timeId: string): Promise<WrappedStory | null> {
+    const res = await apiFetch('/api/wrapped/' + timeframe + '/' + encodeURIComponent(timeId));
+    if (!res.ok) throw new Error('Could not load Wrapped story (' + res.status + ')');
+    return res.json();
+  },
+
+  async startWrappedGeneration(timeframe: 'week' | 'month' | 'year', timeId: string): Promise<string> {
+    const res = await apiFetch('/api/wrapped/' + timeframe + '/' + encodeURIComponent(timeId) + '/start', { method: 'POST' });
+    if (!res.ok) throw new Error('Could not start Wrapped generation');
+    const result = await res.json();
+    return result.requestId;
+  },
+
+  async saveWrappedStory(timeframe: 'week' | 'month' | 'year', timeId: string,
+    requestId: string, story: WrappedStory): Promise<WrappedStory> {
+    const res = await apiFetch('/api/wrapped/' + timeframe + '/' + encodeURIComponent(timeId), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId, story }),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.error || 'Could not save Wrapped story (' + res.status + ')');
+    }
+    return res.json();
   },
 
   async getGeneratedAchievements(): Promise<GeneratedAchievement[]> {

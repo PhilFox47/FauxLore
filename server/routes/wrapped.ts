@@ -1,0 +1,114 @@
+import { randomUUID } from 'node:crypto';
+import type { Express } from "express";
+import type { ServerContext } from "../context";
+
+const validPeriod = (timeframe: unknown, timeId: unknown): timeframe is "week" | "month" | "year" =>
+  (timeframe === "week" && typeof timeId === "string" && /^\d{4}-W(?:0[1-9]|[1-4]\d|5[0-3])$/.test(timeId)) ||
+  (timeframe === "month" && typeof timeId === "string" && /^\d{4}-(?:0[1-9]|1[0-2])$/.test(timeId)) ||
+  (timeframe === "year" && typeof timeId === "string" && /^\d{4}$/.test(timeId));
+
+const sceneTypes = new Set(["opening","insight","outlier","location","journal","spotlight","taste","return","timeline","rhythm","closing"]);
+const string = (value: unknown, limit: number): string | null =>
+  typeof value === "string" && value.trim() && value.length <= limit ? value.trim() : null;
+const isObject = (value: any): boolean => !!value && typeof value === "object" && !Array.isArray(value);
+
+function validateStory(raw: any): any {
+  if (!isObject(raw) || raw.version !== 2 || !string(raw.title, 180) || !string(raw.dek, 500) ||
+    !Array.isArray(raw.scenes) || raw.scenes.length < 3 || raw.scenes.length > 14) {
+    throw new Error("Invalid Wrapped story");
+  }
+  if (raw.scenes[0]?.kind !== "opening" || raw.scenes.at(-1)?.kind !== "closing") {
+    throw new Error("Wrapped story requires an opening and a closing");
+  }
+  const ids = new Set<string>();
+  const scenes = raw.scenes.map((scene: any) => {
+    if (!isObject(scene) || !sceneTypes.has(scene.kind)) throw new Error("Invalid scene type");
+    const id = string(scene.id, 80), eyebrow = string(scene.eyebrow, 90);
+    const title = string(scene.title, 200), body = string(scene.body, 5000);
+    if (!id || !eyebrow || !title || !body || ids.has(id)) throw new Error("Invalid or repeated scene");
+    ids.add(id);
+    if (!Array.isArray(scene.evidenceIds) || scene.evidenceIds.length > 5 ||
+      scene.evidenceIds.some((v: any) => !string(v, 120))) throw new Error("Invalid scene evidence");
+    const media = scene.media === undefined ? undefined : scene.media;
+    if (media && (!isObject(media) || !string(media.id, 120) || !string(media.title, 300))) throw new Error("Invalid scene media");
+    const bars = scene.bars === undefined ? undefined : scene.bars;
+    if (bars && (!Array.isArray(bars) || bars.length > 6 || bars.some((b: any) =>
+      !isObject(b) || !string(b.label, 80) || !string(b.note, 120) ||
+      typeof b.value !== "number" || !Number.isFinite(b.value) || b.value < 0 || b.value > 100))) throw new Error("Invalid chart data");
+    const beats = scene.beats === undefined ? undefined : scene.beats;
+    if (beats && (!Array.isArray(beats) || beats.length > 16 || beats.some((b: any) =>
+      !isObject(b) || !string(b.label, 80) || !string(b.title, 220) || !string(b.detail, 220)))) throw new Error("Invalid timeline");
+    if (scene.quote !== undefined && !string(scene.quote, 3000)) throw new Error("Invalid quote");
+    return {
+      id, kind: scene.kind, eyebrow, title, body, evidenceIds: scene.evidenceIds,
+      ...(string(scene.detail, 1200) ? { detail: scene.detail.trim() } : {}),
+      ...(string(scene.quote, 3000) ? { quote: scene.quote.trim() } : {}),
+      ...(string(scene.sourceLabel, 160) ? { sourceLabel: scene.sourceLabel.trim() } : {}),
+      ...(media ? { media: { id: media.id, title: media.title,
+        cover: string(media.cover, 1500) || undefined, type: string(media.type, 80) || "Media" } } : {}),
+      ...(bars ? { bars } : {}), ...(beats ? { beats } : {}),
+    };
+  });
+  return { version: 2, title: raw.title.trim(), dek: raw.dek.trim(), scenes };
+}
+
+export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
+  const { db, getAuthUser } = ctx;
+
+  app.get("/api/wrapped/:timeframe/:timeId", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const { timeframe, timeId } = req.params;
+      if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
+      const row = db.prepare("SELECT story, generatedAt FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=?")
+        .get(userId, timeframe, timeId) as { story: string; generatedAt: string } | undefined;
+      res.json(row ? { ...JSON.parse(row.story), generatedAt: row.generatedAt } : null);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/wrapped/:timeframe/:timeId/start", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const { timeframe, timeId } = req.params;
+      if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
+      const requestId = randomUUID();
+      db.prepare("INSERT INTO wrapped_requests(userId,timeframe,timeId,requestId) VALUES(?,?,?,?) " +
+        "ON CONFLICT(userId,timeframe,timeId) DO UPDATE SET requestId=excluded.requestId")
+        .run(userId, timeframe, timeId, requestId);
+      res.json({ requestId });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/wrapped/:timeframe/:timeId", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const { timeframe, timeId } = req.params;
+      if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
+      const { requestId, story } = req.body || {};
+      if (!string(requestId, 100)) return res.status(400).json({ error: "Missing generation token" });
+      const cleaned = validateStory(story);
+      const allowedMax = timeframe === "week" ? 6 : timeframe === "month" ? 9 : 14;
+      if (cleaned.scenes.length > allowedMax) return res.status(400).json({ error: "Too many scenes" });
+      const saved = db.transaction(() => {
+        // A stale async response must NOT override a newer generation.
+        const pending = db.prepare("SELECT requestId FROM wrapped_requests WHERE userId=? AND timeframe=? AND timeId=?")
+          .get(userId, timeframe, timeId) as { requestId: string } | undefined;
+        if (!pending || pending.requestId !== requestId) return false;
+        db.prepare("INSERT INTO wrapped_stories(userId,timeframe,timeId,story,generatedAt) VALUES(?,?,?,?,datetime('now')) " +
+          "ON CONFLICT(userId,timeframe,timeId) DO UPDATE SET story=excluded.story, generatedAt=excluded.generatedAt")
+          .run(userId, timeframe, timeId, JSON.stringify(cleaned));
+        db.prepare("DELETE FROM wrapped_requests WHERE userId=? AND timeframe=? AND timeId=?")
+          .run(userId, timeframe, timeId);
+        return true;
+      })();
+      if (!saved) return res.status(409).json({ error: "A newer Wrapped generation superseded this one." });
+      res.json({ ...cleaned, generatedAt: new Date().toISOString() });
+    } catch (e: any) {
+      res.status(e instanceof Error ? 400 : 500)
+        .json({ error: String(e?.message || e) });
+    }
+  });
+}

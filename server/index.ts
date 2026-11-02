@@ -36,6 +36,7 @@ import { registerLogRoutes } from "./routes/logs";
 import { registerDiagnosticsRoutes } from "./routes/diagnostics";
 import { registerSettingsRoutes } from "./routes/settings";
 import { registerRecapRoutes } from "./routes/recaps";
+import { registerWrappedRoutes } from "./routes/wrapped";
 import { registerAiRoutes } from "./routes/ai";
 import { registerCodexRoutes } from "./routes/codex";
 import { registerFlavorTextRoutes } from "./routes/flavorTexts";
@@ -238,6 +239,7 @@ async function startServer() {
   registerDiagnosticsRoutes(app, ctx);
   registerSettingsRoutes(app, ctx);
   registerRecapRoutes(app, ctx);
+  registerWrappedRoutes(app, ctx);
   registerAiRoutes(app, ctx);
   registerCodexRoutes(app, ctx);
   registerFlavorTextRoutes(app, ctx);

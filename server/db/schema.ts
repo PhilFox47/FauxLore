@@ -169,6 +169,26 @@ export function initSchema(db: Db) {
       UNIQUE(userId, timeframe, timeId)
     );
 
+    -- Wrapped has its own editorial lifecycle, independent of ai_recaps.
+    -- Request tokens prevent an older model response replacing a newer reroll.
+    CREATE TABLE IF NOT EXISTS wrapped_stories (
+      userId TEXT NOT NULL,
+      timeframe TEXT NOT NULL CHECK (timeframe IN ('week','month','year')),
+      timeId TEXT NOT NULL,
+      story TEXT NOT NULL,
+      generatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (userId, timeframe, timeId),
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS wrapped_requests (
+      userId TEXT NOT NULL,
+      timeframe TEXT NOT NULL CHECK (timeframe IN ('week','month','year')),
+      timeId TEXT NOT NULL,
+      requestId TEXT NOT NULL,
+      PRIMARY KEY (userId, timeframe, timeId),
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     -- AI-written achievement archive. No fixed definitions, rarity or unlock counter.
     CREATE TABLE IF NOT EXISTS generated_achievements (
       userId TEXT NOT NULL,

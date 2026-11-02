@@ -34,7 +34,9 @@ import { generateRecapAchievements } from '../services/achievementAi';
 import { AchievementCard } from '../components/AchievementCard';
 import { AchievementReveal } from '../components/AchievementReveal';
 import { StoryMode } from '../components/StoryMode';
-import { buildStoryScenes } from '../lib/storyDiscovery';
+import { buildWrappedEvidence } from '../lib/wrappedEvidence';
+import { generateAiWrapped } from '../services/wrappedAi';
+import type { WrappedStory } from '../services/wrappedAi';
 import type { AchievementDraft } from '../lib/generatedAchievements';
 import { DatabaseService } from '../services/db';
 import { groupLogsIntoSessions } from '../lib/sessions';
@@ -102,6 +104,13 @@ export function Recaps() {
   const [timeframe, setTimeframe] = useState<Timeframe>('week');
   const [offsetOffset, setOffsetOffset] = useState(1);
   const [viewMode, setViewMode] = useState<'story' | 'deep'>('story');
+  const [wrappedStories, setWrappedStories] = useState<Record<string, WrappedStory | null>>({});
+  const [wrappedLoaded, setWrappedLoaded] = useState<Set<string>>(new Set());
+  const [wrappedErrors, setWrappedErrors] = useState<Record<string, string>>({});
+  const [wrappedGeneratingKey, setWrappedGeneratingKey] = useState<string | null>(null);
+  const wrappedFetchingRef = useRef<Set<string>>(new Set());
+  const wrappedAutoAttemptedRef = useRef<Set<string>>(new Set());
+  const wrappedGenerationRef = useRef<string | null>(null);
   const recapScrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (recapScrollRef.current) recapScrollRef.current.scrollTop = 0;
@@ -421,6 +430,71 @@ export function Recaps() {
     if (isLoading) return undefined; // Return undefined while loading to avoid false "missing" states
     return aiRecaps.find(r => r.timeframe === timeframe && r.timeId === timeId) || null;
   }, [aiRecaps, timeframe, timeId, isLoading]);
+
+  const wrappedKey = timeframe + ':' + timeId;
+  const wrapped = wrappedStories[wrappedKey] || null;
+  const wrappedHasLoaded = wrappedLoaded.has(wrappedKey);
+  const canUseAi = settings?.aiProvider === 'cliProxy' || !!settings?.nanoGptApiKey;
+
+  // Wrapped has its OWN persisted story and lifecycle. Never look in aiRecaps.
+  useEffect(() => {
+    const key = timeframe + ':' + timeId;
+    if (isLoading || wrappedLoaded.has(key) || wrappedFetchingRef.current.has(key)) return;
+    wrappedFetchingRef.current.add(key);
+    // Responses are stored under their period key even if the user navigates
+    // away. Cancelling would leave that key stuck "loading" on a quick return.
+    DatabaseService.getWrappedStory(timeframe, timeId)
+      .then(found => {
+        setWrappedStories(prev => ({ ...prev, [key]: found }));
+        setWrappedLoaded(prev => new Set(prev).add(key));
+      })
+      .catch((e: any) => {
+        setWrappedErrors(prev => ({ ...prev, [key]: e?.message || 'Could not load Wrapped.' }));
+        setWrappedLoaded(prev => new Set(prev).add(key));
+      })
+      .finally(() => wrappedFetchingRef.current.delete(key));
+  }, [timeframe, timeId, isLoading, wrappedLoaded]);
+
+  const generateWrapped = async () => {
+    const key = timeframe + ':' + timeId;
+    if (wrappedGenerationRef.current || !settings || !canUseAi || !activeLogs.length || activity?.frozen) return;
+    wrappedGenerationRef.current = key;
+    setWrappedGeneratingKey(key);
+    setWrappedErrors(prev => ({ ...prev, [key]: '' }));
+    try {
+      // The token is issued before the expensive call. Another tab or a reroll
+      // can supersede this work without rewriting a newer story.
+      const evidence = buildWrappedEvidence({ timeframe, timeId, logs: activeLogs, history: validLogs, media, settings });
+      if (evidence.facts.length < 2) throw new Error('Not enough recorded activity to compose a personal story yet.');
+      const requestId = await DatabaseService.startWrappedGeneration(timeframe, timeId);
+      const generated = await generateAiWrapped({
+        apiKey: settings.nanoGptApiKey || '',
+        model: creativeModel(settings),
+        persona: settings.aiPersona,
+        evidence, media, previous: wrapped,
+      });
+      const saved = await DatabaseService.saveWrappedStory(timeframe, timeId, requestId, generated);
+      setWrappedStories(prev => ({ ...prev, [key]: saved }));
+      setWrappedLoaded(prev => new Set(prev).add(key));
+    } catch (e: any) {
+      setWrappedErrors(prev => ({ ...prev, [key]: e?.message || 'Wrapped generation failed.' }));
+      toast.error('Wrapped Story Director: ' + (e?.message || e));
+    } finally {
+      wrappedGenerationRef.current = null;
+      setWrappedGeneratingKey(null);
+    }
+  };
+
+  // Generate once on first visit; never use a deterministic replay of recap
+  // prose as a substitute when AI generation fails.
+  useEffect(() => {
+    if (isLoading || viewMode !== 'story' || !wrappedHasLoaded || wrapped || !activeLogs.length ||
+      !canUseAi || activity?.frozen || wrappedErrors[wrappedKey] || wrappedGeneratingKey || wrappedGenerationRef.current ||
+      wrappedAutoAttemptedRef.current.has(wrappedKey)) return;
+    wrappedAutoAttemptedRef.current.add(wrappedKey);
+    void generateWrapped();
+  }, [isLoading, viewMode, wrappedHasLoaded, wrapped, activeLogs.length, canUseAi,
+    activity?.frozen, wrappedGeneratingKey, wrappedKey, wrappedErrors]);
 
   const periodAchievements = useMemo(
     () => achievements.filter(a => a.timeframe === timeframe && a.timeId === timeId)
@@ -1163,12 +1237,7 @@ ${wrappedContext || 'No background material.'}
   const theme = getTheme();
   /** The recap as an issue: chapters, awards, captions — legacy rows included. */
   const story = useMemo(() => readRecap(currentRecap), [currentRecap]);
-  const storyScenes = useMemo(() => buildStoryScenes({
-    timeframe, timeId, recap: story,
-    plan: currentRecap?.data?.editorialPlan || null,
-    logs: activeLogs, history: validLogs, media, settings,
-    achievements: periodAchievements,
-  }), [timeframe, timeId, story, currentRecap, activeLogs, validLogs, media, settings, periodAchievements]);
+  const storyScenes = wrapped?.scenes || [];
   const captions = story?.captions || {};
 
   const renderTopCreator = () => {
@@ -2413,20 +2482,20 @@ ${wrappedContext || 'No background material.'}
 
       <div className="flex-shrink-0 px-4 md:px-8 py-3 border-b border-white/5 bg-zinc-950/60 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1 rounded-xl bg-white/5 p-1 border border-white/10" role="group" aria-label="Recap view">
-          <button onClick={() => setViewMode('story')} disabled={!story || !storyScenes.length}
-            aria-pressed={viewMode === 'story' && !!story}
+          <button onClick={() => setViewMode('story')} disabled={!activeLogs.length}
+            aria-pressed={viewMode === 'story'}
             className={'flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors disabled:opacity-30 ' +
-              (viewMode === 'story' && story ? 'bg-violet-500/20 text-violet-200' : 'text-zinc-400 hover:text-white')}>
+              (viewMode === 'story' ? 'bg-violet-500/20 text-violet-200' : 'text-zinc-400 hover:text-white')}>
             <Presentation className="w-4 h-4" /> Story Mode
           </button>
-          <button onClick={() => setViewMode('deep')} aria-pressed={viewMode === 'deep' || !story}
+          <button onClick={() => setViewMode('deep')} aria-pressed={viewMode === 'deep'}
             className={'flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors ' +
-              (viewMode === 'deep' || !story ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white')}>
+              (viewMode === 'deep' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white')}>
             <LayoutGrid className="w-4 h-4" /> Deep Dive
           </button>
         </div>
         <p className="text-xs text-zinc-500 hidden md:block">
-          {viewMode === 'story' && story ? 'A different story for every period.' : 'All charts, records and details.'}
+          {viewMode === 'story' ? 'An independent, AI-directed Wrapped experience.' : 'Your complete recap and all analytics.'}
         </p>
       </div>
 
@@ -2441,10 +2510,45 @@ ${wrappedContext || 'No background material.'}
             >
                {activeLogs.length > 0 ? (
                  <>
-                   {viewMode === 'story' && story && storyScenes.length > 0 ? (
-                     <StoryMode key={timeId + ':' + (currentRecap?.data?.generationId || '')}
-                       scenes={storyScenes} timeframe={timeframe} timeId={timeId}
-                       onDeepDive={() => setViewMode('deep')} />
+                   {viewMode === 'story' ? (
+                     <div className="space-y-6">
+                       {wrapped && storyScenes.length > 0 ? (
+                         <>
+                           <StoryMode key={wrappedKey + ':' + (wrapped.generatedAt || '')}
+                             scenes={storyScenes} timeframe={timeframe} timeId={timeId}
+                             onDeepDive={() => setViewMode('deep')} />
+                           <div className="flex justify-center">
+                             <button onClick={() => void generateWrapped()}
+                               disabled={!!wrappedGeneratingKey || !canUseAi || !!activity?.frozen}
+                               className="px-5 py-3 flex items-center gap-2 rounded-xl border border-violet-400/20 text-violet-200 bg-violet-400/10 hover:bg-violet-400/20 disabled:opacity-40 text-sm font-bold">
+                               <RefreshCw className={'w-4 h-4 ' + (wrappedGeneratingKey === wrappedKey ? 'animate-spin' : '')} />
+                               {wrappedGeneratingKey === wrappedKey ? 'Directing a new Wrapped...' : 'Reroll the Wrapped story'}
+                             </button>
+                           </div>
+                         </>
+                       ) : (
+                         <div className="min-h-[420px] flex flex-col items-center justify-center text-center rounded-[2.5rem] p-8 bg-gradient-to-br from-violet-950/20 via-zinc-950 to-black border border-violet-400/15 space-y-5">
+                           <Presentation className="w-14 h-14 text-violet-400" />
+                           <h2 className="text-3xl sm:text-5xl text-white font-black tracking-tight">
+                             {wrappedGeneratingKey === wrappedKey ? 'Directing your story...' : 'Your story deserves its own director.'}
+                           </h2>
+                           <p className="text-zinc-400 max-w-xl">
+                             {wrappedGeneratingKey === wrappedKey
+                               ? 'The AI is choosing the most revealing connections and writing a completely new Wrapped story. Your normal recap remains untouched.'
+                               : 'Wrapped is written separately from your recap. Its scenes, commentary and visual structure are chosen from the actual activity of this period.'}
+                           </p>
+                           {wrappedErrors[wrappedKey] && <p role="alert" className="text-rose-300 text-sm max-w-lg">{wrappedErrors[wrappedKey]}</p>}
+                           {!wrappedHasLoaded && <p className="text-zinc-500 text-sm">Checking for a saved Wrapped story...</p>}
+                           <button onClick={() => void generateWrapped()}
+                             disabled={!wrappedHasLoaded || !!wrappedGeneratingKey || !canUseAi || !!activity?.frozen}
+                             className="flex items-center gap-2 bg-violet-500/20 hover:bg-violet-500/30 border border-violet-400/30 rounded-xl px-6 py-3 font-bold text-violet-100 disabled:opacity-40">
+                             <Sparkles className={'w-4 h-4 ' + (wrappedGeneratingKey === wrappedKey ? 'animate-pulse' : '')} />
+                             {wrappedGeneratingKey === wrappedKey ? 'Generating...' : 'Generate independent Wrapped'}
+                           </button>
+                           {!canUseAi && <p className="text-xs text-zinc-500">Configure your AI provider in Settings to create the story.</p>}
+                         </div>
+                       )}
+                     </div>
                    ) : (
                      <>
                    {/* Main Header / AI Section */}
