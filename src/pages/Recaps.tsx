@@ -28,7 +28,7 @@ import {
   RecordsBoard, TasteScatter, UniverseLeaderboard, UniverseTimeline, typeHex,
 } from '../components/RecapCharts';
 import { AwardsShelf, LookAhead, RecapDek, RecapNarrative, readRecap } from '../components/RecapStory';
-import { generateStructuredRecap } from '../services/recapAi';
+import { generateStructuredRecap, planRecapEditorial } from '../services/recapAi';
 import type { StructuredRecap } from '../services/recapAi';
 import { generateRecapAchievements } from '../services/achievementAi';
 import { AchievementCard } from '../components/AchievementCard';
@@ -648,15 +648,41 @@ export function Recaps() {
       const wrappedKnowledge = await DatabaseService.getCodexPromptBlocks(wrappedIds, 'wrapped');
       const wrappedContext = Object.entries(wrappedKnowledge).map(([id, context]) => {
         const m = activeMedia.find(row => row.id === id);
-        return m ? `- ${m.title}: ${context}` : '';
+        return m ? `- ${m.title}: ${context.slice(0, 1100)}${context.length > 1100 ? ' [identity excerpt]' : ''}` : '';
       }).filter(Boolean).join('\n');
 
+      // Sample long periods across the FULL timeline instead of taking the
+      // first N rows (which could silently ignore months of the year).
+      const sampleAcross = (entries: ProgressLog[], limit: number): ProgressLog[] => {
+        const ordered = [...entries].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+        if (ordered.length <= limit) return ordered;
+        return Array.from({ length: limit }, (_, index) =>
+          ordered[Math.round(index * (ordered.length - 1) / (limit - 1))]);
+      };
+
       const promptContext = `
-MEDIA KNOWLEDGE (only work identity and context, NEVER evidence the user experienced particular events):
-${wrappedContext || 'No stored Codex context for the active titles.'}
+EDITORIAL SOURCE EVIDENCE, ${timeframe.toUpperCase()} ${timeId}
+Exact time window: ${format(currentInterval.start, 'yyyy-MM-dd')} to ${format(currentInterval.end, 'yyyy-MM-dd')}.
+This is material for an OPINION COLUMN, not a checklist. Look for small funny details, place-and-media coincidences, taste contradictions and interesting interpretations. Locations are user-recorded log labels, not proof of WHY the user went somewhere.
+
+WHERE AND WHAT (activity-by-location combinations, not just totals):
+${Array.from(new Set(activeLogs.map(l => (l.location || '').trim()).filter(Boolean))).slice(0, 16).map(location => {
+  const here = activeLogs.filter(l => (l.location || '').trim() === location);
+  const titles = Array.from(new Set(here.map(l => media.find(m => m.id === l.mediaId)?.title).filter(Boolean)));
+  const dates = Array.from(new Set(here.map(l => l.timestamp.split('T')[0]))).sort();
+  return `- ${location}: ${here.length} logs on ${dates.length} day(s), ${dates[0]} to ${dates[dates.length-1]}; media: ${titles.slice(0, 12).join(', ')}`;
+}).join('\n') || 'No locations recorded.'}
+
+USER'S WORDS AND REACTIONS (especially important):
+${sampleAcross(activeLogs.filter(l => (l.note || '').trim()), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}${l.location ? ' @ ' + l.location : ''}: ${l.note}`).join('\n') || 'No notes.'}
+${activeMedia.filter(m => (m.userReview || '').trim() || (m.dropReason || '').trim()).map(m => `- ${m.title}: ${m.userReview ? 'Review: ' + m.userReview : ''} ${m.dropReason ? 'Drop reason: ' + m.dropReason : ''}`).join('\n') || 'No reviews.'}
+
+CHRONOLOGICAL CLUES (analyze patterns, never retell this as a log):
+${sampleAcross(activeLogs, timeframe === 'year' ? 90 : 120).map(l => `- ${l.timestamp.split('T')[0]}: ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}, ${l.metricType} ${l.delta}${l.location ? ' @ ' + l.location : ''}`).join('\n') || 'No log clues.'}
+
 Timeframe: ${timeframe} (${formatIntervalLabel()})
-Is First Ever Recap?: ${isFirstRecap ? "YES. Welcome the user to their first recap!" : "NO"}
-Mayor Gaps in Logging: ${maxGapDays >= 3 ? `Yes, max gap of ${Math.round(maxGapDays)} days without playing/reading.` : "No major gaps. Consistent!"}
+Is first recap?: ${isFirstRecap ? 'YES' : 'NO'}
+Largest log gap: ${Math.round(maxGapDays)} days
 
 LOREKEEPER LEVELING:
 Current Level: ${rpgStateAtEnd.level} (${finalClassName})
@@ -667,7 +693,7 @@ Missed Quests: ${missedQuests.length > 0 ? missedQuests.map(q => `${q.title} - $
 BOSSES DEFEATED:
 ${defeatedBosses.length > 0 ? defeatedBosses.map(b => `- ${b.name} (LV ${b.level})`).join('\n') : 'None'}
 
-Total Master Pages (EXP): ${Math.floor(totalMasterPages)} ${isNewPR ? "(PERSONAL RECORD! Highlight this!)" : ""}
+Total Master Pages (EXP): ${Math.floor(totalMasterPages)} ${isNewPR ? '(personal record; mention only if editorially relevant)' : ''}
 Total Logs: ${activeLogs.length}
 
 MEDIA IN PROGRESS:
@@ -698,9 +724,6 @@ ${mediaRanking.slice(0,5).map(m => `- ${m.title} (${Math.round(m.pages)} MP)`).j
 GATHERED LOOT (Artifacts earned by finishing media!):
 ${gatheredLoot.length > 0 ? gatheredLoot.map(a => `- ${a.name} (${a.rarity}): ${a.description}`).join('\n') : 'None'}
 
-JOURNAL NOTES (User's personal thoughts and reactions!):
-${activeLogs.filter(l => l.note && l.note.trim().length > 0).map(l => `- [${l.timestamp.split('T')[0]}] On ${activeMedia.find(m => m.id === l.mediaId)?.title || 'Media'}: "${l.note}"`).join('\n') || 'None'}
-
 WHERE THEY WERE (locations, grouped into kinds of place by the user themselves — a group is their own judgement about which places belong together, so it says more than the raw names do):
 ${groupSummary.stats.length > 0
   ? groupSummary.stats.map(g => `- ${g.name}: ${Math.round(g.pages)} MP (${Math.round(g.share * 100)}% of located logs), ${g.places} place(s)${g.topPlace ? `, mostly ${g.topPlace.location}` : ''}`).join('\n')
@@ -720,10 +743,34 @@ ${rankRace ? `The race: ${rankRace.series.map(r => r.title).join(' vs ')}${rankR
 PERSONAL RECORDS this ${timeframe}: ${records.filter(r => r.isRecord).map(r => `${r.label} — ${r.value} ${r.unit} (previous best ${r.previousBest})`).join(' | ') || 'None broken'}
 NEAR MISSES: ${records.filter(r => !r.isRecord && r.previousBest > 0 && r.value >= r.previousBest * 0.85).map(r => `${r.label} — ${r.value} vs best ${r.previousBest}`).join(' | ') || 'None close'}
 
-PREVIOUS RECAPS (Chronological):
-${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title}): \n${r.summary}`).join('\n\n') : 'No past recaps available.'}
+PREVIOUS ISSUES (A LIST OF USED THEMES TO AVOID, not obligations to mention again):
+${previousRecaps.length > 0 ? previousRecaps.map(r => {
+  const olderAngles = r.data?.editorialPlan?.angles;
+  const used = Array.isArray(olderAngles) && olderAngles.length
+    ? olderAngles.map((a: any) => a.thesis)
+    : (r.data?.structured?.chapters || []).map((c: any) => c.heading);
+  return `- ${r.timeId}: ${r.title}; prior hook: ${r.data?.structured?.dek || (r.summary || '').slice(0, 150)}; angles already covered: ${used.slice(0, 4).join(' / ')}`;
+}).join('\n') : 'No previous issues.'}
+No automatic callbacks. Only revisit a topic for a genuinely NEW development, new insight or a better joke.
+
+MEDIA KNOWLEDGE (work identity only. NOT evidence of personally experienced plot, NO spoilers):
+${wrappedContext || 'No background material.'}
 `;
 
+      // V2: independent editorial selection before prose. Planner failure
+      // degrades to self-editing rather than losing the entire recap.
+      let editorialPlan = null;
+      try {
+        editorialPlan = await planRecapEditorial({
+          apiKey: settings.nanoGptApiKey || '',
+          model: creativeModel(settings),
+          timeframe,
+          intervalLabel: formatIntervalLabel(),
+          context: promptContext,
+        });
+      } catch (error) {
+        console.warn('[recap] Editorial planning failed; falling back to writer planning.', error);
+      }
       const recap = await generateStructuredRecap({
         apiKey: settings.nanoGptApiKey || '',
         model: creativeModel(settings),
@@ -731,6 +778,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
         timeframe,
         intervalLabel: formatIntervalLabel(),
         context: promptContext,
+        editorialPlan,
       });
 
       const generationId = crypto.randomUUID();
@@ -743,6 +791,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
         data: {
           // The whole issue — chapters, awards, chart captions, look-ahead.
           structured: recap,
+          editorialPlan,
           generationId,
           totalMasterPages,
           isNewPR,

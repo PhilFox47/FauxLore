@@ -84,7 +84,7 @@ export function normalizeRecap(raw: any, fallbackText = ''): StructuredRecap {
     ? raw.awards
         .map((a: any) => ({ award: clean(a?.award ?? a?.name), title: clean(a?.title ?? a?.media), reason: clean(a?.reason) }))
         .filter((a: RecapAward) => a.award && a.title)
-        .slice(0, 6)
+        .slice(0, 3)
     : [];
 
   const captionsRaw = raw?.captions || {};
@@ -112,10 +112,75 @@ export function normalizeRecap(raw: any, fallbackText = ''): StructuredRecap {
   };
 }
 
+
+/**
+ * Editorial preselection: think of ORIGINAL arguments before composing prose.
+ * Do not mix writing with idea triage, or the most obvious statistic wins again.
+ */
+export interface EditorialAngle {
+  thesis: string;
+  evidence: string;
+  twist: string;
+}
+export interface EditorialPlan {
+  throughline: string;
+  angles: EditorialAngle[];
+}
+
+export function normalizeEditorialPlan(value: any): EditorialPlan {
+  const text = (v: unknown, max: number) => typeof v === 'string' ? v.trim().slice(0, max) : '';
+  const angles: EditorialAngle[] = Array.isArray(value?.angles)
+    ? value.angles.slice(0, 4).map((v: any) => ({
+      thesis: text(v?.thesis, 400),
+      evidence: text(v?.evidence, 700),
+      twist: text(v?.twist, 500),
+    })).filter((v: EditorialAngle) => v.thesis && v.evidence && v.twist)
+    : [];
+  if (!angles.length) throw new Error('No strong editorial angles were returned.');
+  return { throughline: text(value?.throughline, 300), angles };
+}
+
+export async function planRecapEditorial(args: {
+  apiKey: string;
+  model: string;
+  timeframe: 'week' | 'month' | 'year';
+  intervalLabel: string;
+  context: string;
+}): Promise<EditorialPlan> {
+  const instructions = [
+    "You are the ruthless editor of an opinionated personal media column. The reader LIVED these events. They know what happened. Find what it MEANS, or what is absurd about it.",
+    "Search the evidence for location-versus-media coincidences, changes of environment, contradictions between taste and behavior, journal opinions, neglected details, cross-media parallels, funny accidents and real patterns.",
+    "Privately consider at least six possible angles. Reject obvious milestones, numerical recaps, easy jokes and themes already exhausted by earlier columns. Choose 2-4 genuinely distinct insights; allow just one if evidence is weak. A trivial detail with a brilliant interpretation beats a record with nothing to say.",
+    "A single RED THREAD makes the issue cohere, but it must not force every chapter to discuss the same title. Each selected angle must have a different thesis or comic premise.",
+    "Past recap themes are a DO-NOT-REPEAT reference first, not obligations for callbacks. A callback needs a new development or an unexpected reinterpretation.",
+    "Be provocative, skeptical, witty and occasionally unfair in your OPINIONS. Distinguish factual evidence from speculation; never invent user activity, personal feelings, or plot events. Codex lore is NOT evidence of what the user experienced.",
+    "A thesis is NOT 'the user read more on the train'. A thesis asks why a setting or behavior may be revealing, what contradiction it creates, or what ridiculous conclusion an opinionated columnist could draw from it.",
+    "Choose and rank by novelty, explanatory power, personal specificity, cross-context connections and distinctiveness. Numbers should support, not BE, the point.",
+    "Return ONLY JSON in English: {\"throughline\":\"an evocative editorial thread\",\"angles\":[{\"thesis\":\"specific provocative claim\",\"evidence\":\"facts and notes supporting it, clearly marking inference\",\"twist\":\"new connection or comedic perspective that makes it worth reading\"}]}."
+  ].join('\n');
+  const response = await apiFetch('/api/nano-gpt/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-nano-gpt-key': args.apiKey },
+    body: JSON.stringify({
+      model: args.model || 'gpt-4o-mini', temperature: 0.95,
+      messages: [
+        { role: 'system', content: instructions },
+        { role: 'user', content: 'Select angles for the ' + args.timeframe + ' period ' + args.intervalLabel + '.\n\n' + args.context },
+      ],
+      response_format: { type: 'json_object' },
+    }),
+  });
+  if (!response.ok) throw new Error('Editorial plan request failed (' + response.status + ')');
+  const data = await response.json();
+  const reply = data.choices?.[0]?.message?.content;
+  if (typeof reply !== 'string') throw new Error('Editorial planner returned no text.');
+  return normalizeEditorialPlan(parseJsonLoose(reply));
+}
+
 const CHAPTER_BRIEF: Record<string, string> = {
-  week: '2 or 3 chapters. This is a short dispatch — keep it tight and specific.',
-  month: '4 chapters with a clear arc: what took hold, what it cost, what it revealed, where it left them.',
-  year: '5 or 6 chapters that read as a year in movements: how it opened, what dominated, the turn, the losses, what it says about them now, and how it closed.',
+  week: 'Normally 2-4 different angles; occasionally one sharp argument is enough. No padding.',
+  month: 'Normally 2-4 independent opinions connected by a red thread. No month-by-month account.',
+  year: 'Normally 2-4 substantial observations about the whole year. This is not a chronology of every month.',
 };
 
 /**
@@ -129,50 +194,30 @@ export async function generateStructuredRecap(args: {
   timeframe: 'week' | 'month' | 'year';
   intervalLabel: string;
   context: string;
+  editorialPlan?: EditorialPlan | null;
 }): Promise<StructuredRecap> {
-  const { apiKey, model, persona, timeframe, intervalLabel, context } = args;
+  const { apiKey, model, persona, timeframe, intervalLabel, context, editorialPlan } = args;
 
-  const system = `You are FauxLore's resident columnist, writing the ${timeframe}ly issue about ONE person's media life. ${getPersonaDescription(persona)}
+  const system = [
+    "You are FauxLore's OPINIONATED MEDIA COLUMNIST, not a life-log summarizer. " + getPersonaDescription(persona),
+    "The reader WAS THERE. They already have charts and metrics. Deliver insights, provocation, contradictions, unusual connections, taste arguments, comic observations, surprising inferences and strong opinions they could actually debate.",
+    "KEEP A RED THREAD for the issue's identity, but write 2-4 DISTINCT ARGUMENTS beneath it. Do not turn every chapter into another paragraph about the dominant title. One exceptional thought may suffice if the evidence is thin.",
+    "LEAD WITH YOUR TAKE. A paragraph's first sentence should ideally be an interpretation, surprise or sharp claim. Use facts to earn your opinion, not as a timeline. If a sentence merely lists a title, date, session, Master Pages or rating, remove it unless that exact number is essential to the punchline or argument.",
+    "THE PERSONAL SETTING MATTERS: notice travel, locations, a book read in a related real-world setting, time away from home, shifts in routines, and odd intersections between different media. Do not mistake correlation for a proved cause.",
+    "BE BOLD: argue about what the player's choices might imply, disagree with ratings, point out contradictions, make outlandish but clearly rhetorical accusations. Never fabricate factual events, feelings or personal experiences. Treat source Codex as lore only, never as proof of encountered scenes or plots.",
+    "PREVIOUS RECAPS ARE AN ANTI-REPETITION LIST. A callback needs fresh insight or a new joke. Do not keep discussing an old theme simply to show continuity.",
+    "DYNAMIC LENGTH. An insight may need one line or several paragraphs. No obligatory story beats, no KPI sequences, no summary conclusion, no moral-of-the-story ending. Stop when you've made the point. Avoid bland AI voice ('tapestry', 'journey', 'testament', 'delve', 'symphony', 'a week defined by', 'what this really shows').",
+    "AWARDS are OPTIONAL: zero to two, always tied to an exact media title, and only if the award adds a NEW angle rather than repeating a chapter. Same for the optional ROAST: empty string is better than recycling a punchline. A separate dungeon achievement narrator also runs after this column.",
+    "CAPTIONS go under charts: one independent observation about the indicated dimension; never repeat prose or invent numbers. Omit when unsupported.",
+    "FINISHED means explicitly present in MEDIA COMPLETED. On Hold/Caught Up means awaiting unreleased content, never laziness or abandonment. Respect the actual period dates. Avoid unearned story spoilers.",
+    "Keep ALL JSON strings plain text: no Markdown, HTML or literal formatting tokens. Use blank lines between paragraphs if useful. The pullQuote must literally appear in one of the chapters.",
+    "Length guide: " + (CHAPTER_BRIEF[timeframe] || CHAPTER_BRIEF.month),
+    "Return exactly one JSON object with: title (specific evocative 2-6 words), dek (one provocative editorial hook), chapters ([{heading,body}]), pullQuote (verbatim sharp chapter sentence, <=20 words), awards ([{award,title,reason}]), captions ({momentum,formats,rhythm,taste,pipeline,records,universes,universeTimeline} optional properties), lookAhead ({watchFor,challenge}, empty strings if unnecessary), theme (up to 5 words), mood (one word), roast (optional original jab; blank if repetitive)."
+  ].join('\n');
 
-You are a commentator and analyst who has been following this person closely — NOT a summarizer. The data you are given is evidence, not a script.
-
-Return ONE JSON object, and nothing else, with exactly these keys:
-
-{
-  "title": "2-6 words. Write the chapters first, read them back, then title the issue after the single defining story you found. Like a great episode or album title — evocative, specific, earned. Anchor it in what actually happened: a title they could not put down, a genre spiral, a milestone, a heartbreak, a thread running through their journal notes. In the spirit of 'The Sci-Fi Spiral', 'Three Books, No Sleep', 'Death of a Backlog', 'Cozy Hours and Cold Coffee'. NEVER generic filler like 'A Week of Media', 'Productive Times' or 'The Journey Continues', and never just the date.",
-  "dek": "One sentence under the title that frames the issue — the thesis in miniature, not a summary of the stats.",
-  "chapters": [{"heading": "3-5 word chapter title", "body": "the prose"}],
-  "pullQuote": "The single sharpest sentence in the whole piece, lifted verbatim from one of your chapters. Max 20 words.",
-  "awards": [{"award": "award name, 2-4 words", "title": "the EXACT media title from the data it goes to", "reason": "one sentence, specific and a little funny"}],
-  "captions": {
-    "momentum": "one line reading the pace of this ${timeframe} against the last",
-    "formats": "one line on the mix of media types",
-    "rhythm": "one line on WHEN they consume — hours, days, streaks, gaps",
-    "taste": "one line on their ratings versus the critics'",
-    "pipeline": "one line on what they finished versus what they left open",
-    "records": "one line on any personal bests, or on how close they came",
-    "universes": "one line on the franchises they lived in this ${timeframe} — devotion to one, spread across many, or a universe entered for the first time",
-    "universeTimeline": "one line on how those franchises traded places across the ${timeframe}"
-  },
-  "lookAhead": {"watchFor": "what you will be watching for next ${timeframe}, based on what is unresolved", "challenge": "one concrete, achievable challenge for next ${timeframe}"},
-  "theme": "the theme of this ${timeframe}, max 5 words",
-  "mood": "one word for the emotional register of this ${timeframe}",
-  "roast": "1-2 sentences of genuine, affectionate shade about their habits"
-}
-
-HOW TO WRITE IT:
-1. THESIS, NOT A LIST: every chapter serves one throughline — an obsession, a slump, a genre bender, a finishing spree, a crisis of commitment. NEVER walk the logs item by item. The moment you write "they also...", cut it.
-2. ANALYZE, DON'T ECHO: interpretation is the whole job. Name patterns out loud: shifts in taste, changes in pace, what they gravitate toward versus avoid, the contradiction between what they rate highly and what they actually sink hours into, bingeing versus grazing, what the dropped titles and journal notes say about their headspace. Make a claim, then back it with the data.
-3. USE THE NUMBERS AS EVIDENCE: the context includes this period measured against the last one, personal records, streaks, gaps and the hours they keep. Quote them where they support a point. Never invent one.
-4. TAKE A STANCE: real opinions. Tease them, push them, call out the backlog they keep ignoring, and genuinely celebrate the wins. React like a friend who has been watching.
-5. CONTINUITY: treat PREVIOUS RECAPS as one ongoing story and follow up explicitly. Did they finish the thing you flagged? Is the slump over or worse? Reward callbacks by name. With no previous recaps, set the baseline and say what you will be watching.
-6. AWARDS: hand out 3 to 5, only to titles that literally appear in the data, spelled exactly as written there. They should be sharp and specific ("Hardest Fought", "Biggest Waste of a Good Evening", "The One That Ate the Month") — not generic categories.
-7. CAPTIONS: each caption sits beneath a chart in the app, so it must read as a standalone observation about that exact dimension. One sentence, no preamble, never repeating the chapter prose verbatim. Omit a caption entirely if the data does not support one.
-8. ACCURACY: only treat something as finished if it appears in MEDIA COMPLETED. Do not invent events, feelings or numbers.
-9. ON HOLD MEANS WAITING, NOT SLACKING: an On Hold title is parked because the next season, volume, chapter or patch does not exist yet. It is not a backlog they are avoiding and not evidence of a slump. Never tell them to pick one up, never scold them for the gap, and never award it "most neglected". The only exception is anything listed under UNBLOCKED — new content has shipped there, and pointing at it is exactly the right call.
-10. LENGTH: ${CHAPTER_BRIEF[timeframe] || CHAPTER_BRIEF.month}
-11. HUMAN VOICE / ANTI-SLOP: write like a smart, real person talking. Avoid AI clichés ("delve", "tapestry", "embark", "testament", "symphony", "not merely", "in the realm of") and limp conclusions ("In conclusion", "Overall", "One thing is certain"). Be specific, grounded, and a little unhinged when it is earned.
-12. PLAIN TEXT INSIDE THE JSON: no Markdown, no HTML, no asterisks, hashes, bullets or links — they render as literal characters. Separate paragraphs inside a chapter body with a blank line (\\n\\n). Escape every double quote.`;
+  const outline = editorialPlan?.angles?.length
+    ? 'EDITORIAL SELECTION. USE THESE DISTINCT IDEAS, BUT WRITE FRESH PROSE, NOT A RESTATEMENT OF THE OUTLINE:\n' + JSON.stringify(editorialPlan, null, 2) + '\n\n'
+    : 'Editorial planner unavailable. Privately select 2-4 distinct, non-obvious arguments before writing. Connect them with a thread but avoid repeating the main event.\n\n';
 
   const res = await apiFetch('/api/nano-gpt/chat/completions', {
     method: 'POST',
@@ -182,7 +227,7 @@ HOW TO WRITE IT:
       temperature: 0.9,
       messages: [
         { role: 'system', content: system },
-        { role: 'user', content: `Write the ${timeframe}ly issue for ${intervalLabel}.\n\n${context}` },
+        { role: 'user', content: 'Write the ' + timeframe + 'ly issue for ' + intervalLabel + '.\n\n' + outline + 'EVIDENCE (not a checklist):\n' + context },
       ],
       response_format: { type: 'json_object' },
     }),
