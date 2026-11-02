@@ -130,7 +130,7 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       setAsking(true);
       const timeout = setTimeout(() => controller.abort(), 10000);
       void generateSessionQuestion({
-        item, delta, metricType, enjoyment, statusBefore: item.status, statusAfter: selectedStatus,
+        item, delta, estimatedMinutes: previewSpan?.minutes, metricType, enjoyment, statusBefore: item.status, statusAfter: selectedStatus,
         location, previousLogs, settings, signal: controller.signal,
       }).then(result => {
         if (!controller.signal.aborted) setQuestion(result);

@@ -1378,9 +1378,9 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
                             {log.note && (
                               <p className={cn(
                                 "text-sm",
-                                log.metricType === 'statusChange' ? "text-orange-400 font-bold" : "text-zinc-300 italic"
+                                log.metricType === 'statusChange' ? "text-orange-400 font-bold" : "text-zinc-400"
                               )}>
-                                {log.metricType === 'statusChange' ? log.note : `"${log.note}"`}
+                                {log.metricType === 'statusChange' ? log.note : `Notes: ${log.note}`}
                               </p>
                             )}
                             {log.thoughts && <p className="text-sm italic text-violet-200">Journal: “{log.thoughts}”</p>}

@@ -5,6 +5,7 @@ import type { MediaItem, ProgressLog, Settings, Status } from '../types/schema';
 type QuestionInput = {
   item: MediaItem;
   delta: number;
+  estimatedMinutes?: number;
   metricType: string;
   enjoyment?: number | null;
   statusBefore: Status;
@@ -49,7 +50,7 @@ export async function generateSessionQuestion(input: QuestionInput): Promise<str
         { role: 'user', content: JSON.stringify({
           media: input.item.title, type: input.item.mediaType,
           genres: (input.item.genres || []).slice(0, 4), durationOrProgress: input.delta,
-          progressMetric: input.metricType, sessionEnjoyment: input.enjoyment ?? null,
+          progressMetric: input.metricType, estimatedSessionMinutes: input.estimatedMinutes ?? null, sessionEnjoyment: input.enjoyment ?? null,
           fromStatus: input.statusBefore, toStatus: input.statusAfter,
           location: input.location || null, previousSessions: previous,
         }) }
