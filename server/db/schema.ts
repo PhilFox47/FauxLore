@@ -169,6 +169,23 @@ export function initSchema(db: Db) {
       UNIQUE(userId, timeframe, timeId)
     );
 
+    -- AI-written achievement archive. No fixed definitions, rarity or unlock counter.
+    CREATE TABLE IF NOT EXISTS generated_achievements (
+      userId TEXT NOT NULL,
+      timeframe TEXT NOT NULL CHECK (timeframe IN ('week', 'month', 'year')),
+      timeId TEXT NOT NULL,
+      position INTEGER NOT NULL CHECK (position BETWEEN 0 AND 2),
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      reward TEXT NOT NULL,
+      subject TEXT NOT NULL DEFAULT '',
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (userId, timeframe, timeId, position),
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_generated_achievements_user
+      ON generated_achievements(userId, timeId DESC);
+
     CREATE TABLE IF NOT EXISTS ai_text_cache (
       key TEXT NOT NULL,
       userId TEXT NOT NULL DEFAULT 'default_user',

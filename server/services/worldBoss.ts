@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
+import { getPersonaDescription } from "../../src/lib/personas";
 import { AUTHENTICITY, LEVEL_DESCRIPTIONS, SHARPNESS, enemyTier } from "../lib/artDirection";
 import { bossTarget, bossUnit } from "../lib/bossTargets";
 import { type CodexService } from "./codex";
@@ -134,7 +135,7 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
       // STAGE 2 — creative. The player only ever reads this sentence, and the
       // model that is good at picking a faithful opponent is not the one that is
       // good at giving it a voice.
-      const written = await writeEnemyFlavour(aiConfig, mediaItem, level, tier, spec, codexRow);
+      const written = await writeEnemyFlavour(userId, aiConfig, mediaItem, level, tier, spec, codexRow);
 
       return {
         name,
@@ -157,6 +158,7 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
    * research, so it cannot contradict the research; its whole job is voice.
    */
   async function writeEnemyFlavour(
+    userId: string,
     aiConfig: NonNullable<ReturnType<typeof getAiConfig>>,
     mediaItem: any,
     level: number,
@@ -164,6 +166,8 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
     spec: any,
     codexRow: any,
   ): Promise<{ title: string; description: string } | null> {
+    const selected = db.prepare('SELECT aiPersona FROM settings WHERE userId = ?').get(userId) as { aiPersona?: string } | undefined;
+    const narratorVoice = selected?.aiPersona === 'dungeon-system' ? getPersonaDescription(selected.aiPersona) : '';
     const d = codexRow?.data;
     const voice = [
       d?.tone ? `Tone of the source: ${d.tone}` : "",
@@ -174,6 +178,7 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
 
 THE SOURCE: "${mediaItem.title}" (${mediaItem.mediaType})
 ${voice}
+${narratorVoice ? "SELECTED NARRATOR PERSONA: " + narratorVoice : ""}
 
 THE BRIEF — every fact below is settled. Do not add to it, do not contradict it, do not invent abilities, allies or history it does not mention:
 - Name: ${spec.name}
@@ -186,7 +191,7 @@ THE BRIEF — every fact below is settled. Do not add to it, do not contradict i
 
 WRITE:
 1. Its epithet: a short RPG title without the name ("King of the Koopas", "Intern of the Seventh Circle"). Improve on the working one if you can; keep it if it is already right.
-2. 1-3 sentences of flavour text, in the voice and tone of the source work. Say what it is and how it stands in the player's way. Let its personality show — wit at low levels, dread at high ones. Write it as the world would describe it, not as a stat block.
+2. 1-3 sentences of flavour text, in the selected narrator persona when provided, otherwise in the voice and tone of the source work. Say what it is and how it stands in the player's way. Let its personality show — wit at low levels, dread at high ones. Write it as the world would describe it, not as a stat block.
 
 Do not restate the brief as a list. Do not open with the name and a colon. No markdown, no quotation marks around the whole thing.
 

@@ -29,6 +29,9 @@ import {
 } from '../components/RecapCharts';
 import { AwardsShelf, LookAhead, RecapDek, RecapNarrative, readRecap } from '../components/RecapStory';
 import { generateStructuredRecap } from '../services/recapAi';
+import type { StructuredRecap } from '../services/recapAi';
+import { generateRecapAchievements } from '../services/achievementAi';
+import { AchievementCard } from '../components/AchievementCard';
 import { DatabaseService } from '../services/db';
 import { groupLogsIntoSessions } from '../lib/sessions';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, AreaChart, Area, Legend } from 'recharts';
@@ -85,7 +88,7 @@ function Reveal({ children, className, delay = 0 }: { children: React.ReactNode;
 }
 
 export function Recaps() {
-  const { media, logs, settings, aiRecaps, saveAiRecap, artifacts, worldBosses, isLoading, aiTextCache, activity, locationGroups } = useMediaContext();
+  const { media, logs, settings, aiRecaps, saveAiRecap, achievements, refreshAchievements, artifacts, worldBosses, isLoading, aiTextCache, activity, locationGroups } = useMediaContext();
   const toast = useToast();
 
   // Wallpaper: rendered on demand, because it means fetching every cover in the
@@ -95,6 +98,8 @@ export function Recaps() {
   const [timeframe, setTimeframe] = useState<Timeframe>('week');
   const [offsetOffset, setOffsetOffset] = useState(1); 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isForgingAchievement, setIsForgingAchievement] = useState(false);
+  const [freshlyUnlocked, setFreshlyUnlocked] = useState<string | null>(null);
   const attemptedGenRef = useRef<Set<string>>(new Set());
 
   const validLogs = useMemo(() => logs.filter(log => !log.isHistoric && !log.timestamp.startsWith('1970-01-01')), [logs]);
@@ -407,6 +412,60 @@ export function Recaps() {
     return aiRecaps.find(r => r.timeframe === timeframe && r.timeId === timeId) || null;
   }, [aiRecaps, timeframe, timeId, isLoading]);
 
+  const periodAchievements = useMemo(
+    () => achievements.filter(a => a.timeframe === timeframe && a.timeId === timeId)
+      .sort((a, b) => a.position - b.position),
+    [achievements, timeframe, timeId]
+  );
+
+  const forgeAchievements = async (recap: StructuredRecap, evidence: string, generationId: string | null) => {
+    if (!settings) throw new Error('Missing AI settings');
+    setIsForgingAchievement(true);
+    try {
+      const drafts = await generateRecapAchievements({
+        apiKey: settings.nanoGptApiKey || '',
+        model: creativeModel(settings),
+        timeframe, timeId, recap,
+        context: evidence,
+        previous: achievements,
+      });
+      await DatabaseService.saveGeneratedAchievements({ timeframe, timeId, generationId, achievements: drafts });
+      await refreshAchievements();
+      setFreshlyUnlocked(timeframe + ':' + timeId);
+    } finally {
+      setIsForgingAchievement(false);
+    }
+  };
+
+  // Retry missing achievements on old recaps without rewriting the article.
+  const retryAchievements = async () => {
+    if (!currentRecap || !settings || isForgingAchievement || isGenerating) return;
+    if (settings.aiProvider !== 'cliProxy' && !settings.nanoGptApiKey) {
+      toast.error('Configure an AI provider in Settings first.');
+      return;
+    }
+    const existing = readRecap(currentRecap);
+    if (!existing) return;
+    const evidence = [
+      'Period: ' + timeframe + ' ' + timeId,
+      'Media touched: ' + JSON.stringify(activeMedia.map(m => ({
+        title: m.title, mediaType: m.mediaType, genres: m.genres, userRating: m.userRating,
+        reviewScore: m.reviewScore, userReview: m.userReview, dropReason: m.dropReason
+      }))),
+      'Completed during period: ' + completedMedia.map(m => m.title).join(', '),
+      'Dropped during period: ' + droppedMedia.map(m => m.title).join(', '),
+      'Logs: ' + JSON.stringify(activeLogs.map(l => ({
+        date: l.timestamp, title: media.find(m => m.id === l.mediaId)?.title,
+        metric: l.metricType, progress: l.delta, note: l.note, location: l.location
+      }))),
+    ].join('\n');
+    try {
+      await forgeAchievements(existing, evidence, currentRecap.data?.generationId || null);
+    } catch (e: any) {
+      toast.error('Achievement generation failed: ' + (e?.message || String(e)));
+    }
+  };
+
   const formatIntervalLabel = () => {
     if (timeframe === 'week') {
       if (offsetOffset === 1) return 'Last Week';
@@ -670,6 +729,8 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
         context: promptContext,
       });
 
+      const generationId = crypto.randomUUID();
+      setFreshlyUnlocked(null);
       await saveAiRecap({
         timeframe,
         timeId,
@@ -678,6 +739,7 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
         data: {
           // The whole issue — chapters, awards, chart captions, look-ahead.
           structured: recap,
+          generationId,
           totalMasterPages,
           isNewPR,
           defeatedBosses: defeatedBosses.map(b => ({ id: b.id, name: b.name, level: b.level, mediaId: b.mediaId, imageUrl: b.imageUrl })),
@@ -705,6 +767,12 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
           } : null
         }
       });
+      // A separate AI pass. Failure does not undo the successfully saved recap.
+      try {
+        await forgeAchievements(recap, promptContext, generationId);
+      } catch (achievementError: any) {
+        toast.error('Recap saved, but achievements failed: ' + (achievementError?.message || String(achievementError)));
+      }
     } catch (e: any) {
       toast.error("Failed to generate AI Recap: " + e.message);
     } finally {
@@ -2340,7 +2408,46 @@ ${previousRecaps.length > 0 ? previousRecaps.map(r => `-- ${r.timeId} (${r.title
                       </div>
                    </div>
 
-                   {/* Hero Numbers */}
+                   {/* AI achievements, attached to the period but not forced to recap its theme. */}
+                    {currentRecap && (
+                      <section className="rounded-[2rem] border border-amber-500/20 bg-black/70 p-5 sm:p-8 space-y-5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <Trophy className="h-7 w-7 text-amber-400" />
+                            <div>
+                              <h3 className="text-xl sm:text-2xl font-black text-white">
+                                {freshlyUnlocked === timeframe + ':' + timeId ? 'Achievement Unlocked!' : 'Dungeon Achievements'}
+                              </h3>
+                              <p className="text-xs text-zinc-500">The system has reviewed your choices. This is unfortunate for you.</p>
+                            </div>
+                          </div>
+                          <a href="/achievements" className="text-amber-400 hover:text-amber-300 text-xs font-bold">View archive</a>
+                        </div>
+                        {periodAchievements.length > 0 ? (
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {periodAchievements.map((achievement, index) => (
+                              <AchievementCard key={achievement.position} achievement={achievement} index={index}
+                                fresh={freshlyUnlocked === timeframe + ':' + timeId} />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="border border-dashed border-amber-500/15 rounded-2xl p-6 space-y-4">
+                            <p className="text-zinc-400 text-sm">
+                              {isForgingAchievement ? 'The dungeon system is judging your decisions...' :
+                                'No AI achievement exists for this recap yet.'}
+                            </p>
+                            {!isForgingAchievement && !isGenerating && (
+                              <button onClick={retryAchievements} disabled={!!activity?.frozen}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 disabled:opacity-50 text-sm font-bold">
+                                <Sparkles className="w-4 h-4" /> Generate achievements
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </section>
+                    )}
+
+                    {/* Hero Numbers */}
                    <Reveal className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <HeroStat label="Master Pages" delta={comparison.masterPages} accentClass={theme.text} />
                       <HeroStat label="Titles Finished" delta={comparison.completed} />

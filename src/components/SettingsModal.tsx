@@ -772,7 +772,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         </div>
                       </div>
                       <p className="text-[10px] text-zinc-500 mt-1">
-                        {getPersona(formData.aiPersona).hint} Sets the voice of your recaps and quest titles.
+                        {getPersona(formData.aiPersona).hint} Sets the voice of recaps and titles. Dungeon System AI also narrates enemies and loot.
                       </p>
                     </div>
 

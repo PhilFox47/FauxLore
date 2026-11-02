@@ -1,5 +1,6 @@
 import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
+import { getPersonaDescription } from "../../src/lib/personas";
 import { AUTHENTICITY, SHARPNESS, rarityArt } from "../lib/artDirection";
 import { type CodexService } from "./codex";
 import { codexTaskContext } from "./codexV3Context";
@@ -202,7 +203,7 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
 
       // STAGE 2 — creative. The card in the Armory is one sentence long, and it
       // is the only part of this the player ever reads.
-      const written = await writeLootFlavour(aiConfig, mediaItem, attrs, art, spec, codexRow);
+      const written = await writeLootFlavour(userId, aiConfig, mediaItem, attrs, art, spec, codexRow);
 
       return {
         ...attrs,
@@ -224,6 +225,7 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
    * research and therefore cannot contradict the research. Its job is voice.
    */
   async function writeLootFlavour(
+    userId: string,
     aiConfig: NonNullable<ReturnType<typeof getAiConfig>>,
     mediaItem: any,
     attrs: { rarity: string; slot: string; targetType: string; targetValue: string },
@@ -231,6 +233,8 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
     spec: any,
     codexRow: any,
   ): Promise<string> {
+    const selected = db.prepare('SELECT aiPersona FROM settings WHERE userId = ?').get(userId) as { aiPersona?: string } | undefined;
+    const narratorVoice = selected?.aiPersona === 'dungeon-system' ? getPersonaDescription(selected.aiPersona) : '';
     const d = codexRow?.data;
     const voice = [
       d?.tone ? `Tone of the source: ${d.tone}` : "",
@@ -241,6 +245,7 @@ Return ONLY a pure JSON object, no markdown fence, no commentary:
 
 THE SOURCE: "${mediaItem.title}" (${mediaItem.mediaType})
 ${voice}
+${narratorVoice ? "SELECTED NARRATOR PERSONA: " + narratorVoice : ""}
 
 THE BRIEF — every fact below is settled. Do not add to it, do not contradict it, and do not invent owners, powers or history it does not mention:
 - Name: ${spec.name}
@@ -249,7 +254,7 @@ THE BRIEF — every fact below is settled. Do not add to it, do not contradict i
 - What it looks like: ${spec.look || ""}
 - Rarity: ${attrs.rarity} — it should read as ${art.grandeur}.
 
-WRITE 1-2 sentences of flavour text in the VOICE of this work — its tone, its humour or its dread, its vocabulary. Use the real specifics from the brief rather than vague mysticism. It must also hint, without ever stating it outright, at a bonus to ${attrs.targetType}: "${attrs.targetValue}".
+WRITE 1-2 sentences of flavour text in the selected narrator persona when provided, otherwise in the VOICE of this work — its tone, its humour or its dread, its vocabulary. Use the real specifics from the brief rather than vague mysticism. It must also hint, without ever stating it outright, at a bonus to ${attrs.targetType}: "${attrs.targetValue}".
 
 Write it as the world would describe the object, not as a stat block. Do not restate the brief. Do not open with the name and a colon. No markdown, no surrounding quotation marks.
 

@@ -6,6 +6,7 @@ import { generateText, getPersonaDescription } from '../services/nanoGptService'
 import { getProgressionContext, levelBudget, buildTitleSystemPrompt, buildTitlePrompt } from '../lib/lorekeeperTitles';
 import { useAuth } from './AuthContext';
 import { creativeModel } from '../lib/aiModels';
+import type { GeneratedAchievement } from '../lib/generatedAchievements';
 
 interface MediaContextType {
   media: MediaItem[];
@@ -13,6 +14,7 @@ interface MediaContextType {
   settings: Settings | null;
   rpgState: ReturnType<typeof calculateRPGState>;
   aiRecaps: any[];
+  achievements: GeneratedAchievement[];
   artifacts: Artifact[];
   worldBosses: WorldBoss[];
   aiTextCache: Record<string, string>;
@@ -40,6 +42,7 @@ interface MediaContextType {
   acknowledgeUpdate: (mediaId: string) => Promise<void>;
   refreshMangaCover: (mediaId: string) => Promise<void>;
   saveAiRecap: (recap: any) => Promise<void>;
+  refreshAchievements: () => Promise<void>;
   saveArtifact: (artifact: Artifact) => Promise<void>;
   updateArtifact: (id: string, artifact: Partial<Artifact>) => Promise<void>;
   equipArtifact: (id: string, slot: string) => Promise<void>;
@@ -76,6 +79,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [aiRecaps, setAiRecaps] = useState<any[]>([]);
+  const [achievements, setAchievements] = useState<GeneratedAchievement[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [worldBosses, setWorldBosses] = useState<WorldBoss[]>([]);
   const [aiTextCache, setAiTextCache] = useState<Record<string, string>>({});
@@ -100,6 +104,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       setLogs([]);
       setSettings(null);
       setAiRecaps([]);
+      setAchievements([]);
       setArtifacts([]);
       setWorldBosses([]);
       setAiTextCache({});
@@ -113,7 +118,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     }
     try {
       setIsLoading(true);
-      const [mediaData, logsData, settingsData, recapsData, artifactsData, bossesData, textCacheData, taxData, franchisesData, activityData, locationGroupData] = await Promise.all([
+      const [mediaData, logsData, settingsData, recapsData, artifactsData, bossesData, textCacheData, taxData, franchisesData, activityData, locationGroupData, achievementsData] = await Promise.all([
         DatabaseService.getAllMedia(),
         DatabaseService.getAllLogs(),
         DatabaseService.getSettings(),
@@ -124,12 +129,14 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
         DatabaseService.getTaxonomies(),
         DatabaseService.getAllFranchises(),
         DatabaseService.getActivity(),
-        DatabaseService.getLocationGroups()
+        DatabaseService.getLocationGroups(),
+        DatabaseService.getGeneratedAchievements()
       ]);
       setMedia(mediaData);
       setLogs(logsData);
       setSettings(settingsData);
       setAiRecaps(recapsData);
+      setAchievements(achievementsData);
       setArtifacts(artifactsData);
       setWorldBosses(bossesData);
       setAiTextCache(textCacheData);
@@ -329,6 +336,10 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     return updated;
   }, [refreshData]);
 
+  const refreshAchievements = useCallback(async () => {
+    setAchievements(await DatabaseService.getGeneratedAchievements());
+  }, []);
+
   const saveAiRecap = useCallback(async (recap: any) => {
     await DatabaseService.saveAiRecap(recap);
     await refreshData();
@@ -430,7 +441,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   }, [refreshData]);
 
   return (
-    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, artifacts, worldBosses, taxonomies, activity, locationGroups, saveLocationGroup, setLocationGroupMembers, deleteLocationGroup, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, refreshMetadata, acknowledgeUpdate, refreshMangaCover, notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, saveAiRecap, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, ensureLevelTitle, rerollBoss, tauntBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
+    <MediaContext.Provider value={{ media, logs, settings, rpgState, aiRecaps, achievements, artifacts, worldBosses, taxonomies, activity, locationGroups, saveLocationGroup, setLocationGroupMembers, deleteLocationGroup, franchises, aiTextCache, refreshData, saveMediaItem, deleteMediaItem, addLog, updateLog, deleteLog, mergeLocations, refreshMetadata, acknowledgeUpdate, refreshMangaCover, notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead, deleteNotification, saveAiRecap, refreshAchievements, saveArtifact, updateArtifact, equipArtifact, unequipArtifact, ensureLevelTitle, rerollBoss, tauntBoss, generateBossImage, generateArtifactImage, spawnBoss, saveAiText, clearAiTextCache, addTaxonomy, deleteTaxonomy, moveTaxonomy, editTaxonomy, saveFranchise, isLoading }}>
       {children}
     </MediaContext.Provider>
   );

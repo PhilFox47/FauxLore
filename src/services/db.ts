@@ -1,5 +1,6 @@
 import { MediaItem, ProgressLog, MetricType, MediaType, Artifact, MediaCodex } from '../types/schema';
 import type { FlavorText } from '../lib/flavorTexts';
+import type { GeneratedAchievement, AchievementDraft, AchievementPeriod } from '../lib/generatedAchievements';
 import { v4 as uuidv4 } from 'uuid';
 
 /** See `getEarnedFlavorTexts`. Short enough that finishing something shows up. */
@@ -242,6 +243,26 @@ export const DatabaseService = {
     } catch (e) {
       console.error(e);
       return [];
+    }
+  },
+
+  async getGeneratedAchievements(): Promise<GeneratedAchievement[]> {
+    const res = await apiFetch('/api/achievements');
+    if (!res.ok) throw new Error('Failed to load achievements');
+    return res.json();
+  },
+
+  async saveGeneratedAchievements(data: {
+    timeframe: AchievementPeriod; timeId: string; generationId: string | null; achievements: AchievementDraft[];
+  }): Promise<void> {
+    const res = await apiFetch('/api/achievements', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail.error || 'Failed to save achievements');
     }
   },
 
