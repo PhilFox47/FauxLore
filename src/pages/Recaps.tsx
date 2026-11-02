@@ -33,6 +33,8 @@ import type { StructuredRecap } from '../services/recapAi';
 import { generateRecapAchievements } from '../services/achievementAi';
 import { AchievementCard } from '../components/AchievementCard';
 import { AchievementReveal } from '../components/AchievementReveal';
+import { StoryMode } from '../components/StoryMode';
+import { buildStoryScenes } from '../lib/storyDiscovery';
 import type { AchievementDraft } from '../lib/generatedAchievements';
 import { DatabaseService } from '../services/db';
 import { groupLogsIntoSessions } from '../lib/sessions';
@@ -98,7 +100,12 @@ export function Recaps() {
   const [wallpaperBusy, setWallpaperBusy] = useState<WallpaperFormat | null>(null);
   const [wallpaper, setWallpaper] = useState<{ format: WallpaperFormat; previewUrl: string; covers: number } | null>(null);
   const [timeframe, setTimeframe] = useState<Timeframe>('week');
-  const [offsetOffset, setOffsetOffset] = useState(1); 
+  const [offsetOffset, setOffsetOffset] = useState(1);
+  const [viewMode, setViewMode] = useState<'story' | 'deep'>('story');
+  const recapScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (recapScrollRef.current) recapScrollRef.current.scrollTop = 0;
+  }, [viewMode, timeframe, offsetOffset]); 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isForgingAchievement, setIsForgingAchievement] = useState(false);
   const [freshlyUnlocked, setFreshlyUnlocked] = useState<string | null>(null);
@@ -1156,6 +1163,12 @@ ${wrappedContext || 'No background material.'}
   const theme = getTheme();
   /** The recap as an issue: chapters, awards, captions — legacy rows included. */
   const story = useMemo(() => readRecap(currentRecap), [currentRecap]);
+  const storyScenes = useMemo(() => buildStoryScenes({
+    timeframe, timeId, recap: story,
+    plan: currentRecap?.data?.editorialPlan || null,
+    logs: activeLogs, history: validLogs, media, settings,
+    achievements: periodAchievements,
+  }), [timeframe, timeId, story, currentRecap, activeLogs, validLogs, media, settings, periodAchievements]);
   const captions = story?.captions || {};
 
   const renderTopCreator = () => {
@@ -2398,7 +2411,26 @@ ${wrappedContext || 'No background material.'}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto no-scrollbar relative p-4 md:p-8">
+      <div className="flex-shrink-0 px-4 md:px-8 py-3 border-b border-white/5 bg-zinc-950/60 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1 rounded-xl bg-white/5 p-1 border border-white/10" role="group" aria-label="Recap view">
+          <button onClick={() => setViewMode('story')} disabled={!story || !storyScenes.length}
+            aria-pressed={viewMode === 'story' && !!story}
+            className={'flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors disabled:opacity-30 ' +
+              (viewMode === 'story' && story ? 'bg-violet-500/20 text-violet-200' : 'text-zinc-400 hover:text-white')}>
+            <Presentation className="w-4 h-4" /> Story Mode
+          </button>
+          <button onClick={() => setViewMode('deep')} aria-pressed={viewMode === 'deep' || !story}
+            className={'flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors ' +
+              (viewMode === 'deep' || !story ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white')}>
+            <LayoutGrid className="w-4 h-4" /> Deep Dive
+          </button>
+        </div>
+        <p className="text-xs text-zinc-500 hidden md:block">
+          {viewMode === 'story' && story ? 'A different story for every period.' : 'All charts, records and details.'}
+        </p>
+      </div>
+
+      <div ref={recapScrollRef} className="flex-1 overflow-y-auto no-scrollbar relative p-4 md:p-8">
          <AnimatePresence mode="wait">
             <motion.div
                key={`${timeframe}-${offsetOffset}`}
@@ -2409,6 +2441,12 @@ ${wrappedContext || 'No background material.'}
             >
                {activeLogs.length > 0 ? (
                  <>
+                   {viewMode === 'story' && story && storyScenes.length > 0 ? (
+                     <StoryMode key={timeId + ':' + (currentRecap?.data?.generationId || '')}
+                       scenes={storyScenes} timeframe={timeframe} timeId={timeId}
+                       onDeepDive={() => setViewMode('deep')} />
+                   ) : (
+                     <>
                    {/* Main Header / AI Section */}
                    <div className={`bg-gradient-to-br from-black via-black to-zinc-950 border ${theme.border} rounded-[2rem] p-6 md:p-10 relative overflow-hidden shadow-2xl`}>
                       <div className={`absolute top-0 right-0 w-[500px] h-[500px] ${theme.glow} blur-[120px] rounded-full pointer-events-none opacity-40`} />
@@ -2742,6 +2780,8 @@ ${wrappedContext || 'No background material.'}
 
                    {/* Sealed time capsule (closing) */}
                    {renderTimeCapsule()}
+                     </>
+                   )}
                  </>
                ) : (
                   <div className="flex flex-col items-center justify-center text-center py-40 px-4">
