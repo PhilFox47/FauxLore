@@ -1934,6 +1934,13 @@ function releaseFieldsFromMatch(
               </div>
             )}
 
+            {(formData.mediaType === "Series" || formData.mediaType === "Comic") && (
+              <label className="flex items-center gap-2 text-xs text-zinc-300 rounded-xl p-3 border border-white/10 bg-black/20">
+                <input type="checkbox" checked={!!formData.isOngoing}
+                  onChange={e => setFormData(prev => ({ ...prev, isOngoing: e.target.checked }))} />
+                Ongoing publication (use Caught Up instead of Completed at the latest available episode/issue)
+              </label>
+            )}
             {formData.mediaType === "Series" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

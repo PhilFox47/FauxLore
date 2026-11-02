@@ -37,7 +37,7 @@ export async function generateSessionQuestion(input: QuestionInput): Promise<str
     .sort((a,b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 5)
     .map(l => ({
       date: l.timestamp.slice(0, 10), enjoyment: l.sessionEnjoyment ?? null,
-      thoughts: (l.thoughts || '').slice(0, 320), note: (l.note || '').slice(0, 120),
+      thoughts: (l.thoughts || '').slice(0, 320), note: (l.note || '').slice(0, 120), previousQuestion: (l.thoughtPrompt || '').slice(0, 180),
     }));
   const res = await apiFetch('/api/nano-gpt/chat/completions', {
     method: 'POST', signal: input.signal,

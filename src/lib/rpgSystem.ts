@@ -54,7 +54,7 @@ export const QUEST_DEFINITIONS = [
   { id: '27', title: "Reviewer's Strike", desc: 'Complete X item and rate/review it', timeframes: ['weekly'], defaultWeekly: 1 },
   { id: '29', title: 'Dust It Off', desc: 'Log progress on X item that has been sitting without updates', timeframes: ['weekly'], defaultWeekly: 1 },
   { id: '30', title: 'Marathon Session', desc: 'Have a single progress entry that yields X+ Master Pages in one sitting', timeframes: ['weekly'], defaultWeekly: 50 },
-  { id: '31', title: 'Journalist', desc: 'Write X progress notes', timeframes: ['weekly'], defaultWeekly: 2 },
+  { id: '31', title: 'Journalist', desc: 'Write X journal reflections', timeframes: ['weekly'], defaultWeekly: 2 },
   { id: 'theme', title: 'Theme Quests', desc: 'Gain Master Pages in games/books of the monthly theme.', timeframes: ['monthly'], defaultMonthly: 10 },
 ];
 

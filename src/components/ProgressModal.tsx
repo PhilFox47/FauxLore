@@ -88,7 +88,7 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
   const delta = Number(deltaRaw.toFixed(3));
   const automaticStatus = suggestLogStatus(item, delta, isHistorical);
   const selectedStatus = manualStatus || automaticStatus;
-  const reviewAvailable = savedStatus === 'Completed';
+  const reviewAvailable = savedStatus === 'Completed' && item.status !== 'Completed';
   const previousLogs = logs.filter(l => l.mediaId === item.id && l.metricType !== 'statusChange' && !l.isHistoric);
 
   const dateTime = () => {
@@ -307,11 +307,12 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
             </section>
             <section className="rounded-2xl border border-violet-400/20 bg-violet-500/5 p-4 space-y-3">
               <div className="flex items-center gap-2 text-violet-200 font-black text-xs uppercase tracking-wider"><Sparkles size={16}/> A question just for you</div>
-              {asking && !question ?
-                <p className="flex gap-2 items-center text-sm text-zinc-400"><Loader2 size={16} className="animate-spin"/> Finding one good question...</p> :
-                <p className="text-base sm:text-lg text-white font-bold leading-snug">{question || fallbackSessionQuestion({
-                  item,delta,metricType,enjoyment,statusBefore:item.status,statusAfter:savedStatus,location,previousLogs,settings,
-                })}</p>}
+              <p className="text-base sm:text-lg text-white font-bold leading-snug">{question || fallbackSessionQuestion({
+                item,delta,metricType,enjoyment,statusBefore:item.status,statusAfter:savedStatus,location,previousLogs,settings,
+              })}</p>
+              {asking && <p className="flex gap-2 items-center text-xs text-violet-300/70">
+                <Loader2 size={13} className="animate-spin"/> AI is personalizing this question...
+              </p>}
               <p className="text-xs text-zinc-500">One sentence is enough. You can ignore the question and write whatever matters to you.</p>
             </section>
             <section className="space-y-2">
