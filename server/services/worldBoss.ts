@@ -104,6 +104,7 @@ THE IMAGE PROMPT MUST:
 - Be 2-4 natural sentences that stand entirely on their own, written for the "Z-Image-Turbo" diffusion model (it follows natural language and renders any art style, including real text and logos).
 - Render the subject in the ACTUAL art style, medium and palette of "${mediaItem.title}"${codexRow?.data?.artStyle?.summary ? ` — the Codex records it as: ${codexRow.data.artStyle.summary}` : ""}. Name that style explicitly and reference the franchise to anchor the look. Never default to generic 2D cartoon or flat vector art unless the source really is that.
 - ${AUTHENTICITY(mediaItem.title)}
+- Compose this image as a HORIZONTAL 3:2 LANDSCAPE canvas suitable for a wide enemy card, with safe margins around all essential parts of the subject/action. Never a vertical poster.
 - Show ONE subject only, against ${tier.scene}. Never a crowd or a collage.
 - Capture a MOMENT, not a pose. This one should be ${tier.action}. Pick the specific action that suits THIS enemy — what it would actually be doing — rather than the first one on that list, and describe the follow-through: what is moving, what is being flung or trailing behind it, where its weight is.
 - Frame it with ${tier.camera}. Vary the framing to suit the enemy: full body, three-quarter, or a tight close-up on the part of it that matters.

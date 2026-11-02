@@ -13,7 +13,7 @@ export function GeneratedImage({
   url,
   status,
   alt,
-  aspectClass = 'aspect-[4/3]',
+  aspectClass = 'aspect-square',
   onExpand,
   onRegenerate,
 }: {
@@ -39,7 +39,7 @@ export function GeneratedImage({
         className={cn('w-full rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-zinc-900 cursor-pointer mb-4 relative group/image', aspectClass)}
         onClick={(e) => { e.stopPropagation(); onExpand?.(); }}
       >
-        <img src={url} alt={alt} className="w-full h-full object-cover transition-transform duration-700 group-hover/image:scale-105" referrerPolicy="no-referrer" />
+        <img src={url} alt={alt} className="w-full h-full object-contain transition-transform duration-700 group-hover/image:scale-105" referrerPolicy="no-referrer" />
         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-transparent pointer-events-none" />
       </div>
     );

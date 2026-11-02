@@ -1448,8 +1448,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-widest">Image Generation (Enemies &amp; Loot)</h3>
                   </div>
                   <p className="text-xs text-zinc-500">{formData.aiProvider === 'cliProxy'
-                    ? 'CLIProxyAPI uses fixed GPT image sizes. Aspect ratio is mapped to 1024x1024, 1536x1024 or 1024x1536. CFG/steps are NanoGPT-only; exclusions become best-effort natural-language instructions.'
-                    : 'NanoGPT model and parameters for enemy / loot art. Leave fields blank to use the built-in defaults.'}</p>
+                    ? 'Enemy art is horizontal 3:2 (1536x1024); Loot art is square 1:1 (1024x1024). Both receive explicit framing prompts and supported GPT image sizes. CFG/steps are NanoGPT-only.'
+                    : 'Enemy art is horizontal 3:2 (1152x768); Loot art is square 1:1 (1024x1024). Both get explicit framing prompts. Model-specific settings such as steps and guidance remain configurable.'}</p>
                   {formData.aiProvider === 'cliProxy' && (
                     <div>
                       <label className="block text-sm font-medium text-zinc-400 mb-1">CLIProxyAPI Image Model</label>
@@ -1463,8 +1463,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       <input name="imageModel" value={formData.imageModel} onChange={handleChange} className="input-field" placeholder="z-image-turbo" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-zinc-400 mb-1">Resolution</label>
+                      <label className="block text-sm font-medium text-zinc-400 mb-1">Legacy Image Resolution</label>
                       <input name="imageSize" value={formData.imageSize} onChange={handleChange} className="input-field" placeholder="1024x768" />
+                      <p className="text-[10px] text-zinc-500 mt-1">Kept for compatibility; Enemy and Loot generation now request the fixed 3:2 and 1:1 sizes shown above. This legacy field does not override them.</p>
                     </div>
                     {formData.aiProvider === 'nanoGpt' && (<div>
                       <label className="block text-sm font-medium text-zinc-400 mb-1">Steps</label>

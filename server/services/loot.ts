@@ -173,6 +173,7 @@ THE IMAGE PROMPT MUST:
 - Render it in the ACTUAL art style, medium and material language of "${mediaItem.title}"${artStyle ? ` — the Codex records it as: ${artStyle}` : ""}. Name that style explicitly and reference the franchise by name to anchor the look. Never default to generic flat cartoon or vector icon art unless the source really is that.
 - ${AUTHENTICITY(mediaItem.title)}
 - Describe its exact materials, shape, construction, engravings, labels and wear, so it looks like a used object from that world rather than a showroom prop.
+- Compose this image as a SQUARE 1:1 canvas suitable for a square item slot; keep the full object centered and within safe margins, never a tall poster.
 - Show ONE hero item only, centered, as a polished game-inventory icon / studio product shot with a soft contact shadow, carrying ${art.aura}, on this rarity-specific background: ${art.background}.
 - ${SHARPNESS}
 - Include no hands, no people, no extra props and no watermarks.

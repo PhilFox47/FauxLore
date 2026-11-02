@@ -7,6 +7,7 @@ import { getAiConfig, nanoGenerateText } from "../lib/ai";
 import { recordAiCallStart, recordAiCall, nextCallId, recordPayload } from "../lib/diagnostics";
 import { longRequestDispatcher } from "../lib/httpDispatcher";
 import { cliProxyBaseUrl, cliProxyImageSize, cliProxyImagePrompt } from "../lib/cliProxy";
+import { imageFrameSize, imageFrameMatches, withImageFrame, type ImageFrame } from "../../src/lib/imageFraming";
 import { AUTHENTICITY, SHARPNESS, enemyTier, rarityArt } from "../lib/artDirection";
 import { codexArtStyleBlock, type CodexService } from "./codex";
 import { codexTaskContext } from "./codexV3Context";
@@ -29,9 +30,8 @@ import { codexTaskContext } from "./codexV3Context";
  */
 const IMAGE_DEFAULTS = {
   model: "z-image-turbo",
-  // 4:3, because that is the box the app draws these in. A square default meant
-  // every generated image lost a quarter of itself to `object-cover` before
-  // anyone saw it. Same width as before, so nothing gets more expensive.
+  // Legacy fallback for global settings. Generated boss/loot images use
+  // per-feature square or 3:2 canvases instead of this generic resolution.
   size: "1024x768",
   steps: 10,
   guidance: 1.5,
@@ -199,17 +199,19 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
     return JSON.parse(text);
   }
 
-  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = ""): Promise<string> {
+  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = "", frame: ImageFrame = "square"): Promise<string> {
     const cfg = readImageConfig();
     const negativePrompt = [cfg.negative, extraNegative].filter(Boolean).join(", ");
+    const framedPrompt = withImageFrame(prompt, frame);
+    const requestedSize = imageFrameSize(frame, cfg.useCli ? "cliProxy" : "nanoGpt");
 
     if (cfg.useCli) {
       const sys: any = db.prepare("SELECT cliProxyBaseUrl FROM system_settings WHERE id = 'system'").get() || {};
       const baseUrl = cliProxyBaseUrl(sys.cliProxyBaseUrl);
       const body = {
         model: cfg.model,
-        prompt: cliProxyImagePrompt(prompt, negativePrompt),
-        size: cliProxyImageSize(cfg.size),
+        prompt: cliProxyImagePrompt(framedPrompt, negativePrompt),
+        size: cliProxyImageSize(requestedSize),
         n: 1,
         response_format: "b64_json",
       };
@@ -241,7 +243,10 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
         const fileName = `${uuidv4()}${ext}`;
         fs.writeFileSync(path.join(aiImagesDir, fileName), buffer);
         const got = actual?.width && actual?.height ? `${actual.width}x${actual.height}` : "unknown";
-        console.log(`[images] CLIProxyAPI ${cfg.model} requested ${body.size}, returned ${got}`);
+        if (actual && !imageFrameMatches(frame, actual.width, actual.height)) {
+          console.warn(`[images] ${cfg.model} returned an unexpected ${got} canvas for ${frame}; check Image Generation Diagnostics.`);
+        }
+        console.log(`[images] CLIProxyAPI ${cfg.model} requested ${body.size} (${frame}), returned ${got}`);
         recordPayload(callId, "images", { reply: `image saved: ${got}; binary redacted` });
         recordAiCall({ ...shape, durationMs: Date.now() - startedAt, httpStatus: response.status });
         return `/uploads/ai-images/${fileName}`;
@@ -263,9 +268,9 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
     try {
       remoteUrl = imageUrlFrom(await requestImage(apiKey, {
         model: cfg.model,
-        prompt,
+        prompt: framedPrompt,
         negative_prompt: negativePrompt,
-        resolution: cfg.size,
+        resolution: requestedSize,
         n: 1,
         ...tuning,
       }, "https://nano-gpt.com/api/v1/images", 1));
@@ -274,9 +279,9 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
       console.warn(`[images] Normalized route failed, falling back to /generations: ${String((e as any)?.message || e)}`);
       remoteUrl = imageUrlFrom(await requestImage(apiKey, {
         model: cfg.model,
-        prompt,
+        prompt: framedPrompt,
         negative_prompt: negativePrompt,
-        size: cfg.size,
+        size: requestedSize,
         ...tuning,
         response_format: "url",
       }, "https://nano-gpt.com/api/v1/images/generations", 2));
@@ -294,11 +299,13 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
       const actual = imageSize(buffer);
       if (actual?.width && actual?.height) {
         const got = `${actual.width}x${actual.height}`;
-        if (cfg.size && got !== cfg.size) {
+        if (!imageFrameMatches(frame, actual.width, actual.height)) {
+          console.warn(`[images] Returned ${got} does not match required ${frame} canvas.`);
+        }
+        if (got !== requestedSize) {
           console.warn(
-            `[images] Asked ${cfg.model} for ${cfg.size} and got ${got}. ` +
-              `The provider is not honouring the size parameter for this model — ` +
-              `changing it in Settings will keep having no effect until a value it accepts is used.`,
+            `[images] Asked ${cfg.model} for ${requestedSize} and got ${got}. ` +
+              `The provider did not return the required ${frame} canvas; verify its supported image dimensions.`,
           );
         } else {
           console.log(`[images] ${cfg.model} returned ${got}`);
@@ -352,7 +359,7 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
         db.prepare("UPDATE world_bosses SET imagePrompt = ? WHERE id = ?").run(imagePrompt, bossId);
       }
 
-      const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt, BOSS_NEGATIVE_EXTRA);
+      const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt, BOSS_NEGATIVE_EXTRA, "landscape-3:2");
       db.prepare("UPDATE world_bosses SET imageUrl = ?, imageStatus = 'done' WHERE id = ?").run(imageUrl, bossId);
     } catch (e) {
       console.error("Boss Image Background Gen Error:", e);
@@ -388,6 +395,7 @@ THE PROMPT MUST:
 - OPEN with the creature itself — what it is and the most striking thing about how it looks. Everything else follows it.
 - Render the entity in the ACTUAL art style and medium of "${mediaTitle}". NAME that style explicitly in the prompt using the house style above — the named craft terms are what an image model keys on, so use them verbatim rather than paraphrasing them into adjectives. Reference the franchise by name as well, to anchor the look. Do NOT default to generic 2D cartoon or flat vector art unless that truly matches the source.
 - ${AUTHENTICITY(mediaTitle)}
+- Compose for a HORIZONTAL LANDSCAPE 3:2 frame, with the subject and essential action inside safe margins; no tall/portrait poster framing.
 - Depict ONE subject only, with a setting/background appropriate to its tier — never a busy crowd scene.
 - Show it mid-action rather than posed: ${tier.action}. Frame it with ${tier.camera}. Never a neutral standing figure facing the lens — no mugshots, no line-ups, no posing for a photograph.
 - Faithfully describe its anatomy, armor/weapons, materials, aura and expression, and let the tier drive everything: a Level 1 must look genuinely silly and harmless; a Level 5 must look like a monumental, epic final boss.
@@ -425,7 +433,7 @@ Return ONLY the final image prompt text, nothing else.`;
         db.prepare("UPDATE artifacts SET imagePrompt = ? WHERE id = ?").run(imagePrompt, artifactId);
       }
 
-      const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt, LOOT_NEGATIVE_EXTRA);
+      const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt, LOOT_NEGATIVE_EXTRA, "square");
       db.prepare("UPDATE artifacts SET imageUrl = ?, imageStatus = 'done' WHERE id = ?").run(imageUrl, artifactId);
     } catch (e) {
       console.error("Artifact Image Background Gen Error:", e);
@@ -462,6 +470,7 @@ THE PROMPT MUST:
 - Render it in the ACTUAL art style and material design of "${mediaTitle}". NAME that style explicitly using the house style above, reusing its craft terms verbatim rather than paraphrasing them, and reference the franchise to anchor the look. Avoid generic flat cartoon icons.
 - ${AUTHENTICITY(mediaTitle)}
 - Scale the item's grandeur to its rarity: ${art.grandeur}.
+- Compose for a SQUARE 1:1 image with the entire object centered and safely inside the canvas, no tall poster framing.
 - Present ONE hero item only, centered, as a polished inventory icon / studio product shot, on this rarity-specific background: ${art.background}. A soft contact shadow under the item.
 - Describe its exact materials, shape, engravings and wear.
 - ${SHARPNESS}
@@ -487,9 +496,9 @@ Return ONLY the final image prompt text, nothing else.`;
       return {
         ok: true,
         model: cfg.model,
-        configured: { resolution: cliProxyImageSize(cfg.size) },
+        configured: { bossResolution: imageFrameSize('landscape-3:2', 'cliProxy'), lootResolution: imageFrameSize('square', 'cliProxy') },
         supported_parameters: { size: ["1024x1024", "1536x1024", "1024x1536"] },
-        note: "CLIProxyAPI maps requested aspect ratios to GPT image sizes. Diffusion steps, CFG and negative_prompt are not supported; exclusions are appended as prose.",
+        note: "Enemy artwork is requested at 3:2 (1536x1024) and loot at 1:1 (1024x1024), regardless of legacy imageSize. Prompt framing also specifies the aspect ratio and safe composition. Diffusion steps, CFG and negative_prompt are not supported.",
       };
     }
     const url = `https://nano-gpt.com/api/v1/images/models/${encodeURIComponent(cfg.model)}/endpoints`;
@@ -501,7 +510,7 @@ Return ONLY the final image prompt text, nothing else.`;
       return {
         ok: true,
         model: cfg.model,
-        configured: { resolution: cfg.size, steps: cfg.steps, guidance: cfg.guidance },
+        configured: { bossResolution: imageFrameSize('landscape-3:2', 'nanoGpt'), lootResolution: imageFrameSize('square', 'nanoGpt'), legacyResolution: cfg.size, steps: cfg.steps, guidance: cfg.guidance },
         supported_parameters: endpoint?.supported_parameters ?? null,
         pricing: endpoint?.pricing ?? null,
         input_reference_constraints: endpoint?.input_reference_constraints ?? null,

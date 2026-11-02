@@ -1,4 +1,5 @@
 import { apiFetch } from './db';
+import { withImageFrame, imageFrameSize } from '../lib/imageFraming';
 
 // Personas live in lib/personas, which the server reads too.
 import { getPersonaDescription } from '../lib/personas';
@@ -208,9 +209,9 @@ export async function generateImage(apiKey: string, prompt: string): Promise<str
     },
     body: JSON.stringify({
       model: "z-image-turbo",
-      prompt: prompt,
+      prompt: withImageFrame(prompt, 'square'),
       negative_prompt: "text, words, letters, watermark, signature, logo, UI, frame, border, low quality, blurry, jpeg artifacts, deformed, disfigured, bad anatomy, extra limbs, cropped",
-      size: "1024x1024",
+      size: imageFrameSize('square', 'nanoGpt'),
       num_inference_steps: 8,
       guidance_scale: 1.5,
       response_format: "url"

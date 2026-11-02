@@ -13,6 +13,7 @@
     "test:wrapped": "tsx --test src/lib/wrappedEvidence.test.ts server/routes/wrapped.test.ts",
     "test:logging": "tsx --test src/lib/logStatus.test.ts",
     "test:ai-grounding": "tsx --test src/lib/fauxLoreMechanics.test.ts",
+    "test:image-framing": "tsx --test src/lib/imageFraming.test.ts",
     "start": "node dist/server.cjs"
   },
   "dependencies": {

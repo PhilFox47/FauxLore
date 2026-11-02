@@ -705,6 +705,7 @@ export function Armory() {
          )}
          <div className="flex flex-col h-full relative z-10">
             <GeneratedImage
+              aspectClass="aspect-square"
               url={artifact.imageUrl}
               status={artifact.imageStatus}
               alt={artifact.name}

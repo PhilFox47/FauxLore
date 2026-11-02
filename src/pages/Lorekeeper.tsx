@@ -680,6 +680,7 @@ export function Lorekeeper() {
                       </div>
 
                       <GeneratedImage
+                        aspectClass="aspect-[3/2]"
                         url={boss.imageUrl}
                         status={boss.imageStatus}
                         alt={boss.name}
@@ -830,6 +831,7 @@ export function Lorekeeper() {
                       </div>
 
                       <GeneratedImage
+                        aspectClass="aspect-[3/2]"
                         url={boss.imageUrl}
                         status={boss.imageStatus}
                         alt={boss.name}
