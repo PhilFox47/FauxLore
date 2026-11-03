@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { AchievementCard } from './AchievementCard';
 import { DynamicStorySlide } from './DynamicStorySlide';
+import { EditorialStorySlide } from './EditorialStorySlide';
 import { safeDynamicScene } from '../lib/dynamicScenes';
 import type { GeneratedAchievement } from '../lib/generatedAchievements';
 import type { StoryScene, StoryLayout, StoryPalette, StoryVisual, StoryMedia } from '../lib/storyDiscovery';
@@ -151,6 +152,15 @@ function StorySlide({ scene, number, total, onDeepDive, coverArtUrl, sceneArtUrl
   if (dynamic) {
     return <DynamicStorySlide scene={scene} composition={dynamic} number={number} total={total}
       coverArtUrl={coverArtUrl} sceneArtUrl={sceneArtUrl} onDeepDive={onDeepDive} />;
+  }
+  // A failed Visual Director pass must not turn a verified analytical story
+  // back into generic bar templates. Render its safe data treatment directly.
+  if (scene.analytic && (scene.editorialJob === 'data-reveal' ||
+      scene.design?.layout === 'infographic')) {
+    return <EditorialStorySlide scene={scene}
+      direction={{ presentation: 'data', textSide: 'left', textPosition: 'middle',
+        imageFocus: 'right', dataTreatment: scene.analytic.kind }}
+      number={number} total={total} onDeepDive={onDeepDive} />;
   }
   const layout = scene.design?.layout || fallbackLayout[scene.kind];
   const isWrappedTitleArt = scene.kind === 'opening' && !!coverArtUrl;
