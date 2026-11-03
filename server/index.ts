@@ -230,6 +230,7 @@ async function startServer() {
     queueBossVictoryArtwork,
     generateArtifactImageBackground,
     queueWrappedCoverArt,
+    queueWrappedSceneArtwork,
     codex,
     describeImageModel,
     flavorLibrary,
