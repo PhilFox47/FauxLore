@@ -33,10 +33,10 @@ test("visual director receives saved copy and ONLY verified media and numerical 
   assert.match(brief, /Space Game/);
   assert.match(brief, /"index":0/);
   assert.match(brief, /hasVerifiedQuote/);
-  assert.match(brief, /No invented achievements/);
+  assert.match(brief, /IMMUTABLE/);
   assert.match(brief, /COMPOSE EVERY SCENE/);
   assert.match(brief, /canGenerateOriginalSceneArt/);
-  assert.match(brief, /one artistic device that tells the reader WHY/i);
+  assert.match(brief, /THE STORY\x27S MEANING COMES FIRST/i);
   assert.doesNotMatch(brief, /https:\/\/example.com/);
 });
 
@@ -85,4 +85,31 @@ test("director accepts meaningful original art concepts on eligible interior sce
   });
   assert.match(result.scenes[1].composition?.artConcept || "", /silent racetrack/);
   assert.equal(result.scenes[1].composition?.elements[2].type, "scene-art");
+});
+
+test("second-pass visual director describes explicit safe cinematic versus data stages", () => {
+  const brief = wrappedVisualDirectorBrief(story);
+  assert.match(brief, /CINEMATIC EDITORIAL DIRECTION/);
+  assert.match(brief, /textSide/);
+  assert.match(brief, /imageFocus/);
+  assert.match(brief, /DATA means a verified comparison/);
+  assert.match(brief, /TYPOGRAPHY is a deliberately quiet/);
+  assert.match(brief, /BLEEDS edge-to-edge|bleeds edge-to-edge/i);
+});
+
+test("model's editorial staging is normalized without allowing executable design fields", () => {
+  const proposal = {
+    ...composition,
+    direction: { presentation: "data", textSide: "left", textPosition: "middle", imageFocus: "right",
+      css: "position:fixed;inset:0", eventHandler: "alert(1)" },
+  };
+  const directed = applyWrappedVisualCompositions(story, {
+    compositions: [{ sceneId: "wrapped-1", composition: proposal }],
+  });
+  const clean = directed.scenes[1].composition!;
+  assert.equal(clean.direction?.presentation, "data");
+  assert.equal(clean.direction?.textSide, "left");
+  assert.equal("css" in (clean.direction || {}), false);
+  assert.equal("eventHandler" in (clean.direction || {}), false);
+  assert.deepEqual(directed.scenes[1].bars, story.scenes[1].bars);
 });
