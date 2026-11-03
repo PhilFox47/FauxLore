@@ -89,7 +89,8 @@ export function EditorialStorySlide({ scene, direction, imageUrl, number, total,
               {scene.body}
             </motion.p>
           </div>
-          <div className={"grid gap-7 md:gap-10 " +
+          {scene.analytic ? <WrappedAnalyticStage analytic={scene.analytic}
+            palette={scene.design?.palette || 'violet'} /> : <div className={"grid gap-7 md:gap-10 " +
             ((scene.bars?.length || 0) > 1 ? "md:grid-cols-2" : "grid-cols-1")}>
             {scene.bars!.map((metric, i) => <motion.div key={metric.label + i} {...enter(.23 + .12*i)}
               className="border-t border-white/20 pt-5">
