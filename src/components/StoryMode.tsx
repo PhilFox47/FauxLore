@@ -142,14 +142,15 @@ function CopyBlock({ scene, large = false, center = false }: { scene: StoryScene
   </div>;
 }
 
-function StorySlide({ scene, number, total, onDeepDive, coverArtUrl }: {
+function StorySlide({ scene, number, total, onDeepDive, coverArtUrl, sceneArtUrl }: {
   scene: StoryScene; number: number; total: number; onDeepDive: () => void;
   coverArtUrl?: string | null;
+  sceneArtUrl?: string;
 }) {
   const dynamic = scene.composition ? safeDynamicScene(scene.composition, scene) : null;
   if (dynamic) {
     return <DynamicStorySlide scene={scene} composition={dynamic} number={number} total={total}
-      coverArtUrl={coverArtUrl} onDeepDive={onDeepDive} />;
+      coverArtUrl={coverArtUrl} sceneArtUrl={sceneArtUrl} onDeepDive={onDeepDive} />;
   }
   const layout = scene.design?.layout || fallbackLayout[scene.kind];
   const isWrappedTitleArt = scene.kind === 'opening' && !!coverArtUrl;
@@ -163,7 +164,7 @@ function StorySlide({ scene, number, total, onDeepDive, coverArtUrl }: {
   const timeline = !!scene.beats?.length;
   const quote = !!scene.quote;
   const chosenLayout: StoryLayout =
-    isWrappedTitleArt ? 'cover-hero' :
+    isWrappedTitleArt || sceneArtUrl ? 'cover-hero' :
     layout === 'cover-wall' && covers.length < 2 ? (primary ? 'split-feature' : 'type-poster') :
     layout === 'cover-hero' && !primary?.cover ? 'type-poster' :
     layout === 'quote-poster' && !quote ? 'editorial' :
@@ -194,7 +195,11 @@ function StorySlide({ scene, number, total, onDeepDive, coverArtUrl }: {
       <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/75 to-black/10" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
     </div>}
-    {chosenLayout === 'cover-hero' && !isWrappedTitleArt && primary?.cover && <>
+    {sceneArtUrl && <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+      <img src={sceneArtUrl} alt="" loading="eager" className="w-full h-full object-cover opacity-85" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/70 to-black/15" />
+    </div>}
+    {chosenLayout === 'cover-hero' && !isWrappedTitleArt && !sceneArtUrl && primary?.cover && <>
       <img src={primary.cover} alt="" aria-hidden="true" loading="eager" referrerPolicy="no-referrer"
         className="absolute inset-0 w-full h-full object-cover blur-[95px] opacity-25 scale-125" />
       <div className="absolute right-5 top-14 w-[28%] aspect-[2/3] sm:hidden opacity-85"><img src={primary.cover} alt="" aria-hidden="true" referrerPolicy="no-referrer" className="w-full h-full object-contain" /></div>
@@ -286,13 +291,15 @@ function AchievementFinale({ achievements, onDeepDive }: { achievements: Generat
 }
 
 /** An AI-directed scene sequence with an independently persisted achievement epilogue. */
-export function StoryMode({ scenes, timeframe, timeId, achievements = [], onDeepDive, coverArtUrl, coverArtStatus }: {
+export function StoryMode({ scenes, timeframe, timeId, achievements = [], onDeepDive, coverArtUrl, coverArtStatus, sceneArt = {}, sceneArtStatus }: {
   scenes: StoryScene[];
   timeframe: 'week' | 'month' | 'year';
   timeId: string;
   achievements?: GeneratedAchievement[];
   coverArtUrl?: string | null;
   coverArtStatus?: 'pending' | 'generating' | 'done' | 'failed' | null;
+  sceneArt?: Record<string, string>;
+  sceneArtStatus?: 'pending' | 'generating' | 'done' | 'failed' | null;
   onDeepDive: () => void;
 }) {
   const [index, setIndex] = useState(0);
@@ -325,8 +332,9 @@ export function StoryMode({ scenes, timeframe, timeId, achievements = [], onDeep
       <div>
         <p className="text-xs font-black text-violet-200 tracking-[.2em] uppercase">FauxLore Wrapped · {timeId}</p>
         <p className="text-xs text-zinc-500 mt-1">{scenes.length} AI-directed scenes · Dungeon verdict finale</p>
-        {(coverArtStatus === 'pending' || coverArtStatus === 'generating') && (
-          <p role="status" className="text-xs text-violet-200/80 mt-1">Illustrating this Wrapped's title cover…</p>
+        {(coverArtStatus === 'pending' || coverArtStatus === 'generating' ||
+          sceneArtStatus === 'pending' || sceneArtStatus === 'generating') && (
+          <p role="status" className="text-xs text-violet-200/80 mt-1">Illustrating this Wrapped…</p>
         )}
       </div>
       <div className="flex gap-2">
@@ -359,7 +367,8 @@ export function StoryMode({ scenes, timeframe, timeId, achievements = [], onDeep
         if (Math.abs(delta) >= 65) { setIndex(i => Math.max(0, Math.min(total - 1, i + (delta < 0 ? 1 : -1)))); setCopied(false); }
       }}>
       <AnimatePresence mode="wait">
-        {current ? <StorySlide key={current.id} scene={current} number={index + 1} total={total} onDeepDive={onDeepDive} coverArtUrl={coverArtUrl} /> :
+        {current ? <StorySlide key={current.id} scene={current} number={index + 1} total={total}
+          onDeepDive={onDeepDive} coverArtUrl={coverArtUrl} sceneArtUrl={sceneArt[current.id]} /> :
           <AchievementFinale key="finale" achievements={achievements} onDeepDive={onDeepDive} />}
       </AnimatePresence>
     </div>
