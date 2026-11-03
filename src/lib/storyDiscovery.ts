@@ -3,6 +3,7 @@ import { calculateScaledDelta } from './scaling';
 import type { MediaItem, ProgressLog, Settings } from '../types/schema';
 import type { StructuredRecap, EditorialPlan } from '../services/recapAi';
 import type { GeneratedAchievement } from './generatedAchievements';
+import type { DynamicSceneComposition } from './dynamicScenes';
 
 export type StoryPeriod = 'week' | 'month' | 'year';
 export type StoryKind = 'opening' | 'insight' | 'outlier' | 'location' | 'journal' | 'spotlight' | 'taste' | 'return' | 'timeline' | 'rhythm' | 'achievement' | 'closing';
