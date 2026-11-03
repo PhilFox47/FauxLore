@@ -103,7 +103,7 @@ export function registerBossRoutes(app: Express, ctx: ServerContext) {
 
       // Snapshot the PRE-ENRAGE portrait before any rendering starts. Future
       // manual regenerations must reference this, never the already-enraged image.
-      const originalImageUrl = boss.imageStatus === "done" && isLocalGeneratedImage(boss.imageUrl)
+      const originalImageUrl = (boss.imageStatus === "done" || !boss.imageStatus) && isLocalGeneratedImage(boss.imageUrl)
         ? boss.imageUrl : null;
       const shouldRender = !activity.isFrozen(userId as string);
       const now = new Date().toISOString();
