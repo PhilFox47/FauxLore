@@ -329,7 +329,10 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
       const ids = [...selectIllustratedScenes(story.scenes), "achievement-finale"];
       if (!ids.length) return false;
       let images: Record<string, string> = {};
-      try { images = JSON.parse(row.sceneArtJson || "{}"); } catch { images = {}; }
+      try {
+        const parsed = JSON.parse(row.sceneArtJson || "{}");
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) images = parsed;
+      } catch { images = {}; }
       // A previously "done" issue may predate the full-art rule. Fill only
       // the new gaps on open without charging again for existing chapter art.
       if (!regenerate && ids.every(id => typeof images[id] === "string" && !!images[id])) return false;
@@ -367,7 +370,8 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
       const ids = [...selectIllustratedScenes(story.scenes), "achievement-finale"];
       let images: Record<string, string> = {};
       try {
-        if (row.sceneArtJson) images = JSON.parse(row.sceneArtJson);
+        const parsed = JSON.parse(row.sceneArtJson || "{}");
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) images = parsed;
       } catch { images = {}; }
       // New issues generate ALL narrative scenes. Existing issues fill only
       // gaps on GET, while an explicit redraw repaints every eligible scene.
