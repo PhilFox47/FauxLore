@@ -4,6 +4,13 @@ import { imageSize } from "./imageSize";
 
 export type BossVisualState = "enraged" | "defeated";
 
+/** Victory always takes priority over Enrage once the battle has ended. */
+export function bossVisualState(boss: { status?: string | null; enraged?: boolean | number | null }): BossVisualState | null {
+  if (boss.status === "Defeated") return "defeated";
+  if (boss.enraged) return "enraged";
+  return null;
+}
+
 export type BossVisualIdentity = {
   name: string;
   title?: string | null;
