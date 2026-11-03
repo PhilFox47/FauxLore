@@ -21,6 +21,14 @@ test("every narrative scene including closing gets a background; opening has its
   assert.equal(selectIllustratedScenes(scenes, 1).length, 1);
 });
 
+test("a textual insight about statistics can still have art when it is not an infographic", () => {
+  const proseOnly = { ...scenes[1], kind: "outlier" as const, title: "A meaningful change",
+    body: "A change described through a personal memory instead of a chart." };
+  assert.equal(isWrappedInfographicScene(proseOnly), false);
+  assert.deepEqual(selectIllustratedScenes([scenes[0], proseOnly, scenes[4]]),
+    ["wrapped-1", "wrapped-4"]);
+});
+
 test("story first reveal and restyles wait for title and selected chapter images", () => {
   const initial = { scenes, coverArtStatus: "generating", sceneArtStatus: "generating", sceneArt: {} };
   assert.equal(shouldHoldWrappedForArtwork(initial), true);
@@ -76,8 +84,10 @@ test("image prompt and editorial layout agree on the reserved text area", () => 
 test("verified data comparison scenes are not wasted as illustration calls", () => {
   const metrics: StoryScene[] = [
     scenes[0],
-    { ...scenes[1], kind: "outlier" },
-    { ...scenes[2], kind: "taste" },
+    { ...scenes[1], kind: "outlier",
+      design: { layout: "infographic", palette: "violet", visual: "bars", mediaIds: [], align: "left" } },
+    { ...scenes[2], kind: "taste",
+      editorialJob: "data-reveal" },
     scenes[3],
     scenes[4],
   ];
