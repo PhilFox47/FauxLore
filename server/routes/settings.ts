@@ -142,6 +142,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
           // Check if the boss is now defeated by this change
           const newStatus = boss.currentProgress >= newTarget ? 'Defeated' : 'Active';
           db.prepare("UPDATE world_bosses SET targetProgress = ?, status = ?, updatedAt = ? WHERE id = ?").run(newTarget, newStatus, new Date().toISOString(), boss.id);
+          if (newStatus === 'Defeated') queueBossVictoryArtwork(userId as string, boss.id);
         }
       }
       
