@@ -125,8 +125,8 @@ export function normalizeDynamicScene(
     }
     if (type === "stat" || type === "beat") {
       const facts = type === "stat" ? scene.bars : scene.beats;
-      if (!Number.isInteger(raw.index) || !facts || (raw.index as number) < 0 ||
-          (raw.index as number) >= facts.length) {
+      if (typeof raw.index !== "number" || !Number.isInteger(raw.index) || !facts ||
+          raw.index < 0 || raw.index >= facts.length) {
         throw new Error("Dynamic scene data must reference a verified index");
       }
       element.index = raw.index as number;
