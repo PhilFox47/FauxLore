@@ -145,7 +145,8 @@ Tests: `npm run test:achievements`.
 Wrapped is now a **two-pass experience**. The existing Story Director first
 writes a fully evidence-grounded editorial story. A separate Visual Director
 then designs **every scene** individually, from opening to finale, using a
-restricted scene-composition JSON format. Weak or invalid compositions still
+restricted scene-composition JSON format plus a cinematic/data/typography
+direction shared with image generation. Weak or invalid compositions still
 fall back to the original layout; the Director is asked to create a meaningful
 visual concept, not just more decorative circles or book-cover grids. This format supports freely positioned
 headlines, narration, media artwork, title art, verified numeric comparisons,
@@ -182,6 +183,47 @@ These exercise parser isolation, media/stat provenance, invalid layouts,
 AI proposals and the save boundary; a live GPT model + browser render test
 still requires the local configured provider.
 
+### Wrapped: Cinematic Editorial (full-bleed visual direction)
+
+Wrapped's Visual Director now uses a **Cinematic Editorial** contract for each
+scene. Instead of asking an image model to position every title in a little
+percentage box inside a colorful card, it supplies a validated design plan:
+
+- `direction.presentation`: `cinematic`, `data`, `typography` or legacy `composed`
+- `direction.textSide`: `left`, `right` or `center`
+- `direction.textPosition`: `top`, `middle` or `bottom`
+- `direction.imageFocus`: `left`, `right` or `center`
+
+**Cinematic** renders the generated 3:2 image as an actual edge-to-edge
+background of the whole story slide, without a second colorful frame, image
+panel, or card-within-card. React owns typography, the responsive reading
+column, subtle contrast overlays and placement, while the image provider
+receives the *same* editorial text-side and subject-focus specification.
+An inconsistent focal point is corrected away from the headline region.
+Existing generated opening/chapter images gain full-bleed presentation too;
+new scenes can use precise placement and a specific art concept.
+
+**Data** is intentionally image-free: verified numbers are presented as
+dominant editorial graphics with clear labels and understated dividers.
+**Typography** provides quiet, spacious editorial finales and reflective
+interludes. `composed` and the original fixed layouts remain available for
+advanced sequences, invalid/failed AI compositions or old stories without a
+dynamic design.
+
+The image selector budgets **up to three original interior chapter images**
+plus the opening illustration, but excludes `outlier`/`taste` statistical
+comparison scenes from paid image requests. This is a maximum, not a quota.
+The story-writing prompt now explicitly forbids consecutive slides repeating
+the same claim with different visuals: a hook should not spoil the next
+infographic. After **Restyle scenes**, the opening illustration and chapter
+artwork are both regenerated so their focal framing matches the new layout;
+the story stays hidden until the image jobs complete or fail. Existing story
+text, numbers, provenance and achievements do not change.
+
+Image model final priorities no longer override the requested focus with a
+fixed "text-left / subject-right" instruction. Neither the director nor the
+saved composition can execute arbitrary HTML, CSS or JavaScript.
+
 ### Wrapped: optional visual self-insert
 
 **Settings → Base Preferences → Visual Self-Insert** stores a private,
@@ -195,7 +237,7 @@ fictional/source characters. Settings use per-user database columns, not
 system-wide image settings, and missing fields in partial settings POSTs
 preserve existing values.
 
-Both the Wrapped opening cover and up to two original chapter illustrations
+Both the Wrapped opening cover and up to three original chapter illustrations
 read that account's profile at render time. The AI receives a bounded
 appearance description as optional factual guidance. This does not affect
 story narration, achievements, other account images or previously saved
@@ -214,7 +256,7 @@ Tests: `npm run test:visual-self` (also included in `npm run test:wrapped`).
 
 ### Wrapped: original chapter illustrations and complete first reveal
 
-The same configured image provider can now generate **up to two additional,
+The same configured image provider can now generate **up to three additional,
 original 3:2 chapter illustrations** for important interior story beats, chosen
 deterministically by narrative relevance. Prompts are written from the actual
 scene premise and optional model-authored `artConcept`, not a list of every
@@ -231,7 +273,7 @@ also repaints the chapter illustrations, and waits until the new visuals are
 ready to avoid showing mismatched old artwork with the new compositions.
 The **Redraw chapter artwork** control retries or rerolls only interior images.
 
-Jobs have separate request tokens and statuses, are limited to two interior
+Jobs have separate request tokens and statuses, are limited to three interior
 images per issue, and do not auto-retry on failed providers. They are not
 re-generated at every visit. `npm run test:wrapped` covers their lifecycle,
 restart recovery and stale-image protection.
