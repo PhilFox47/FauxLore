@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeDynamicScene, safeDynamicScene } from "./dynamicScenes";
+import { normalizeDynamicScene, safeDynamicScene, imageFramingGuidance } from "./dynamicScenes";
 import type { StoryScene } from "./storyDiscovery";
 
 const scene: StoryScene = {
@@ -105,4 +105,48 @@ test("interior generated art keeps a bounded concept, never executable code or f
     ...proposed, elements: [...proposed.elements, node("image2", "scene-art", { x: 1, y: 1, w: 20, h: 20 })],
   }, scene), /too cluttered/);
   assert.throws(() => normalizeDynamicScene(proposed, { ...scene, kind: "opening" }), /Interior art/);
+});
+
+test("editorial direction contains only validated enum tokens and never arbitrary CSS", () => {
+  const incoming = {
+    ...design(),
+    direction: {
+      presentation: "cinematic", textSide: "right", textPosition: "bottom",
+      imageFocus: "left", style: "position:fixed", javascript: "alert(1)",
+    },
+  };
+  const cleaned = normalizeDynamicScene(incoming, scene);
+  assert.deepEqual(cleaned.direction, {
+    presentation: "cinematic", textSide: "right", textPosition: "bottom", imageFocus: "left",
+  });
+  assert.doesNotMatch(JSON.stringify(cleaned), /position:fixed|alert\(1\)/);
+  assert.equal(normalizeDynamicScene({ ...incoming,
+    direction: { ...incoming.direction, presentation: "javascript" },
+  }, scene).direction, undefined);
+});
+
+test("model cannot aim the dominant subject behind the headline", () => {
+  const proposal = normalizeDynamicScene({
+    ...design(),
+    direction: { presentation: "cinematic", textSide: "right", textPosition: "middle", imageFocus: "right" },
+  }, scene);
+  assert.equal(proposal.direction?.imageFocus, "left");
+  const framing = imageFramingGuidance(proposal.direction);
+  assert.match(framing, /RIGHT 55% darker/);
+  assert.match(framing, /toward the LEFT/);
+});
+
+test("opening cinematic concept can accompany the cover without invented image URLs", () => {
+  const incoming = {
+    ...design([
+      node("hero", "title", { x: 6, y: 12, w: 65, h: 28 }),
+      node("body", "body", { x: 6, y: 55, w: 60, h: 30 }),
+    ]),
+    direction: { presentation: "cinematic", textSide: "left", textPosition: "middle", imageFocus: "right" },
+    artConcept: "A vast archive whose shelves become the rings of Saturn",
+  };
+  const cleaned = normalizeDynamicScene(incoming, { ...scene, kind: "opening" });
+  assert.match(cleaned.artConcept || "", /rings of Saturn/);
+  assert.equal(cleaned.elements.length, 2);
+  assert.equal("url" in cleaned, false);
 });
