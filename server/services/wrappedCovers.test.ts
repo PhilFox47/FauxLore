@@ -80,7 +80,8 @@ test("cover prompt reflects the actual saved issue, reserves text overlay space 
   assert.match(prompt, /Only ONE focal subject/);
   assert.doesNotMatch(prompt, /connecting the MOST meaningful two or three themes/);
   assert.match(prompt, /cobalt/);
-  assert.match(prompt, /LEFT 45 percent/);
+  assert.match(prompt, /LEFT 55% darker/);
+  assert.match(prompt, /toward the RIGHT/);
   assert.match(prompt, /NO text/);
   assert.doesNotMatch(prompt, /Unlogged Title/);
 });
@@ -393,4 +394,27 @@ test("chapter illustrations receive the same account-scoped optional likeness in
     assert.match(prompts[0], /A train on a train/);
     assert.match(prompts[0], /not a requirement/);
   } finally { db.close(); }
+});
+
+test("opening cover respects the same focal/typography plan and visual idea as the slide", () => {
+  const directed = {
+    ...story,
+    scenes: story.scenes.map((scene, i) => i === 0 ? {
+      ...scene,
+      composition: {
+        artConcept: "A lone astronaut standing in an enormous silent archive",
+        direction: {
+          presentation: "cinematic" as const,
+          textSide: "right" as const,
+          textPosition: "middle" as const,
+          imageFocus: "left" as const,
+        },
+      },
+    } : scene),
+  };
+  const prompt = buildWrappedCoverPrompt(directed, TIMEFRAME, PERIOD, []);
+  assert.match(prompt, /lone astronaut standing in an enormous silent archive/);
+  assert.match(prompt, /RIGHT 55% darker/);
+  assert.match(prompt, /toward the LEFT/);
+  assert.doesNotMatch(prompt, /LEFT 55% darker/);
 });
