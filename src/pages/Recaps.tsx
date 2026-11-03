@@ -835,11 +835,27 @@ export function Recaps() {
         media,
         settings,
       }));
+      const monthlyEditorialEvidence = timeframe === 'month' ? (() => {
+        const evidence = buildWrappedEvidence({
+          timeframe, timeId, logs: activeLogs, history: validLogs, media, settings,
+        });
+        const contract = evidence.monthlyCoverage;
+        return [
+          'MONTHLY COVERAGE CHECK: This is a COMPLETE CALENDAR MONTH, NOT an expanded version of its final week.',
+          'Substantial recorded phases: ' + (contract?.requiredPhases.join(', ') || 'none'),
+          'Final seven days contributed ' + Math.round((contract?.lastWeekShare || 0) * 100) +
+            '% of weighted monthly progress. Do not overrepresent the end unless activity really concentrated there.',
+          ...evidence.facts.filter(fact => !!fact.phase).map(fact =>
+            fact.title + ': ' + fact.evidence),
+          'Build the editorial thesis from multiple distinct parts of the month when they contain meaningful evidence. Do not invent equal activity, a narrative arc, or reasons for behavior.',
+        ].join('\n');
+      })() : '';
       const promptContext = `
 EDITORIAL SOURCE EVIDENCE, ${timeframe.toUpperCase()} ${timeId}
 Exact time window: ${format(currentInterval.start, 'yyyy-MM-dd')} to ${format(currentInterval.end, 'yyyy-MM-dd')}.
 PERSONAL MEDIA HABIT BASELINE (READ BEFORE SELECTING ANGLES):
 ${focusCalibration}
+${monthlyEditorialEvidence}
 This is material for an OPINION COLUMN, not a checklist. Seek meaningful reviews, specific moments, actual personal judgments and objectively unusual changes of emphasis. Locations are user-recorded log labels, not proof of WHY the user went somewhere.
 
 WHERE AND WHAT (activity-by-location combinations, not just totals):
