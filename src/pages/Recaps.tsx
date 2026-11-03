@@ -521,7 +521,7 @@ export function Recaps() {
       // compositions instead of merely returning the old ones unchanged.
       const naked: WrappedStory = { ...source, scenes: source.scenes.map(({ composition, ...scene }) => scene) };
       const designed = await generateWrappedVisualCompositions({
-        story: naked, apiKey: settings.nanoGptApiKey || '', model: creativeModel(settings),
+        story: naked, apiKey: settings.nanoGptApiKey || '', model: creativeModel(settings), timeframe,
       });
       const compositions = designed.scenes
         .filter(scene => !!scene.composition)
