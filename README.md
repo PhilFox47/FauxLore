@@ -116,6 +116,33 @@ CLIProxyAPI settings:
   This tests local prompt and reference handling; a live gateway test is still
   required to verify the configured CLIProxyAPI image-edit endpoint.
 
+### Wrapped: AI-generated title illustrations
+
+Every **Weekly, Monthly and Yearly Wrapped** can have one independent 3:2
+title illustration on its opening slide. The app derives a single cohesive
+editorial image prompt from the saved Wrapped's title, actual narrative themes,
+and media titles verified against that account's activity logs in the period.
+The reporting timezone is stored with the issue to respect period boundaries.
+The image does **not** contain typography: the real Wrapped title is overlaid
+by the UI. Existing official media covers on every other slide are unchanged.
+
+The cover uses the selected global image provider (GPT Image 2.5 via
+CLIProxyAPI, or the configured NanoGPT image model). It is generated and saved
+in the background after a new story is stored, and once when an existing older
+Wrapped is first opened. The same saved image is reused on later visits;
+opening an issue never generates another cover if one already exists. A
+**Redraw title artwork** button rerolls only the illustration, leaving the
+narrative, statistics and achievements untouched. Failed image generation
+leaves the saved Wrapped intact and shows a retry button.
+
+Story and cover generation have separate request tokens so old in-flight
+renders cannot overwrite a newer Wrapped reroll. Repeated requests do not
+start duplicate image jobs. Images for dormant accounts are not automatically
+generated, and restart-interrupted jobs move to a retryable failed state.
+
+Tests: `npm run test:wrapped` and `npm run test:image-prompting`.
+A real image-output test still requires an authenticated local provider.
+
 **Provider isolation:** When CLIProxyAPI is selected, ordinary text, image
 generation, and explicit web-search requests use CLIProxyAPI. Codex research
 uses its native Responses web search; no automatic paid NanoGPT fallback.
