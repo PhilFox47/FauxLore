@@ -69,3 +69,14 @@ test("Rarity is environmental art direction, not a change in the object's materi
   assert.match(rarityArt("Mythic").grandeur, /without inventing supernatural properties/i);
   assert.match(rarityArt("Legendary").grandeur, /authentic design/i);
 });
+
+test("GPT Image 2.5 Wrapped cover briefs do not inherit boss or loot portrait constraints", () => {
+  const prompt = gptImage25DeliveryPrompt(
+    "One cinematic editorial title illustration connecting Mass Effect and a thriller.",
+    "wrapped",
+  );
+  assert.match(prompt, /editorial cover for the user's actual Wrapped period/);
+  assert.match(prompt, /left portion darker and uncluttered/);
+  assert.doesNotMatch(prompt, /Level changes the drama of the scene/);
+  assert.doesNotMatch(prompt, /Rarity is an inventory/);
+});
