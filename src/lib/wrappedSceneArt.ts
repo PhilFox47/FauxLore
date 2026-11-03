@@ -7,7 +7,8 @@ import { visualSelfImageClause, type VisualSelfProfile } from "./visualSelf";
  * into "one image per media title": image generation serves the narrative.
  * Same deterministic selection is used by the Visual Director and server.
  */
-export function selectIllustratedScenes<T extends Pick<StoryScene, "id" | "kind" | "title" | "body">>(
+export function selectIllustratedScenes<T extends Pick<StoryScene, "id" | "kind" | "title" | "body"> &
+  Partial<Pick<StoryScene, "composition">>>(
   scenes: T[], maximum = 3,
 ): string[] {
   if (maximum <= 0) return [];
@@ -25,10 +26,15 @@ export function selectIllustratedScenes<T extends Pick<StoryScene, "id" | "kind"
     const score = (rank[scene.kind] || 3) +
       Math.min(2, (scene.title || "").length / 35) +
       Math.min(2, (scene.body || "").length / 340);
-    return { id: scene.id, index, score };
+    const mode = scene.composition?.direction?.presentation;
+    // Candidate ranking stays stable between the pre-design and post-design
+    // passes. If Terra deliberately chooses data/type instead, skip the paid
+    // image rather than silently choosing a different, unplanned scene.
+    return { id: scene.id, index, score, renderArt: !mode || mode === "cinematic" };
   });
   const chosen = available.sort((a, b) => b.score - a.score || a.index - b.index)
-    .slice(0, Math.min(3, maximum)).sort((a, b) => a.index - b.index);
+    .slice(0, Math.min(3, maximum)).filter(item => item.renderArt)
+    .sort((a, b) => a.index - b.index);
   return chosen.map(({ id }) => id);
 }
 
