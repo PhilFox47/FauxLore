@@ -58,3 +58,43 @@ test('Local cached media cover paths are allowed, but unsafe URLs remain blocked
   assert.equal(saved.scenes[1].artworks[0].cover, cached);
   assert.equal(saved.scenes[1].media.cover, cached);
 });
+
+test('API persists bounded generated scenes and strips attempts at arbitrary HTML/CSS', () => {
+  const submitted = story();
+  (submitted.scenes[1] as any).composition = {
+    version: 1, backdrop: 'spotlight', elements: [
+      { id: 'headline', type: 'title', box: { x: 5, y: 15, w: 58, h: 20 },
+        size: 'lg', tone: 'primary', motion: 'rise', delay: .2,
+        html: '<script>window.alert(1)</script>', style: 'position:fixed' },
+      { id: 'copy', type: 'body', box: { x: 5, y: 51, w: 58, h: 25 },
+        size: 'md', tone: 'secondary', motion: 'fade', delay: .5 },
+      { id: 'cover', type: 'media', box: { x: 70, y: 22, w: 24, h: 56 },
+        size: 'lg', tone: 'accent', motion: 'float', delay: 0,
+        mediaId: 'book', url: 'javascript:alert(2)' },
+    ],
+  };
+  const validated = validateStory(submitted);
+  const design = validated.scenes[1].composition;
+  assert.equal(validated.visualRevision, 0);
+  assert.equal(design.elements.length, 3);
+  assert.equal(design.elements[2].mediaId, 'book');
+  assert.equal('html' in design.elements[0], false);
+  assert.equal('style' in design.elements[0], false);
+  assert.equal('url' in design.elements[2], false);
+  assert.equal(JSON.stringify(design).includes('script'), false);
+});
+
+test('API drops fabricated media, unverified stats or impossible geometry but keeps the saved story', () => {
+  const submitted = story();
+  (submitted.scenes[1] as any).composition = {
+    version: 1, backdrop: 'grid', elements: [
+      { id: 'headline', type: 'title', box: { x: 5, y: 15, w: 58, h: 20 }, size: 'lg', tone: 'primary', motion: 'rise', delay: .2 },
+      { id: 'copy', type: 'body', box: { x: 5, y: 51, w: 58, h: 25 }, size: 'md', tone: 'primary', motion: 'fade', delay: .2 },
+      { id: 'fake', type: 'stat', box: { x: 70, y: 22, w: 24, h: 56 }, size: 'lg', tone: 'accent', motion: 'pop', delay: 0, index: 9 },
+    ],
+  };
+  const validated = validateStory(submitted);
+  assert.equal(validated.scenes[1].composition, undefined);
+  assert.equal(validated.scenes[1].title, 'Unlikely bedfellows');
+  assert.equal(validated.scenes.length, 3);
+});
