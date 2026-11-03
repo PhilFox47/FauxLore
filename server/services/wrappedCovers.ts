@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "../context";
 import { selectIllustratedScenes, buildWrappedSceneArtPrompt } from "../../src/lib/wrappedSceneArt";
+import type { StoryScene } from "../../src/lib/storyDiscovery";
 
 export type WrappedTimeframe = "week" | "month" | "year";
 export type WrappedCoverSubject = { id: string; title: string; type: string; genres?: string[] };
@@ -274,7 +275,7 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
       ).get(userId, timeframe, timeId) as { sceneArtStatus: string | null; story: string } | undefined;
       if (!row || (!regenerate && row.sceneArtStatus != null) ||
           (regenerate && ["pending","generating"].includes(row.sceneArtStatus || ""))) return false;
-      const story = JSON.parse(row.story) as WrappedCoverStory & { scenes: Array<WrappedCoverStory["scenes"][number] & { id: string }> };
+      const story = JSON.parse(row.story) as WrappedCoverStory & { scenes: StoryScene[] };
       if (!selectIllustratedScenes(story.scenes).length) return false;
       const token = randomUUID();
       const result = db.prepare(
@@ -305,7 +306,7 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
         "SELECT story, sceneArtJson FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=? AND sceneArtRequestId=?",
       ).get(userId, timeframe, timeId, token) as { story: string; sceneArtJson?: string | null } | undefined;
       if (!row) return;
-      const story = JSON.parse(row.story) as WrappedCoverStory & { scenes: Array<WrappedCoverStory["scenes"][number] & { id: string }> };
+      const story = JSON.parse(row.story) as WrappedCoverStory & { scenes: StoryScene[] };
       const ids = selectIllustratedScenes(story.scenes);
       let images: Record<string, string> = {};
       try {
