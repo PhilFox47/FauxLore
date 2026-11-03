@@ -73,6 +73,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     imageNegativePrompt: '',
     timezone: '',
     aiPersona: 'witty',
+    visualSelfInsertMode: 'never' as 'never' | 'auto' | 'prefer',
+    visualSelfDescription: '',
     disableAutoDrop: false,
     pushTypes: PUSH_EVENTS.map(e => e.id),
     inactivityReminderDays: 7,
@@ -153,6 +155,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         imageNegativePrompt: settings.imageNegativePrompt || '',
         timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
         aiPersona: settings.aiPersona || 'witty',
+        visualSelfInsertMode: settings.visualSelfInsertMode === 'prefer' ? 'prefer' as const
+          : settings.visualSelfInsertMode === 'auto' ? 'auto' as const : 'never' as const,
+        visualSelfDescription: settings.visualSelfDescription || '',
         disableAutoDrop: !!settings.disableAutoDrop,
         pushTypes: settings.pushTypes || PUSH_EVENTS.map(e => e.id),
         inactivityReminderDays: settings.inactivityReminderDays ?? 7,
@@ -222,6 +227,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             imageNegativePrompt: settings.imageNegativePrompt || '',
             timezone: settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
             aiPersona: settings.aiPersona || 'witty',
+            visualSelfInsertMode: settings.visualSelfInsertMode === 'prefer' ? 'prefer' as const
+              : settings.visualSelfInsertMode === 'auto' ? 'auto' as const : 'never' as const,
+            visualSelfDescription: settings.visualSelfDescription || '',
             disableAutoDrop: !!settings.disableAutoDrop,
             pushTypes: settings.pushTypes || PUSH_EVENTS.map(e => e.id),
             inactivityReminderDays: settings.inactivityReminderDays ?? 7,
@@ -774,6 +782,59 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       <p className="text-[10px] text-zinc-500 mt-1">
                         {getPersona(formData.aiPersona).hint} Sets the voice of recaps and titles. Dungeon System AI also narrates enemies and loot.
                       </p>
+                    </div>
+
+                    <div className="rounded-xl border border-violet-500/20 bg-zinc-900/40 p-4 space-y-4">
+                      <div className="flex items-center gap-2">
+                        <UserCircle className="w-5 h-5 text-violet-300" />
+                        <h3 className="text-sm font-bold text-zinc-100">Visual Self-Insert · Wrapped artwork</h3>
+                      </div>
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        Optionally let your own appearance inform Wrapped title and chapter illustrations.
+                        This only affects generated images, not the narrative, statistics or other users.
+                        A human protagonist is never compulsory.
+                      </p>
+                      <div>
+                        <label htmlFor="visual-self-mode" className="block text-xs font-semibold text-zinc-300 mb-2">
+                          When should FauxLore show you?
+                        </label>
+                        <select id="visual-self-mode" value={formData.visualSelfInsertMode}
+                          onChange={e => setFormData(prev => ({ ...prev,
+                            visualSelfInsertMode: e.target.value as 'never' | 'auto' | 'prefer' }))}
+                          className="input-field w-full bg-[#121214]">
+                          <option value="never">Never · don't use my appearance</option>
+                          <option value="auto">Auto · only when the scene benefits</option>
+                          <option value="prefer">Prefer · choose me when a human protagonist fits</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="visual-self-description" className="block text-xs font-semibold text-zinc-300 mb-2">
+                          Your appearance (private, editable)
+                        </label>
+                        <textarea id="visual-self-description"
+                          value={formData.visualSelfDescription}
+                          onChange={e => setFormData(prev => ({ ...prev, visualSelfDescription: e.target.value }))}
+                          maxLength={700}
+                          rows={4}
+                          className="input-field w-full resize-y"
+                          placeholder="For example: short dark hair, glasses, trimmed beard, casual clothing, distinctive facial features…"
+                        />
+                        <div className="flex items-start justify-between gap-3 mt-1">
+                          <p className="text-[11px] text-zinc-500 leading-relaxed">
+                            Write only what you want the image model to know. The description is
+                            stored per account and included only in Wrapped image requests when
+                            Auto or Prefer is enabled. No photos are uploaded.
+                          </p>
+                          <span className="text-[10px] text-zinc-500 tabular-nums shrink-0">
+                            {formData.visualSelfDescription.length}/700
+                          </span>
+                        </div>
+                        {formData.visualSelfInsertMode !== 'never' && !formData.visualSelfDescription.trim() && (
+                          <p className="text-[11px] text-amber-300 mt-2">
+                            Add a description to enable visual likeness. Until then, generation behaves as before.
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-4 space-y-3">
