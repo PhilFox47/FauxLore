@@ -845,6 +845,17 @@ export function Recaps() {
           'Substantial recorded phases: ' + (contract?.requiredPhases.join(', ') || 'none'),
           'Final seven days contributed ' + Math.round((contract?.lastWeekShare || 0) * 100) +
             '% of weighted monthly progress. Do not overrepresent the end unless activity really concentrated there.',
+          ...(contract?.clusters || []).filter(cluster => cluster.activeDays > 0)
+            .map(cluster => [
+              'MONTH PART ' + cluster.phase.toUpperCase() + ': ' +
+                cluster.progressShare + '% of normalized month progress across ' +
+                cluster.activeDays + ' recorded active day(s).',
+              'Leading actual works: ' + cluster.leadingWorks.map(work =>
+                work.title + ' (' + work.share + '% of this phase)').join('; '),
+              cluster.places.length ? 'Recorded places: ' + cluster.places.join(', ') : '',
+              cluster.journalHighlights.length ? 'Actual journal excerpts: ' +
+                cluster.journalHighlights.map(entry => entry.quote).join(' | ') : '',
+            ].filter(Boolean).join(' ')),
           ...evidence.facts.filter(fact => !!fact.phase).map(fact =>
             fact.title + ': ' + fact.evidence),
           'Build the editorial thesis from multiple distinct parts of the month when they contain meaningful evidence. Do not invent equal activity, a narrative arc, or reasons for behavior.',
