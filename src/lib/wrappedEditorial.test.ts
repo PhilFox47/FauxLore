@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MAX_DATA_SLIDES, isSignificantFormatShift, isSignificantTasteGap,
+  MAX_DATA_SLIDES, isSignificantFormatShift, isSignificantTasteGap, isStrongSceneData,
   evidenceStoryFunctions, requiredMonthlyPhases,
 } from './wrappedEditorial';
 import { buildWrappedEvidence } from './wrappedEvidence';
@@ -48,6 +48,24 @@ test('weak 16-point game shift fails chart gating; major book and audiobook shif
   assert.equal(isSignificantTasteGap(5, 4.5), false);
   assert.equal(isSignificantTasteGap(5, 3.5), true);
   assert.deepEqual(MAX_DATA_SLIDES, { week: 1, month: 2, year: 3 });
+});
+
+test('legacy chart numbers cannot sneak a weak game shift into a visual-only reroll', () => {
+  assert.equal(isStrongSceneData('outlier', [
+    { value: 32.7 }, { value: 48.7 },
+  ]), false);
+  assert.equal(isStrongSceneData('outlier', [
+    { value: 2 }, { value: 25.7 },
+  ]), true);
+  assert.equal(isStrongSceneData('taste', [
+    { value: 100 }, { value: 90 },
+  ]), false);
+  assert.equal(isStrongSceneData('taste', [
+    { value: 100 }, { value: 70 },
+  ]), true);
+  assert.equal(isStrongSceneData('insight', [
+    { value: 0 }, { value: 100 },
+  ]), false);
 });
 
 test('monthly evidence exposes meaningful early, middle and late periods and actual last-week share', () => {
