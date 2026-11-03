@@ -1,4 +1,5 @@
 import type { StoryScene } from "./storyDiscovery";
+import { visualSelfImageClause, type VisualSelfProfile } from "./visualSelf";
 
 /**
  * Pick two ACTUAL story beats for original illustrations. Never turn this
@@ -30,6 +31,7 @@ export function selectIllustratedScenes<T extends Pick<StoryScene, "id" | "kind"
 export function buildWrappedSceneArtPrompt(
   issue: { title: string; dek: string },
   scene: Pick<StoryScene, "kind" | "title" | "body" | "media" | "composition">,
+  visualSelf?: VisualSelfProfile | null,
 ): string {
   const idea = (scene.composition?.artConcept || "").trim();
   const influence = scene.media?.title
@@ -46,6 +48,7 @@ export function buildWrappedSceneArtPrompt(
     "Do not invent actual personal experiences, spoilers, dialogue, factual achievements or authorial quotes. The image may express a fictional metaphor, but not portray it as an event that happened to the user.",
     "Horizontal 3:2 composition, generous negative space and a legible hero subject positioned toward the right. Make it work as a subdued cinematic background behind white app typography if necessary.",
     "NO text, logos, printed lettering, statistics, charts, mosaics, screenshots, user-interface elements, split panels, poster walls or watermarks.",
+    visualSelfImageClause(visualSelf),
   ].filter(Boolean).join("\n\n");
 }
 
