@@ -77,7 +77,7 @@ test("GPT Image 2.5 Wrapped cover briefs do not inherit boss or loot portrait co
   );
   assert.match(prompt, /singular, high-impact editorial KEY ART/);
   assert.match(prompt, /ONE central visual thesis/);
-  assert.match(prompt, /at most ONE source media work/ii);
+  assert.match(prompt, /at most ONE source media work/i);
   assert.match(prompt, /no character lineup/i);
   assert.match(prompt, /left portion darker and uncluttered/);
   assert.doesNotMatch(prompt, /Level changes the drama of the scene/);
