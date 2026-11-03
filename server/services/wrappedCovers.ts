@@ -34,7 +34,23 @@ const compact = (value: unknown, limit = 140): string =>
  * WrappedEvidence places activity on its reporting day after shifting a
  * timestamp back five hours. Use matching 05:00 UTC boundaries here.
  */
-export function wrappedCoverBounds(timeframe: WrappedTimeframe, timeId: string) {
+/** Convert a local midnight in an IANA timezone into a UTC instant, including DST. */
+function zonedMidnight(utcCalendarDate: number, timeZone: string): number {
+  const partsFor = (instant: number) => {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    }).formatToParts(new Date(instant));
+    const values = Object.fromEntries(parts.map(p => [p.type, Number(p.value)]));
+    return Date.UTC(values.year, values.month - 1, values.day, values.hour, values.minute, values.second);
+  };
+  const offset = (at: number) => partsFor(at) - at;
+  let actual = utcCalendarDate - offset(utcCalendarDate);
+  actual = utcCalendarDate - offset(actual); // re-check near daylight-saving changes
+  return actual;
+}
+
+export function wrappedCoverBounds(timeframe: WrappedTimeframe, timeId: string, timeZone = "UTC") {
   const year = Number(timeId.slice(0, 4));
   if (!Number.isInteger(year) || year < 1970 || year > 2200) throw new Error("Invalid Wrapped year");
   let startMs: number;
@@ -58,8 +74,8 @@ export function wrappedCoverBounds(timeframe: WrappedTimeframe, timeId: string) 
     endMs = startMs + 7 * 86_400_000;
   }
   return {
-    start: new Date(startMs + 5 * 3600_000).toISOString(),
-    end: new Date(endMs + 5 * 3600_000).toISOString(),
+    start: new Date(zonedMidnight(startMs, timeZone) + 5 * 3600_000).toISOString(),
+    end: new Date(zonedMidnight(endMs, timeZone) + 5 * 3600_000).toISOString(),
   };
 }
 
@@ -100,11 +116,11 @@ export function createWrappedCoverService({ db, generateImage, canSpendTokens }:
   canSpendTokens: (userId: string) => boolean;
 }) {
   const current = db.prepare(
-    "SELECT story, coverArtStatus, coverArtRequestId FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=?",
+    "SELECT story, coverArtStatus, coverArtRequestId, coverArtTimeZone FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=?",
   );
 
-  function subjectsFor(userId: string, timeframe: WrappedTimeframe, timeId: string, story: WrappedCoverStory): WrappedCoverSubject[] {
-    const { start, end } = wrappedCoverBounds(timeframe, timeId);
+  function subjectsFor(userId: string, timeframe: WrappedTimeframe, timeId: string, story: WrappedCoverStory, timeZone: string): WrappedCoverSubject[] {
+    const { start, end } = wrappedCoverBounds(timeframe, timeId, timeZone);
     const rows = db.prepare(
       "SELECT l.mediaId AS id, m.title, m.mediaType AS type, m.genres " +
       "FROM logs l JOIN media m ON m.id=l.mediaId AND m.userId=l.userId " +
@@ -141,10 +157,10 @@ export function createWrappedCoverService({ db, generateImage, canSpendTokens }:
         "WHERE userId=? AND timeframe=? AND timeId=? AND coverArtRequestId=? AND coverArtStatus='pending'",
       ).run(userId, timeframe, timeId, token);
       if (!claimed.changes) return;
-      const row = current.get(userId, timeframe, timeId) as { story: string } | undefined;
+      const row = current.get(userId, timeframe, timeId) as { story: string; coverArtTimeZone?: string | null } | undefined;
       if (!row) return;
       const story = JSON.parse(row.story) as WrappedCoverStory;
-      const subjects = subjectsFor(userId, timeframe, timeId, story);
+      const subjects = subjectsFor(userId, timeframe, timeId, story, row.coverArtTimeZone || "UTC");
       // If no activity is actually attached to this period, don't create an
       // allegedly personal illustration from a hallucinated story title.
       if (!subjects.length) throw new Error("No verified progress logs for this Wrapped period.");
@@ -164,6 +180,7 @@ export function createWrappedCoverService({ db, generateImage, canSpendTokens }:
   }
 
   function queue(userId: string, timeframe: WrappedTimeframe, timeId: string, regenerate = false): boolean {
+    try {
     const row = current.get(userId, timeframe, timeId) as { coverArtStatus?: string | null } | undefined;
     if (!row || !canSpendTokens(userId)) return false;
     if (regenerate) {
@@ -182,6 +199,12 @@ export function createWrappedCoverService({ db, generateImage, canSpendTokens }:
     if (!claim.changes) return false;
     void render(userId, timeframe, timeId, token);
     return true;
+    } catch (error) {
+      // Image generation is strictly auxiliary. Never turn a successfully
+      // saved Wrapped into a failed HTTP request due to an artwork problem.
+      console.error("[wrapped-cover] Could not enqueue title illustration:", error);
+      return false;
+    }
   }
 
   return { queue };
