@@ -3,7 +3,7 @@ import { normalizeDynamicScene } from "../lib/dynamicScenes";
 import type { DynamicSceneComposition } from "../lib/dynamicScenes";
 import type { WrappedStory } from "./wrappedAi";
 import { selectIllustratedScenes } from "../lib/wrappedSceneArt";
-import { MAX_DATA_SLIDES, isDataLayout } from "../lib/wrappedEditorial";
+import { MAX_DATA_SLIDES, isDataLayout, isStrongSceneData } from "../lib/wrappedEditorial";
 import type { StoryPeriod } from "../lib/storyDiscovery";
 
 type DirectorReply = { compositions?: Array<{ sceneId: string; composition: unknown }> };
@@ -28,7 +28,7 @@ export function wrappedVisualDirectorBrief(
     imageMediaIds: [...new Set([scene.media, ...(scene.artworks || [])]
       .filter(m => m?.cover).map(m => m!.id))].slice(0, 6),
     canUseData: isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) &&
-      !!scene.bars?.length,
+      isStrongSceneData(scene.kind, scene.bars),
     verifiedBars: (scene.bars || []).slice(0, 6).map((bar, index) => ({
       index, label: bar.label, value: bar.value, note: bar.note,
     })),
@@ -86,7 +86,8 @@ export function applyWrappedVisualCompositions(
         composition.elements.some(element => element.type === "stat");
       if (dataLike) {
         if (!isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
-            !scene.bars?.length || dataCount >= MAX_DATA_SLIDES[timeframe]) {
+            !isStrongSceneData(scene.kind, scene.bars) ||
+            dataCount >= MAX_DATA_SLIDES[timeframe]) {
           // A visual-only reroll may not turn ordinary prose into a new
           // infographic or bypass the narrative's evidence/quantity budget.
           continue;
