@@ -31,6 +31,8 @@ export interface ServerContext {
   // Both image jobs read everything they need (including the AI-written image
   // prompt) off the row itself, so callers only identify what to draw.
   generateBossImageBackground: (userId: string, bossId: string) => Promise<void>;
+  /** Queue reference-guided Victory artwork after an Active -> Defeated transition. */
+  queueBossVictoryArtwork: (userId: string, bossId: string) => void;
   generateArtifactImageBackground: (userId: string, artifactId: string) => Promise<void>;
   codex: CodexService;
   /** What the configured image model accepts, asked of NanoGPT directly. */
