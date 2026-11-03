@@ -83,3 +83,14 @@ test("verified data comparison scenes are not wasted as illustration calls", () 
   ];
   assert.deepEqual(selectIllustratedScenes(metrics), ["wrapped-3"]);
 });
+
+test("a deliberate typographic or data scene does not consume a paid image slot", () => {
+  const directed: StoryScene[] = scenes.map((scene, index) => index === 2 ? {
+    ...scene,
+    composition: {
+      version: 1, backdrop: "minimal", elements: [],
+      direction: { presentation: "typography", textSide: "center", textPosition: "middle", imageFocus: "right" },
+    },
+  } : scene);
+  assert.deepEqual(selectIllustratedScenes(directed), ["wrapped-1", "wrapped-3"]);
+});
