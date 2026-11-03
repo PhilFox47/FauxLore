@@ -164,7 +164,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
     return JSON.parse(text);
   }
 
-  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = "", frame: ImageFrame = "square", referenceDataUrl: string | null = null, fallbackPrompt: string | null = null, intent: "boss" | "loot" | "wrapped" = frame === "square" ? "loot" : "boss"): Promise<string> {
+  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = "", frame: ImageFrame = "square", referenceDataUrl: string | null = null, fallbackPrompt: string | null = null, intent: "boss" | "loot" | "wrapped" | "wrapped-scene" = frame === "square" ? "loot" : "boss"): Promise<string> {
     const cfg = readImageConfig();
     const negativePrompt = [cfg.negative, extraNegative].filter(Boolean).join(", ");
     const framedPrompt = withImageFrame(prompt, frame);
@@ -560,6 +560,16 @@ Return ONLY the final image prompt text, nothing else.`;
     );
   }
 
+  /** Render a separate, original cinematic illustration for one Wrapped chapter. */
+  async function generateWrappedSceneImage(userId: string, prompt: string): Promise<string> {
+    const config = getAiConfig(db, userId);
+    if (!config) throw new Error("AI image provider is not configured.");
+    return internalGenerateImageWithNanoGpt(
+      config.apiKey, prompt, "collages, grids, franchise logos, letterforms, captions",
+      "landscape-3:2", null, null, "wrapped-scene",
+    );
+  }
+
   /**
    * What the configured image model actually accepts, from NanoGPT itself.
    *
@@ -606,5 +616,6 @@ Return ONLY the final image prompt text, nothing else.`;
     queueBossVictoryArtwork,
     generateArtifactImageBackground,
     generateWrappedCoverImage,
+    generateWrappedSceneImage,
   };
 }
