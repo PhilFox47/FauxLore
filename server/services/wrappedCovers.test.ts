@@ -418,3 +418,106 @@ test("opening cover respects the same focal/typography plan and visual idea as t
   assert.match(prompt, /toward the LEFT/);
   assert.doesNotMatch(prompt, /LEFT 55% darker/);
 });
+
+
+test("specific Wrapped chapter art uses one matching ready Codex style, not an unrelated multi-work collage", async () => {
+  const db = fixture();
+  const prompts: string[] = [];
+  const lookups: string[] = [];
+  try {
+    const staged = {
+      title: "October's biggest surprise", dek: "A revealing review",
+      scenes: [
+        { id: "wrapped-0", kind: "opening", title: "Welcome", body: "A summary" },
+        { id: "wrapped-1", kind: "spotlight", title: "A second season is wanted",
+          body: "Mass Effect was worth every minute.",
+          media: { id: "logged", title: "Mass Effect" },
+          artworks: [{ id: "logged", title: "Mass Effect" }] },
+        { id: "wrapped-2", kind: "location", title: "Many worlds in one place",
+          body: "The hotel had several works going at once.",
+          media: { id: "logged", title: "Mass Effect" },
+          artworks: [
+            { id: "logged", title: "Mass Effect" },
+            { id: "unlogged", title: "Unlogged Title" },
+          ] },
+        { id: "wrapped-3", kind: "closing", title: "End", body: "Until next month" },
+      ],
+    };
+    db.prepare("UPDATE wrapped_stories SET story=?").run(JSON.stringify(staged));
+    const service = createWrappedCoverService({
+      db: db as unknown as Db, canSpendTokens: () => true,
+      generateImage: async () => "/uploads/cover.png",
+      generateSceneImage: async (_, prompt) => {
+        prompts.push(prompt);
+        return "/uploads/art-" + prompts.length + ".png";
+      },
+      getCodexStyle: (userId, mediaId) => {
+        assert.equal(userId, "user");
+        lookups.push(mediaId);
+        return { mediaId, mediaTitle: "Mass Effect",
+          style: "Form: cinematic 3D game rendering\nPalette: desaturated blue\nCharacter models: recognizable armor" };
+      },
+    });
+    assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), true);
+    await settle();
+    assert.equal(prompts.length, 2);
+    assert.deepEqual(lookups, ["logged"], "Mixed scenes do not request arbitrary Codex styles");
+    assert.match(prompts[0], /CODEX VISUAL IDENTITY/);
+    assert.match(prompts[0], /desaturated blue/);
+    assert.match(prompts[0], /A second season is wanted/);
+    assert.doesNotMatch(prompts[1], /CODEX VISUAL IDENTITY|desaturated blue/);
+  } finally { db.close(); }
+});
+
+test("single-media cover may inherit the correct style without making it a media-cover mosaic", async () => {
+  const db = fixture();
+  const prompts: string[] = [];
+  try {
+    const service = createWrappedCoverService({
+      db: db as unknown as Db, canSpendTokens: () => true,
+      generateImage: async (_, prompt) => { prompts.push(prompt); return "/uploads/cover.png"; },
+      getCodexStyle: (_userId, mediaId) => ({
+        mediaId, mediaTitle: "Mass Effect",
+        style: "Form: visually stylized 3D sci-fi game\nPalette: midnight blue and icy silver",
+      }),
+    });
+    assert.equal(service.queue("user", TIMEFRAME, PERIOD), true);
+    await settle();
+    assert.match(prompts[0], /ONE-WORK CODEX VISUAL STYLE/);
+    assert.match(prompts[0], /midnight blue and icy silver/);
+    assert.match(prompts[0], /Only ONE focal subject/);
+    assert.doesNotMatch(prompts[0], /Unlogged Title|A Very Busy Side Quest/);
+  } finally { db.close(); }
+});
+
+test("missing or throwing Codex resolvers never prevent image creation or retry with extra paid calls", async () => {
+  const db = fixture();
+  let imageCalls = 0;
+  try {
+    const staged = {
+      title: "One memorable work", dek: "The main experience",
+      scenes: [
+        { id: "wrapped-0", kind: "opening", title: "Begin", body: "A beginning" },
+        { id: "wrapped-1", kind: "spotlight", title: "Mass Effect stands out",
+          body: "Your Mass Effect review was emphatic.",
+          media: { id: "logged", title: "Mass Effect" } },
+        { id: "wrapped-2", kind: "closing", title: "Finish", body: "A conclusion" },
+      ],
+    };
+    db.prepare("UPDATE wrapped_stories SET story=?").run(JSON.stringify(staged));
+    const service = createWrappedCoverService({
+      db: db as unknown as Db, canSpendTokens: () => true,
+      generateImage: async () => "/uploads/cover.png",
+      generateSceneImage: async (_, prompt) => {
+        imageCalls++;
+        assert.doesNotMatch(prompt, /CODEX VISUAL IDENTITY/);
+        return "/uploads/normal.png";
+      },
+      getCodexStyle: () => { throw new Error("Codex unavailable"); },
+    });
+    assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), true);
+    await settle();
+    assert.equal(imageCalls, 1);
+    assert.equal((db.prepare("SELECT sceneArtStatus FROM wrapped_stories").get() as any).sceneArtStatus, "done");
+  } finally { db.close(); }
+});
