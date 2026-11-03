@@ -68,7 +68,7 @@ export function gptImage25DeliveryPrompt(prompt: string, kind: "loot" | "boss", 
       ]
     : [
         "Preserve the canonical character or creature's recognizable anatomy, armor, silhouette, palette and signature equipment. Level changes the drama of the scene, not the actual species or character design.",
-        "Depict one complete, readable primary subject in a specific active moment, with a source-appropriate setting. No extra foreground characters or montage panels.",
+        "Depict one complete, readable primary subject in a source-appropriate moment OR clearly defeated aftermath, according to the requested state. Do not force a defeated opponent back into an attacking pose. No extra foreground characters or montage panels.",
       ];
   priorities.push("No invented lettering, emblems, watermarks or interface overlays. Genuine intrinsic markings may remain when source-supported.");
   if (customExclusions.trim()) priorities.push("Additional user-requested exclusions: " + customExclusions.trim());
