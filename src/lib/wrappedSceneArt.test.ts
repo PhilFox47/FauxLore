@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { selectIllustratedScenes, shouldHoldWrappedForArtwork, buildWrappedSceneArtPrompt } from "./wrappedSceneArt";
+import { selectIllustratedScenes, shouldHoldWrappedForArtwork, buildWrappedSceneArtPrompt, selectWrappedSceneStyleMediaId } from "./wrappedSceneArt";
 import type { StoryScene } from "./storyDiscovery";
 
 const scenes: StoryScene[] = [
@@ -93,4 +93,72 @@ test("a deliberate typographic or data scene does not consume a paid image slot"
     },
   } : scene);
   assert.deepEqual(selectIllustratedScenes(directed), ["wrapped-1", "wrapped-3"]);
+});
+
+
+test("one featured work gets its own Codex visual style rather than generic photorealism", () => {
+  const avatar: StoryScene = {
+    id: "wrapped-avatar", kind: "spotlight", eyebrow: "RARE APPROVAL",
+    title: "The next season is wanted",
+    body: "Your saved review of Avatar: Seven Havens is emphatic. It delivered the story you wanted.",
+    media: { id: "avatar", title: "Avatar: Seven Havens - Book One: Survival", type: "Game" },
+    artworks: [
+      { id: "avatar", title: "Avatar: Seven Havens - Book One: Survival", type: "Game" },
+      { id: "other", title: "Another Game", type: "Game" },
+    ],
+  };
+  assert.equal(selectWrappedSceneStyleMediaId(avatar), "avatar");
+  const prompt = buildWrappedSceneArtPrompt(
+    { title: "October verdict", dek: "A surprising approval" }, avatar, null,
+    { mediaId: "avatar", mediaTitle: "Avatar: Seven Havens - Book One: Survival",
+      style: "Form: stylized 2D animation\nNamed style: hand-painted cel animation\nPalette: muted jade and gold" },
+  );
+  assert.match(prompt, /SOURCE-STYLE-GROUNDED/);
+  assert.match(prompt, /hand-painted cel animation/);
+  assert.match(prompt, /Avatar: Seven Havens - Book One: Survival/);
+  assert.match(prompt, /do NOT default to a photoreal human/);
+  assert.match(prompt, /chapter thesis primary/);
+  assert.match(prompt, /Horizontal landscape 3:2/);
+});
+
+test("mixed media, abstract themes and non-image data scenes never select a Codex style", () => {
+  const avatar = { id: "avatar", title: "Avatar: Seven Havens", type: "Game" };
+  const book = { id: "book", title: "Der Nachtzug", type: "Book" };
+  const base: StoryScene = {
+    id: "wrapped-example", kind: "insight", eyebrow: "A JOURNEY",
+    title: "Two different verdicts",
+    body: "Avatar: Seven Havens was wonderful, while Der Nachtzug was fascinating.",
+    media: avatar, artworks: [avatar, book],
+  };
+  assert.equal(selectWrappedSceneStyleMediaId(base), null);
+  assert.equal(selectWrappedSceneStyleMediaId({
+    ...base, title: "The experience", body: "This was a month of rediscovery",
+  }), null);
+  assert.equal(selectWrappedSceneStyleMediaId({
+    ...base, title: "A peculiar journey", body: "Der Nachtzug made the trip special",
+  }), "book");
+  assert.equal(selectWrappedSceneStyleMediaId({
+    ...base, kind: "outlier", title: "Avatar: Seven Havens", body: "Measured share",
+  }), null);
+  assert.equal(selectWrappedSceneStyleMediaId({
+    ...base, editorialJob: "data-reveal", title: "Avatar: Seven Havens", body: "Measured share",
+  }), null);
+  assert.equal(selectWrappedSceneStyleMediaId({
+    ...base, kind: "opening", title: "Avatar: Seven Havens", body: "A new month",
+  }), null);
+  assert.equal(selectWrappedSceneStyleMediaId({
+    ...base, title: "Avatar: Seven Havens", composition: {
+      version: 1, backdrop: "minimal", elements: [],
+      direction: { presentation: "typography", textSide: "center",
+        textPosition: "middle", imageFocus: "right" },
+    },
+  }), null);
+});
+
+test("missing Codex context preserves existing scene art prompt behavior", () => {
+  const scene = scenes[1];
+  const standard = buildWrappedSceneArtPrompt({ title: "Story", dek: "A memory" }, scene);
+  assert.match(standard, /original cinematic EDITORIAL ILLUSTRATION/);
+  assert.doesNotMatch(standard, /CODEX VISUAL IDENTITY/);
+  assert.doesNotMatch(standard, /SOURCE-STYLE-GROUNDED/);
 });
