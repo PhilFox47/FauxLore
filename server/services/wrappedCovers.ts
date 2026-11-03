@@ -80,9 +80,37 @@ export function wrappedCoverBounds(timeframe: WrappedTimeframe, timeId: string, 
 }
 
 /**
- * A single illustrated title-page image, with actual source titles and story
- * themes. Media comes from logged user activity within the requested period,
- * NOT unverified titles invented by the story model.
+ * Select one primary media inspiration only when the saved Wrapped itself
+ * clearly foregrounds that title. A title appearing in activity logs is not
+ * enough to justify placing it in the picture. No forced franchise montage.
+ */
+export function selectWrappedCoverFocus(
+  story: WrappedCoverStory,
+  candidates: Array<WrappedCoverSubject & { count: number; sceneScore: number }>,
+): WrappedCoverSubject | null {
+  const headline = (story.title + " " + story.dek).toLocaleLowerCase();
+  const ranked = candidates
+    .map(candidate => ({
+      ...candidate,
+      mentionedInThesis: candidate.title.length >= 4 &&
+        headline.includes(candidate.title.toLocaleLowerCase()),
+    }))
+    .filter(candidate => candidate.sceneScore > 0 || candidate.mentionedInThesis)
+    .sort((a, b) =>
+      b.sceneScore - a.sceneScore ||
+      Number(b.mentionedInThesis) - Number(a.mentionedInThesis) ||
+      Math.min(b.count, 8) - Math.min(a.count, 8) ||
+      a.title.localeCompare(b.title),
+    );
+  if (!ranked.length) return null;
+  const { id, title, type, genres } = ranked[0];
+  return { id, title, type, genres };
+}
+
+/**
+ * Wrapped covers are EDITORIAL KEY ART, not a visual inventory. Supply one
+ * dominant thesis, one narrative beat and at most one optional media anchor.
+ * Never dump all logged titles or scenes into the generation prompt.
  */
 export function buildWrappedCoverPrompt(
   story: WrappedCoverStory, timeframe: WrappedTimeframe, timeId: string,
@@ -90,23 +118,34 @@ export function buildWrappedCoverPrompt(
 ): string {
   const title = compact(story.title, 180);
   const dek = compact(story.dek, 220);
-  const sceneIdeas = story.scenes
-    .filter(s => s.kind !== "opening" && s.kind !== "closing" && !!s.evidenceIds?.length)
-    .slice(0, 4).map(s => compact(s.title, 120)).filter(Boolean);
-  const sources = subjects.slice(0, 3).map(s => {
-    const genres = (s.genres || []).slice(0, 3).map(g => compact(g, 40)).filter(Boolean).join(", ");
-    return compact(s.title, 140) + " (" + compact(s.type, 40) + (genres ? "; " + genres : "") + ")";
-  });
+  const primary = subjects[0];
+  const narrativeBeat = story.scenes.find(scene =>
+    scene.kind !== "opening" && scene.kind !== "closing" &&
+    !!scene.evidenceIds?.length &&
+    (primary ? scene.media?.id === primary.id ||
+      scene.artworks?.some(art => art.id === primary.id) : true),
+  ) || story.scenes.find(scene =>
+    scene.kind !== "opening" && scene.kind !== "closing" && !!scene.evidenceIds?.length,
+  );
   const palette = palettes[story.scenes[0]?.design?.palette || ""] || palettes.violet;
+  const mediaInfluence = primary
+    ? "OPTIONAL SINGLE MEDIA INFLUENCE: " + compact(primary.title, 140) +
+      " (" + compact(primary.type, 40) + "). Use this work's visual language only if it makes the central concept clearer. " +
+      "It is not a required subject, character or logo. Do not depict any other media title. " +
+      "A subtle mood or material influence is preferable to an unrelated literal appearance."
+    : "No single media title is the dominant visual anchor. Build the image from the period's core editorial idea, not a lineup of recognizable franchises.";
   return [
-    "Create ONE original, cinematic, visually distinctive editorial TITLE ILLUSTRATION for a personal media Wrapped.",
-    "Period: " + timeframe + " " + timeId + ". Main theme: " + title + ". Mood and concept: " + dek + ".",
-    sceneIdeas.length ? "Supporting editorial themes: " + sceneIdeas.join("; ") + "." : "",
-    sources.length ? "These works were actually logged during this period. Use recognizable visual motifs inspired by their settings and genres, without copying their existing cover art: " + sources.join("; ") + "." : "",
-    "Invent one coherent visual metaphor connecting the MOST meaningful two or three themes. Give it a clear central focal point and rich spatial depth. The result should feel like commissioned cover art for THIS specific period, not a generic fantasy image, a cover mosaic, a screenshot collage or unrelated decorative objects.",
-    "Cinematic " + palette + " color direction. Source-authentic materials and subject identities wherever recognizable elements appear. Do not invent achievements, gameplay events, interactions, relationships or spoilers that are not in the supplied theme.",
-    "Horizontal landscape 3:2 composition. Keep the LEFT 45 percent of the frame relatively dark and uncluttered for the app's overlaid title. Put the primary visual impact mostly to the right, with essential shapes safely inside the frame.",
-    "This image is art only: NO text, headlines, invented logos, labels, typography, statistics, UI panels, watermarks or borders. The application renders the real title and copy itself.",
+    "Create ONE striking, original EDITORIAL KEY ART image for a personal media Wrapped. It is NOT a visual summary, montage, franchise mashup or collection of miniature covers.",
+    "PERIOD: " + timeframe + " " + timeId + ". CENTRAL EDITORIAL THESIS: " + title +
+      ". Emotional interpretation: " + dek + ".",
+    narrativeBeat ? "ONE supporting story beat, for thematic understanding (not another object to draw): " +
+      compact(narrativeBeat.title, 120) + "." : "",
+    mediaInfluence,
+    "ART DIRECTION: Choose ONE memorable visual metaphor or singular scene that expresses the thesis. Depict ONE clear hero motif (a person, object, creature, or location), ONE purposeful action or situation, and ONE coherent environment. Make a confident choice; simplify rather than accumulate. The idea should be understandable at a glance, evocative and specific to this period.",
+    "HARD COMPOSITION RULE: Only ONE focal subject and ONE visual thesis. Do not illustrate each logged title. No lineup of characters from different works, competing subjects, separate worlds, panels, split screens, book-cover grids, game-cover mosaics or decorative easter eggs. Leave out anything that weakens the main image.",
+    "Use cinematic " + palette + " art direction, atmospheric lighting, meaningful negative space and convincing depth. Interpret the emotional truth of the supplied thesis, but never fabricate personal achievements, events or spoilers.",
+    "Horizontal landscape 3:2 composition. Keep the LEFT 45 percent of the frame relatively dark and uncluttered for the app's overlaid title. Place the main visual impact mostly on the right, keeping essential forms safely in frame.",
+    "This is illustration ONLY: NO text, titles, labels, logos, watermarks, statistics, UI overlays or borders. FauxLore renders all real copy separately.",
   ].filter(Boolean).join("\n\n");
 }
 
@@ -126,7 +165,7 @@ export function createWrappedCoverService({ db, generateImage, canSpendTokens }:
       "FROM logs l JOIN media m ON m.id=l.mediaId AND m.userId=l.userId " +
       "WHERE l.userId=? AND l.timestamp>=? AND l.timestamp<? AND l.metricType!='statusChange' AND l.delta>0",
     ).all(userId, start, end) as Array<{ id: string; title: string; type: string; genres: string | null }>;
-    const counts = new Map<string, { id: string; title: string; type: string; genres?: string[]; count: number; scenes: number }>();
+    const counts = new Map<string, { id: string; title: string; type: string; genres?: string[]; count: number; sceneScore: number }>();
     for (const row of rows) {
       const previous = counts.get(row.id);
       if (previous) { previous.count++; continue; }
@@ -135,19 +174,23 @@ export function createWrappedCoverService({ db, generateImage, canSpendTokens }:
         const parsed = JSON.parse(row.genres || "[]");
         if (Array.isArray(parsed)) genres = parsed.filter((g: unknown): g is string => typeof g === "string").slice(0, 3);
       } catch {}
-      counts.set(row.id, { id: row.id, title: row.title, type: row.type, genres, count: 1, scenes: 0 });
+      counts.set(row.id, { id: row.id, title: row.title, type: row.type, genres, count: 1, sceneScore: 0 });
     }
-    for (const scene of story.scenes) {
-      if (scene.kind === "opening" || scene.kind === "closing" || !scene.evidenceIds?.length) continue;
+    story.scenes.forEach((scene, index) => {
+      if (scene.kind === "opening" || scene.kind === "closing" || !scene.evidenceIds?.length) return;
       const seen = new Set([scene.media?.id, ...(scene.artworks || []).map(a => a.id)].filter((id): id is string => !!id));
       for (const id of seen) {
         const found = counts.get(id);
-        if (found) found.scenes++;
+        if (found) {
+          // Prioritize the Wrapped's own central coverage over raw log volume.
+          found.sceneScore += 5 + Math.max(0, 3 - index) + (scene.kind === "spotlight" ? 3 : 0);
+        }
       }
-    }
-    return [...counts.values()]
-      .sort((a, b) => (b.scenes * 3 + Math.min(b.count, 8)) - (a.scenes * 3 + Math.min(a.count, 8)))
-      .slice(0, 3).map(({ id, title, type, genres }) => ({ id, title, type, genres }));
+    });
+    const focus = selectWrappedCoverFocus(story, [...counts.values()]);
+    // Intentionally return at most ONE named work. An abstract issue need not
+    // visually reference a franchise just because several titles were logged.
+    return focus ? [focus] : [];
   }
 
   async function render(userId: string, timeframe: WrappedTimeframe, timeId: string, token: string): Promise<void> {
@@ -168,9 +211,9 @@ export function createWrappedCoverService({ db, generateImage, canSpendTokens }:
         } catch { /* Legacy databases may lack timezone settings. */ }
       }
       const subjects = subjectsFor(userId, timeframe, timeId, story, timeZone || "UTC");
-      // If no activity is actually attached to this period, don't create an
-      // allegedly personal illustration from a hallucinated story title.
-      if (!subjects.length) throw new Error("No verified progress logs for this Wrapped period.");
+      // A broad/abstract Wrapped may have no dominant media reference.
+      // Story and period are still grounded in existing saved activity; never
+      // force unrelated logged titles into the visual merely to fill space.
       const prompt = buildWrappedCoverPrompt(story, timeframe, timeId, subjects);
       const url = await generateImage(userId, prompt);
       db.prepare(
