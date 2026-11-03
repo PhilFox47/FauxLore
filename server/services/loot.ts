@@ -3,6 +3,7 @@ import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
 import { getPersonaDescription } from "../../src/lib/personas";
 import { FAUXLORE_ITEM_ATTRIBUTION } from '../../src/lib/fauxLoreMechanics';
 import { AUTHENTICITY, SHARPNESS, rarityArt } from "../lib/artDirection";
+import { imagePromptCraft, imagePromptProfileFromDb } from "../lib/imagePromptGuidance";
 import { type CodexService } from "./codex";
 import { codexTaskContext } from "./codexV3Context";
 
@@ -137,6 +138,11 @@ export function createLootService({ db, codex }: { db: Db; codex: CodexService }
     });
     const codexBlock = codexTaskContext(db,codexRow,"loot");
     const art = rarityArt(attrs.rarity);
+    const imageProfile = imagePromptProfileFromDb(db);
+    const imageCraft = imagePromptCraft(imageProfile);
+    const imageSharpness = imageProfile.gptImage25
+      ? "Keep the object's silhouette, surface details and authentic markings legible; use source-appropriate depth of field and lighting."
+      : SHARPNESS;
     const artStyle = codexRow?.data?.artStyle?.summary;
 
     const legacyBrief = oldArtifact
@@ -152,14 +158,14 @@ ${FAUXLORE_ITEM_ATTRIBUTION}
 ${codexBlock || `(No Codex is on record for this title — rely on your own knowledge of it and stay faithful to what you actually know.)`}${legacyBrief}
 
 THE DROP (fixed by the game — honour it exactly):
-- Rarity: ${attrs.rarity}. At this tier the object should read as ${art.grandeur}.
+- Rarity: ${attrs.rarity}. This determines how special and significant the drop is within the SOURCE, not how magical or ornate its surface looks. Choose ${art.grandeur}.
 - Slot: ${attrs.slot} — ${SLOT_BRIEF[attrs.slot] || "equipped gear"}. The object must physically make sense in that slot.
 - Bonus: it grants a bonus to ${attrs.targetType}: "${attrs.targetValue}".
 
 HOW TO CHOOSE THE OBJECT:
 1. Reach into this specific world first. The Codex is a reference on the work — its objects, its factions, its vocabulary, its materials — and nothing in it has been sorted by rarity or reserved for any tier. The best drop is usually something it records, or a variant of one that a character in this world would plausibly own.
 2. If nothing there fits the slot or the rarity, invent one — but build it out of this work's own material culture: its technology level, its craft, its named organizations, its slang. A drop from a 90s office comedy is a laminated badge or a stapler, not an enchanted amulet. A drop from a hard sci-fi series is hardware, not a rune.
-3. Let rarity decide the stature of what you pick. Common is a genuinely mundane, everyday object from that world. Mythic is the artifact the entire plot revolves around.
+3. Let rarity decide the significance, provenance and recognizability of the object you PICK. Common is an everyday object; Mythic can be an irreplaceable canonical relic, an iconic piece of mundane technology or a source-defining possession. Do not manufacture magical properties, new embellishments or a different physical form simply to satisfy the rarity.
 
 HOW TO WRITE IT:
 4. Name it in 4 words or fewer, in the naming style of this work — its language, its honorifics, its brand names, its jargon. Not generic fantasy unless the source is generic fantasy.
@@ -168,15 +174,15 @@ HOW TO WRITE IT:
 7. Art-direct its inventory icon yourself, as ONE ready-to-use text-to-image prompt.
 
 THE IMAGE PROMPT MUST:
-- Be 2-4 natural sentences that stand entirely on their own, written for the "Z-Image-Turbo" diffusion model (it follows natural language and renders any art style, including real text and logos).
+${imageCraft}
 - Open by naming the object literally and plainly, so the model cannot mistake what it is. If it is a sword it is a sword; a cassette tape a cassette; a book a book; a sandwich a sandwich. NEVER substitute a generic ring, gem, orb or "magic trinket" for the real object.
 - Render it in the ACTUAL art style, medium and material language of "${mediaItem.title}"${artStyle ? ` — the Codex records it as: ${artStyle}` : ""}. Name that style explicitly and reference the franchise by name to anchor the look. Never default to generic flat cartoon or vector icon art unless the source really is that.
 - ${AUTHENTICITY(mediaItem.title)}
-- Describe its exact materials, shape, construction, engravings, labels and wear, so it looks like a used object from that world rather than a showroom prop.
+- Describe the item's established materials, shape, construction, original colors, markings and wear. If its canonical design is known, preserve it faithfully. Do not invent decorative gems, armor plating, runes, logos, magical glow or supernatural upgrades merely because it is rare.
 - Compose this image as a SQUARE 1:1 canvas suitable for a square item slot; keep the full object centered and within safe margins, never a tall poster.
-- Show ONE hero item only, centered, as a polished game-inventory icon / studio product shot with a soft contact shadow, carrying ${art.aura}, on this rarity-specific background: ${art.background}.
-- ${SHARPNESS}
-- Include no hands, no people, no extra props and no watermarks.
+- Show ONE hero item only, centered, as a recognizable game-inventory product image with a natural contact shadow. Rarity should appear through presentation outside the object: ${art.background}; ${art.aura}. Never recolor or remodel the object for a rarity tier. If the SOURCE establishes a real glow or unusual material, reproduce that faithfully instead.
+- ${imageSharpness}
+- Include no hands, people, duplicate items, unrelated props, watermarks or invented labels. Only genuine writing or branding that belongs on the item may appear.
 
 Return ONLY a pure JSON object, no markdown fence, no commentary:
 {
