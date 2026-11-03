@@ -41,7 +41,7 @@ export function imagePromptCraft(profile: ImagePromptProfile): string {
       "Use clear prose, with short paragraphs when useful; not diffusion keyword soup or generic hype. Typically 80-160 words for complex action, shorter for a straightforward item. Every sentence must add a visible instruction.",
       "Specify exact words in quotes only if those words authentically belong on the subject. Otherwise request no added labels or invented logos. Keep the subject fully readable and inside the requested canvas.",
       "Do not invent fantasy effects, change real materials or redesign the subject merely to convey an RPG level or rarity. Express presentation value through composition and lighting instead.",
-      "Return only the image prompt, with no model instructions, commentary or markdown.",
+      "Keep these instructions inside the imagePrompt field only; obey the caller\u0027s required JSON structure.",
     ].join("\n- ");
   }
   if (profile.distilled) {
