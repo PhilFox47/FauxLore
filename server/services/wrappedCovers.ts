@@ -157,7 +157,9 @@ export function buildWrappedCoverPrompt(
     visualIdea ? "EDITORIAL DIRECTOR'S SPECIFIC IMAGE CONCEPT (priority over generic ideas): " + visualIdea : "",
     "ART DIRECTION: Choose ONE memorable visual metaphor or singular scene that expresses the thesis. Depict ONE clear hero motif (a person, object, creature, or location), ONE purposeful action or situation, and ONE coherent environment. Make a confident choice; simplify rather than accumulate. The idea should be understandable at a glance, evocative and specific to this period.",
     "HARD COMPOSITION RULE: Only ONE focal subject and ONE visual thesis. Do not illustrate each logged title. No lineup of characters from different works, competing subjects, separate worlds, panels, split screens, book-cover grids, game-cover mosaics or decorative easter eggs. Leave out anything that weakens the main image.",
-    "Use cinematic " + palette + " art direction, atmospheric lighting, meaningful negative space and convincing depth. Interpret the emotional truth of the supplied thesis, but never fabricate personal achievements, events or spoilers.",
+    primary && styleReference?.mediaId === primary.id && styleReference.style.trim()
+      ? "Apply the referenced Codex's true medium, palette, drawing/rendering language and lighting. Keep typography legible and the cover editorial, rather than repainting it as generic cinematic photography. Never invent personal achievements, events or spoilers."
+      : "Use cinematic " + palette + " art direction, atmospheric lighting, meaningful negative space and convincing depth. Interpret the emotional truth of the supplied thesis, but never fabricate personal achievements, events or spoilers.",
     "Horizontal landscape 3:2 composition, cinematic full-frame editorial illustration. " +
       imageFramingGuidance(opening?.composition?.direction),
     "This is illustration ONLY: NO text, titles, labels, logos, watermarks, statistics, UI overlays or borders. FauxLore renders all real copy separately.",
