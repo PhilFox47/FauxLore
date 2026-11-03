@@ -24,7 +24,7 @@ function fixture() {
   const db = new Database(":memory:");
   db.exec(
     "CREATE TABLE wrapped_stories (userId TEXT, timeframe TEXT, timeId TEXT, story TEXT, " +
-      "coverArtUrl TEXT, coverArtStatus TEXT, coverArtRequestId TEXT, " +
+      "coverArtUrl TEXT, coverArtStatus TEXT, coverArtRequestId TEXT, coverArtTimeZone TEXT, " +
       "PRIMARY KEY(userId,timeframe,timeId));" +
     "CREATE TABLE media (id TEXT, userId TEXT, title TEXT, mediaType TEXT, genres TEXT);" +
     "CREATE TABLE logs (id TEXT, userId TEXT, mediaId TEXT, timestamp TEXT, metricType TEXT, delta REAL);",
@@ -54,6 +54,9 @@ test("weekly, monthly and yearly cover selection respects Wrapped's five-hour re
   assert.equal(wrappedCoverBounds("week", "2026-W45").start, "2026-11-02T05:00:00.000Z");
   assert.equal(wrappedCoverBounds("week", "2026-W45").end, "2026-11-09T05:00:00.000Z");
   assert.equal(wrappedCoverBounds("month", "2026-11").start, "2026-11-01T05:00:00.000Z");
+  // Local midnight moves from UTC+2 to UTC+1 across European DST.
+  assert.equal(wrappedCoverBounds("month", "2026-10", "Europe/Berlin").start, "2026-10-01T03:00:00.000Z");
+  assert.equal(wrappedCoverBounds("month", "2026-10", "Europe/Berlin").end, "2026-11-01T04:00:00.000Z");
   assert.equal(wrappedCoverBounds("year", "2026").end, "2027-01-01T05:00:00.000Z");
   assert.throws(() => wrappedCoverBounds("month", "2026-13"));
 });
