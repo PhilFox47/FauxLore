@@ -237,6 +237,16 @@ export function runMigrations(db: Db) {
   try { db.prepare("ALTER TABLE world_bosses ADD COLUMN enraged INTEGER DEFAULT 0").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE world_bosses ADD COLUMN enragedAt TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE world_bosses ADD COLUMN enrageOriginalImageUrl TEXT").run(); } catch (e) {}
+  // Backfill ONCE for existing bosses, before victory artwork ever replaces their
+  // imageUrl. Never recalculate on every boot or a Victory image becomes its own
+  // reference after the next restart.
+  try {
+    db.prepare("ALTER TABLE world_bosses ADD COLUMN basePortraitImageUrl TEXT").run();
+    db.prepare(`UPDATE world_bosses
+      SET basePortraitImageUrl = COALESCE(enrageOriginalImageUrl,
+        CASE WHEN COALESCE(enraged, 0) = 0 AND (imageStatus IS NULL OR imageStatus = 'done')
+          THEN imageUrl ELSE NULL END)`).run();
+  } catch (e) { /* existing databases have already snapshotted their originals */ }
   try { db.prepare("ALTER TABLE world_bosses ADD COLUMN imageGenerationToken TEXT").run(); } catch (e) {}
   // A process restart cancels in-memory image jobs; expose a retry, not an endless spinner.
   try { db.prepare("UPDATE world_bosses SET imageStatus = 'failed' WHERE imageStatus IN ('pending', 'generating')").run(); } catch (e) {}
