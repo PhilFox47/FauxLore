@@ -267,6 +267,10 @@ export function initSchema(db: Db) {
       -- penalty, and one more week to settle it.
       enraged INTEGER DEFAULT 0,
       enragedAt TEXT,
+      -- Keep the pre-enrage image as an immutable reference for edits and retries.
+      enrageOriginalImageUrl TEXT,
+      -- A stale in-flight render must not overwrite a taunt or a reroll.
+      imageGenerationToken TEXT,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
     );
 
