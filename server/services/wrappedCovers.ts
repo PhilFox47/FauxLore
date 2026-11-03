@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "../context";
+import { selectIllustratedScenes, buildWrappedSceneArtPrompt } from "../../src/lib/wrappedSceneArt";
 
 export type WrappedTimeframe = "week" | "month" | "year";
 export type WrappedCoverSubject = { id: string; title: string; type: string; genres?: string[] };
@@ -147,9 +148,11 @@ export function buildWrappedCoverPrompt(
   ].filter(Boolean).join("\n\n");
 }
 
-export function createWrappedCoverService({ db, generateImage, canSpendTokens }: {
+export function createWrappedCoverService({ db, generateImage, generateSceneImage, canSpendTokens }: {
   db: Db;
   generateImage: (userId: string, prompt: string) => Promise<string>;
+  /** Uses the same configured image provider, with scene-specific art direction. */
+  generateSceneImage?: (userId: string, prompt: string) => Promise<string>;
   canSpendTokens: (userId: string) => boolean;
 }) {
   const current = db.prepare(
@@ -259,5 +262,90 @@ export function createWrappedCoverService({ db, generateImage, canSpendTokens }:
     }
   }
 
-  return { queue };
+  /**
+   * Two chapter images per issue. Separate job tokens prevent a previous
+   * illustration or a superseded story from replacing newer artwork.
+   */
+  function queueScenes(userId: string, timeframe: WrappedTimeframe, timeId: string, regenerate = false): boolean {
+    try {
+      if (!generateSceneImage || !canSpendTokens(userId)) return false;
+      const row = db.prepare(
+        "SELECT sceneArtStatus, story FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=?",
+      ).get(userId, timeframe, timeId) as { sceneArtStatus: string | null; story: string } | undefined;
+      if (!row || (!regenerate && row.sceneArtStatus != null) ||
+          (regenerate && ["pending","generating"].includes(row.sceneArtStatus || ""))) return false;
+      const story = JSON.parse(row.story) as WrappedCoverStory & { scenes: Array<WrappedCoverStory["scenes"][number] & { id: string }> };
+      if (!selectIllustratedScenes(story.scenes).length) return false;
+      const token = randomUUID();
+      const result = db.prepare(
+        "UPDATE wrapped_stories SET sceneArtStatus='pending', sceneArtRequestId=? " +
+        "WHERE userId=? AND timeframe=? AND timeId=? AND " +
+        (regenerate
+          ? "(sceneArtStatus IS NULL OR sceneArtStatus IN ('done','failed'))"
+          : "sceneArtStatus IS NULL"),
+      ).run(token, userId, timeframe, timeId);
+      if (!result.changes) return false;
+      void renderScenes(userId, timeframe, timeId, token);
+      return true;
+    } catch (error) {
+      console.warn("[wrapped-scenes] Could not start illustration job", error);
+      return false;
+    }
+  }
+
+  async function renderScenes(userId: string, timeframe: WrappedTimeframe, timeId: string, token: string): Promise<void> {
+    let missing = false;
+    try {
+      const claimed = db.prepare(
+        "UPDATE wrapped_stories SET sceneArtStatus='generating' " +
+        "WHERE userId=? AND timeframe=? AND timeId=? AND sceneArtRequestId=? AND sceneArtStatus='pending'",
+      ).run(userId, timeframe, timeId, token);
+      if (!claimed.changes || !generateSceneImage) return;
+      const row = db.prepare(
+        "SELECT story, sceneArtJson FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=? AND sceneArtRequestId=?",
+      ).get(userId, timeframe, timeId, token) as { story: string; sceneArtJson?: string | null } | undefined;
+      if (!row) return;
+      const story = JSON.parse(row.story) as WrappedCoverStory & { scenes: Array<WrappedCoverStory["scenes"][number] & { id: string }> };
+      const ids = selectIllustratedScenes(story.scenes);
+      let images: Record<string, string> = {};
+      try {
+        if (row.sceneArtJson) images = JSON.parse(row.sceneArtJson);
+      } catch { images = {}; }
+      // A manual redraw starts with an empty slate; regular calls only target
+      // initially unillustrated scenes. Existing visible art stays during rerolls.
+      for (const id of ids) {
+        const live = db.prepare(
+          "SELECT sceneArtRequestId FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=?",
+        ).get(userId, timeframe, timeId) as { sceneArtRequestId: string | null } | undefined;
+        if (live?.sceneArtRequestId !== token) return;
+        const scene = story.scenes.find(s => s.id === id);
+        if (!scene) continue;
+        const prompt = buildWrappedSceneArtPrompt(story, scene);
+        try {
+          const imageUrl = await generateSceneImage(userId, prompt);
+          images[id] = imageUrl;
+          db.prepare(
+            "UPDATE wrapped_stories SET sceneArtJson=? WHERE userId=? AND timeframe=? AND timeId=? AND sceneArtRequestId=?",
+          ).run(JSON.stringify(images), userId, timeframe, timeId, token);
+        } catch (error) {
+          missing = true;
+          console.error("[wrapped-scenes] Could not illustrate " + id, error);
+          // Avoid blindly trying another paid provider call after a failure.
+          break;
+        }
+      }
+      db.prepare(
+        "UPDATE wrapped_stories SET sceneArtStatus=?, sceneArtRequestId=NULL " +
+        "WHERE userId=? AND timeframe=? AND timeId=? AND sceneArtRequestId=?",
+      ).run(missing ? "failed" : "done", userId, timeframe, timeId, token);
+    } catch (error) {
+      console.error("[wrapped-scenes] Illustration job failed", error);
+      db.prepare(
+        "UPDATE wrapped_stories SET sceneArtStatus='failed', sceneArtRequestId=NULL " +
+        "WHERE userId=? AND timeframe=? AND timeId=? AND sceneArtRequestId=?",
+      ).run(userId, timeframe, timeId, token);
+    }
+  }
+
+  return { queue, queueScenes };
 }
