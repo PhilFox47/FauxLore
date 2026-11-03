@@ -312,6 +312,45 @@ images per issue, and do not auto-retry on failed providers. They are not
 re-generated at every visit. `npm run test:wrapped` covers their lifecycle,
 restart recovery and stale-image protection.
 
+### Wrapped editorial phase 2: analytic roles, meaningful data art and monthly chapters
+
+The Wrapped director now decides each scene's **editorialJob** (hook,
+verdict, contrast, turning-point, pattern, data-reveal, place, reflection,
+payoff) BEFORE choosing the fallback layout. Its independent Visual Director
+receives the verified story job, source IDs, and an immutable analytic dataset.
+It may stage the scene creatively, but cannot change its underlying editorial
+argument, author numbers, substitute an unrelated chart, or execute HTML/CSS/JS.
+
+Four distinct responsive animated data stages replace the repeated two-bar
+default when a data scene genuinely earns a place:
+
+- **Shift:** historical share vs current share, with the measured
+  percentage-point change (e.g. a strong 2% -> 26% increase)
+- **Duel:** a meaningful user vs critic ratings disagreement, using mirrored
+  verdict numbers rather than generic progress bars
+- **Arc:** real early/middle/late monthly progress distribution, eligible only
+  when that distribution varies substantially; NEVER fake psychological eras
+- **Dominance:** one verified unusually prominent work occupying at least
+  half the normalized period progress, contrasted with the remainder
+
+All values are calculated in FauxLore and bounded server-side. The source
+also checks analytical significance: no extra filler charts appear just
+because the renderer has additional treatments. The existing weekly/monthly/
+yearly infographic ceilings and repetition guard still apply. Saved older
+Wrapped issues continue using their existing content and visuals.
+
+For monthly Wrapped, early (days 1-10), middle (11-20), and late (21-end)
+are **real evidence clusters**, not forced chapters. Each supplies normalized
+progress share, active days, up to three leading works, actual user journal
+excerpts and recorded places. Date-scoped journals, locations, and single-
+phase media sessions can now satisfy coverage directly, instead of requiring
+the director to cite generic phase-summary cards. The Deep Dive also
+receives those verified clusters for its monthly editorial planning.
+
+This phase adds dedicated safe React renderers, not open-ended HTML generation.
+Use `npm run test:wrapped` to run structural, visual, evidence and API tests.
+A live image-model/Docker integration pass is still needed locally.
+
 ### Wrapped editorial phase 1: fewer, stronger data scenes and whole-period coverage
 
 Wrapped stories now earn their infographic slots instead of using charts to pad
