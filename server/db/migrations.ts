@@ -10,6 +10,15 @@ import { bossTarget, bossUnit } from "../lib/bossTargets";
  * production databases: every step is wrapped in try/catch and only adds.
  */
 export function runMigrations(db: Db) {
+  // Wrapped cover artwork is independent of story JSON, and a failed render
+  // must never invalidate or overwrite the saved editorial issue.
+  for (const col of ["coverArtUrl", "coverArtStatus", "coverArtRequestId"]) {
+    try { db.prepare("ALTER TABLE wrapped_stories ADD COLUMN " + col + " TEXT").run(); } catch {}
+  }
+  // Jobs are in-memory. After a restart a pending job can be retried manually.
+  try {
+    db.prepare("UPDATE wrapped_stories SET coverArtStatus='failed', coverArtRequestId=NULL WHERE coverArtStatus IN ('pending','generating')").run();
+  } catch {}
   // Logging V2: additive, non-destructive. Historical note stays a legacy note, never guessed as a journal.
   try { db.exec("ALTER TABLE logs ADD COLUMN thoughts TEXT"); } catch (e) {}
   try { db.exec("ALTER TABLE logs ADD COLUMN thoughtPrompt TEXT"); } catch (e) {}
