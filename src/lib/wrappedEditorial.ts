@@ -87,6 +87,15 @@ export interface MonthlyCoverage {
   lastWeekShare: number;
   /** The number of phase-specific narrative scenes required when possible. */
   minPhaseScenes: number;
+  /** Grounded per-phase editorial clusters, not invented narrative eras. */
+  clusters?: Array<{
+    phase: MonthPhase;
+    progressShare: number;
+    activeDays: number;
+    leadingWorks: Array<{ id: string; title: string; share: number }>;
+    journalHighlights: Array<{ mediaId: string; quote: string }>;
+    places: string[];
+  }>;
 }
 
 /** Avoid requiring a fake story from an empty or negligible slice of a month. */
