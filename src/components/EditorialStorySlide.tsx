@@ -126,6 +126,16 @@ export function EditorialStorySlide({ scene, direction, imageUrl, number, total,
               className="mt-7 border-l-2 border-white/60 pl-5 text-lg sm:text-xl italic text-white/85 text-left">
               “{scene.quote}”
             </motion.blockquote>}
+            {!!scene.beats?.length && <motion.ol {...enter(.48)}
+              className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 text-left" aria-label="Verified story timeline">
+              {scene.beats.slice(0, 6).map((beat, i) =>
+                <li key={beat.label + '-' + i}
+                  className="rounded-xl border border-white/20 bg-black/45 backdrop-blur-sm p-4">
+                  <span className="text-[11px] font-bold uppercase tracking-[.12em] text-white/65">{beat.label}</span>
+                  <p className="text-sm font-black text-white mt-1">{beat.title}</p>
+                  {beat.detail && <p className="text-xs text-white/65 mt-1">{beat.detail}</p>}
+                </li>)}
+            </motion.ol>}
           </div>
         </div>
       )}
