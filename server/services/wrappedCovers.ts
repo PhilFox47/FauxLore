@@ -160,7 +160,14 @@ export function createWrappedCoverService({ db, generateImage, canSpendTokens }:
       const row = current.get(userId, timeframe, timeId) as { story: string; coverArtTimeZone?: string | null } | undefined;
       if (!row) return;
       const story = JSON.parse(row.story) as WrappedCoverStory;
-      const subjects = subjectsFor(userId, timeframe, timeId, story, row.coverArtTimeZone || "UTC");
+      let timeZone = row.coverArtTimeZone;
+      if (!timeZone) {
+        try {
+          const setting = db.prepare("SELECT timezone FROM settings WHERE userId=?").get(userId) as { timezone?: string | null } | undefined;
+          timeZone = setting?.timezone || null;
+        } catch { /* Legacy databases may lack timezone settings. */ }
+      }
+      const subjects = subjectsFor(userId, timeframe, timeId, story, timeZone || "UTC");
       // If no activity is actually attached to this period, don't create an
       // allegedly personal illustration from a hallucinated story title.
       if (!subjects.length) throw new Error("No verified progress logs for this Wrapped period.");
