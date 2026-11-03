@@ -1,0 +1,153 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  MAX_DATA_SLIDES, isSignificantFormatShift, isSignificantTasteGap,
+  evidenceStoryFunctions, requiredMonthlyPhases,
+} from './wrappedEditorial';
+import { buildWrappedEvidence } from './wrappedEvidence';
+import { normalizeWrappedStory } from '../services/wrappedAi';
+import type { WrappedEvidence } from './wrappedEvidence';
+import type { MediaItem, ProgressLog } from '../types/schema';
+
+const media: MediaItem[] = [
+  { id: 'book', title: 'The Long Novel', mediaType: 'Book', status: 'Completed',
+    genres: ['Thriller'], tags: [], tropes: [], createdAt: '2026-01-01', updatedAt: '2026-10-31' },
+  { id: 'game', title: 'A Slow Game', mediaType: 'Game', status: 'Active',
+    genres: ['Adventure'], tags: [], tropes: [], createdAt: '2026-01-01', updatedAt: '2026-10-31' },
+];
+const log = (id: string, mediaId: string, date: string, delta: number): ProgressLog => ({
+  id, mediaId, timestamp: date + 'T12:00:00Z', delta,
+  metricType: mediaId === 'book' ? 'pagesRead' : 'playtimeHours',
+});
+const monthLogs = [
+  log('start', 'book', '2026-10-04', 100),
+  log('mid', 'game', '2026-10-17', 8),
+  log('end', 'book', '2026-10-28', 100),
+];
+const monthEvidence = () => buildWrappedEvidence({
+  timeframe: 'month', timeId: '2026-10', logs: monthLogs,
+  history: monthLogs, media,
+});
+const design = (layout = 'editorial', visual = 'none') =>
+  ({ layout, palette: 'cobalt', visual, mediaIds: [], align: 'left' });
+const scene = (kind: string, title: string, evidenceIds: string[], layout = 'editorial', visual = 'none') =>
+  ({ kind, title, body: 'A distinct, well-supported argument about this period.', evidenceIds,
+    design: design(layout, visual) });
+const story = (...middle: ReturnType<typeof scene>[]) => ({
+  title: 'The Entire Month', dek: 'A careful look beyond the final week.',
+  scenes: [scene('opening', 'Open', [], 'cover-hero', 'cover'),
+    ...middle, scene('closing', 'End', [], 'type-poster')],
+});
+
+test('weak 16-point game shift fails chart gating; major book and audiobook shifts qualify', () => {
+  assert.equal(isSignificantFormatShift(.487, .327), false);
+  assert.equal(isSignificantFormatShift(.26, .02), true);
+  assert.equal(isSignificantFormatShift(.24, .05), true);
+  assert.equal(isSignificantFormatShift(.15, .40), true);
+  assert.equal(isSignificantFormatShift(.44, .30), false);
+  assert.equal(isSignificantTasteGap(5, 4.5), false);
+  assert.equal(isSignificantTasteGap(5, 3.5), true);
+  assert.deepEqual(MAX_DATA_SLIDES, { week: 1, month: 2, year: 3 });
+});
+
+test('monthly evidence exposes meaningful early, middle and late periods and actual last-week share', () => {
+  const evidence = monthEvidence();
+  assert.deepEqual(evidence.monthlyCoverage?.requiredPhases, ['early', 'middle', 'late']);
+  assert.equal(evidence.monthlyCoverage?.minPhaseScenes, 2);
+  assert.ok((evidence.monthlyCoverage?.lastWeekShare || 0) < .60);
+  for (const phase of ['early', 'middle', 'late']) {
+    const fact = evidence.facts.find(item => item.id === 'month-' + phase);
+    assert.ok(fact);
+    assert.equal(fact.phase, phase);
+    assert.match(fact.evidence, /Most substantial recorded works/);
+  }
+});
+
+test('valid monthly stories cite real activity from the entire month', () => {
+  const result = normalizeWrappedStory(story(
+    scene('insight', 'A chapter from the start', ['month-early']),
+    scene('spotlight', 'The middle mattered', ['month-middle']),
+    scene('insight', 'An ending worth noticing', ['month-late']),
+  ), monthEvidence(), media);
+  assert.equal(result.scenes.length, 5);
+});
+
+test('a monthly that looks only at the last week fails coverage', () => {
+  assert.throws(() => normalizeWrappedStory(story(
+    scene('insight', 'A late moment', ['month-late']),
+    scene('spotlight', 'More about the ending', ['media-0']),
+    scene('insight', 'Another last-week comment', ['overview']),
+  ), monthEvidence(), media), /Monthly coverage missing/);
+});
+
+test('putting all monthly phases in one slide is not genuine story coverage', () => {
+  assert.throws(() => normalizeWrappedStory(story(
+    scene('insight', 'The entire month in a checklist', ['month-early', 'month-middle', 'month-late']),
+    scene('spotlight', 'A supporting work', ['media-1']),
+  ), monthEvidence(), media), /independent phase-supported scenes/);
+});
+
+test('last-week-only scenes cannot dominate a month whose final week did not dominate', () => {
+  const evidence = monthEvidence();
+  // These fact scopes represent verified source dates in the last seven days.
+  const extra = ['late-moment-1', 'late-moment-2', 'late-moment-3'];
+  const extended: WrappedEvidence = { ...evidence, facts: [...evidence.facts,
+    ...extra.map(id => ({ id, kind: 'insight' as const, title: id, evidence: id, recentOnly: true }))],
+  };
+  assert.throws(() => normalizeWrappedStory(story(
+    scene('insight', 'Beginning', ['month-early']),
+    scene('insight', 'Middle', ['month-middle']),
+    ...extra.map(id => scene('insight', id, [id])),
+  ), extended, media), /overrepresents the final seven days/);
+});
+
+test('format-share slides with different media labels still repeat ONE editorial job', () => {
+  assert.deepEqual(evidenceStoryFunctions(['outlier-Book', 'outlier-Game']), ['format-share-shift']);
+  const chartFacts = ['outlier-Book', 'outlier-Game'].map(id => ({
+    id, kind: 'outlier' as const, title: id, evidence: 'Substantial comparison for ' + id,
+    bars: [{ label: 'Before', value: 10, note: 'Before' }, { label: 'Now', value: 90, note: 'Now' }],
+  }));
+  const evidence: WrappedEvidence = {
+    timeframe: 'month', timeId: '2026-10', bounds: { start: '2026-10-01', end: '2026-10-31' },
+    editorialCalibration: '', media: [], facts: [...chartFacts],
+  };
+  assert.throws(() => normalizeWrappedStory(story(
+    scene('outlier', 'Books rose', ['outlier-Book'], 'infographic', 'bars'),
+    scene('outlier', 'Games fell', ['outlier-Game'], 'infographic', 'bars'),
+  ), evidence, media), /repeats the editorial function/);
+});
+
+test('weekly stories reject two different infographic topics; monthly maximum is two', () => {
+  const chartFacts = ['taste-a', 'taste-b', 'taste-c'].map(id => ({
+    id, kind: 'taste' as const, title: id, evidence: id,
+    bars: [{ label: 'User', value: 90, note: '4.5/5' }, { label: 'Critics', value: 50, note: '2.5/5' }],
+  }));
+  const weekly: WrappedEvidence = {
+    timeframe: 'week', timeId: '2026-W44', bounds: { start: '2026-10-26', end: '2026-11-01' },
+    editorialCalibration: '', media: [], facts: chartFacts,
+  };
+  const slides = chartFacts.map(f => scene('taste', f.title, [f.id], 'infographic', 'bars'));
+  assert.throws(() => normalizeWrappedStory(story(slides[0], slides[1]), weekly, media),
+    /Infographic budget exceeded/);
+  assert.throws(() => normalizeWrappedStory(story(...slides),
+    { ...weekly, timeframe: 'month', timeId: '2026-10' }, media), /Infographic budget exceeded/);
+});
+
+test('weak critic disagreement does not create an eligible chart, but still keeps the review evidence', () => {
+  const sources = media.map(m => ({ ...m, userRating: 4.5, reviewScore: 4.0 }));
+  const evidence = buildWrappedEvidence({
+    timeframe: 'week', timeId: '2026-W44', logs: [
+      log('one', 'book', '2026-10-27', 30),
+      log('two', 'game', '2026-10-28', 1),
+    ], history: [], media: sources,
+  });
+  const taste = evidence.facts.find(f => f.id === 'taste-book');
+  assert.equal(taste?.kind, 'insight');
+  assert.equal(taste?.bars, undefined);
+  assert.match(taste?.evidence || '', /NOT an infographic-worthy disagreement/);
+});
+
+test('monthly phase requirements skip genuinely empty or tiny calendar slices', () => {
+  assert.deepEqual(requiredMonthlyPhases({ early: .05, middle: .15, late: .8 }), ['middle', 'late']);
+  assert.deepEqual(requiredMonthlyPhases({ early: 0, middle: 0, late: 1 }), ['late']);
+});
