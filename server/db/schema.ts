@@ -181,6 +181,10 @@ export function initSchema(db: Db) {
       timeId TEXT NOT NULL,
       story TEXT NOT NULL,
       generatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      -- One independently generated title illustration per saved story.
+      coverArtUrl TEXT,
+      coverArtStatus TEXT,
+      coverArtRequestId TEXT,
       PRIMARY KEY (userId, timeframe, timeId),
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
