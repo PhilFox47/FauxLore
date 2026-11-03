@@ -140,6 +140,45 @@ and an atomic save prevents a half-updated set.
 
 Tests: `npm run test:achievements`.
 
+### Wrapped: AI-directed dynamic scene compositions
+
+Wrapped is now a **two-pass experience**. The existing Story Director first
+writes a fully evidence-grounded editorial story. A separate Visual Director
+then chooses **2-3 scenes** worth custom art direction (typically an opening,
+a narrative turning point or the finale) and describes their placement in a
+restricted scene-composition JSON format. This format supports freely positioned
+headlines, narration, media artwork, title art, verified numeric comparisons,
+chronological beats, real user quotes and geometric shapes, plus entry and
+subtle ambient animations.
+
+These scenes use `DynamicStorySlide` and a bounded percentage-coordinate desktop
+canvas. Mobile automatically uses a readable vertical composition rather than
+scaling the desktop layout. Motion respects reduced-motion preferences.
+The remaining slides retain the existing trustworthy preset layouts, as do
+older Wrapped issues without a composition and any invalid AI output.
+
+**Security and factual integrity:** The model cannot output or execute HTML,
+CSS or JavaScript. The shared `normalizeDynamicScene` schema is enforced both
+when the visual ideas are created and again by the API when they are saved.
+It reconstructs only approved element types, positions, animations and visual
+tokens. Media references must belong to the **existing verified scene**;
+numbers, quotes and timeline labels are always resolved from that verified
+scene at render time, not supplied by the model. Invalid layouts are skipped,
+not allowed to corrupt a saved Wrapped.
+
+New Wrapped generation automatically attempts the independent visual pass
+after the written story has passed validation. If that optional AI call fails,
+the written Wrapped still saves and displays. Use **Restyle scenes** on an
+existing Wrapped to generate fresh designs without changing its story text,
+statistics, achievements or title illustration. Rerolls use a saved
+`visualRevision` token, rejecting stale changes from other tabs; existing
+visuals remain visible if a reroll fails.
+
+Tests: `npm run test:wrapped-visuals` (or `npm run test:wrapped`).
+These exercise parser isolation, media/stat provenance, invalid layouts,
+AI proposals and the save boundary; a live GPT model + browser render test
+still requires the local configured provider.
+
 ### Wrapped: AI-generated title illustrations
 
 Every **Weekly, Monthly and Yearly Wrapped** can have one independent 3:2
