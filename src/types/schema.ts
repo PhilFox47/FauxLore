@@ -465,6 +465,9 @@ export interface Settings {
   imageNegativePrompt?: string;
   timezone?: string;
   aiPersona?: string;
+  /** Private opt-in visual likeness guidance used only by Wrapped image prompts. */
+  visualSelfInsertMode?: 'never' | 'auto' | 'prefer';
+  visualSelfDescription?: string;
   yearlyGoals?: Partial<Record<MediaType, number>>;
   lastActiveDate?: string;
   currentStreak?: number;
