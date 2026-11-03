@@ -172,8 +172,9 @@ not allowed to corrupt a saved Wrapped.
 New Wrapped generation automatically attempts the independent visual pass
 after the written story has passed validation. If that optional AI call fails,
 the written Wrapped still saves and displays. Use **Restyle scenes** on an
-existing Wrapped to generate fresh designs without changing its story text,
-statistics, achievements or title illustration. Rerolls use a saved
+existing Wrapped to generate fresh designs and repaint the title/chapter
+illustrations without changing its story text, statistics or achievements.
+Rerolls use a saved
 `visualRevision` token, rejecting stale changes from other tabs; existing
 visuals remain visible if a reroll fails. Restyling also regenerates the
 interior illustrations to match newly proposed visual concepts.
