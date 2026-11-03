@@ -14,7 +14,8 @@ export function isWrappedInfographicScene(
     scene.design?.layout === "infographic" ||
     ["bars", "rings", "tiles"].includes(scene.design?.visual || "") ||
     scene.composition?.direction?.presentation === "data" ||
-    !!scene.composition?.elements?.some(element => element.type === "stat");
+    (Array.isArray(scene.composition?.elements) &&
+      scene.composition.elements.some(element => element?.type === "stat"));
 }
 
 export function selectIllustratedScenes<T extends Pick<StoryScene,
