@@ -315,6 +315,7 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
               // proportional payout in calculateRPGState scales the reward down.
               const finalProgress = isCompleted ? Math.max(newProgress, boss.targetProgress) : newProgress;
               db.prepare("UPDATE world_bosses SET currentProgress = ?, status = 'Defeated', updatedAt = ? WHERE id = ?").run(finalProgress, new Date().toISOString(), boss.id);
+              queueBossVictoryArtwork(userId as string, boss.id);
             } else {
               db.prepare("UPDATE world_bosses SET currentProgress = ?, updatedAt = ? WHERE id = ?").run(newProgress, new Date().toISOString(), boss.id);
             }
