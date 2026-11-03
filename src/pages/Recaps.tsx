@@ -2649,7 +2649,7 @@ ${wrappedContext || 'No background material.'}
                                <button onClick={() => void restyleWrappedVisuals()}
                                  disabled={!!wrappedGeneratingKey || !!visualDirectingKey ||
                                    initialArtworkPending || !canUseAi || !!activity?.frozen}
-                                 title="Redesign selected scenes without changing the story, title artwork or achievements"
+                                 title="Restyle the scenes and regenerate title/chapter images without rewriting the story or achievements"
                                  className="px-5 py-3 flex items-center gap-2 rounded-xl border border-emerald-400/20 text-emerald-200 bg-emerald-400/10 hover:bg-emerald-400/20 disabled:opacity-40 text-sm font-bold">
                                  <Presentation className={'w-4 h-4 ' + (visualDirectingKey === wrappedKey ? 'animate-pulse' : '')} />
                                  {visualDirectingKey === wrappedKey ? 'Directing new scenes...' : 'Restyle scenes'}
