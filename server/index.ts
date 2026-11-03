@@ -141,7 +141,9 @@ async function startServer() {
     },
     notify,
   });
-  const { generateBossImageBackground, generateArtifactImageBackground, describeImageModel } = createImageService({ db, aiImagesDir, codex });
+  const { generateBossImageBackground, queueBossVictoryArtwork, generateArtifactImageBackground, describeImageModel } = createImageService({
+    db, aiImagesDir, codex, canSpendTokens: userId => !activity.isFrozen(userId),
+  });
   const coverCache = createCoverCache({ coversDir });
   const { spawnWorldBoss, generateEnemy } = createWorldBossService({ db, generateBossImageBackground, codex });
   const { generateLoot } = createLootService({ db, codex });
