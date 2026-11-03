@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { selectIllustratedScenes, shouldHoldWrappedForArtwork, buildWrappedSceneArtPrompt, selectWrappedSceneStyleMediaId } from "./wrappedSceneArt";
+import { selectIllustratedScenes, isWrappedInfographicScene, shouldHoldWrappedForArtwork, buildWrappedSceneArtPrompt, buildWrappedClosingTableauPrompt, buildWrappedAchievementFinalePrompt, selectWrappedSceneStyleMediaId } from "./wrappedSceneArt";
 import type { StoryScene } from "./storyDiscovery";
 
 const scenes: StoryScene[] = [
@@ -15,8 +15,8 @@ const scenes: StoryScene[] = [
     body: "It ended with another unusual coincidence." },
 ];
 
-test("up to three narrative chapter beats, never the title/closing", () => {
-  assert.deepEqual(selectIllustratedScenes(scenes), ["wrapped-1","wrapped-2","wrapped-3"]);
+test("every narrative scene including closing gets a background; opening has its own cover", () => {
+  assert.deepEqual(selectIllustratedScenes(scenes), ["wrapped-1","wrapped-2","wrapped-3","wrapped-4"]);
   assert.equal(selectIllustratedScenes(scenes, 0).length, 0);
   assert.equal(selectIllustratedScenes(scenes, 1).length, 1);
 });
@@ -81,10 +81,10 @@ test("verified data comparison scenes are not wasted as illustration calls", () 
     scenes[3],
     scenes[4],
   ];
-  assert.deepEqual(selectIllustratedScenes(metrics), ["wrapped-3"]);
+  assert.deepEqual(selectIllustratedScenes(metrics), ["wrapped-3", "wrapped-4"]);
 });
 
-test("a deliberate typographic or data scene does not consume a paid image slot", () => {
+test("a typography scene still receives an original image; only verified data scenes are exempt", () => {
   const directed: StoryScene[] = scenes.map((scene, index) => index === 2 ? {
     ...scene,
     composition: {
@@ -92,7 +92,8 @@ test("a deliberate typographic or data scene does not consume a paid image slot"
       direction: { presentation: "typography", textSide: "center", textPosition: "middle", imageFocus: "right" },
     },
   } : scene);
-  assert.deepEqual(selectIllustratedScenes(directed), ["wrapped-1", "wrapped-3"]);
+  assert.deepEqual(selectIllustratedScenes(directed),
+    ["wrapped-1", "wrapped-2", "wrapped-3", "wrapped-4"]);
 });
 
 
@@ -161,4 +162,65 @@ test("missing Codex context preserves existing scene art prompt behavior", () =>
   assert.match(standard, /original cinematic EDITORIAL ILLUSTRATION/);
   assert.doesNotMatch(standard, /CODEX VISUAL IDENTITY/);
   assert.doesNotMatch(standard, /SOURCE-STYLE-GROUNDED/);
+});
+
+
+test("all non-infographic scenes are illustrated even in longer monthly issues", () => {
+  const longer: StoryScene[] = [
+    scenes[0],
+    ...Array.from({length: 9}, (_, i) => ({
+      ...scenes[1], id: "wrapped-" + (i + 1), kind: "insight" as const,
+      title: "Narrative point " + (i + 1),
+    })),
+    { ...scenes[4], id: "wrapped-10" },
+  ];
+  assert.equal(selectIllustratedScenes(longer).length, 10);
+  assert.equal(selectIllustratedScenes(longer)[9], "wrapped-10");
+});
+
+test("data-reveal and chart compositions never consume background artwork", () => {
+  const stats: StoryScene = {
+    ...scenes[2], editorialJob: "data-reveal",
+  };
+  assert.equal(isWrappedInfographicScene(stats), true);
+  assert.equal(isWrappedInfographicScene({
+    ...scenes[2], design: {
+      layout: "infographic", palette: "violet", visual: "bars", mediaIds: [], align: "left",
+    },
+  }), true);
+  const composed: StoryScene = {
+    ...scenes[2], composition: {
+      version: 1, backdrop: "minimal", elements: [],
+      direction: { presentation: "data", textSide: "center",
+        textPosition: "middle", imageFocus: "right" },
+    },
+  };
+  assert.deepEqual(selectIllustratedScenes([scenes[0], stats, composed, scenes[4]]), ["wrapped-4"]);
+});
+
+test("closing tableau is one quiet symbolic epilogue, with no cards or literal media inventory", () => {
+  const closing = { ...scenes[4], composition: {
+    version: 1, backdrop: "cinematic" as const,
+    direction: { presentation: "cinematic" as const, textSide: "right" as const,
+      textPosition: "middle" as const, imageFocus: "left" as const },
+    artConcept: "One quiet lamp glows on an empty railway platform",
+    elements: [],
+  }};
+  const prompt = buildWrappedClosingTableauPrompt({
+    title: "A month in stories", dek: "A month about patience",
+    scenes: [...scenes.slice(0, -1), closing],
+  }, closing);
+  assert.match(prompt, /FULL-BLEED FINAL TABLEAU/);
+  assert.match(prompt, /quiet lamp glows/);
+  assert.match(prompt, /RIGHT 55% darker/);
+  assert.match(prompt, /ONE visual metaphor/);
+  assert.match(prompt, /No multiple franchise worlds/);
+  assert.match(prompt, /book jackets, floating game covers or souvenir cards/);
+  assert.doesNotMatch(prompt, /EXISTING CODEX VISUAL IDENTITY/);
+  const finale = buildWrappedAchievementFinalePrompt({
+    title: "A month in stories", dek: "A month about patience",
+  });
+  assert.match(finale, /FINAL.*Dungeon System Verdict/i);
+  assert.match(finale, /BEHIND interactive achievement cards/);
+  assert.match(finale, /no fake medals/i);
 });
