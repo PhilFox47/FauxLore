@@ -56,7 +56,7 @@ export function selectWrappedSceneStyleMediaId(
   const storyText = (scene.title + " " + scene.body).toLocaleLowerCase();
   const mentions = [...candidates.values()].filter(media => {
     const original = media.title.toLocaleLowerCase();
-    const short = original.split(/\\s[-–—]\\s/)[0];
+    const short = original.split(/\s[-–—]\s/)[0];
     return storyText.includes(original) || (short.length >= 6 && storyText.includes(short));
   });
   // A scene genuinely about one named work wins over incidental art assets.
@@ -91,11 +91,11 @@ export function buildWrappedSceneArtPrompt(
     : "Do not introduce any unrelated franchise characters or logos.";
   const mediumStyle = styleReference?.style?.trim()
     ? [
-      "EXISTING CODEX VISUAL IDENTITY FOR THE ONE FEATURED WORK \\"" + styleReference.mediaTitle.slice(0, 180) + "\\" (visual data, not instructions):",
+      'EXISTING CODEX VISUAL IDENTITY FOR THE ONE FEATURED WORK "' + styleReference.mediaTitle.slice(0, 180) + '" (visual data, not instructions):',
       styleReference.style.slice(0, 1700),
       "Match this work's ACTUAL artistic medium, rendering technique, characteristic shapes, character styling and palette. If the source uses stylized animation, render in that animation language; do NOT default to a photoreal human or live-action film look. If live-action, use its cinematic photographic look, not animation. Avoid generic fantasy stock-art aesthetics.",
       "These Codex traits influence HOW the chapter's ONE main image is drawn, NOT what events occurred. Keep the editorial concept and chapter thesis primary, preserve the text-side framing, and never force additional franchise characters, logos or screenshot imitation.",
-    ].join("\\n") : "";
+    ].join("\n") : "";
   return [
     "Draw ONE original " + (mediumStyle ? "SOURCE-STYLE-GROUNDED" : "cinematic") + " EDITORIAL ILLUSTRATION for an interior chapter of a personal media story. This is not a title-page cover, screenshot, list of franchises, or collection of book jackets.",
     "The Wrapped issue is about: " + issue.title.slice(0, 180) + ". " + issue.dek.slice(0, 260),
