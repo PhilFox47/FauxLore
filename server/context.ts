@@ -35,6 +35,8 @@ export interface ServerContext {
   queueBossVictoryArtwork: (userId: string, bossId: string) => void;
   /** Lazily generate or explicitly reroll ONE title illustration for a Wrapped issue. */
   queueWrappedCoverArt: (userId: string, timeframe: "week" | "month" | "year", timeId: string, regenerate?: boolean) => boolean;
+  /** Up to two original illustrations for meaningful interior Wrapped scenes. */
+  queueWrappedSceneArtwork: (userId: string, timeframe: "week" | "month" | "year", timeId: string, regenerate?: boolean) => boolean;
   generateArtifactImageBackground: (userId: string, artifactId: string) => Promise<void>;
   codex: CodexService;
   /** What the configured image model accepts, asked of NanoGPT directly. */
