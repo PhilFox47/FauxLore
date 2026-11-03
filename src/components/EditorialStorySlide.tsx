@@ -2,6 +2,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import type { StoryScene } from "../lib/storyDiscovery";
 import type { EditorialDirection } from "../lib/dynamicScenes";
+import { WrappedAnalyticStage } from "./WrappedAnalyticStage";
 
 /**
  * Cinematic Editorial is a true full-bleed stage, NOT an image node inside a
