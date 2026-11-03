@@ -67,9 +67,10 @@ export function gptImage25DeliveryPrompt(prompt: string, kind: "loot" | "boss" |
         "Use a quiet studio presentation with one complete, unobstructed item. No people, hands, duplicate items or unrelated props.",
       ]
     : kind === "wrapped" ? [
-        "This is ONE evocative editorial cover for the user's actual Wrapped period, not a boss portrait, item card or collage of existing covers.",
-        "Unify the named media themes into a coherent cinematic illustration with intentional art direction. Do not invent user achievements, story events or personal experiences.",
-        "Keep the left portion darker and uncluttered so the app can overlay its own title and subtitle. Add NO baked-in titles, typography, logos, watermarks or interface.",
+        "This is singular, high-impact editorial KEY ART, not an illustrated inventory of the media consumed. Find ONE central visual thesis, ONE unmistakable hero motif and ONE coherent moment.",
+        "Prefer a bold, emotionally resonant metaphor to comprehensive coverage. At most ONE source media work may influence the picture, and even that need not appear literally. Do NOT add other recognizable franchises to fill space.",
+        "Absolutely no character lineup, crossover montage, multiple worlds, mini-posters, visual checklist, split panels, or scattered easter eggs. Keep secondary visual elements subordinate to the main motif.",
+        "Keep the left portion darker and uncluttered so the app can overlay its own title and subtitle. Do not invent personal achievements, story events or experiences. Add NO baked-in titles, typography, logos, watermarks or interface.",
       ]
     : [
         "Preserve the canonical character or creature's recognizable anatomy, armor, silhouette, palette and signature equipment. Level changes the drama of the scene, not the actual species or character design.",
