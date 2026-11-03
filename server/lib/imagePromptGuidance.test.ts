@@ -75,7 +75,10 @@ test("GPT Image 2.5 Wrapped cover briefs do not inherit boss or loot portrait co
     "One cinematic editorial title illustration connecting Mass Effect and a thriller.",
     "wrapped",
   );
-  assert.match(prompt, /editorial cover for the user's actual Wrapped period/);
+  assert.match(prompt, /singular, high-impact editorial KEY ART/);
+  assert.match(prompt, /ONE central visual thesis/);
+  assert.match(prompt, /at most ONE source media work/i);
+  assert.match(prompt, /no character lineup/i);
   assert.match(prompt, /left portion darker and uncluttered/);
   assert.doesNotMatch(prompt, /Level changes the drama of the scene/);
   assert.doesNotMatch(prompt, /Rarity is an inventory/);
