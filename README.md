@@ -116,6 +116,39 @@ CLIProxyAPI settings:
   This tests local prompt and reference handling; a live gateway test is still
   required to verify the configured CLIProxyAPI image-edit endpoint.
 
+### Recap & Wrapped: Personal media habits are the baseline
+
+FauxLore is an all-media tracker, so routine switching between games, books,
+audiobooks, shows, films and different genres is **not itself a newsworthy
+event**. The AI must not repeatedly celebrate or roast having "many different
+worlds", a "chaotic mix", multiple titles on one day or a wide variety of
+media. High media-count evidence does not establish indecision, restlessness
+or exceptional eclectic taste.
+
+Both the independent Wrapped Story Director and the Deep Dive's editorial
+planner/writer receive personal baseline calibration from the preceding 12
+comparable calendar periods, requiring at least three meaningful prior active
+periods before claiming unusually strong concentration. Comparison uses
+positive, normalized Master Pages and detects a notably stronger single-title
+focus or a material format-share shift, rather than rewarding raw distinct-title
+counts. With inadequate history, the AI is told **not** to claim abnormal focus
+or switching. Strong category shifts such as an unusually book-heavy week
+remain useful even when other formats still appear in the logs.
+
+Generic same-day crossover evidence cards were removed. Logged locations still
+supply specific, verifiable coincidences, but no longer enumerate all nearby
+media as proof of remarkable variety. The director should spend its scenes on
+meaningful reactions, actual user reviews, significant deviations from the
+personal baseline, source-specific observations, strong stories and justified
+connections. No stale, repeated "look how many things you switched between"
+throughline.
+
+Previously saved Recaps and Wrapped stories are preserved. Regenerate a story
+to apply the updated editorial guidance; this change does not rewrite the
+existing archive.
+
+Tests: `npm run test:media-focus` (also included in `npm run test:wrapped`).
+
 ### Dungeon Achievements as Recap/Wrapped souvenirs
 
 Achievements now celebrate the **defining, evidence-backed events and themes**
