@@ -158,16 +158,21 @@ function StorySlide({ scene, number, total, onDeepDive, coverArtUrl, sceneArtUrl
     return <WrappedClosingTableau scene={scene} imageUrl={sceneArtUrl}
       number={number} total={total} onDeepDive={onDeepDive} />;
   }
-  if (!isWrappedInfographicScene(scene)) {
-    const direction = dynamic?.direction || {
-      presentation: 'cinematic' as const, textSide: 'left' as const,
-      textPosition: 'middle' as const, imageFocus: 'right' as const,
-    };
+  const direction = dynamic?.direction || {
+    presentation: 'cinematic' as const, textSide: 'left' as const,
+    textPosition: 'middle' as const, imageFocus: 'right' as const,
+  };
+  if (isWrappedInfographicScene(scene)) {
+    // Graphic-only stages are the sole exception to the full-art rule. Do
+    // not allow an old composed image node to inject a media cover here.
     return <EditorialStorySlide scene={scene}
-      direction={{ ...direction, presentation: 'cinematic' }}
-      imageUrl={scene.kind === 'opening' ? coverArtUrl : sceneArtUrl}
+      direction={{ ...direction, presentation: 'data' }}
       number={number} total={total} onDeepDive={onDeepDive} />;
   }
+  return <EditorialStorySlide scene={scene}
+    direction={{ ...direction, presentation: 'cinematic' }}
+    imageUrl={scene.kind === 'opening' ? coverArtUrl : sceneArtUrl}
+    number={number} total={total} onDeepDive={onDeepDive} />;
   if (dynamic) {
     return <DynamicStorySlide scene={scene} composition={dynamic} number={number} total={total}
       coverArtUrl={coverArtUrl} sceneArtUrl={sceneArtUrl} onDeepDive={onDeepDive} />;
