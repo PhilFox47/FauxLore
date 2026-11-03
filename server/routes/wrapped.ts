@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { normalizeDynamicScene } from "../../src/lib/dynamicScenes";
-import { MAX_DATA_SLIDES, isDataLayout } from "../../src/lib/wrappedEditorial";
+import { MAX_DATA_SLIDES, isDataLayout, isStrongSceneData } from "../../src/lib/wrappedEditorial";
 import type { StoryPeriod } from "../../src/lib/storyDiscovery";
 
 const validPeriod = (timeframe: unknown, timeId: unknown): timeframe is "week" | "month" | "year" =>
@@ -92,6 +92,12 @@ export function validateStory(raw: any, timeframe?: StoryPeriod): any {
       throw new Error("Invalid artwork collection");
     }
     const cleanArtworks = artworks?.map(cleanArtwork);
+    if (isDataLayout(scene.kind, design?.layout, design?.visual) &&
+        !isStrongSceneData(scene.kind, bars)) {
+      // New stories cannot reinstate a weak chart by hand-editing JSON. Old
+      // saved issues remain readable and untouched until rerolled.
+      if (timeframe) throw new Error('Weak or unsupported infographic comparison');
+    }
     const saved: any = {
       id, kind: scene.kind, eyebrow, title, body, evidenceIds: scene.evidenceIds,
       ...(string(scene.detail, 1200) ? { detail: scene.detail.trim() } : {}),
@@ -221,7 +227,7 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
           if ((composition.direction?.presentation === 'data' ||
             composition.elements.some(element => element.type === 'stat')) &&
             (!isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
-              !scene.bars?.length)) {
+              !isStrongSceneData(scene.kind, scene.bars))) {
             throw new Error('Visual-only rerolls cannot invent data scenes or unsupported charts');
           }
           byScene.set(proposal.sceneId, composition);
