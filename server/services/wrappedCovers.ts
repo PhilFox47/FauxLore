@@ -178,6 +178,18 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
     "SELECT story, coverArtStatus, coverArtRequestId, coverArtTimeZone FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=?",
   );
 
+  function optionalCodexStyle(userId: string, mediaId: string): WrappedCodexStyle | null {
+    try {
+      const result = getCodexStyle?.(userId, mediaId);
+      // Guard custom integrations too: a resolver must not return a different
+      // work's style and quietly recolor the image with an unrelated universe.
+      return result?.mediaId === mediaId ? result : null;
+    } catch (error) {
+      console.warn("[wrapped-style] Style lookup failed; keeping standard art:", error);
+      return null;
+    }
+  }
+
   function visualSelfFor(userId: string): VisualSelfProfile {
     // Read once per image job, not globally. Never use a different account's
     // appearance; never transmit this private profile to the Story Director.
@@ -250,8 +262,7 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
       // No unverified imagery for periods with zero actual progress. But a
       // valid, abstract issue can intentionally have no named visual anchor.
       if (!hasVerifiedActivity) throw new Error("No verified progress logs for this Wrapped period.");
-      const codexStyle = subjects[0] && getCodexStyle
-        ? getCodexStyle(userId, subjects[0].id) : null;
+      const codexStyle = subjects[0] ? optionalCodexStyle(userId, subjects[0].id) : null;
       const prompt = buildWrappedCoverPrompt(
         story, timeframe, timeId, subjects, visualSelfFor(userId), codexStyle,
       );
@@ -356,8 +367,7 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
         const scene = story.scenes.find(s => s.id === id);
         if (!scene) continue;
         const featuredMediaId = selectWrappedSceneStyleMediaId(scene);
-        const style = featuredMediaId && getCodexStyle
-          ? getCodexStyle(userId, featuredMediaId) : null;
+        const style = featuredMediaId ? optionalCodexStyle(userId, featuredMediaId) : null;
         const prompt = buildWrappedSceneArtPrompt(
           story, scene, visualSelfFor(userId),
           style?.mediaId === featuredMediaId ? style : null,
