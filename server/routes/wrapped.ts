@@ -219,6 +219,9 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
       })();
       if (saved === "missing") return res.status(404).json({ error: "Wrapped not found" });
       if (saved === "stale") return res.status(409).json({ error: "Wrapped visuals changed; reload before rerolling." });
+      // Newly composed scene images should match the new visual metaphor,
+      // rather than briefly reusing imagery from a different composition.
+      queueWrappedSceneArtwork(userId, timeframe, timeId, true);
       res.json(savedStory(userId, timeframe, timeId));
     } catch (error: any) {
       res.status(400).json({ error: "Could not validate composed scenes: " + String(error?.message || error) });
