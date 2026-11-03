@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'motion/react';
-import { ArrowDownRight, ArrowRight, ArrowUpRight } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import type { VerifiedAnalytic } from '../lib/wrappedEditorial';
 import { isStrongVerifiedAnalytic } from '../lib/wrappedEditorial';
 import type { StoryPalette } from '../lib/storyDiscovery';
