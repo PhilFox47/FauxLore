@@ -85,3 +85,24 @@ test("generated title artwork can only be placed on the opening scene", () => {
   assert.throws(() => normalizeDynamicScene(withTitleArt, scene));
   assert.equal(normalizeDynamicScene(withTitleArt, { ...scene, kind: "opening" }).elements[2].type, "title-art");
 });
+
+test("interior generated art keeps a bounded concept, never executable code or fabricated source data", () => {
+  const proposed = {
+    ...design([
+      node("hero", "title", { x: 6, y: 12, w: 52, h: 26 }),
+      node("body", "body", { x: 6, y: 52, w: 50, h: 30 }),
+      node("image", "scene-art", { x: 61, y: 5, w: 35, h: 90 }),
+    ]),
+    artConcept: "A solitary train entering a mysterious station at midnight",
+    script: "<script>alert(1)</script>",
+  };
+  const clean = normalizeDynamicScene(proposed, scene);
+  assert.equal(clean.elements[2].type, "scene-art");
+  assert.match(clean.artConcept || "", /solitary train/);
+  assert.equal("script" in clean, false);
+  assert.equal(normalizeDynamicScene({ ...proposed, artConcept: "<script>evil()</script>" }, scene).artConcept, undefined);
+  assert.throws(() => normalizeDynamicScene({
+    ...proposed, elements: [...proposed.elements, node("image2", "scene-art", { x: 1, y: 1, w: 20, h: 20 })],
+  }, scene), /too cluttered/);
+  assert.throws(() => normalizeDynamicScene(proposed, { ...scene, kind: "opening" }), /Interior art/);
+});
