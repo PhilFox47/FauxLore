@@ -14,7 +14,7 @@ export function isWrappedInfographicScene(
   return scene.editorialJob === "data-reveal" ||
     isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
     scene.composition?.direction?.presentation === "data" ||
-    !!scene.composition?.elements.some(element => element.type === "stat");
+    !!scene.composition?.elements?.some(element => element.type === "stat");
 }
 
 export function selectIllustratedScenes<T extends Pick<StoryScene,
