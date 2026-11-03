@@ -24,7 +24,11 @@ export interface EditorialDirection {
 /** Only editorial placement metadata; generated artwork never supplies CSS. */
 export function imageFramingGuidance(direction?: Partial<EditorialDirection> | null): string {
   const side = direction?.textSide === "right" ? "right" : direction?.textSide === "center" ? "center" : "left";
-  const focus = direction?.imageFocus === "left" ? "left" : direction?.imageFocus === "center" ? "center" : "right";
+  const rawFocus = direction?.imageFocus === "left" ? "left" : direction?.imageFocus === "center" ? "center" : "right";
+  // Do not put the image's most important subject underneath its headline.
+  const focus = side === "left" && rawFocus === "left" ? "right"
+    : side === "right" && rawFocus === "right" ? "left"
+    : side === "center" && rawFocus === "center" ? "right" : rawFocus;
   const space = side === "center"
     ? "Keep the central 55% relatively dark, quiet and uncluttered so centered overlaid typography remains readable."
     : "Keep the " + side.toUpperCase() + " 55% darker, quieter and free of faces or vital objects for overlaid story text.";
@@ -199,7 +203,9 @@ export function normalizeDynamicScene(
       presentation: value.direction.presentation as EditorialPresentation,
       textSide: value.direction.textSide as EditorialTextSide,
       textPosition: value.direction.textPosition as EditorialTextPosition,
-      imageFocus: value.direction.imageFocus as EditorialImageFocus,
+      imageFocus: value.direction.textSide === value.direction.imageFocus
+        ? (value.direction.textSide === "right" ? "left" : "right")
+        : value.direction.imageFocus as EditorialImageFocus,
     };
   }
   return {
