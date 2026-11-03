@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { normalizeDynamicScene } from "../../src/lib/dynamicScenes";
-import { MAX_DATA_SLIDES, isDataLayout, isStrongSceneData } from "../../src/lib/wrappedEditorial";
+import { MAX_DATA_SLIDES, isDataLayout, isStrongSceneData, isStrongVerifiedAnalytic, normalizeEditorialJob, normalizeVerifiedAnalytic } from "../../src/lib/wrappedEditorial";
 import type { StoryPeriod } from "../../src/lib/storyDiscovery";
 
 const validPeriod = (timeframe: unknown, timeId: unknown): timeframe is "week" | "month" | "year" =>
@@ -87,19 +87,27 @@ export function validateStory(raw: any, timeframe?: StoryPeriod): any {
       !isObject(b) || !string(b.label, 80) || !string(b.title, 220) || !string(b.detail, 220)))) throw new Error("Invalid timeline");
     if (scene.quote !== undefined && !string(scene.quote, 3000)) throw new Error("Invalid quote");
     const design = cleanDesign(scene.design);
+    const analytic = scene.analytic == null ? undefined : normalizeVerifiedAnalytic(scene.analytic);
+    if (analytic && !isStrongVerifiedAnalytic(analytic)) {
+      throw new Error("Weak or malformed analytics are not eligible for a data scene");
+    }
+    const editorialJob = normalizeEditorialJob(scene.editorialJob, scene.kind);
     const artworks = scene.artworks;
     if (artworks !== undefined && (!Array.isArray(artworks) || artworks.length > 6)) {
       throw new Error("Invalid artwork collection");
     }
     const cleanArtworks = artworks?.map(cleanArtwork);
-    if (isDataLayout(scene.kind, design?.layout, design?.visual) &&
-        !isStrongSceneData(scene.kind, bars)) {
+    if ((isDataLayout(scene.kind, design?.layout, design?.visual) ||
+          editorialJob === 'data-reveal') &&
+        !isStrongSceneData(scene.kind, bars) && !isStrongVerifiedAnalytic(analytic)) {
       // New stories cannot reinstate a weak chart by hand-editing JSON. Old
       // saved issues remain readable and untouched until rerolled.
       if (timeframe) throw new Error('Weak or unsupported infographic comparison');
     }
     const saved: any = {
       id, kind: scene.kind, eyebrow, title, body, evidenceIds: scene.evidenceIds,
+      editorialJob,
+      ...(analytic ? { analytic } : {}),
       ...(string(scene.detail, 1200) ? { detail: scene.detail.trim() } : {}),
       ...(string(scene.quote, 3000) ? { quote: scene.quote.trim() } : {}),
       ...(string(scene.sourceLabel, 160) ? { sourceLabel: scene.sourceLabel.trim() } : {}),
@@ -124,6 +132,7 @@ export function validateStory(raw: any, timeframe?: StoryPeriod): any {
   if (timeframe) {
     const count = scenes.slice(1, -1).filter((scene: any) =>
       isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
+      scene.editorialJob === 'data-reveal' ||
       scene.composition?.direction?.presentation === "data" ||
       scene.composition?.elements?.some((item: any) => item.type === "stat")).length;
     if (count > MAX_DATA_SLIDES[timeframe]) {
@@ -226,8 +235,10 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
           const composition = normalizeDynamicScene(proposal.composition, scene);
           if ((composition.direction?.presentation === 'data' ||
             composition.elements.some(element => element.type === 'stat')) &&
-            (!isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
-              !isStrongSceneData(scene.kind, scene.bars))) {
+            (!(isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
+                scene.editorialJob === 'data-reveal') ||
+              !(isStrongSceneData(scene.kind, scene.bars) ||
+                isStrongVerifiedAnalytic(scene.analytic)))) {
             throw new Error('Visual-only rerolls cannot invent data scenes or unsupported charts');
           }
           byScene.set(proposal.sceneId, composition);
