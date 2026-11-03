@@ -275,6 +275,18 @@ export const DatabaseService = {
     return res.json();
   },
 
+  /** Regenerates only the persisted Wrapped cover, not its editorial story. */
+  async regenerateWrappedCover(timeframe: 'week' | 'month' | 'year', timeId: string): Promise<WrappedStory> {
+    const res = await apiFetch('/api/wrapped/' + timeframe + '/' + encodeURIComponent(timeId) + '/cover', {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.error || 'Could not generate Wrapped cover (' + res.status + ')');
+    }
+    return res.json();
+  },
+
   async getGeneratedAchievements(): Promise<GeneratedAchievement[]> {
     const res = await apiFetch('/api/achievements');
     if (!res.ok) throw new Error('Failed to load achievements');
