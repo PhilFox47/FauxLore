@@ -269,6 +269,8 @@ export function initSchema(db: Db) {
       enragedAt TEXT,
       -- Keep the pre-enrage image as an immutable reference for edits and retries.
       enrageOriginalImageUrl TEXT,
+      -- Source-of-truth portrait shared by Enrage and Victory transformations.
+      basePortraitImageUrl TEXT,
       -- A stale in-flight render must not overwrite a taunt or a reroll.
       imageGenerationToken TEXT,
       FOREIGN KEY(mediaId) REFERENCES media(id) ON DELETE CASCADE
