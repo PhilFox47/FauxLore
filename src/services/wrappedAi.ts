@@ -10,6 +10,9 @@ export interface WrappedStory {
   dek: string;
   scenes: (StoryScene & { evidenceIds: string[] })[];
   generatedAt?: string;
+  /** Separate image asset, never part of AI-authored story JSON. */
+  coverArtUrl?: string | null;
+  coverArtStatus?: 'pending' | 'generating' | 'done' | 'failed' | null;
 }
 const kinds = new Set<StoryKind>(['opening','insight','outlier','location','journal','spotlight','taste','return','timeline','rhythm','closing']);
 const limit = { week: 6, month: 9, year: 14 };
