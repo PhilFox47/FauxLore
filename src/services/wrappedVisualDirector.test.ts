@@ -168,3 +168,48 @@ test("the monthly visual director accepts two verified data slides but not a thi
   }, sample.scenes.length, "month");
   assert.equal(result.scenes.filter(scene => scene.composition?.direction?.presentation === "data").length, 2);
 });
+
+
+test('the visual director stages a chosen story job using ONLY verified analytic data', () => {
+  const focused: WrappedStory = {
+    ...story,
+    scenes: [
+      story.scenes[0],
+      { id: 'wrapped-1', kind: 'insight', eyebrow: 'THE CENTER OF IT ALL',
+        title: 'A single work took over', body: 'A genuinely unusual focal point.',
+        evidenceIds: ['focus-0'], editorialJob: 'data-reveal',
+        analytic: { kind: 'dominance', unit: 'percent', points: [
+          { label: 'The Long Novel', value: 72, note: 'Share of normalized progress' },
+          { label: 'Everything else', value: 28, note: 'Remaining share' },
+        ] },
+      },
+      story.scenes[2],
+    ],
+  };
+  const brief = wrappedVisualDirectorBrief(focused, undefined, 'month');
+  assert.match(brief, /editorialJob/);
+  assert.match(brief, /"kind":"dominance"/);
+  assert.match(brief, /"canUseData":true/);
+  assert.match(brief, /FOUR ANALYTIC STAGES/);
+  const proposed = {
+    version: 1, backdrop: 'minimal',
+    direction: { presentation: 'data', textSide: 'left',
+      textPosition: 'middle', imageFocus: 'right', dataTreatment: 'dominance' },
+    elements: [
+      element('headline', 'title', 6, 10, 65, 24),
+      element('copy', 'body', 6, 59, 68, 25),
+    ],
+  };
+  const directed = applyWrappedVisualCompositions(focused, {
+    compositions: [{ sceneId: 'wrapped-1', composition: proposed }],
+  }, 3, 'month');
+  assert.equal(directed.scenes[1].composition?.direction?.dataTreatment, 'dominance');
+  assert.deepEqual(directed.scenes[1].analytic, focused.scenes[1].analytic);
+  const forged = applyWrappedVisualCompositions(focused, {
+    compositions: [{ sceneId: 'wrapped-1',
+      composition: { ...proposed, direction: {
+        ...proposed.direction, dataTreatment: 'shift',
+      } } }],
+  }, 3, 'month');
+  assert.equal(forged.scenes[1].composition, undefined);
+});
