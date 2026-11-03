@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Db } from "../context";
 import { selectIllustratedScenes, buildWrappedSceneArtPrompt } from "../../src/lib/wrappedSceneArt";
 import type { StoryScene } from "../../src/lib/storyDiscovery";
+import { visualSelfImageClause, type VisualSelfProfile } from "../../src/lib/visualSelf";
 
 export type WrappedTimeframe = "week" | "month" | "year";
 export type WrappedCoverSubject = { id: string; title: string; type: string; genres?: string[] };
@@ -117,6 +118,7 @@ export function selectWrappedCoverFocus(
 export function buildWrappedCoverPrompt(
   story: WrappedCoverStory, timeframe: WrappedTimeframe, timeId: string,
   subjects: WrappedCoverSubject[],
+  visualSelf?: VisualSelfProfile | null,
 ): string {
   const title = compact(story.title, 180);
   const dek = compact(story.dek, 220);
@@ -146,6 +148,7 @@ export function buildWrappedCoverPrompt(
     "Use cinematic " + palette + " art direction, atmospheric lighting, meaningful negative space and convincing depth. Interpret the emotional truth of the supplied thesis, but never fabricate personal achievements, events or spoilers.",
     "Horizontal landscape 3:2 composition. Keep the LEFT 45 percent of the frame relatively dark and uncluttered for the app's overlaid title. Place the main visual impact mostly on the right, keeping essential forms safely in frame.",
     "This is illustration ONLY: NO text, titles, labels, logos, watermarks, statistics, UI overlays or borders. FauxLore renders all real copy separately.",
+    visualSelfImageClause(visualSelf),
   ].filter(Boolean).join("\n\n");
 }
 
@@ -159,6 +162,18 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
   const current = db.prepare(
     "SELECT story, coverArtStatus, coverArtRequestId, coverArtTimeZone FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=?",
   );
+
+  function visualSelfFor(userId: string): VisualSelfProfile {
+    // Read once per image job, not globally. Never use a different account's
+    // appearance; never transmit this private profile to the Story Director.
+    try {
+      return (db.prepare(
+        "SELECT visualSelfInsertMode, visualSelfDescription FROM settings WHERE userId=?",
+      ).get(userId) as VisualSelfProfile | undefined) || {};
+    } catch {
+      return {};
+    }
+  }
 
   function subjectsFor(userId: string, timeframe: WrappedTimeframe, timeId: string, story: WrappedCoverStory, timeZone: string): {
     subjects: WrappedCoverSubject[]; hasVerifiedActivity: boolean;
@@ -220,7 +235,7 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
       // No unverified imagery for periods with zero actual progress. But a
       // valid, abstract issue can intentionally have no named visual anchor.
       if (!hasVerifiedActivity) throw new Error("No verified progress logs for this Wrapped period.");
-      const prompt = buildWrappedCoverPrompt(story, timeframe, timeId, subjects);
+      const prompt = buildWrappedCoverPrompt(story, timeframe, timeId, subjects, visualSelfFor(userId));
       const url = await generateImage(userId, prompt);
       db.prepare(
         "UPDATE wrapped_stories SET coverArtUrl=?, coverArtStatus='done', coverArtRequestId=NULL " +
@@ -321,7 +336,7 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
         if (live?.sceneArtRequestId !== token) return;
         const scene = story.scenes.find(s => s.id === id);
         if (!scene) continue;
-        const prompt = buildWrappedSceneArtPrompt(story, scene);
+        const prompt = buildWrappedSceneArtPrompt(story, scene, visualSelfFor(userId));
         try {
           const imageUrl = await generateSceneImage(userId, prompt);
           images[id] = imageUrl;
