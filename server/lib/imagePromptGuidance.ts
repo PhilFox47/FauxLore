@@ -69,6 +69,7 @@ export function gptImage25DeliveryPrompt(prompt: string, kind: "loot" | "boss" |
     : kind === "wrapped-scene" ? [
         "Illustrate ONE specific interior scene from a personal Wrapped story, not a title page. Express the supplied chapter premise as a single strong visual metaphor or environment, grounded in the chapter's actual story.",
         "Do NOT try to draw all logged media titles, a collage of book jackets, a franchise lineup or a layout of separate panels. Prefer one memorable focal subject and atmosphere with natural negative space.",
+        "If the prompt includes an EXISTING CODEX VISUAL IDENTITY, obey its actual source medium, craft language and rendering style: 2D animation stays stylized 2D, live action stays photographic, and 3D games retain their recognizable rendering. Never substitute default photorealism for an animated work.",
         "Follow the explicit EDITORIAL IMAGE FRAMING in the supplied prompt EXACTLY: the quiet text side and subject focal side may vary. Do not revert to a generic left-text/right-image layout. No baked-in typography, numbers, logos or UI; no fabricated personal achievements.",
       ]
     : kind === "wrapped" ? [
