@@ -105,7 +105,19 @@ export function validateStory(raw: any): any {
 }
 
 export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser } = ctx;
+  const { db, getAuthUser, activity, queueWrappedCoverArt } = ctx;
+  const findSaved = db.prepare(
+    "SELECT story, generatedAt, coverArtUrl, coverArtStatus FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=?",
+  );
+  function savedStory(userId: string, timeframe: "week" | "month" | "year", timeId: string) {
+    const row = findSaved.get(userId, timeframe, timeId) as {
+      story: string; generatedAt: string; coverArtUrl: string | null; coverArtStatus: string | null;
+    } | undefined;
+    return row ? {
+      ...JSON.parse(row.story), generatedAt: row.generatedAt,
+      coverArtUrl: row.coverArtUrl, coverArtStatus: row.coverArtStatus,
+    } : null;
+  }
 
   app.get("/api/wrapped/:timeframe/:timeId", (req, res) => {
     try {
@@ -113,9 +125,26 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
       if (!userId) return;
       const { timeframe, timeId } = req.params;
       if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
-      const row = db.prepare("SELECT story, generatedAt FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=?")
-        .get(userId, timeframe, timeId) as { story: string; generatedAt: string } | undefined;
-      res.json(row ? { ...JSON.parse(row.story), generatedAt: row.generatedAt } : null);
+      // Older stored issues receive exactly one cover when next opened.
+      // A GET never retries failures or spends tokens for dormant accounts.
+      queueWrappedCoverArt(userId, timeframe, timeId);
+      res.json(savedStory(userId, timeframe, timeId));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  /** Reroll only the title illustration, keeping every story scene unchanged. */
+  app.post("/api/wrapped/:timeframe/:timeId/cover", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      if (!activity.requireActive(userId, res)) return;
+      const { timeframe, timeId } = req.params;
+      if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
+      if (!savedStory(userId, timeframe, timeId)) return res.status(404).json({ error: "Wrapped not found" });
+      if (!queueWrappedCoverArt(userId, timeframe, timeId, true)) {
+        return res.status(409).json({ error: "A cover image is already being generated." });
+      }
+      res.json(savedStory(userId, timeframe, timeId));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -149,15 +178,19 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
         const pending = db.prepare("SELECT requestId FROM wrapped_requests WHERE userId=? AND timeframe=? AND timeId=?")
           .get(userId, timeframe, timeId) as { requestId: string } | undefined;
         if (!pending || pending.requestId !== requestId) return false;
-        db.prepare("INSERT INTO wrapped_stories(userId,timeframe,timeId,story,generatedAt) VALUES(?,?,?,?,datetime('now')) " +
-          "ON CONFLICT(userId,timeframe,timeId) DO UPDATE SET story=excluded.story, generatedAt=excluded.generatedAt")
-          .run(userId, timeframe, timeId, JSON.stringify(cleaned));
+        db.prepare(
+          "INSERT INTO wrapped_stories(userId,timeframe,timeId,story,generatedAt,coverArtUrl,coverArtStatus,coverArtRequestId) " +
+          "VALUES(?,?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now'),NULL,NULL,NULL) " +
+          "ON CONFLICT(userId,timeframe,timeId) DO UPDATE SET story=excluded.story, " +
+          "generatedAt=excluded.generatedAt, coverArtUrl=NULL, coverArtStatus=NULL, coverArtRequestId=NULL",
+        ).run(userId, timeframe, timeId, JSON.stringify(cleaned));
         db.prepare("DELETE FROM wrapped_requests WHERE userId=? AND timeframe=? AND timeId=?")
           .run(userId, timeframe, timeId);
         return true;
       })();
       if (!saved) return res.status(409).json({ error: "A newer Wrapped generation superseded this one." });
-      res.json({ ...cleaned, generatedAt: new Date().toISOString() });
+      queueWrappedCoverArt(userId, timeframe, timeId);
+      res.json(savedStory(userId, timeframe, timeId));
     } catch (e: any) {
       res.status(e instanceof Error ? 400 : 500)
         .json({ error: String(e?.message || e) });
