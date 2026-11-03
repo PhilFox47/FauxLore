@@ -267,14 +267,17 @@ test("original interior chapter artworks are generated once and stored independe
     };
     const artwork = JSON.parse(row.sceneArtJson);
     assert.equal(row.sceneArtStatus, "done");
-    assert.deepEqual(Object.keys(artwork), ["wrapped-1", "wrapped-2"]);
-    assert.equal(imageCalls.length, 2);
+    assert.deepEqual(Object.keys(artwork), ["wrapped-1", "wrapped-2", "wrapped-3", "achievement-finale"]);
+    assert.equal(imageCalls.length, 4);
+    assert.match(imageCalls[2], /FULL-BLEED FINAL TABLEAU/);
+    assert.match(imageCalls[2], /visual EPILOGUE/);
+    assert.match(imageCalls[3], /Dungeon System Verdict/);
     assert.match(imageCalls[0], /A train on a train/);
     assert.match(imageCalls[1], /Eight titles at one hotel/);
     assert.doesNotMatch(imageCalls[0], /draw all media titles/i);
     assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD, true), true, "Manual redraw regenerates chapter art only");
     await settle();
-    assert.equal(imageCalls.length, 4);
+    assert.equal(imageCalls.length, 8);
     assert.equal(JSON.parse((db.prepare("SELECT story FROM wrapped_stories").get() as any).story).title, staged.title);
   } finally { db.close(); }
 });
@@ -306,12 +309,18 @@ test("superseded Wrapped image jobs cannot overwrite newer artwork", async () =>
     db.prepare("UPDATE wrapped_stories SET sceneArtStatus=NULL,sceneArtRequestId=NULL,sceneArtJson=NULL").run();
     assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), true);
     await settle();
-    assert.equal((db.prepare("SELECT sceneArtJson FROM wrapped_stories").get() as any).sceneArtJson,
-      JSON.stringify({ "wrapped-1": "/uploads/new-chapter.png" }));
+    assert.deepEqual(JSON.parse((db.prepare("SELECT sceneArtJson FROM wrapped_stories").get() as any).sceneArtJson), {
+      "wrapped-1": "/uploads/new-chapter.png",
+      "wrapped-2": "/uploads/new-chapter.png",
+      "achievement-finale": "/uploads/new-chapter.png",
+    });
     releaseOld?.("/uploads/obsolete-chapter.png");
     await settle();
-    assert.equal((db.prepare("SELECT sceneArtJson FROM wrapped_stories").get() as any).sceneArtJson,
-      JSON.stringify({ "wrapped-1": "/uploads/new-chapter.png" }));
+    assert.deepEqual(JSON.parse((db.prepare("SELECT sceneArtJson FROM wrapped_stories").get() as any).sceneArtJson), {
+      "wrapped-1": "/uploads/new-chapter.png",
+      "wrapped-2": "/uploads/new-chapter.png",
+      "achievement-finale": "/uploads/new-chapter.png",
+    });
   } finally { db.close(); }
 });
 
@@ -388,7 +397,7 @@ test("chapter illustrations receive the same account-scoped optional likeness in
     });
     assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), true);
     await settle();
-    assert.equal(prompts.length, 1);
+    assert.equal(prompts.length, 3);
     assert.match(prompts[0], /short brown hair and blue glasses/);
     assert.match(prompts[0], /PREFER the account owner/);
     assert.match(prompts[0], /A train on a train/);
@@ -460,12 +469,14 @@ test("specific Wrapped chapter art uses one matching ready Codex style, not an u
     });
     assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), true);
     await settle();
-    assert.equal(prompts.length, 2);
+    assert.equal(prompts.length, 4);
     assert.deepEqual(lookups, ["logged"], "Mixed scenes do not request arbitrary Codex styles");
     assert.match(prompts[0], /CODEX VISUAL IDENTITY/);
     assert.match(prompts[0], /desaturated blue/);
     assert.match(prompts[0], /A second season is wanted/);
     assert.doesNotMatch(prompts[1], /CODEX VISUAL IDENTITY|desaturated blue/);
+    assert.match(prompts[2], /FULL-BLEED FINAL TABLEAU/);
+    assert.match(prompts[3], /Dungeon System Verdict/);
   } finally { db.close(); }
 });
 
@@ -517,7 +528,7 @@ test("missing or throwing Codex resolvers never prevent image creation or retry 
     });
     assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), true);
     await settle();
-    assert.equal(imageCalls, 1);
+    assert.equal(imageCalls, 3);
     assert.equal((db.prepare("SELECT sceneArtStatus FROM wrapped_stories").get() as any).sceneArtStatus, "done");
   } finally { db.close(); }
 });
