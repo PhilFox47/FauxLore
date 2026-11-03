@@ -3,6 +3,8 @@ import { normalizeDynamicScene } from "../lib/dynamicScenes";
 import type { DynamicSceneComposition } from "../lib/dynamicScenes";
 import type { WrappedStory } from "./wrappedAi";
 import { selectIllustratedScenes } from "../lib/wrappedSceneArt";
+import { MAX_DATA_SLIDES, isDataLayout } from "../lib/wrappedEditorial";
+import type { StoryPeriod } from "../lib/storyDiscovery";
 
 type DirectorReply = { compositions?: Array<{ sceneId: string; composition: unknown }> };
 
@@ -11,7 +13,9 @@ type DirectorReply = { compositions?: Array<{ sceneId: string; composition: unkn
  * already verified by normalizeWrappedStory enters this pass. Numbers, quotes
  * and media URLs cannot be written by the model: it only references bound IDs.
  */
-export function wrappedVisualDirectorBrief(story: WrappedStory, onlySceneIds?: string[]): string {
+export function wrappedVisualDirectorBrief(
+  story: WrappedStory, onlySceneIds?: string[], timeframe: StoryPeriod = "week",
+): string {
   const illustrated = new Set(selectIllustratedScenes(story.scenes));
   const wanted = onlySceneIds ? new Set(onlySceneIds) : null;
   const scenes = story.scenes.filter(scene => !wanted || wanted.has(scene.id)).map(scene => ({
@@ -23,6 +27,8 @@ export function wrappedVisualDirectorBrief(story: WrappedStory, onlySceneIds?: s
     palette: scene.design?.palette || "violet",
     imageMediaIds: [...new Set([scene.media, ...(scene.artworks || [])]
       .filter(m => m?.cover).map(m => m!.id))].slice(0, 6),
+    canUseData: isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) &&
+      !!scene.bars?.length,
     verifiedBars: (scene.bars || []).slice(0, 6).map((bar, index) => ({
       index, label: bar.label, value: bar.value, note: bar.note,
     })),
@@ -39,11 +45,13 @@ export function wrappedVisualDirectorBrief(story: WrappedStory, onlySceneIds?: s
   return [
     "ISSUE: " + story.title + "\n" + story.dek,
     "VERIFIED, ALREADY WRITTEN SCENES (do not change their copy):\n" + JSON.stringify(scenes),
+    "STRICT DATA BUDGET FOR THIS " + timeframe.toUpperCase() + ": at most " +
+      MAX_DATA_SLIDES[timeframe] + " infographic/data slide(s) across the ENTIRE issue. This is a maximum, NOT a quota. The Story Director has already limited chart jobs; do not create new ones in the visual pass.",
     "COMPOSE EVERY SCENE IN THE PROVIDED LIST. No skipping: exactly one composition for EACH sceneId listed, nothing else. Choose a distinctive but coherent cinematic-magazine treatment for each story beat, with a deliberate visual rhythm across the issue.",
     "NEW CINEMATIC EDITORIAL DIRECTION: Every composition MUST include direction:{presentation:'cinematic'|'data'|'typography'|'composed',textSide:'left'|'right'|'center',textPosition:'top'|'middle'|'bottom',imageFocus:'left'|'center'|'right'}. Use actual JSON double-quoted strings. This is a SAFE editorial plan, NOT arbitrary CSS or executable code.",
     "CINEMATIC means a SINGLE beautiful generated illustration bleeds edge-to-edge behind magazine typography, not an image rectangle inside a colourful card. Choose cinematic primarily for canStageCinematic=true scenes. The React renderer handles safe text spacing, gradients and contrast. A true full-art cinematic scene needs ONE striking motif and a clear visual thesis. For opening art, write artConcept specifying the thesis as an evocative scene. For chapter art, add a single scene-art element AND a 10-180 character artConcept specific to this beat. The image generator will receive EXACTLY this text placement and focal direction.",
     "IMAGE COMPOSITION IS JOINT ART DIRECTION: textSide describes where the overlaid typography will be; imageFocus describes where the primary image subject must be. Keep them mostly opposite (text LEFT, focal RIGHT, or vice versa), and reserve the text area as quiet, dark negative space. Center text is appropriate only for intentionally symmetrical imagery. textPosition determines the upper, middle or lower visual rhythm of the typography.",
-    "DATA means a verified comparison is the HERO, presented as bold clean editorial typography with no gratuitous collage, colour frame or image. Choose data ONLY for scenes whose verifiedBars is nonempty (e.g. dramatic 9% vs 39% shift). TYPOGRAPHY is a deliberately quiet text-led scene, ideal for a memorable conclusion without a suitable image. COMPOSED is a rare fallback when a data diagram, quote or multi-part sequence truly benefits from modular placement. Do NOT default to composed.",
+    "DATA means a significant verified comparison is the HERO. Choose presentation:'data' and stat elements ONLY when canUseData=true AND the difference is editorially important. A 33% to 49% increase does not justify a whole chart! Do not recycle the same claim as both a text and a chart slide. If the same format change has already been explained, use quiet typography or image-led narrative instead. TYPOGRAPHY is a deliberately quiet text-led scene; COMPOSED is a rare fallback for a genuine sequence. Do NOT default to composed.",
     "Most illustrated scenes should favor cinematic full-art, but make it an editorial CHOICE rather than an obligatory quota. Do NOT make every slide a painting: allow data and typographic breathing room. Avoid stacked coloured card backgrounds, borders around the illustration, separate image boxes, floating unrelated covers, green or purple thematic rims, ornamental circles and title/description disconnected by huge empty gaps.",
     "THE STORY'S MEANING COMES FIRST: A visual device must express a specific observation, surprising connection, significant contrast, or earned emotional payoff. A scene about a train/book crossover can be a cinematic train emerging from an open novel; a media-share comparison should let real percentages dominate. Decorative piles of the week's many media objects are not an idea.",
     "The old coordinate elements are still REQUIRED for backwards compatibility and reliable fallback, but in cinematic/data/typography modes the renderer prioritizes the new direction plan. Give exactly ONE title and ONE body element with readable boxes, include accurate verified stat/beat/media references only when they improve the point. Avoid crowding. Never overlap title/body boxes.",
@@ -56,6 +64,7 @@ export function wrappedVisualDirectorBrief(story: WrappedStory, onlySceneIds?: s
 
 export function applyWrappedVisualCompositions(
   story: WrappedStory, raw: unknown, maxCompositions = story.scenes.length,
+  timeframe: StoryPeriod = "week",
 ): WrappedStory {
   const reply = raw as DirectorReply;
   if (!reply || !Array.isArray(reply.compositions) || reply.compositions.length > 14) {
@@ -63,13 +72,26 @@ export function applyWrappedVisualCompositions(
   }
   const seen = new Set<string>();
   const maps = new Map<string, DynamicSceneComposition>();
+  let dataCount = 0;
   for (const proposal of reply.compositions) {
     if (!proposal || typeof proposal.sceneId !== "string" || seen.has(proposal.sceneId)) continue;
     seen.add(proposal.sceneId);
     const scene = story.scenes.find(s => s.id === proposal.sceneId);
     if (!scene || maps.size >= maxCompositions) continue;
     try {
-      maps.set(proposal.sceneId, normalizeDynamicScene(proposal.composition, scene));
+      const composition = normalizeDynamicScene(proposal.composition, scene);
+      const dataLike = composition.direction?.presentation === "data" ||
+        composition.elements.some(element => element.type === "stat");
+      if (dataLike) {
+        if (!isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
+            !scene.bars?.length || dataCount >= MAX_DATA_SLIDES[timeframe]) {
+          // A visual-only reroll may not turn ordinary prose into a new
+          // infographic or bypass the narrative's evidence/quantity budget.
+          continue;
+        }
+        dataCount++;
+      }
+      maps.set(proposal.sceneId, composition);
     } catch (error) {
       // One invalid slide does not poison the editorial story or other slides.
       console.warn("[wrapped-visuals] Skipping invalid AI composition:", proposal.sceneId, error);
@@ -84,8 +106,9 @@ export async function generateWrappedVisualCompositions(args: {
   story: WrappedStory;
   model: string;
   apiKey: string;
+  timeframe?: StoryPeriod;
 }): Promise<WrappedStory> {
-  const { story, model, apiKey } = args;
+  const { story, model, apiKey, timeframe = "week" } = args;
   const request = async (userPrompt: string): Promise<unknown> => {
     const result = await apiFetch("/api/nano-gpt/chat/completions", {
       method: "POST",
@@ -114,7 +137,8 @@ export async function generateWrappedVisualCompositions(args: {
   };
   let resultStory = story;
   try {
-    resultStory = applyWrappedVisualCompositions(story, await request(wrappedVisualDirectorBrief(story)));
+    resultStory = applyWrappedVisualCompositions(story, await request(wrappedVisualDirectorBrief(story, undefined, timeframe)),
+      story.scenes.length, timeframe);
   } catch (error) {
     console.warn("[wrapped-visuals] Primary design pass failed; retrying only missing scenes:", error);
   }
@@ -124,10 +148,11 @@ export async function generateWrappedVisualCompositions(args: {
   const missing = resultStory.scenes.filter(scene => !scene.composition).map(scene => scene.id);
   if (missing.length) {
     try {
-      const repairPrompt = wrappedVisualDirectorBrief(resultStory, missing) +
+      const repairPrompt = wrappedVisualDirectorBrief(resultStory, missing, timeframe) +
         "\n\nTARGETED REPAIR: the prior visual design was absent or invalid for these scene IDs: " +
         missing.join(", ") + ". Return exactly these scenes. Use generous title and body boxes and strong ideas.";
-      resultStory = applyWrappedVisualCompositions(resultStory, await request(repairPrompt));
+      resultStory = applyWrappedVisualCompositions(resultStory, await request(repairPrompt),
+        resultStory.scenes.length, timeframe);
     } catch (error) {
       console.warn("[wrapped-visuals] Some scenes retain reliable preset layouts:", error);
     }
