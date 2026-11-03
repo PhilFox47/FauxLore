@@ -172,8 +172,12 @@ export async function generateAiWrapped(args: {
     const data = await result.json();
     const answer = data.choices?.[0]?.message?.content;
     if (typeof answer !== 'string') throw new Error('Wrapped Director returned no story');
-    try { return normalizeWrappedStory(parseJson(answer), evidence, media); }
-    catch (err: any) { lastFailure = err?.message || 'Invalid story'; }
+    try {
+      const story = normalizeWrappedStory(parseJson(answer), evidence, media);
+      // A second, independent creative call composes only selected visual
+      // highlights. Any failure falls back to the already valid story layouts.
+      return await generateWrappedVisualCompositions({ story, apiKey, model });
+    } catch (err: any) { lastFailure = err?.message || 'Invalid story'; }
   }
   throw new Error('Wrapped Director failed validation twice: ' + lastFailure);
 }
