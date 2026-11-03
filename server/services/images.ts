@@ -159,7 +159,7 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
     return JSON.parse(text);
   }
 
-  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = "", frame: ImageFrame = "square", referenceDataUrl: string | null = null): Promise<string> {
+  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = "", frame: ImageFrame = "square", referenceDataUrl: string | null = null, fallbackPrompt: string | null = null): Promise<string> {
     const cfg = readImageConfig();
     const negativePrompt = [cfg.negative, extraNegative].filter(Boolean).join(", ");
     const framedPrompt = withImageFrame(prompt, frame);
@@ -173,13 +173,14 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
         : cliProxyImagePrompt(framedPrompt, negativePrompt);
       const size = cliProxyImageSize(requestedSize);
 
-      async function requestCliImage(edit: boolean, attempt: 1 | 2): Promise<string> {
+      async function requestCliImage(edit: boolean, attempt: 1 | 2, overriddenPrompt?: string): Promise<string> {
         const route = edit ? "/images/edits" : "/images/generations";
+        const effectivePrompt = overriddenPrompt || finalPrompt;
         const body: Record<string, unknown> = edit
-          ? cliProxyImageEditBody(cfg.model, finalPrompt, size, referenceDataUrl || "")
-          : { model: cfg.model, prompt: finalPrompt, size, n: 1, response_format: "b64_json" };
+          ? cliProxyImageEditBody(cfg.model, effectivePrompt, size, referenceDataUrl || "")
+          : { model: cfg.model, prompt: effectivePrompt, size, n: 1, response_format: "b64_json" };
         const callId = nextCallId();
-        const shape = { callId, model: cfg.model, scope: "images", attempt, promptChars: finalPrompt.length };
+        const shape = { callId, model: cfg.model, scope: "images", attempt, promptChars: effectivePrompt.length };
         const startedAt = Date.now();
         recordAiCallStart(shape);
         // NEVER put embedded reference-image bytes into diagnostics or logs.
@@ -233,7 +234,13 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
           const status = Number(e?.httpStatus || 0);
           if (!imageEditSupportsTextFallback(status)) throw e;
           console.warn(`[images] CLIProxyAPI edit unavailable (HTTP ${status}); using text-only enrage fallback.`);
-          return requestCliImage(false, 2);
+          // An unsupported edit must NOT leave "the supplied image" in the
+          // generation-only prompt: there is no reference on that request.
+          const textOnly = fallbackPrompt
+            ? gptImage25DeliveryPrompt(withImageFrame(fallbackPrompt, frame),
+                frame === "square" ? "loot" : "boss", cfg.customNegative)
+            : finalPrompt;
+          return requestCliImage(false, 2, textOnly);
         }
       }
       if (referenceDataUrl) {
@@ -352,6 +359,7 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
       }
 
       let referenceDataUrl: string | null = null;
+      let textOnlyEnragePrompt: string | null = null;
       if (boss.enraged) {
         const cfg = readImageConfig();
         if (cfg.useCli && cfg.gptImage25) {
@@ -360,18 +368,20 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
         if (!referenceDataUrl) {
           console.warn(`[images] Enrage reference unavailable or unsupported for ${bossId}; using source-faithful text-only generation.`);
         }
-        imagePrompt = buildEnragedBossImagePrompt({
+        const identity = {
           name: boss.name,
           title: boss.title,
           description: boss.description,
           sourceTitle: mediaTitle,
           sourceType: mediaType,
           imagePrompt,
-        }, !!referenceDataUrl);
+        };
+        textOnlyEnragePrompt = buildEnragedBossImagePrompt(identity, false);
+        imagePrompt = referenceDataUrl ? buildEnragedBossImagePrompt(identity, true) : textOnlyEnragePrompt;
       }
 
       const imageUrl = await internalGenerateImageWithNanoGpt(
-        aiConfig.apiKey, imagePrompt, BOSS_NEGATIVE_EXTRA, "landscape-3:2", referenceDataUrl,
+        aiConfig.apiKey, imagePrompt, BOSS_NEGATIVE_EXTRA, "landscape-3:2", referenceDataUrl, textOnlyEnragePrompt,
       );
       const saved = db.prepare(
         "UPDATE world_bosses SET imageUrl = ?, imageStatus = 'done', imageGenerationToken = NULL WHERE id = ? AND userId = ? AND imageGenerationToken = ?",
