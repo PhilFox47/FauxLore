@@ -34,7 +34,9 @@ test("visual director receives saved copy and ONLY verified media and numerical 
   assert.match(brief, /"index":0/);
   assert.match(brief, /hasVerifiedQuote/);
   assert.match(brief, /No invented achievements/);
-  assert.match(brief, /Choose 2 or 3 DIFFERENT scenes/);
+  assert.match(brief, /COMPOSE EVERY SCENE/);
+  assert.match(brief, /canGenerateOriginalSceneArt/);
+  assert.match(brief, /one artistic device that tells the reader WHY/i);
   assert.doesNotMatch(brief, /https:\/\/example.com/);
 });
 
@@ -62,7 +64,25 @@ test("bad scene data is discarded, while valid siblings survive", () => {
   assert.equal(output.scenes[2].composition, undefined);
 });
 
-test("no one can add more than three AI-composed scenes to a Wrapped", () => {
-  const input = { compositions: Array.from({ length: 9 }, (_, n) => ({ sceneId: String(n), composition })) };
+test("director allows all scenes but rejects proposals beyond the global 14-scene cap", () => {
+  const input = { compositions: Array.from({ length: 15 }, (_, n) => ({ sceneId: String(n), composition })) };
   assert.throws(() => applyWrappedVisualCompositions(story, input));
+});
+
+test("director accepts meaningful original art concepts on eligible interior scenes", () => {
+  const illustrated = {
+    version: 1,
+    backdrop: "cinematic",
+    artConcept: "A lone clock suspended above a silent racetrack at dawn",
+    elements: [
+      element("hero", "title", 6, 8, 70, 25),
+      element("copy", "body", 6, 61, 56, 31),
+      element("art", "scene-art", 62, 8, 34, 85),
+    ],
+  };
+  const result = applyWrappedVisualCompositions(story, {
+    compositions: [{ sceneId: "wrapped-1", composition: illustrated }],
+  });
+  assert.match(result.scenes[1].composition?.artConcept || "", /silent racetrack/);
+  assert.equal(result.scenes[1].composition?.elements[2].type, "scene-art");
 });
