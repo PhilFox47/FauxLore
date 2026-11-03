@@ -153,7 +153,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
       body: JSON.stringify(body),
     } as any);
     const text = await res.text();
-    recordPayload(callId, "images", { reply: text });
+    recordPayload(callId, "images", { reply: redactVisualSelfForDiagnostics(text) });
     recordAiCall({
       ...shape,
       durationMs: Date.now() - startedAt,
@@ -161,7 +161,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
       error: !res.ok ? `HTTP ${res.status}` : undefined,
     });
 
-    if (!res.ok) throw new Error(`${url} -> ${res.status} ${text}`);
+    if (!res.ok) throw new Error(`${url} -> ${res.status} ${redactVisualSelfForDiagnostics(text)}`);
     return JSON.parse(text);
   }
 
@@ -202,7 +202,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
             body: JSON.stringify(body),
           } as any);
           if (!response.ok) {
-            const detail = (await response.text()).slice(0, 500);
+            const detail = redactVisualSelfForDiagnostics((await response.text()).slice(0, 500));
             throw Object.assign(new Error(`CLIProxyAPI image ${edit ? "edit" : "generation"} HTTP ${response.status}: ${detail}`), { httpStatus: response.status });
           }
           const result: any = await response.json();
