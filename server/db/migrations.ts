@@ -12,7 +12,7 @@ import { bossTarget, bossUnit } from "../lib/bossTargets";
 export function runMigrations(db: Db) {
   // Wrapped cover artwork is independent of story JSON, and a failed render
   // must never invalidate or overwrite the saved editorial issue.
-  for (const col of ["coverArtUrl", "coverArtStatus", "coverArtRequestId"]) {
+  for (const col of ["coverArtUrl", "coverArtStatus", "coverArtRequestId", "coverArtTimeZone"]) {
     try { db.prepare("ALTER TABLE wrapped_stories ADD COLUMN " + col + " TEXT").run(); } catch {}
   }
   // Jobs are in-memory. After a restart a pending job can be retried manually.
