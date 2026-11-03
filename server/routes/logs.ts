@@ -4,7 +4,7 @@ import type { ServerContext } from "../context";
 import { pickMangaCoverUrl, type MangaCoverIndex } from "../integrations/mangadexCovers";
 
 export function registerLogRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser, activity, autoTag } = ctx;
+  const { db, getAuthUser, activity, autoTag, queueBossVictoryArtwork } = ctx;
 
   /**
    * Keeps a manga's cover matched to reading progress as chapters are logged,
