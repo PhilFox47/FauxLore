@@ -50,10 +50,9 @@ export function buildWrappedSceneArtPrompt(
 }
 
 /**
- * Initial reveal is gated until the FIRST title and chapter illustrations
- * finish, so the user never sees a transient media-cover placeholder.
- * Regenerating artwork intentionally keeps the previous successful assets
- * visible during the new job.
+ * Reveal is gated until the title and chapter illustrations finish, so the
+ * user never sees a transient placeholder or a newly restyled scene with an
+ * older mismatched image.
  */
 export function shouldHoldWrappedForArtwork(issue: {
   scenes: StoryScene[];
