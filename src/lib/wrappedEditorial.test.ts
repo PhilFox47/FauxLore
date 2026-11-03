@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   MAX_DATA_SLIDES, isSignificantFormatShift, isSignificantTasteGap, isStrongSceneData,
+  isStrongVerifiedAnalytic, normalizeVerifiedAnalytic, normalizeEditorialJob,
   evidenceStoryFunctions, requiredMonthlyPhases,
 } from './wrappedEditorial';
 import { buildWrappedEvidence } from './wrappedEvidence';
@@ -188,4 +189,76 @@ test('a routine 33-to-49 percent gaming shift never becomes a Wrapped outlier ca
   assert.equal(evidence.facts.some(f => f.id === 'outlier-Game'), false);
   assert.equal(evidence.facts.some(f => f.id === 'outlier-Book'), false);
   assert.doesNotMatch(evidence.editorialCalibration, /REAL FORMAT SHIFTS/);
+});
+
+
+test('four analytical treatments have strict, distinct, source-bounded eligibility', () => {
+  const analytic = (kind: 'shift' | 'duel' | 'arc' | 'dominance', values: number[]) =>
+    normalizeVerifiedAnalytic({ kind, unit: 'percent',
+      points: values.map((value, i) => ({ label: 'Metric ' + i, value, note: 'Verified' })),
+    });
+  assert.equal(isStrongVerifiedAnalytic(analytic('shift', [2, 26])), true);
+  assert.equal(isStrongVerifiedAnalytic(analytic('shift', [32.7, 48.7])), false);
+  assert.equal(isStrongVerifiedAnalytic(analytic('duel', [100, 70])), true);
+  assert.equal(isStrongVerifiedAnalytic(analytic('duel', [90, 80])), false);
+  assert.equal(isStrongVerifiedAnalytic(analytic('dominance', [67, 33])), true);
+  assert.equal(isStrongVerifiedAnalytic(analytic('dominance', [45, 55])), false);
+  assert.equal(isStrongVerifiedAnalytic(analytic('arc', [18, 57, 25])), true);
+  assert.equal(isStrongVerifiedAnalytic(analytic('arc', [31, 36, 33])), false);
+  assert.throws(() => normalizeVerifiedAnalytic({ kind: 'arc', unit: 'percent',
+    points: [{ label: 'First', value: 40, note: '' }] }), /point count/);
+  assert.throws(() => normalizeVerifiedAnalytic({ kind: 'shift', unit: 'percent',
+    points: [{ label: 'A', value: 20, note: '' },
+      { label: 'B', value: 1000, note: '' }] }), /Invalid analytic point/);
+});
+
+test('director gets app-sanitized analytics even if AI fabricates values in its story JSON', () => {
+  const evidence = monthEvidence();
+  const actual = { kind: 'dominance' as const, unit: 'percent' as const,
+    points: [
+      { label: 'Long Novel', value: 80, note: 'Actual share' },
+      { label: 'All other works', value: 20, note: 'Other share' },
+    ],
+  };
+  evidence.facts.push({ id: 'focus-0', kind: 'insight', title: 'Verified focus',
+    evidence: 'Long Novel accounts for 80% of recorded progress.', analytic: actual });
+  const sceneWithFakeNumbers = {
+    ...scene('insight', 'A single powerful focus', ['focus-0', 'month-early'],
+      'infographic', 'none'), editorialJob: 'data-reveal',
+    analytic: { kind: 'dominance', unit: 'percent',
+      points: [{ label: 'Invented', value: 99, note: '' },
+        { label: 'Other', value: 1, note: '' }] },
+  };
+  const output = normalizeWrappedStory(story(
+    sceneWithFakeNumbers, scene('insight', 'A different month section', ['month-middle']),
+    scene('insight', 'Final chapter', ['month-late']),
+  ), evidence, media);
+  assert.deepEqual(output.scenes[1].analytic, actual);
+  assert.equal(output.scenes[1].editorialJob, 'data-reveal');
+  assert.equal(normalizeEditorialJob('random-html', 'insight'), 'pattern');
+  assert.equal(normalizeEditorialJob('verdict', 'opening'), 'hook');
+});
+
+test('month clusters include real media, locations and direct reflections by phase', () => {
+  const logs = [
+    { ...log('early', 'book', '2026-10-02', 100),
+      thoughts: 'This mystery surprised me.', location: 'Train' },
+    { ...log('middle', 'game', '2026-10-15', 8),
+      location: 'Home' },
+    { ...log('late', 'book', '2026-10-28', 200),
+      thoughts: 'The ending was tense.', location: 'Hotel' },
+  ];
+  const data = buildWrappedEvidence({
+    timeframe: 'month', timeId: '2026-10',
+    logs, history: logs, media,
+  });
+  const early = data.monthlyCoverage?.clusters?.find(c => c.phase === 'early');
+  const middle = data.monthlyCoverage?.clusters?.find(c => c.phase === 'middle');
+  const late = data.monthlyCoverage?.clusters?.find(c => c.phase === 'late');
+  assert.equal(early?.activeDays, 1);
+  assert.equal(early?.leadingWorks[0]?.title, 'The Long Novel');
+  assert.equal(early?.journalHighlights[0]?.quote, 'This mystery surprised me.');
+  assert.deepEqual(middle?.places, ['Home']);
+  assert.deepEqual(late?.places, ['Hotel']);
+  assert.equal(late?.journalHighlights[0]?.quote, 'The ending was tense.');
 });
