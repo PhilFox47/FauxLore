@@ -170,3 +170,22 @@ test('monthly phase requirements skip genuinely empty or tiny calendar slices', 
   assert.deepEqual(requiredMonthlyPhases({ early: .05, middle: .15, late: .8 }), ['middle', 'late']);
   assert.deepEqual(requiredMonthlyPhases({ early: 0, middle: 0, late: 1 }), ['late']);
 });
+
+test('a routine 33-to-49 percent gaming shift never becomes a Wrapped outlier card', () => {
+  const earlierMonths = ['2026-04-13', '2026-05-13', '2026-06-13', '2026-07-13', '2026-08-13'];
+  const history = earlierMonths.flatMap((date, i) => [
+    log('past-book-' + i, 'book', date, 67),
+    log('past-game-' + i, 'game', date, 2.75),
+  ]);
+  const current = [
+    log('september-book', 'book', '2026-09-12', 51),
+    log('september-game', 'game', '2026-09-22', 49 / 12),
+  ];
+  const evidence = buildWrappedEvidence({
+    timeframe: 'month', timeId: '2026-09', logs: current,
+    history: [...history, ...current], media,
+  });
+  assert.equal(evidence.facts.some(f => f.id === 'outlier-Game'), false);
+  assert.equal(evidence.facts.some(f => f.id === 'outlier-Book'), false);
+  assert.doesNotMatch(evidence.editorialCalibration, /REAL FORMAT SHIFTS/);
+});
