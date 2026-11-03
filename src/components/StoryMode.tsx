@@ -7,6 +7,8 @@ import {
 import { AchievementCard } from './AchievementCard';
 import { DynamicStorySlide } from './DynamicStorySlide';
 import { EditorialStorySlide } from './EditorialStorySlide';
+import { WrappedClosingTableau } from './WrappedClosingTableau';
+import { isWrappedInfographicScene } from '../lib/wrappedSceneArt';
 import { safeDynamicScene } from '../lib/dynamicScenes';
 import type { GeneratedAchievement } from '../lib/generatedAchievements';
 import type { StoryScene, StoryLayout, StoryPalette, StoryVisual, StoryMedia } from '../lib/storyDiscovery';
@@ -149,6 +151,23 @@ function StorySlide({ scene, number, total, onDeepDive, coverArtUrl, sceneArtUrl
   sceneArtUrl?: string;
 }) {
   const dynamic = scene.composition ? safeDynamicScene(scene.composition, scene) : null;
+  // A concluding tableau is an image-led epilogue, never a row of media cards.
+  // All other narrative scenes also get one full-bleed original background,
+  // even if an older Visual Director chose typography or a split cover layout.
+  if (scene.kind === 'closing') {
+    return <WrappedClosingTableau scene={scene} imageUrl={sceneArtUrl}
+      number={number} total={total} onDeepDive={onDeepDive} />;
+  }
+  if (!isWrappedInfographicScene(scene)) {
+    const direction = dynamic?.direction || {
+      presentation: 'cinematic' as const, textSide: 'left' as const,
+      textPosition: 'middle' as const, imageFocus: 'right' as const,
+    };
+    return <EditorialStorySlide scene={scene}
+      direction={{ ...direction, presentation: 'cinematic' }}
+      imageUrl={scene.kind === 'opening' ? coverArtUrl : sceneArtUrl}
+      number={number} total={total} onDeepDive={onDeepDive} />;
+  }
   if (dynamic) {
     return <DynamicStorySlide scene={scene} composition={dynamic} number={number} total={total}
       coverArtUrl={coverArtUrl} sceneArtUrl={sceneArtUrl} onDeepDive={onDeepDive} />;
