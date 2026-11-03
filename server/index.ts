@@ -21,6 +21,7 @@ import { reportBrowserStatus } from "./integrations/gamestorylog";
 import { createBackupManager } from "./services/backup";
 import { createImageService } from "./services/images";
 import { createWrappedCoverService } from "./services/wrappedCovers";
+import { createWrappedCodexStyleResolver } from "./lib/wrappedCodexStyle";
 import { createCoverCache } from "./services/coverCache";
 import { createWorldBossService } from "./services/worldBoss";
 import { createCodexService } from "./services/codex";
@@ -149,6 +150,7 @@ async function startServer() {
     db,
     generateImage: generateWrappedCoverImage,
     generateSceneImage: generateWrappedSceneImage,
+    getCodexStyle: createWrappedCodexStyleResolver(db, codex),
     canSpendTokens: userId => !activity.isFrozen(userId),
   });
   const coverCache = createCoverCache({ coversDir });
