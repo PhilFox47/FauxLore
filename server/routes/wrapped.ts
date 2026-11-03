@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Express } from "express";
 import type { ServerContext } from "../context";
+import { normalizeDynamicScene } from "../../src/lib/dynamicScenes";
 
 const validPeriod = (timeframe: unknown, timeId: unknown): timeframe is "week" | "month" | "year" =>
   (timeframe === "week" && typeof timeId === "string" && /^\d{4}-W(?:0[1-9]|[1-4]\d|5[0-3])$/.test(timeId)) ||
@@ -89,7 +90,7 @@ export function validateStory(raw: any): any {
       throw new Error("Invalid artwork collection");
     }
     const cleanArtworks = artworks?.map(cleanArtwork);
-    return {
+    const saved: any = {
       id, kind: scene.kind, eyebrow, title, body, evidenceIds: scene.evidenceIds,
       ...(string(scene.detail, 1200) ? { detail: scene.detail.trim() } : {}),
       ...(string(scene.quote, 3000) ? { quote: scene.quote.trim() } : {}),
@@ -100,6 +101,17 @@ export function validateStory(raw: any): any {
       ...(design ? { design } : {}),
       ...(cleanArtworks?.length ? { artworks: cleanArtworks } : {}),
     };
+    if (scene.composition !== undefined) {
+      try {
+        // Validate again on the SERVER against already sanitized factual data.
+        // Never trust a browser's claimed stat values or media reference URLs.
+        saved.composition = normalizeDynamicScene(scene.composition, saved);
+      } catch {
+        // The story is valid without generated visuals: reject only the
+        // optional composition, retaining a fully functional legacy slide.
+      }
+    }
+    return saved;
   });
   return { version: 2, title: raw.title.trim(), dek: raw.dek.trim(), scenes };
 }
