@@ -360,11 +360,15 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
 
       if (item.status === 'Completed') {
         try {
+          const activeBosses = db.prepare(
+            "SELECT id FROM world_bosses WHERE userId = ? AND mediaId = ? AND status = 'Active'",
+          ).all(userId, item.id) as { id: string }[];
           db.prepare(`
-            UPDATE world_bosses 
-            SET status = 'Defeated', currentProgress = targetProgress
+            UPDATE world_bosses
+            SET status = 'Defeated', currentProgress = targetProgress, updatedAt = ?
             WHERE userId = ? AND mediaId = ? AND status = 'Active'
-          `).run(userId, item.id);
+          `).run(new Date().toISOString(), userId, item.id);
+          for (const boss of activeBosses) queueBossVictoryArtwork(userId as string, boss.id);
         } catch (e) { console.error("Could not defeat boss on media completion", e); }
       } else if (item.status === 'Dropped') {
         try {
