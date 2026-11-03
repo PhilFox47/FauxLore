@@ -69,13 +69,13 @@ export function gptImage25DeliveryPrompt(prompt: string, kind: "loot" | "boss" |
     : kind === "wrapped-scene" ? [
         "Illustrate ONE specific interior scene from a personal Wrapped story, not a title page. Express the supplied chapter premise as a single strong visual metaphor or environment, grounded in the chapter's actual story.",
         "Do NOT try to draw all logged media titles, a collage of book jackets, a franchise lineup or a layout of separate panels. Prefer one memorable focal subject and atmosphere with natural negative space.",
-        "Keep visual content away from the center-left enough for the application to overlay legible copy, but do not bake in any typography, numbers, logos or UI. No fabricated personal achievements or story events.",
+        "Follow the explicit EDITORIAL IMAGE FRAMING in the supplied prompt EXACTLY: the quiet text side and subject focal side may vary. Do not revert to a generic left-text/right-image layout. No baked-in typography, numbers, logos or UI; no fabricated personal achievements.",
       ]
     : kind === "wrapped" ? [
         "This is singular, high-impact editorial KEY ART, not an illustrated inventory of the media consumed. Find ONE central visual thesis, ONE unmistakable hero motif and ONE coherent moment.",
         "Prefer a bold, emotionally resonant metaphor to comprehensive coverage. At most ONE source media work may influence the picture, and even that need not appear literally. Do NOT add other recognizable franchises to fill space.",
         "Absolutely no character lineup, crossover montage, multiple worlds, mini-posters, visual checklist, split panels, or scattered easter eggs. Keep secondary visual elements subordinate to the main motif.",
-        "Keep the left portion darker and uncluttered so the app can overlay its own title and subtitle. Do not invent personal achievements, story events or experiences. Add NO baked-in titles, typography, logos, watermarks or interface.",
+        "Follow the requested EDITORIAL IMAGE FRAMING rather than assuming the title always appears on the left. Leave the chosen typography side quiet and keep the focal subject on its requested opposite side. Do not invent personal achievements, story events or experiences. Add NO baked-in titles, typography, logos, watermarks or interface.",
       ]
     : [
         "Preserve the canonical character or creature's recognizable anatomy, armor, silhouette, palette and signature equipment. Level changes the drama of the scene, not the actual species or character design.",
