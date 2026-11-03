@@ -114,3 +114,67 @@ test('server rejects data-heavy new stories even if the client claims valid comp
   issue.scenes.splice(3, 0, chart('taste-c'));
   assert.throws(() => validateStory(issue, 'month'), /Infographic limit exceeded/);
 });
+
+
+test('server persists approved analytic datasets and strips arbitrary AI markup from them', () => {
+  const issue: any = story();
+  issue.scenes[1].kind = 'insight';
+  issue.scenes[1].editorialJob = 'data-reveal';
+  issue.scenes[1].design = design('infographic', 'none');
+  issue.scenes[1].analytic = {
+    kind: 'dominance', unit: 'percent', clientScript: '<script>alert(1)</script>',
+    points: [
+      { label: 'An important book', value: 73, note: 'Verified MP share', html: '<b>unsafe</b>' },
+      { label: 'All others', value: 27, note: 'Remainder' },
+    ],
+  };
+  issue.scenes[1].composition = {
+    version: 1, backdrop: 'minimal',
+    direction: { presentation: 'data', textSide: 'left', textPosition: 'middle',
+      imageFocus: 'right', dataTreatment: 'dominance', javascript: 'alert(1)' },
+    elements: [
+      { id: 'title', type: 'title', box: { x: 5, y: 10, w: 60, h: 24 },
+        size: 'lg', tone: 'primary', motion: 'rise', delay: .1 },
+      { id: 'body', type: 'body', box: { x: 5, y: 60, w: 60, h: 25 },
+        size: 'md', tone: 'secondary', motion: 'fade', delay: .3 },
+    ],
+  };
+  const result = validateStory(issue, 'week');
+  assert.equal(result.scenes[1].analytic.kind, 'dominance');
+  assert.equal(result.scenes[1].editorialJob, 'data-reveal');
+  assert.equal(result.scenes[1].composition.direction.dataTreatment, 'dominance');
+  assert.equal(JSON.stringify(result).includes('clientScript'), false);
+  assert.equal(JSON.stringify(result).includes('javascript'), false);
+  assert.equal(JSON.stringify(result).includes('<script>'), false);
+  assert.equal(JSON.stringify(result).includes('<b>'), false);
+
+  issue.scenes[1].analytic.points[0].value = 200;
+  assert.throws(() => validateStory(issue, 'week'), /Invalid analytic point/);
+});
+
+test('server cannot save a data stage under an unrelated analytic treatment', () => {
+  const issue: any = story();
+  issue.scenes[1].kind = 'insight';
+  issue.scenes[1].editorialJob = 'data-reveal';
+  issue.scenes[1].design = design('infographic');
+  issue.scenes[1].analytic = {
+    kind: 'dominance', unit: 'percent', points: [
+      { label: 'A book', value: 75, note: '' },
+      { label: 'Others', value: 25, note: '' },
+    ],
+  };
+  issue.scenes[1].composition = {
+    version: 1, backdrop: 'minimal',
+    direction: { presentation: 'data', textSide: 'left', textPosition: 'middle',
+      imageFocus: 'right', dataTreatment: 'duel' },
+    elements: [
+      { id: 'title', type: 'title', box: { x: 5, y: 10, w: 60, h: 24 },
+        size: 'lg', tone: 'primary', motion: 'rise', delay: .1 },
+      { id: 'body', type: 'body', box: { x: 5, y: 60, w: 60, h: 25 },
+        size: 'md', tone: 'secondary', motion: 'fade', delay: .3 },
+    ],
+  };
+  const saved = validateStory(issue, 'week');
+  assert.equal(saved.scenes[1].composition, undefined,
+    'The safe fallback drops an invalid composition, never the verified story');
+});
