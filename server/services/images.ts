@@ -10,6 +10,7 @@ import { cliProxyBaseUrl, cliProxyImageSize, cliProxyImagePrompt, cliProxyImageE
 import { imagePromptCraft, resolveImagePromptProfile, gptImage25DeliveryPrompt } from "../lib/imagePromptGuidance";
 import { buildBossStateImagePrompt, bossVisualState, basePortraitForTransition, localImageReferenceDataUrl } from "../lib/bossStateImages";
 import { imageFrameSize, imageFrameMatches, withImageFrame, type ImageFrame } from "../../src/lib/imageFraming";
+import { redactVisualSelfForDiagnostics } from "../../src/lib/visualSelf";
 import { AUTHENTICITY, SHARPNESS, enemyTier, rarityArt } from "../lib/artDirection";
 import { codexArtStyleBlock, type CodexService } from "./codex";
 import { codexTaskContext } from "./codexV3Context";
@@ -137,7 +138,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
     const shape = { callId, model: String(body.model || "?"), scope: "images", attempt, promptChars: prompt.length };
     const startedAt = Date.now();
     recordAiCallStart(shape);
-    recordPayload(callId, "images", { prompt: JSON.stringify(body, null, 2) });
+    recordPayload(callId, "images", { prompt: redactVisualSelfForDiagnostics(JSON.stringify(body, null, 2)) });
 
     const res = await fetch(url, {
       method: "POST",
@@ -190,7 +191,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
         recordAiCallStart(shape);
         // NEVER put embedded reference-image bytes into diagnostics or logs.
         recordPayload(callId, "images", {
-          prompt: JSON.stringify({ endpoint: route, ...body, ...(edit ? { images: "[one local image; bytes redacted]" } : {}) }),
+          prompt: redactVisualSelfForDiagnostics(JSON.stringify({ endpoint: route, ...body, ...(edit ? { images: "[one local image; bytes redacted]" } : {}) })),
         });
         try {
           const response = await fetch(`${baseUrl}${route}`, {
@@ -224,7 +225,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
           recordAiCall({ ...shape, durationMs: Date.now() - startedAt, httpStatus: response.status });
           return `/uploads/ai-images/${fileName}`;
         } catch (e: any) {
-          recordAiCall({ ...shape, durationMs: Date.now() - startedAt, httpStatus: e?.httpStatus, error: e?.message || String(e) });
+          recordAiCall({ ...shape, durationMs: Date.now() - startedAt, httpStatus: e?.httpStatus, error: redactVisualSelfForDiagnostics(e?.message || String(e)) });
           throw e;
         }
       }
