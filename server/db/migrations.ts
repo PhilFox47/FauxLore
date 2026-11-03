@@ -18,6 +18,7 @@ export function runMigrations(db: Db) {
   // Jobs are in-memory. After a restart a pending job can be retried manually.
   try {
     db.prepare("UPDATE wrapped_stories SET coverArtStatus='failed', coverArtRequestId=NULL WHERE coverArtStatus IN ('pending','generating')").run();
+    db.prepare("UPDATE wrapped_stories SET sceneArtStatus='failed', sceneArtRequestId=NULL WHERE sceneArtStatus IN ('pending','generating')").run();
   } catch {}
   // Logging V2: additive, non-destructive. Historical note stays a legacy note, never guessed as a journal.
   try { db.exec("ALTER TABLE logs ADD COLUMN thoughts TEXT"); } catch (e) {}
