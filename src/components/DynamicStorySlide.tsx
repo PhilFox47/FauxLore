@@ -185,7 +185,7 @@ function Entrance({ node, children, reduce, mobile }: {
 }
 
 const priority = (node: DynamicSceneElement) =>
-  node.type === "shape" ? 0 : node.type === "title-art" ? 1 :
+  node.type === "shape" ? 0 : node.type === "title-art" || node.type === "scene-art" ? 1 :
   node.type === "media" ? 2 : node.type === "eyebrow" ? 3 :
   node.type === "title" ? 4 : node.type === "body" ? 5 : 6;
 
@@ -204,8 +204,11 @@ export function DynamicStorySlide({ scene, composition, number, total, coverArtU
 }) {
   const reduce = !!useReducedMotion();
   const theme = themes[scene.design?.palette || "violet"];
-  const foreground = composition.elements.filter(e => e.type !== "shape");
-  const desktop = [...composition.elements].sort((a, b) => priority(a) - priority(b));
+  // The scene's eyebrow already appears in the surrounding presentation
+  // chrome; repeating it inside the AI composition wastes space.
+  const foreground = composition.elements.filter(e => e.type !== "shape" && e.type !== "eyebrow");
+  const desktop = composition.elements.filter(e => e.type !== "eyebrow")
+    .sort((a, b) => priority(a) - priority(b));
   const mobilePriority = (node: DynamicSceneElement) =>
     node.type === "eyebrow" ? 0 : node.type === "title" ? 1 :
     node.type === "scene-art" || node.type === "title-art" || node.type === "media" ? 2 :
