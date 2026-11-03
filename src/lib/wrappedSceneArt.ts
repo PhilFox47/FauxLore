@@ -1,41 +1,29 @@
 import type { StoryScene } from "./storyDiscovery";
 import { imageFramingGuidance } from "./dynamicScenes";
 import { visualSelfImageClause, type VisualSelfProfile } from "./visualSelf";
+import { isDataLayout } from "./wrappedEditorial";
 
 /**
- * Pick up to three story-driven beats for original illustrations. Never turn this
- * into "one image per media title": image generation serves the narrative.
- * Same deterministic selection is used by the Visual Director and server.
+ * All narrative slides get an original full-bleed background. The opening
+ * receives its own title cover job; verified data scenes remain deliberately
+ * clean. This is shared by the Visual Director, queued image jobs and UI.
  */
-export function selectIllustratedScenes<T extends Pick<StoryScene, "id" | "kind" | "title" | "body"> &
-  Partial<Pick<StoryScene, "composition">>>(
-  scenes: T[], maximum = 3,
+export function isWrappedInfographicScene(
+  scene: Pick<StoryScene, "kind" | "design" | "editorialJob" | "composition">,
+): boolean {
+  return scene.editorialJob === "data-reveal" ||
+    isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
+    scene.composition?.direction?.presentation === "data" ||
+    !!scene.composition?.elements.some(element => element.type === "stat");
+}
+
+export function selectIllustratedScenes<T extends Pick<StoryScene,
+  "id" | "kind" | "title" | "body" | "design" | "editorialJob" | "composition">>(
+  scenes: T[], maximum = Number.POSITIVE_INFINITY,
 ): string[] {
   if (maximum <= 0) return [];
-  const available = scenes.slice(1, -1)
-    // Verified comparisons have their own premium visual grammar. Spending
-    // image-generation calls on a stat-first scene usually weakens the point.
-    .filter(scene => scene.kind !== "outlier" && scene.kind !== "taste")
-    .map((scene, index) => {
-    const rank: Record<string, number> = {
-      location: 8, insight: 7, spotlight: 6, return: 6,
-      journal: 5, rhythm: 5, outlier: 4, timeline: 4, taste: 4,
-    };
-    // Prefer vivid narrative beats early in the issue and avoid making the
-    // finale look like yet another unrelated image montage.
-    const score = (rank[scene.kind] || 3) +
-      Math.min(2, (scene.title || "").length / 35) +
-      Math.min(2, (scene.body || "").length / 340);
-    const mode = scene.composition?.direction?.presentation;
-    // Candidate ranking stays stable between the pre-design and post-design
-    // passes. If Terra deliberately chooses data/type instead, skip the paid
-    // image rather than silently choosing a different, unplanned scene.
-    return { id: scene.id, index, score, renderArt: !mode || mode === "cinematic" };
-  });
-  const chosen = available.sort((a, b) => b.score - a.score || a.index - b.index)
-    .slice(0, Math.min(3, maximum)).filter(item => item.renderArt)
-    .sort((a, b) => a.index - b.index);
-  return chosen.map(({ id }) => id);
+  return scenes.filter(scene => scene.kind !== "opening" &&
+    !isWrappedInfographicScene(scene)).slice(0, maximum).map(scene => scene.id);
 }
 
 /** Only one genuinely featured medium can dictate the image's rendering style.
@@ -46,7 +34,7 @@ export function selectWrappedSceneStyleMediaId(
 ): string | null {
   if (["opening", "closing", "outlier", "taste", "rhythm", "timeline"].includes(scene.kind) ||
       scene.editorialJob === "data-reveal" ||
-      ["data", "typography"].includes(scene.composition?.direction?.presentation || "")) return null;
+      scene.composition?.direction?.presentation === "data") return null;
 
   const candidates = new Map<string, { id: string; title: string }>();
   for (const media of [scene.media, ...(scene.artworks || [])]) {
@@ -108,6 +96,38 @@ export function buildWrappedSceneArtPrompt(
     "Horizontal landscape 3:2. This is a TRUE FULL-BLEED cinematic background behind the chapter's typography, not a small inset image, a framed photograph or a rectangular card. " +
       imageFramingGuidance(scene.composition?.direction),
     "NO text, logos, printed lettering, statistics, charts, mosaics, screenshots, user-interface elements, split panels, poster walls or watermarks.",
+    visualSelfImageClause(visualSelf),
+  ].filter(Boolean).join("\n\n");
+}
+
+/**
+ * The final story scene is an EPILOGUE, not a screenshot montage or a list of
+ * highlighted works. Use up to three earlier editorial beats only as thematic
+ * context to find a single, memorable final tableau.
+ */
+export function buildWrappedClosingTableauPrompt(
+  issue: { title: string; dek: string; scenes: Array<Pick<StoryScene, "kind" | "title" | "body">> },
+  scene: Pick<StoryScene, "title" | "body" | "composition">,
+  visualSelf?: VisualSelfProfile | null,
+): string {
+  const storyBeats = issue.scenes.filter(s => s.kind !== "opening" && s.kind !== "closing");
+  const selected = storyBeats.length <= 3 ? storyBeats : [
+    storyBeats[0], storyBeats[Math.floor((storyBeats.length - 1) / 2)], storyBeats[storyBeats.length - 1],
+  ];
+  const idea = scene.composition?.artConcept?.trim() || "";
+  return [
+    "Create the ORIGINAL FULL-BLEED FINAL TABLEAU for a personal Wrapped story. This is a visual EPILOGUE: the last, quietly unforgettable image before the curtain falls. Not an album cover, not a cover wall, not a media inventory.",
+    "WHOLE ISSUE: " + issue.title.slice(0, 180) + ". The emotional premise: " + issue.dek.slice(0, 260),
+    "FINAL EDITORIAL VERDICT: " + scene.title.slice(0, 160) + ". " + scene.body.slice(0, 700),
+    selected.length ? "Earlier story beats for thematic understanding ONLY, not separate things to draw: " +
+      selected.map(s => s.title.slice(0, 110)).join("; ") + "." : "",
+    idea ? "EDITORIAL DIRECTOR'S ENDING CONCEPT: " + idea.slice(0, 350) : "",
+    "ONE composed cinematic or illustrative scene, ONE visual metaphor, ONE clear emotional resolution. A single empty railway platform, distant road, quiet horizon, closing door, abandoned chair, fading light, or another NEW motif suggested by THIS actual ending. Choose one, NOT several. Avoid repetitive default train or sunset imagery unless the story truly calls for it.",
+    "Let the final image communicate completion and afterglow rather than a list of everything consumed. No multiple franchise worlds, character lineups, collections of media props, framed posters, book jackets, floating game covers or souvenir cards. Small symbolic echoes are permitted ONLY if they remain subordinate to ONE hero composition.",
+    "Wide 3:2 horizontal background, premium editorial art with generous dark negative space behind the final headline and reflection. " +
+      imageFramingGuidance(scene.composition?.direction),
+    "The UI overlays ALL lettering and the Deep Dive action. Render NO text, written logos, lettering, labels, buttons, statistics, panels, screenshots, borders or watermarks.",
+    "Do not invent the user's real experiences, achievements, plot events, quotes or spoilers. One evocative fictional metaphor is allowed.",
     visualSelfImageClause(visualSelf),
   ].filter(Boolean).join("\n\n");
 }
