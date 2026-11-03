@@ -89,11 +89,24 @@ CLIProxyAPI settings:
 - **Text models:** Use a chat-completions-compatible model returned by CLIProxyAPI
   (e.g. `gpt-6.1-sol`). The creative slot defaults to the analytical slot.
 - **Image model:** Use a supported image model (e.g. `gpt-image-2`).
-  Image generation uses `/v1/images/generations` with `b64_json`; FauxLore
-  saves the decoded image in its existing local uploads directory. Diffusion
-  step counts and CFG do **not** apply. Image sizes map to 1024×1024,
-  1536×1024 or 1024×1536, and negative prompts are phrased as best-effort
-  natural-language constraints.
+  Ordinary image generation uses `/v1/images/generations` with `b64_json`;
+  FauxLore saves the decoded images in its existing uploads directory.
+  **Enraging a boss with an existing local portrait** instead sends that exact
+  original portrait as a private base64 data URL to `/v1/images/edits` when the
+  configured model is GPT Image 2.5. A source-aware enrage prompt preserves the
+  same enemy's identity while changing its action, expression and context.
+  The original portrait URL is retained so manual regenerations use the same
+  reference rather than progressively editing an edited image. Taunt responds
+  immediately; the artwork finishes in the background and the UI polls for it.
+  If there is no usable original image or the edit route is unavailable, FauxLore
+  generates from a dedicated text-only enrage prompt and logs the fallback.
+  Authentication, timeouts and rate limits do not trigger duplicate paid calls.
+  Diffusion steps and CFG do **not** apply; image sizes map to 1024×1024,
+  1536×1024 or 1024×1536.
+
+  Enrage image regression tests: `npm run test:enrage-images`.
+  This only checks local behavior; a live gateway integration test is needed to
+  verify the configured CLIProxyAPI version's edit endpoint.
 
 **Provider isolation:** When CLIProxyAPI is selected, ordinary text, image
 generation, and explicit web-search requests use CLIProxyAPI. Codex research
