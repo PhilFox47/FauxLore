@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Db } from "../context";
 import { selectIllustratedScenes, buildWrappedSceneArtPrompt } from "../../src/lib/wrappedSceneArt";
 import type { StoryScene } from "../../src/lib/storyDiscovery";
+import { imageFramingGuidance, type EditorialDirection } from "../../src/lib/dynamicScenes";
 import { visualSelfImageClause, type VisualSelfProfile } from "../../src/lib/visualSelf";
 
 export type WrappedTimeframe = "week" | "month" | "year";
@@ -14,6 +15,7 @@ export type WrappedCoverStory = {
     title: string;
     evidenceIds?: string[];
     design?: { palette?: string };
+    composition?: { artConcept?: string; direction?: EditorialDirection };
     media?: { id?: string };
     artworks?: Array<{ id?: string }>;
   }>;
@@ -129,7 +131,9 @@ export function buildWrappedCoverPrompt(
     (!primary || scene.media?.id === primary.id ||
       scene.artworks?.some(art => art.id === primary.id)),
   );
-  const palette = palettes[story.scenes[0]?.design?.palette || ""] || palettes.violet;
+  const opening = story.scenes[0];
+  const palette = palettes[opening?.design?.palette || ""] || palettes.violet;
+  const visualIdea = compact(opening?.composition?.artConcept, 230);
   const mediaInfluence = primary
     ? "OPTIONAL SINGLE MEDIA INFLUENCE: " + compact(primary.title, 140) +
       " (" + compact(primary.type, 40) + "). Use this work's visual language only if it makes the central concept clearer. " +
@@ -143,10 +147,12 @@ export function buildWrappedCoverPrompt(
     narrativeBeat ? "ONE supporting story beat, for thematic understanding (not another object to draw): " +
       compact(narrativeBeat.title, 120) + "." : "",
     mediaInfluence,
+    visualIdea ? "EDITORIAL DIRECTOR'S SPECIFIC IMAGE CONCEPT (priority over generic ideas): " + visualIdea : "",
     "ART DIRECTION: Choose ONE memorable visual metaphor or singular scene that expresses the thesis. Depict ONE clear hero motif (a person, object, creature, or location), ONE purposeful action or situation, and ONE coherent environment. Make a confident choice; simplify rather than accumulate. The idea should be understandable at a glance, evocative and specific to this period.",
     "HARD COMPOSITION RULE: Only ONE focal subject and ONE visual thesis. Do not illustrate each logged title. No lineup of characters from different works, competing subjects, separate worlds, panels, split screens, book-cover grids, game-cover mosaics or decorative easter eggs. Leave out anything that weakens the main image.",
     "Use cinematic " + palette + " art direction, atmospheric lighting, meaningful negative space and convincing depth. Interpret the emotional truth of the supplied thesis, but never fabricate personal achievements, events or spoilers.",
-    "Horizontal landscape 3:2 composition. Keep the LEFT 45 percent of the frame relatively dark and uncluttered for the app's overlaid title. Place the main visual impact mostly on the right, keeping essential forms safely in frame.",
+    "Horizontal landscape 3:2 composition, cinematic full-frame editorial illustration. " +
+      imageFramingGuidance(opening?.composition?.direction),
     "This is illustration ONLY: NO text, titles, labels, logos, watermarks, statistics, UI overlays or borders. FauxLore renders all real copy separately.",
     visualSelfImageClause(visualSelf),
   ].filter(Boolean).join("\n\n");
