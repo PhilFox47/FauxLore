@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { normalizeDynamicScene } from "../../src/lib/dynamicScenes";
+import { MAX_DATA_SLIDES, isDataLayout } from "../../src/lib/wrappedEditorial";
+import type { StoryPeriod } from "../../src/lib/storyDiscovery";
 
 const validPeriod = (timeframe: unknown, timeId: unknown): timeframe is "week" | "month" | "year" =>
   (timeframe === "week" && typeof timeId === "string" && /^\d{4}-W(?:0[1-9]|[1-4]\d|5[0-3])$/.test(timeId)) ||
@@ -56,7 +58,7 @@ function cleanArtwork(value: any): any {
     ...(url ? { cover: url } : {}) };
 }
 
-export function validateStory(raw: any): any {
+export function validateStory(raw: any, timeframe?: StoryPeriod): any {
   if (!isObject(raw) || raw.version !== 2 || !string(raw.title, 180) || !string(raw.dek, 500) ||
     !Array.isArray(raw.scenes) || raw.scenes.length < 3 || raw.scenes.length > 14) {
     throw new Error("Invalid Wrapped story");
@@ -113,6 +115,16 @@ export function validateStory(raw: any): any {
     }
     return saved;
   });
+  if (timeframe) {
+    const count = scenes.slice(1, -1).filter((scene: any) =>
+      isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
+      scene.composition?.direction?.presentation === "data" ||
+      scene.composition?.elements?.some((item: any) => item.type === "stat")).length;
+    if (count > MAX_DATA_SLIDES[timeframe]) {
+      throw new Error("Infographic limit exceeded for " + timeframe + ": " +
+        count + " data slides, maximum " + MAX_DATA_SLIDES[timeframe]);
+    }
+  }
   return { version: 2, title: raw.title.trim(), dek: raw.dek.trim(), visualRevision: 0, scenes };
 }
 
@@ -277,7 +289,7 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
           reportTimeZone = timeZone;
         } catch { /* Older clients and invalid zones fall back to UTC. */ }
       }
-      const cleaned = validateStory(story);
+      const cleaned = validateStory(story, timeframe);
       const allowedMax = timeframe === "week" ? 6 : timeframe === "month" ? 9 : 14;
       if (cleaned.scenes.length > allowedMax) return res.status(400).json({ error: "Too many scenes" });
       const saved = db.transaction(() => {
