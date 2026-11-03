@@ -37,12 +37,18 @@ function fixture() {
     .run("unlogged", "user", "Unlogged Title", "Book", "[]");
   db.prepare("INSERT INTO media(id,userId,title,mediaType,genres) VALUES(?,?,?,?,?)")
     .run("stranger", "another-user", "Other Person's Game", "Game", "[]");
+  db.prepare("INSERT INTO media(id,userId,title,mediaType,genres) VALUES(?,?,?,?,?)")
+    .run("background", "user", "A Very Busy Side Quest", "Game", "[]");
   db.prepare("INSERT INTO logs(id,userId,mediaId,timestamp,metricType,delta) VALUES(?,?,?,?,?,?)")
     .run("log-one", "user", "logged", "2026-11-03T12:00:00.000Z", "playtimeHours", 2);
   db.prepare("INSERT INTO logs(id,userId,mediaId,timestamp,metricType,delta) VALUES(?,?,?,?,?,?)")
     .run("log-stranger", "another-user", "stranger", "2026-11-03T12:00:00.000Z", "playtimeHours", 8);
   db.prepare("INSERT INTO logs(id,userId,mediaId,timestamp,metricType,delta) VALUES(?,?,?,?,?,?)")
     .run("log-outside", "user", "unlogged", "2026-10-15T12:00:00.000Z", "pagesRead", 30);
+  const insertLog = db.prepare("INSERT INTO logs(id,userId,mediaId,timestamp,metricType,delta) VALUES(?,?,?,?,?,?)");
+  for (let i = 0; i < 12; i++) {
+    insertLog.run("background-" + i, "user", "background", "2026-11-03T13:00:00.000Z", "playtimeHours", 1);
+  }
   return db;
 }
 const settle = () => new Promise<void>(resolve => setImmediate(resolve));
@@ -137,7 +143,8 @@ test("one cover per saved Wrapped; media subjects are restricted to user-owned p
     assert.equal(read(db).coverArtUrl, "/uploads/ai-images/cover-a.png");
     assert.equal(prompts.length, 1);
     assert.match(prompts[0], /Mass Effect/);
-    assert.doesNotMatch(prompts[0], /Unlogged Title|Other Person's Game/);
+    assert.doesNotMatch(prompts[0], /Unlogged Title|Other Person's Game|A Very Busy Side Quest/,
+      "The most-logged side title must not crowd out the story's actual focal media.");
 
     assert.equal(service.queue("user", TIMEFRAME, PERIOD, true), true, "manual cover reroll is separate");
     await settle();
@@ -188,6 +195,40 @@ test("image generation failures never delete the story and are not silently auto
     assert.equal(JSON.parse(read(db).story).scenes.length, 3);
     assert.equal(service.queue("user", TIMEFRAME, PERIOD), false);
     assert.equal(calls, 1);
+  } finally { db.close(); }
+});
+
+test("abstract issue with real logs is allowed; a period with no verified activity cannot fabricate a cover", async () => {
+  const db = fixture();
+  const prompts: string[] = [];
+  try {
+    db.prepare("UPDATE wrapped_stories SET story=? WHERE userId='user'")
+      .run(JSON.stringify({
+        title: "Slow Return", dek: "A period of finding balance",
+        scenes: [
+          { kind: "opening", title: "Return", evidenceIds: [] },
+          { kind: "insight", title: "Patience", evidenceIds: ["reflection-0"] },
+          { kind: "closing", title: "Afterward", evidenceIds: [] },
+        ],
+      }));
+    const service = createWrappedCoverService({
+      db: db as unknown as Db, canSpendTokens: () => true,
+      generateImage: async (_, prompt) => {
+        prompts.push(prompt);
+        return "/uploads/abstract.png";
+      },
+    });
+    assert.equal(service.queue("user", TIMEFRAME, PERIOD), true);
+    await settle();
+    assert.equal(read(db).coverArtStatus, "done");
+    assert.equal(prompts.length, 1);
+    assert.doesNotMatch(prompts[0], /Mass Effect|A Very Busy Side Quest/);
+    db.prepare("DELETE FROM logs WHERE userId='user'").run();
+    db.prepare("UPDATE wrapped_stories SET coverArtStatus=NULL, coverArtUrl=NULL").run();
+    assert.equal(service.queue("user", TIMEFRAME, PERIOD), true);
+    await settle();
+    assert.equal(read(db).coverArtStatus, "failed");
+    assert.equal(prompts.length, 1, "No second image request should run without actual logs");
   } finally { db.close(); }
 });
 
