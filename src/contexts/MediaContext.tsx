@@ -156,6 +156,19 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     refreshData();
   }, [refreshData, user?.id]);
 
+  // Enrage edits run AFTER the taunt response. Poll just the boss endpoint
+  // while an enraged artwork job is pending, without reloading the whole app.
+  useEffect(() => {
+    if (!user || !worldBosses.some(b => b.enraged && (b.imageStatus === 'pending' || b.imageStatus === 'generating'))) return;
+    let cancelled = false;
+    const timer = setInterval(() => {
+      void DatabaseService.getWorldBosses()
+        .then(bosses => { if (!cancelled) setWorldBosses(bosses); })
+        .catch(error => { if (!cancelled) console.error('Could not poll enraged boss artwork:', error); });
+    }, 4000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [user?.id, worldBosses]);
+
   // Auto-tagging runs on the server after a new entry is saved. Poll while any
   // entry is still pending so its genres and tags appear on their own.
   useEffect(() => {
