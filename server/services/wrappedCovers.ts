@@ -122,10 +122,8 @@ export function buildWrappedCoverPrompt(
   const narrativeBeat = story.scenes.find(scene =>
     scene.kind !== "opening" && scene.kind !== "closing" &&
     !!scene.evidenceIds?.length &&
-    (primary ? scene.media?.id === primary.id ||
-      scene.artworks?.some(art => art.id === primary.id) : true),
-  ) || story.scenes.find(scene =>
-    scene.kind !== "opening" && scene.kind !== "closing" && !!scene.evidenceIds?.length,
+    (!primary || scene.media?.id === primary.id ||
+      scene.artworks?.some(art => art.id === primary.id)),
   );
   const palette = palettes[story.scenes[0]?.design?.palette || ""] || palettes.violet;
   const mediaInfluence = primary
@@ -158,7 +156,9 @@ export function createWrappedCoverService({ db, generateImage, canSpendTokens }:
     "SELECT story, coverArtStatus, coverArtRequestId, coverArtTimeZone FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=?",
   );
 
-  function subjectsFor(userId: string, timeframe: WrappedTimeframe, timeId: string, story: WrappedCoverStory, timeZone: string): WrappedCoverSubject[] {
+  function subjectsFor(userId: string, timeframe: WrappedTimeframe, timeId: string, story: WrappedCoverStory, timeZone: string): {
+    subjects: WrappedCoverSubject[]; hasVerifiedActivity: boolean;
+  } {
     const { start, end } = wrappedCoverBounds(timeframe, timeId, timeZone);
     const rows = db.prepare(
       "SELECT l.mediaId AS id, m.title, m.mediaType AS type, m.genres " +
@@ -183,14 +183,16 @@ export function createWrappedCoverService({ db, generateImage, canSpendTokens }:
         const found = counts.get(id);
         if (found) {
           // Prioritize the Wrapped's own central coverage over raw log volume.
-          found.sceneScore += 5 + Math.max(0, 3 - index) + (scene.kind === "spotlight" ? 3 : 0);
+          found.sceneScore += 5 + Math.max(0, 3 - index) +
+            (scene.kind === "spotlight" ? 3 : 0) +
+            (scene.media?.id === id ? 4 : 0);
         }
       }
     });
     const focus = selectWrappedCoverFocus(story, [...counts.values()]);
     // Intentionally return at most ONE named work. An abstract issue need not
     // visually reference a franchise just because several titles were logged.
-    return focus ? [focus] : [];
+    return { subjects: focus ? [focus] : [], hasVerifiedActivity: counts.size > 0 };
   }
 
   async function render(userId: string, timeframe: WrappedTimeframe, timeId: string, token: string): Promise<void> {
@@ -210,10 +212,10 @@ export function createWrappedCoverService({ db, generateImage, canSpendTokens }:
           timeZone = setting?.timezone || null;
         } catch { /* Legacy databases may lack timezone settings. */ }
       }
-      const subjects = subjectsFor(userId, timeframe, timeId, story, timeZone || "UTC");
-      // A broad/abstract Wrapped may have no dominant media reference.
-      // Story and period are still grounded in existing saved activity; never
-      // force unrelated logged titles into the visual merely to fill space.
+      const { subjects, hasVerifiedActivity } = subjectsFor(userId, timeframe, timeId, story, timeZone || "UTC");
+      // No unverified imagery for periods with zero actual progress. But a
+      // valid, abstract issue can intentionally have no named visual anchor.
+      if (!hasVerifiedActivity) throw new Error("No verified progress logs for this Wrapped period.");
       const prompt = buildWrappedCoverPrompt(story, timeframe, timeId, subjects);
       const url = await generateImage(userId, prompt);
       db.prepare(
