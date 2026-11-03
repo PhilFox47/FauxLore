@@ -312,6 +312,45 @@ images per issue, and do not auto-retry on failed providers. They are not
 re-generated at every visit. `npm run test:wrapped` covers their lifecycle,
 restart recovery and stale-image protection.
 
+### Wrapped editorial phase 1: fewer, stronger data scenes and whole-period coverage
+
+Wrapped stories now earn their infographic slots instead of using charts to pad
+visual variety. An **outlier format-share chart** requires a truly large
+personal-baseline difference (at least 25 percentage points, or at least 18
+points with a doubling/halving of share). For example, gaming 32.7% -> 48.7%
+is **not** an infographic by itself; books 2% -> 26% can be. A **taste chart**
+requires a user-vs-critic difference of at least 1/5; smaller differences
+remain available for commentary and reviews. Strong numbers still need an
+actual editorial interpretation. These are minimum measurable gates, not a
+rule that every qualifying statistic must become a chart.
+
+**Maximum data scenes** (hard limits, not targets): weekly 1, monthly 2,
+yearly 3. The Story Director, Visual Director and server-side save/recompose
+validation enforce them. A visual-only reroll cannot invent new chart scenes
+after the editorial story has been checked. No chart is required when the
+evidence doesn't warrant one.
+
+The Story Director also rejects **duplicate editorial jobs**: e.g. one
+slide about a book-heavy month and another about games losing share are
+often two versions of the same format-shift argument. Combine them when
+appropriate, or choose genuinely different insights. Source overlap is not
+itself forbidden: the same title may support different valid observations.
+
+**Monthly coverage is measured, not wished for.** Progress in calendar
+days 1-10, 11-20 and 21-end is separately summarized with verified leading
+works and normalized progress shares. Any phase with at least 12% of
+monthly progress is substantive. When two or more phases qualify, they
+must be cited across at least two separate interior scenes, and each
+qualifying phase must appear somewhere. If the last seven days account
+for less than 60% of monthly progress, they cannot alone support more
+than half the interior scenes. Genuinely late-heavy or sparse months are
+not forced into fake equal coverage. Monthly Deep Dive editorial planning
+also receives the same phase evidence, though its freeform prose cannot be
+structurally validated in exactly the same way as Wrapped story scenes.
+
+Saved legacy stories and visuals remain intact until the story is rerolled.
+Tests: `npm run test:wrapped-editorial` (included in `npm run test:wrapped`).
+
 ### Wrapped: AI-generated title illustrations
 
 Every **Weekly, Monthly and Yearly Wrapped** can have one independent 3:2
