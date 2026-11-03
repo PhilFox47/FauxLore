@@ -37,7 +37,7 @@ import { StoryMode } from '../components/StoryMode';
 import { buildWrappedEvidence } from '../lib/wrappedEvidence';
 import { generateAiWrapped } from '../services/wrappedAi';
 import { generateWrappedVisualCompositions } from '../services/wrappedVisualDirector';
-import { selectIllustratedScenes } from '../lib/wrappedSceneArt';
+import { shouldHoldWrappedForArtwork } from '../lib/wrappedSceneArt';
 import type { WrappedStory } from '../services/wrappedAi';
 import type { AchievementDraft } from '../lib/generatedAchievements';
 import { DatabaseService } from '../services/db';
@@ -437,14 +437,7 @@ export function Recaps() {
 
   const wrappedKey = timeframe + ':' + timeId;
   const wrapped = wrappedStories[wrappedKey] || null;
-  const requiredSceneArtIds = wrapped ? selectIllustratedScenes(wrapped.scenes) : [];
-  // Never flash placeholder covers or partially rendered story artwork. On
-  // explicit redraws keep displaying the PREVIOUS successful image instead.
-  const initialArtworkPending = !!wrapped && (
-    (!wrapped.coverArtUrl && (wrapped.coverArtStatus === 'pending' || wrapped.coverArtStatus === 'generating')) ||
-    ((wrapped.sceneArtStatus === 'pending' || wrapped.sceneArtStatus === 'generating') &&
-      requiredSceneArtIds.some(id => !wrapped.sceneArt?.[id]))
-  );
+  const initialArtworkPending = shouldHoldWrappedForArtwork(wrapped);
   const wrappedHasLoaded = wrappedLoaded.has(wrappedKey);
   const canUseAi = settings?.aiProvider === 'cliProxy' || !!settings?.nanoGptApiKey;
 
@@ -2626,7 +2619,7 @@ ${wrappedContext || 'No background material.'}
                            )}
                            {initialArtworkPending ? (
                              <div role="status" aria-live="polite"
-                               className="min-h-[480px] flex flex-col items-center justify-center text-center rounded-[2.5rem] p-8 bg-gradient-to-br from-cobalt-950/20 via-zinc-950 to-black border border-violet-400/20 space-y-5">
+                               className="min-h-[480px] flex flex-col items-center justify-center text-center rounded-[2.5rem] p-8 bg-gradient-to-br from-blue-950/20 via-zinc-950 to-black border border-violet-400/20 space-y-5">
                                <ImageIcon className="w-12 h-12 text-violet-300 animate-pulse" />
                                <h2 className="text-3xl sm:text-4xl font-black text-white">Painting your Wrapped...</h2>
                                <p className="max-w-xl text-zinc-300 text-sm sm:text-base">
