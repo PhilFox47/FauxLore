@@ -164,7 +164,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
     return JSON.parse(text);
   }
 
-  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = "", frame: ImageFrame = "square", referenceDataUrl: string | null = null, fallbackPrompt: string | null = null): Promise<string> {
+  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = "", frame: ImageFrame = "square", referenceDataUrl: string | null = null, fallbackPrompt: string | null = null, intent: "boss" | "loot" | "wrapped" = frame === "square" ? "loot" : "boss"): Promise<string> {
     const cfg = readImageConfig();
     const negativePrompt = [cfg.negative, extraNegative].filter(Boolean).join(", ");
     const framedPrompt = withImageFrame(prompt, frame);
@@ -174,7 +174,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
       const sys: any = db.prepare("SELECT cliProxyBaseUrl FROM system_settings WHERE id = 'system'").get() || {};
       const baseUrl = cliProxyBaseUrl(sys.cliProxyBaseUrl);
       const finalPrompt = cfg.gptImage25
-        ? gptImage25DeliveryPrompt(framedPrompt, frame === "square" ? "loot" : "boss", cfg.customNegative)
+        ? gptImage25DeliveryPrompt(framedPrompt, intent, cfg.customNegative)
         : cliProxyImagePrompt(framedPrompt, negativePrompt);
       const size = cliProxyImageSize(requestedSize);
 
@@ -242,7 +242,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
           // generation-only prompt: there is no reference on that request.
           const textOnly = fallbackPrompt
             ? gptImage25DeliveryPrompt(withImageFrame(fallbackPrompt, frame),
-                frame === "square" ? "loot" : "boss", cfg.customNegative)
+                intent, cfg.customNegative)
             : finalPrompt;
           return requestCliImage(false, 2, textOnly);
         }
@@ -550,6 +550,16 @@ Return ONLY the final image prompt text, nothing else.`;
     return nanoGenerateText(aiConfig, prompt, { temperature: 0.7, webSearch: !codexBlock, tier: "analytical", scope: "imageprompt", userId });
   }
 
+  /** One standalone 3:2 title illustration for an entire Wrapped story. */
+  async function generateWrappedCoverImage(userId: string, prompt: string): Promise<string> {
+    const config = getAiConfig(db, userId);
+    if (!config) throw new Error("AI image provider is not configured.");
+    return internalGenerateImageWithNanoGpt(
+      config.apiKey, prompt, "unreadable text, fake logos, watermarks, collage grids",
+      "landscape-3:2", null, null, "wrapped",
+    );
+  }
+
   /**
    * What the configured image model actually accepts, from NanoGPT itself.
    *
@@ -595,5 +605,6 @@ Return ONLY the final image prompt text, nothing else.`;
     generateBossImageBackground,
     queueBossVictoryArtwork,
     generateArtifactImageBackground,
+    generateWrappedCoverImage,
   };
 }
