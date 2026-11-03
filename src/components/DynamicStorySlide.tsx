@@ -217,7 +217,7 @@ export function DynamicStorySlide({ scene, composition, number, total, coverArtU
   };
   if ((direction.presentation === "cinematic" && !!stageImage) ||
       direction.presentation === "typography" ||
-      (direction.presentation === "data" && !!scene.bars?.length)) {
+      (direction.presentation === "data" && (!!scene.bars?.length || !!scene.analytic))) {
     return <EditorialStorySlide scene={scene} direction={direction} imageUrl={stageImage}
       number={number} total={total} onDeepDive={onDeepDive} />;
   }
