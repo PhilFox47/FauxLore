@@ -607,6 +607,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         imageNegativePrompt: formData.imageNegativePrompt,
         timezone: formData.timezone,
         aiPersona: formData.aiPersona,
+        visualSelfInsertMode: formData.visualSelfInsertMode,
+        visualSelfDescription: formData.visualSelfDescription,
         disableAutoDrop: formData.disableAutoDrop,
         pushTypes: formData.pushTypes,
         inactivityReminderDays: formData.inactivityReminderDays,
