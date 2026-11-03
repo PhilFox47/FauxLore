@@ -558,9 +558,10 @@ export function Recaps() {
     }
   };
 
-  // Retry missing achievements on old recaps without rewriting the article.
+  // Generate or REFORGE achievements without touching the saved Recap/Wrapped.
+  // Existing achievements stay visible until the server atomically stores the new set.
   const retryAchievements = async () => {
-    if (!currentRecap || !settings || isForgingAchievement || isGenerating) return;
+    if (!currentRecap || !settings || isForgingAchievement || isGenerating || activity?.frozen) return;
     if (settings.aiProvider !== 'cliProxy' && !settings.nanoGptApiKey) {
       toast.error('Configure an AI provider in Settings first.');
       return;
@@ -2592,6 +2593,16 @@ ${wrappedContext || 'No background material.'}
                                    ? 'Painting title artwork...'
                                    : wrapped.coverArtStatus === 'failed' ? 'Retry title artwork' : 'Redraw title artwork'}
                                </button>
+                               {currentRecap && (
+                                 <button onClick={() => void retryAchievements()}
+                                   disabled={!!wrappedGeneratingKey || !canUseAi || !!activity?.frozen ||
+                                     isForgingAchievement || isGenerating}
+                                   className="px-5 py-3 flex items-center gap-2 rounded-xl border border-amber-400/20 text-amber-200 bg-amber-400/10 hover:bg-amber-400/20 disabled:opacity-40 text-sm font-bold">
+                                   <Trophy className={'w-4 h-4 ' + (isForgingAchievement ? 'animate-pulse' : '')} />
+                                   {isForgingAchievement ? 'Forging souvenirs...' :
+                                     periodAchievements.length ? 'Reforge achievements' : 'Forge achievements'}
+                                 </button>
+                               )}
                                {wrapped.generatedAt && (
                                  <span className="text-xs text-zinc-500" title="Last successfully saved Wrapped">
                                    Saved {new Date(wrapped.generatedAt.replace(' ', 'T') + (wrapped.generatedAt.includes('Z') ? '' : 'Z')).toLocaleString()}
@@ -2679,7 +2690,7 @@ ${wrappedContext || 'No background material.'}
                       </div>
                    </div>
 
-                   {/* AI achievements, attached to the period but not forced to recap its theme. */}
+                   {/* AI achievements: collectible souvenirs of the period's defining Recap/Wrapped themes. */}
                     {currentRecap && (
                       <section className="rounded-[2rem] border border-amber-500/20 bg-black/70 p-5 sm:p-8 space-y-5">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -2692,7 +2703,17 @@ ${wrappedContext || 'No background material.'}
                               <p className="text-xs text-zinc-500">The system has reviewed your choices. This is unfortunate for you.</p>
                             </div>
                           </div>
-                          <a href="/achievements" className="text-amber-400 hover:text-amber-300 text-xs font-bold">View archive</a>
+                          <div className="flex flex-wrap items-center gap-3">
+                            {periodAchievements.length > 0 && (
+                              <button onClick={() => void retryAchievements()}
+                                disabled={isForgingAchievement || isGenerating || !canUseAi || !!activity?.frozen}
+                                className="text-amber-300 hover:text-amber-200 text-xs font-bold disabled:opacity-40 flex gap-1.5 items-center">
+                                <RefreshCw className={'w-3.5 h-3.5 ' + (isForgingAchievement ? 'animate-spin' : '')} />
+                                {isForgingAchievement ? 'Reforging...' : 'Reforge achievements'}
+                              </button>
+                            )}
+                            <a href="/achievements" className="text-amber-400 hover:text-amber-300 text-xs font-bold">View archive</a>
+                          </div>
                         </div>
                         {periodAchievements.length > 0 ? (
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
