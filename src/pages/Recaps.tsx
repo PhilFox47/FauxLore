@@ -455,6 +455,41 @@ export function Recaps() {
       .finally(() => wrappedFetchingRef.current.delete(key));
   }, [timeframe, timeId, isLoading, wrappedLoaded]);
 
+  // Image generation is independent of the story save. Poll only while the
+  // cover is being created; keep the last saved illustration visible on reroll.
+  useEffect(() => {
+    if (!wrapped || (wrapped.coverArtStatus !== 'pending' && wrapped.coverArtStatus !== 'generating')) return;
+    let cancelled = false;
+    let fetching = false;
+    const issueVersion = wrapped.generatedAt;
+    const timer = window.setInterval(() => {
+      if (fetching) return;
+      fetching = true;
+      void DatabaseService.getWrappedStory(timeframe, timeId)
+        .then(latest => {
+          if (cancelled || !latest) return;
+          setWrappedStories(previous => {
+            if (previous[wrappedKey]?.generatedAt !== issueVersion) return previous;
+            return { ...previous, [wrappedKey]: latest };
+          });
+        })
+        .catch(error => { if (!cancelled) console.error('Could not refresh Wrapped title art:', error); })
+        .finally(() => { fetching = false; });
+    }, 4000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [timeframe, timeId, wrappedKey, wrapped?.generatedAt, wrapped?.coverArtStatus]);
+
+  const regenerateWrappedCover = async () => {
+    if (!wrapped || wrapped.coverArtStatus === 'pending' || wrapped.coverArtStatus === 'generating' ||
+      !canUseAi || activity?.frozen) return;
+    try {
+      const updated = await DatabaseService.regenerateWrappedCover(timeframe, timeId);
+      setWrappedStories(previous => ({ ...previous, [wrappedKey]: updated }));
+    } catch (error: any) {
+      toast.error('Wrapped cover: ' + (error?.message || 'Image generation could not start.'));
+    }
+  };
+
   const generateWrapped = async () => {
     const key = timeframe + ':' + timeId;
     if (wrappedGenerationRef.current || !settings || !canUseAi || !activeLogs.length || activity?.frozen) return;
@@ -2535,6 +2570,7 @@ ${wrappedContext || 'No background material.'}
                            <StoryMode key={wrappedKey + ':' + (wrapped.generatedAt || '')}
                              scenes={storyScenes} timeframe={timeframe} timeId={timeId}
                              achievements={periodAchievements}
+                             coverArtUrl={wrapped.coverArtUrl} coverArtStatus={wrapped.coverArtStatus}
                              onDeepDive={() => setViewMode('deep')} />
                            <div className="flex flex-col items-center gap-3">
                              <div className="flex flex-wrap justify-center items-center gap-3">
@@ -2543,6 +2579,17 @@ ${wrappedContext || 'No background material.'}
                                  className="px-5 py-3 flex items-center gap-2 rounded-xl border border-violet-400/20 text-violet-200 bg-violet-400/10 hover:bg-violet-400/20 disabled:opacity-40 text-sm font-bold">
                                  <RefreshCw className={'w-4 h-4 ' + (wrappedGeneratingKey === wrappedKey ? 'animate-spin' : '')} />
                                  {wrappedGeneratingKey === wrappedKey ? 'Directing a new Wrapped...' : 'Reroll the Wrapped story'}
+                               </button>
+                               <button onClick={() => void regenerateWrappedCover()}
+                                 disabled={!!wrappedGeneratingKey || !canUseAi || !!activity?.frozen ||
+                                   wrapped.coverArtStatus === 'pending' || wrapped.coverArtStatus === 'generating'}
+                                 className="px-5 py-3 flex items-center gap-2 rounded-xl border border-cyan-400/20 text-cyan-200 bg-cyan-400/10 hover:bg-cyan-400/20 disabled:opacity-40 text-sm font-bold">
+                                 {wrapped.coverArtStatus === 'pending' || wrapped.coverArtStatus === 'generating'
+                                   ? <RefreshCw className="w-4 h-4 animate-spin" />
+                                   : <ImageIcon className="w-4 h-4" />}
+                                 {wrapped.coverArtStatus === 'pending' || wrapped.coverArtStatus === 'generating'
+                                   ? 'Painting title artwork...'
+                                   : wrapped.coverArtStatus === 'failed' ? 'Retry title artwork' : 'Redraw title artwork'}
                                </button>
                                {wrapped.generatedAt && (
                                  <span className="text-xs text-zinc-500" title="Last successfully saved Wrapped">
