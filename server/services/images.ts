@@ -347,6 +347,9 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
     const styleBlock = codexArtStyleBlock(codexRow);
     const tier = enemyTier(boss.level || 1);
     const imageCfg = readImageConfig();
+    const imageSharpness = imageCfg.gptImage25
+      ? "Keep canonical features, silhouette and signature markings clear, with lighting and depth of field faithful to the source medium."
+      : SHARPNESS;
     const fullName = [boss.name, boss.title].filter(Boolean).join(", ");
 
     const prompt = `You are an expert art director writing ONE text-to-image prompt.
@@ -357,7 +360,7 @@ SUBJECT: a single RPG enemy named "${fullName}", from the media "${mediaTitle}" 
 
 ${codexBlock || `(No Codex is on record. Use web search to identify what "${boss.name}" is within "${mediaTitle}", and the authentic visual art style, medium and colour palette of "${mediaTitle}" itself.)`}
 
-${styleBlock ? `${styleBlock}\n\nThat house style is the single most important thing to get right. The creature must look as though it was drawn by the same hand, for the same work — its medium, palette, light and line quality are not options.\n` : ""}
+${styleBlock ? `${styleBlock}\n\nCanonical subject identity and the source's visual style must BOTH survive. The creature must keep its recognizable form while looking as though it belongs in the original medium, palette and lighting.\n` : ""}
 YOUR TASK: write ONE prompt describing this single character/creature so it looks like it genuinely belongs in "${mediaTitle}".
 
 THE PROMPT MUST:
@@ -368,7 +371,7 @@ THE PROMPT MUST:
 - Depict ONE subject only, with a setting/background appropriate to its tier — never a busy crowd scene.
 - Show it mid-action rather than posed: ${tier.action}. Frame it with ${tier.camera}. Never a neutral standing figure facing the lens — no mugshots, no line-ups, no posing for a photograph.
 - Faithfully describe its anatomy, armor/weapons, materials, aura and expression, and let the tier drive everything: a Level 1 must look genuinely silly and harmless; a Level 5 must look like a monumental, epic final boss.
-- ${SHARPNESS}
+- ${imageSharpness}
 - Contain no watermarks, signatures or extra/duplicate characters.
 
 Return ONLY the final image prompt text, nothing else.`;
@@ -421,6 +424,9 @@ Return ONLY the final image prompt text, nothing else.`;
     const styleBlock = codexArtStyleBlock(codexRow);
     const art = rarityArt(artifact.rarity || "Common");
     const imageCfg = readImageConfig();
+    const imageSharpness = imageCfg.gptImage25
+      ? "Keep original materials, lettering and construction clearly readable, using source-appropriate lighting and depth of field."
+      : SHARPNESS;
 
     const prompt = `You are an expert art director writing ONE text-to-image prompt.
 
@@ -430,7 +436,7 @@ SUBJECT: a single RPG loot item named "${artifact.name}", described as "${artifa
 
 ${codexBlock || `(No Codex is on record. Use web search to determine what "${artifact.name}" literally IS within "${mediaTitle}", and the authentic art style, medium and material language of "${mediaTitle}".)`}
 
-${styleBlock ? `${styleBlock}\n\nThat house style is the single most important thing to get right. The object must look as though it was drawn by the same hand, for the same work — its medium, palette, light and material language are not options.\n` : ""}
+${styleBlock ? `${styleBlock}\n\nCanonical object identity and the source's visual style must BOTH survive. Preserve the item's genuine shape, materials and markings while matching the original work's medium and palette.\n` : ""}
 YOUR TASK: write ONE prompt for a single game-inventory icon of this exact object.
 
 THE PROMPT MUST:
@@ -442,7 +448,7 @@ THE PROMPT MUST:
 - Compose for a SQUARE 1:1 image with the entire object centered and safely inside the canvas, no tall poster framing.
 - Present ONE recognizable item on a restrained studio backdrop: ${art.background}. Use ${art.aura} as an environmental lighting cue ONLY, not an effect emitted by the object. A subtle contact shadow may ground the item.
 - Describe its genuine materials, proportions, original markings, form and wear; never invent ornaments, supernatural effects or logos to communicate rarity.
-- ${SHARPNESS}
+- ${imageSharpness}
 - No hands, no person, no extra props — just the single item on its background.
 
 Return ONLY the final image prompt text, nothing else.`;
