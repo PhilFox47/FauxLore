@@ -19,7 +19,7 @@ export function resolveImagePromptProfile(provider: string, model: string): Imag
 export function imagePromptProfileFromDb(db: Db): ImagePromptProfile {
   let row: { aiProvider?: string; cliProxyImageModel?: string; imageModel?: string } = {};
   try {
-    row = db.prepare("SELECT aiProvider, cliProxyImageModel, imageModel FROM system_settings WHERE id = 'system'").get() as typeof row || {};
+    row = (db.prepare("SELECT aiProvider, cliProxyImageModel, imageModel FROM system_settings WHERE id = 'system'").get() as typeof row | undefined) || {};
   } catch {
     // Older databases still get a safe NanoGPT prompt until their migrations run.
   }
