@@ -48,6 +48,9 @@ test("local reference loader rejects remote paths, traversals, bogus files, and 
     assert.equal(localImageReferenceDataUrl("/uploads/ai-images/ffffffff-ffff-ffff-ffff-ffffffffffff.png", dir), null);
     fs.writeFileSync(path.join(dir, ID + ".png"), Buffer.from("definitely not a PNG"));
     assert.equal(localImageReferenceDataUrl(URL, dir), null);
+    // Sparse file: exercises the upload size cap without allocating 11 MiB.
+    fs.truncateSync(path.join(dir, ID + ".png"), 11 * 1024 * 1024);
+    assert.equal(localImageReferenceDataUrl(URL, dir), null);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
