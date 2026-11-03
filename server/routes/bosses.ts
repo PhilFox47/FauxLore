@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { ENRAGE_TARGET_MULTIPLIER } from "../../src/lib/rpgSystem";
-import { isLocalGeneratedImage } from "../lib/enrageImages";
+import { basePortraitForTransition } from "../lib/bossStateImages";
 import { v4 as uuidv4 } from "uuid";
 
 export function registerBossRoutes(app: Express, ctx: ServerContext) {
@@ -103,16 +103,16 @@ export function registerBossRoutes(app: Express, ctx: ServerContext) {
 
       // Snapshot the PRE-ENRAGE portrait before any rendering starts. Future
       // manual regenerations must reference this, never the already-enraged image.
-      const originalImageUrl = (boss.imageStatus === "done" || !boss.imageStatus) && isLocalGeneratedImage(boss.imageUrl)
-        ? boss.imageUrl : null;
+      const originalImageUrl = basePortraitForTransition(boss);
       const shouldRender = !activity.isFrozen(userId as string);
       const now = new Date().toISOString();
       db.prepare(
         `UPDATE world_bosses
             SET enraged = 1, enragedAt = ?, targetProgress = ?, expiresAt = ?, updatedAt = ?,
-                enrageOriginalImageUrl = ?, imageStatus = ?, imageGenerationToken = ?
+                enrageOriginalImageUrl = ?, basePortraitImageUrl = COALESCE(basePortraitImageUrl, ?),
+                imageStatus = ?, imageGenerationToken = ?
           WHERE id = ? AND userId = ?`,
-      ).run(now, newTarget, newExpiry, now, originalImageUrl,
+      ).run(now, newTarget, newExpiry, now, originalImageUrl, originalImageUrl,
         shouldRender ? "pending" : "failed", uuidv4(), boss.id, userId);
 
       const updated = db.prepare('SELECT * FROM world_bosses WHERE id = ? AND userId = ?').get(boss.id, userId) as any;
@@ -145,7 +145,7 @@ export function registerBossRoutes(app: Express, ctx: ServerContext) {
       if (enemy) {
         // A rerolled enemy is a NEW identity. Never reuse the previous one's
         // frozen pre-enrage reference, even if its enraged status persists.
-        db.prepare("UPDATE world_bosses SET name = ?, title = ?, description = ?, imagePrompt = ?, enrageOriginalImageUrl = NULL, imageGenerationToken = ?, updatedAt = ? WHERE id = ? AND userId = ?")
+        db.prepare("UPDATE world_bosses SET name = ?, title = ?, description = ?, imagePrompt = ?, imageUrl = NULL, imageStatus = 'pending', enrageOriginalImageUrl = NULL, basePortraitImageUrl = NULL, imageGenerationToken = ?, updatedAt = ? WHERE id = ? AND userId = ?")
           .run(enemy.name, enemy.title || null, enemy.description || null, enemy.imagePrompt || null, uuidv4(), new Date().toISOString(), boss.id, userId);
         // Awaited so the client's spinner covers the redraw and one refresh shows
         // the finished enemy.
