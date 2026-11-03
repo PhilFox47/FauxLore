@@ -285,10 +285,16 @@ function StorySlide({ scene, number, total, onDeepDive, coverArtUrl, sceneArtUrl
   </motion.article>;
 }
 
-function AchievementFinale({ achievements, onDeepDive }: { achievements: GeneratedAchievement[]; onDeepDive: () => void }) {
+function AchievementFinale({ achievements, onDeepDive, imageUrl }: {
+  achievements: GeneratedAchievement[]; onDeepDive: () => void; imageUrl?: string;
+}) {
   return <motion.section key="achievement-finale" initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }}
     exit={{ opacity: 0, y: -20 }} transition={{ duration: .4 }}
     className="relative overflow-hidden rounded-[2.5rem] border border-amber-400/25 bg-gradient-to-br from-[#2a1706] via-[#130e10] to-black p-6 sm:p-10 lg:p-14 shadow-2xl">
+    {imageUrl && <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+      <img src={imageUrl} alt="" loading="eager" className="absolute inset-0 h-full w-full object-cover opacity-90" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/65 to-black/90" />
+    </div>}
     <div className="absolute -top-28 left-[20%] w-3/5 h-64 rounded-full bg-amber-500/15 blur-[110px] pointer-events-none" />
     <div className="relative space-y-8">
       <div className="flex items-center gap-3 text-amber-300 text-xs font-black uppercase tracking-[.24em]">
@@ -398,7 +404,8 @@ export function StoryMode({ scenes, timeframe, timeId, achievements = [], onDeep
       <AnimatePresence mode="wait">
         {current ? <StorySlide key={current.id} scene={current} number={index + 1} total={total}
           onDeepDive={onDeepDive} coverArtUrl={coverArtUrl} sceneArtUrl={sceneArt[current.id]} /> :
-          <AchievementFinale key="finale" achievements={achievements} onDeepDive={onDeepDive} />}
+          <AchievementFinale key="finale" achievements={achievements} onDeepDive={onDeepDive}
+            imageUrl={sceneArt['achievement-finale']} />}
       </AnimatePresence>
     </div>
     <div className="flex items-center justify-between gap-3">
