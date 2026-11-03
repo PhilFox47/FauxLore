@@ -35,6 +35,7 @@ import { AchievementCard } from '../components/AchievementCard';
 import { AchievementReveal } from '../components/AchievementReveal';
 import { StoryMode } from '../components/StoryMode';
 import { buildWrappedEvidence } from '../lib/wrappedEvidence';
+import { analyzeMediaFocus, focusEditorialCalibration } from '../lib/periodFocus';
 import { generateAiWrapped } from '../services/wrappedAi';
 import { generateWrappedVisualCompositions } from '../services/wrappedVisualDirector';
 import { shouldHoldWrappedForArtwork } from '../lib/wrappedSceneArt';
@@ -826,10 +827,20 @@ export function Recaps() {
           ordered[Math.round(index * (ordered.length - 1) / (limit - 1))]);
       };
 
+      const focusCalibration = focusEditorialCalibration(analyzeMediaFocus({
+        timeframe,
+        periodStart: currentInterval.start,
+        logs: activeProgressLogs,
+        history: validLogs,
+        media,
+        settings,
+      }));
       const promptContext = `
 EDITORIAL SOURCE EVIDENCE, ${timeframe.toUpperCase()} ${timeId}
 Exact time window: ${format(currentInterval.start, 'yyyy-MM-dd')} to ${format(currentInterval.end, 'yyyy-MM-dd')}.
-This is material for an OPINION COLUMN, not a checklist. Look for small funny details, place-and-media coincidences, taste contradictions and interesting interpretations. Locations are user-recorded log labels, not proof of WHY the user went somewhere.
+PERSONAL MEDIA HABIT BASELINE (READ BEFORE SELECTING ANGLES):
+${focusCalibration}
+This is material for an OPINION COLUMN, not a checklist. Seek meaningful reviews, specific moments, actual personal judgments and objectively unusual changes of emphasis. Locations are user-recorded log labels, not proof of WHY the user went somewhere.
 
 WHERE AND WHAT (activity-by-location combinations, not just totals):
 ${Array.from(new Set(activeLogs.map(l => (l.location || '').trim()).filter(Boolean))).slice(0, 16).map(location => {
