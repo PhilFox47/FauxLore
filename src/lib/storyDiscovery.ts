@@ -39,6 +39,8 @@ export interface StoryScene {
   achievement?: GeneratedAchievement;
   design?: StoryDesign;
   artworks?: StoryMedia[];
+  /** Optional AI-composed visual stage; absent/invalid = safe legacy layout. */
+  composition?: DynamicSceneComposition;
 }
 
 export interface StoryInput {
