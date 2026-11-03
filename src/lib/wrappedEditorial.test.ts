@@ -262,3 +262,24 @@ test('month clusters include real media, locations and direct reflections by pha
   assert.deepEqual(late?.places, ['Hotel']);
   assert.equal(late?.journalHighlights[0]?.quote, 'The ending was tense.');
 });
+
+
+test('a genuine three-phase change offers an Arc renderer without making it obligatory', () => {
+  const logs = [
+    log('early', 'book', '2026-10-05', 110),
+    log('middle', 'game', '2026-10-15', .5),
+    log('late', 'book', '2026-10-29', 250),
+  ];
+  const evidence = buildWrappedEvidence({
+    timeframe: 'month', timeId: '2026-10', logs,
+    history: logs, media,
+  });
+  const arc = evidence.facts.find(f => f.id === 'month-arc');
+  assert.equal(arc?.analytic?.kind, 'arc');
+  assert.equal(arc?.analytic?.points.length, 3);
+  assert.equal(arc?.bars, undefined, 'Arc uses a verified dataset, not fake bar labels');
+  assert.equal(isStrongVerifiedAnalytic(arc?.analytic), true);
+  assert.deepEqual(evidence.monthlyCoverage?.requiredPhases, ['early', 'late']);
+  assert.ok(evidence.facts.some(f => f.id === 'month-early'));
+  assert.ok(evidence.facts.some(f => f.id === 'month-late'));
+});
