@@ -2,7 +2,7 @@ import { format, isWithinInterval, parseISO, startOfISOWeek, startOfMonth, start
 import { calculateScaledDelta } from './scaling';
 import { analyzeMediaFocus, focusEditorialCalibration } from './periodFocus';
 import { isSignificantFormatShift, isSignificantTasteGap, monthPhase, monthPhaseLabel, requiredMonthlyPhases } from './wrappedEditorial';
-import type { MonthPhase, MonthlyCoverage } from './wrappedEditorial';
+import type { MonthPhase, MonthlyCoverage, VerifiedAnalytic } from './wrappedEditorial';
 import type { MediaItem, ProgressLog, Settings } from '../types/schema';
 import type { StoryBar, StoryBeat, StoryKind, StoryPeriod } from './storyDiscovery';
 
@@ -16,6 +16,8 @@ export interface WrappedFact {
   quote?: string;
   bars?: StoryBar[];
   beats?: StoryBeat[];
+  /** Validated by the data pipeline, never written by the story LLM. */
+  analytic?: VerifiedAnalytic;
   /** Verified date scope for enforceable monthly storytelling coverage. */
   phase?: MonthPhase;
   /** All supporting activity falls in the month's final seven days. */
@@ -107,6 +109,28 @@ export function buildWrappedEvidence(args: {
         ? progress.filter(log => inFinalWeek(log)).reduce((sum, log) => sum + value(log), 0) / total
         : 0,
       minPhaseScenes: Math.min(requiredPhases.length, 2),
+      clusters: names.map(phase => {
+        const entries = segments.get(phase)!;
+        const titleWeights = new Map<string, number>();
+        for (const entry of entries) titleWeights.set(entry.mediaId,
+          (titleWeights.get(entry.mediaId) || 0) + value(entry));
+        return {
+          phase, progressShare: round(shares[phase] * 100),
+          activeDays: new Set(entries.map(entry =>
+            format(subHours(parseISO(entry.timestamp), 5), 'yyyy-MM-dd'))).size,
+          leadingWorks: [...titleWeights].sort((a, b) => b[1] - a[1]).slice(0, 3)
+            .map(([id, weight]) => ({
+              id, title: byId.get(id)?.title || 'Unknown',
+              share: round(totals.get(phase)! > 0 ? weight / totals.get(phase)! * 100 : 0),
+            })),
+          journalHighlights: entries.filter(entry => !!entry.thoughts?.trim())
+            .slice(0, 2).map(entry => ({
+              mediaId: entry.mediaId, quote: entry.thoughts!.trim().slice(0, 240),
+            })),
+          places: [...new Set(entries.map(entry => entry.location?.trim() || '').filter(Boolean))]
+            .slice(0, 3),
+        };
+      }),
     };
     // Supply verified, phase-scoped evidence. A month's first ten days are
     // NEVER displaced merely because its final week has more recent reviews.
@@ -139,6 +163,13 @@ export function buildWrappedEvidence(args: {
     const id = ranking[0]?.[0];
     add({ id: 'focus-0', kind: 'insight', title: 'Unusually strong focus: ' + focus.leadingTitle,
       mediaId: id,
+      ...(focus.leadingShare >= .50 ? { analytic: {
+        kind: 'dominance' as const, unit: 'percent' as const,
+        points: [
+          { label: focus.leadingTitle, value: round(focus.leadingShare * 100), note: 'Share of the period\'s normalized Master Pages' },
+          { label: 'All other works', value: round((1 - focus.leadingShare) * 100), note: 'Combined remaining share; NOT hours' },
+        ],
+      } } : {}),
       evidence: focus.leadingTitle + ' accounted for ' + Math.round(focus.leadingShare * 100) +
         '% of normalized Master Pages this period, versus ' +
         Math.round(focus.baselineLeadingShare * 100) + '% for the leading title on average across ' +
@@ -212,7 +243,13 @@ export function buildWrappedEvidence(args: {
         ...(largeGap ? { bars: [
           { label: 'You', value: round((m.userRating || 0) * 20), note: m.userRating + ' / 5' },
           { label: 'Critics', value: round((m.reviewScore || 0) * 20), note: m.reviewScore + ' / 5' },
-        ] } : {}),
+        ], analytic: {
+          kind: 'duel' as const, unit: 'percent' as const,
+          points: [
+            { label: 'Your rating', value: round((m.userRating || 0) * 20), note: m.userRating + ' / 5' },
+            { label: 'Critic rating', value: round((m.reviewScore || 0) * 20), note: m.reviewScore + ' / 5' },
+          ],
+        } } : {}),
       });
     });
   const places = new Map<string, ProgressLog[]>();
@@ -277,8 +314,38 @@ export function buildWrappedEvidence(args: {
           { label: 'Previous periods', value: round(baseline * 100), note: 'Average of ' + past.length + ' active periods' },
           { label: 'This period', value: round(share * 100), note: 'Share of Master Pages' },
         ],
+        analytic: { kind: 'shift', unit: 'percent', points: [
+          { label: 'Your usual ' + type + ' share', value: round(baseline * 100),
+            note: 'Average of ' + past.length + ' prior active ' + timeframe + ' periods' },
+          { label: type + ' this period', value: round(share * 100),
+            note: 'Percent of normalized Master Pages, not time spent' },
+        ] },
       });
     });
+  }
+  // A genuinely lopsided month can support an ARC data scene, but only
+  // when the phase distribution itself tells a substantial story. Otherwise
+  // the clusters remain editorial context, not an obligatory chart.
+  if (timeframe === 'month' && monthlyCoverage?.clusters?.length === 3) {
+    const clusters = monthlyCoverage.clusters;
+    const values = clusters.map(cluster => cluster.progressShare);
+    if (monthlyCoverage.requiredPhases.length >= 2 &&
+        Math.max(...values) - Math.min(...values) >= 25) {
+      add({ id: 'month-arc', kind: 'rhythm',
+        title: 'Where the month actually happened',
+        evidence: 'Recorded normalized progress was not distributed evenly: ' +
+          clusters.map(cluster => cluster.phase + ' ' + cluster.progressShare + '%').join(', ') +
+          '. Show this ONLY if the concentration across phases makes a substantive point. Percentages of Master Pages, NOT hours or total attention.',
+        mediaIds: [...new Set(clusters.flatMap(cluster =>
+          cluster.leadingWorks.slice(0, 1).map(work => work.id)))],
+        analytic: { kind: 'arc', unit: 'percent', points: clusters.map(cluster => ({
+          label: cluster.phase === 'early' ? 'Days 1–10' :
+            cluster.phase === 'middle' ? 'Days 11–20' : 'Days 21–end',
+          value: cluster.progressShare,
+          note: cluster.leadingWorks[0]?.title || 'No substantial recorded activity',
+        })) },
+      });
+    }
   }
   if (timeframe !== 'week') {
     const buckets = new Map<string, Map<string, number>>();
