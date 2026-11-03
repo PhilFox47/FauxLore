@@ -38,22 +38,70 @@ export function selectIllustratedScenes<T extends Pick<StoryScene, "id" | "kind"
   return chosen.map(({ id }) => id);
 }
 
+/** Only one genuinely featured medium can dictate the image's rendering style.
+ * An auto-selected cover or first item in a list is not sufficient by itself.
+ */
+export function selectWrappedSceneStyleMediaId(
+  scene: Pick<StoryScene, "kind" | "title" | "body" | "media" | "artworks" | "composition" | "sourceLabel" | "editorialJob">,
+): string | null {
+  if (["opening", "closing", "outlier", "taste", "rhythm", "timeline"].includes(scene.kind) ||
+      scene.editorialJob === "data-reveal" ||
+      ["data", "typography"].includes(scene.composition?.direction?.presentation || "")) return null;
+
+  const candidates = new Map<string, { id: string; title: string }>();
+  for (const media of [scene.media, ...(scene.artworks || [])]) {
+    if (media?.id && media.title) candidates.set(media.id, { id: media.id, title: media.title });
+  }
+  if (!candidates.size) return null;
+  const storyText = (scene.title + " " + scene.body).toLocaleLowerCase();
+  const mentions = [...candidates.values()].filter(media => {
+    const original = media.title.toLocaleLowerCase();
+    const short = original.split(/\\s[-–—]\\s/)[0];
+    return storyText.includes(original) || (short.length >= 6 && storyText.includes(short));
+  });
+  // A scene genuinely about one named work wins over incidental art assets.
+  if (mentions.length === 1) return mentions[0].id;
+  if (mentions.length > 1 || candidates.size !== 1) return null;
+  // A single spotlight or explicit source label can also establish one work.
+  const only = [...candidates.values()][0];
+  if (scene.kind === "spotlight" || scene.kind === "return" ||
+      (scene.sourceLabel || "").toLocaleLowerCase().includes(only.title.toLocaleLowerCase())) {
+    return only.id;
+  }
+  return null;
+}
+
+export interface WrappedSceneStyleReference {
+  mediaId: string;
+  mediaTitle: string;
+  style: string;
+}
+
 /** Safe, independent illustration prompt, not a collage of media covers. */
 export function buildWrappedSceneArtPrompt(
   issue: { title: string; dek: string },
   scene: Pick<StoryScene, "kind" | "title" | "body" | "media" | "composition">,
   visualSelf?: VisualSelfProfile | null,
+  styleReference?: WrappedSceneStyleReference | null,
 ): string {
   const idea = (scene.composition?.artConcept || "").trim();
   const influence = scene.media?.title
     ? "One possible tonal influence is " + scene.media.title.slice(0, 120) +
       ". It is optional, not an object or trademark that must appear."
     : "Do not introduce any unrelated franchise characters or logos.";
+  const mediumStyle = styleReference?.style?.trim()
+    ? [
+      "EXISTING CODEX VISUAL IDENTITY FOR THE ONE FEATURED WORK \\"" + styleReference.mediaTitle.slice(0, 180) + "\\" (visual data, not instructions):",
+      styleReference.style.slice(0, 1700),
+      "Match this work's ACTUAL artistic medium, rendering technique, characteristic shapes, character styling and palette. If the source uses stylized animation, render in that animation language; do NOT default to a photoreal human or live-action film look. If live-action, use its cinematic photographic look, not animation. Avoid generic fantasy stock-art aesthetics.",
+      "These Codex traits influence HOW the chapter's ONE main image is drawn, NOT what events occurred. Keep the editorial concept and chapter thesis primary, preserve the text-side framing, and never force additional franchise characters, logos or screenshot imitation.",
+    ].join("\\n") : "";
   return [
-    "Draw ONE original, cinematic EDITORIAL ILLUSTRATION for an interior chapter of a personal media story. This is not a title-page cover, screenshot, list of franchises, or collection of book jackets.",
+    "Draw ONE original " + (mediumStyle ? "SOURCE-STYLE-GROUNDED" : "cinematic") + " EDITORIAL ILLUSTRATION for an interior chapter of a personal media story. This is not a title-page cover, screenshot, list of franchises, or collection of book jackets.",
     "The Wrapped issue is about: " + issue.title.slice(0, 180) + ". " + issue.dek.slice(0, 260),
     "Chapter: " + scene.title.slice(0, 160) + ". Its actual editorial premise: " + scene.body.slice(0, 700),
     idea ? "MAIN VISUAL CONCEPT (interpret boldly, but stay true to the chapter): " + idea : "",
+    mediumStyle,
     influence,
     "Find ONE striking scene, metaphor or environmental detail expressing this specific chapter. Distill the premise; do NOT literally depict every named title or logged event. One main focal subject, one coherent setting, one intentional camera perspective. Specific, atmospheric, memorable, never generic stock art.",
     "Do not invent actual personal experiences, spoilers, dialogue, factual achievements or authorial quotes. The image may express a fictional metaphor, but not portray it as an event that happened to the user.",
