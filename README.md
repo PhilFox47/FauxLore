@@ -116,6 +116,30 @@ CLIProxyAPI settings:
   This tests local prompt and reference handling; a live gateway test is still
   required to verify the configured CLIProxyAPI image-edit endpoint.
 
+### Dungeon Achievements as Recap/Wrapped souvenirs
+
+Achievements now celebrate the **defining, evidence-backed events and themes**
+of a period, including the same subjects already prominent in its Recap or
+Wrapped. Selecting an obscure detail merely because the recap has not mentioned
+it is no longer a goal. A central highlight should anchor the first (or only)
+achievement. A multi-achievement set should have distinct significant
+highlights, rather than redundant versions of the same moment.
+
+Achievements still invent their own title, joke, narrative angle and purely
+imaginary reward; they **do not copy** existing recap/Wrapped prose or invent
+user actions. Older achievement titles and punchlines remain anti-duplication
+references, but a beloved medium can recur across time periods when there is
+new logged evidence.
+
+When a Wrapped already exists at generation time its themes also inform the
+award selection; otherwise the saved Recap provides the primary editorial
+throughline. Archived achievements are not silently rewritten. Use
+**Reforge achievements** in either the Wrapped view or its deep-dive recap to
+replace only that period's set. The prior set remains intact if generation fails,
+and an atomic save prevents a half-updated set.
+
+Tests: `npm run test:achievements`.
+
 ### Wrapped: AI-generated title illustrations
 
 Every **Weekly, Monthly and Yearly Wrapped** can have one independent 3:2
