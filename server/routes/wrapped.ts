@@ -113,7 +113,7 @@ export function validateStory(raw: any): any {
     }
     return saved;
   });
-  return { version: 2, title: raw.title.trim(), dek: raw.dek.trim(), scenes };
+  return { version: 2, title: raw.title.trim(), dek: raw.dek.trim(), visualRevision: 0, scenes };
 }
 
 export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
