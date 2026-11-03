@@ -11,9 +11,9 @@
 export const SHARPNESS =
   "Render with sharp focus, crisp clean detail and even, clear lighting. Avoid heavy bokeh, shallow depth of field, soft focus and excessive vignette.";
 
-/** Authentic-franchise directive — let it borrow real iconography from the source. */
+/** Faithful source identity, without inventing badges or painting logos onto unrelated items. */
 export const AUTHENTICITY = (media: string) =>
-  `Incorporate authentic, recognizable iconography from "${media}" — real emblems, logos, insignia, branding, color schemes, fonts and motifs — wherever they naturally belong (for example, a festival event pass should bear that festival's actual real logo and branding; a known character should resemble their real design). Reproduce the franchise's genuine design language as faithfully as possible.`;
+  `Preserve the genuine visual identity of "${media}": canonical designs, proportions, colors, materials and any established emblem or text that actually belongs on THIS subject. Do not invent logos, markings or unrelated franchise branding just to signal the source.`;
 
 /** How the app describes each enemy level to the AI, in plain difficulty terms. */
 export const LEVEL_DESCRIPTIONS: Record<number, string> = {
@@ -80,45 +80,50 @@ export function enemyTier(level: number): { word: string; look: string; scene: s
   };
 }
 
-/** Per-rarity art direction for loot: how grand the item is, its aura, and its background. */
+/**
+ * Rarity controls WHAT the reward means and HOW the image is presented.
+ * It never changes canonical item geometry, properties, materials or inscriptions.
+ * Accent hues belong to the backdrop/UI; innate magic belongs on the object only
+ * when the source actually establishes it.
+ */
 export function rarityArt(rarity: string): { grandeur: string; aura: string; background: string } {
   switch (rarity) {
     case "Mythic":
       return {
-        grandeur: "an impossible, reality-bending cosmic relic of god-like power, breathtakingly intricate",
-        aura: "swirling multi-colored cosmic energy and radiant iridescent particles",
-        background: "an epic decorated backdrop of swirling iridescent cosmic nebula colors with glowing particles and radiant light rays",
+        grandeur: "an irreplaceable, source-defining or uniquely storied object, without inventing supernatural properties",
+        aura: "very restrained iridescent edge lighting behind the item, never an invented effect emitted by it",
+        background: "an uncluttered charcoal studio backdrop with subtle iridescent rim-light accents",
       };
     case "Legendary":
       return {
-        grandeur: "a magnificent, awe-inspiring legendary masterwork, ornate and richly detailed",
-        aura: "an intense golden aura and shimmering golden light",
-        background: "an epic dark backdrop decorated with golden light rays, ornate gold filigree framing the edges, and floating golden embers in warm gold/yellow tones",
+        grandeur: "an iconic, exceptionally significant or storied object within this specific world, retaining its authentic design",
+        aura: "subtle warm golden backlighting around the silhouette, not a magical aura on the object",
+        background: "a restrained dark studio backdrop with a warm gold edge-light accent",
       };
     case "Epic":
       return {
-        grandeur: "an impressive, elaborately crafted epic item with ornate detailing",
-        aura: "a vivid purple magical glow",
-        background: "a dark backdrop with a soft purple radial glow and faint ornamental motifs in violet",
+        grandeur: "a notably distinctive or hard-won object whose source-world construction stays believable",
+        aura: "a soft violet accent light in the scene, not a new glow or power on the item",
+        background: "a dark neutral studio backdrop with a restrained violet light accent",
       };
     case "Super Rare":
     case "Rare":
       return {
-        grandeur: "a well-crafted, distinctly special item",
-        aura: "a cool blue shimmer",
-        background: "a dark backdrop with a subtle blue radial glow",
+        grandeur: "a well-crafted, uncommon or meaningfully recognizable object from the source",
+        aura: "a subtle cool-blue light on the background, without changing the item's color",
+        background: "a neutral dark studio backdrop with gentle cool-blue edge lighting",
       };
     case "Uncommon":
       return {
-        grandeur: "a slightly better-than-average item",
-        aura: "a faint green sheen",
-        background: "a plain dark grey backdrop with a very faint green tint",
+        grandeur: "a slightly unusual or useful object that still feels ordinary in its own world",
+        aura: "a faint green-tinted light in the background only",
+        background: "a plain dark gray studio backdrop with a minimal green accent",
       };
-    default: // Common
+    default:
       return {
-        grandeur: "a plain, ordinary, everyday object with no embellishment",
-        aura: "no magical glow at all",
-        background: "a simple flat neutral grey studio background with no decoration",
+        grandeur: "a mundane, ordinary object as it naturally appears in this world",
+        aura: "plain, even neutral lighting with no artificial magical effects",
+        background: "a simple neutral gray studio backdrop",
       };
   }
 }
