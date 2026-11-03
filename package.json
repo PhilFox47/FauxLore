@@ -14,7 +14,8 @@
     "test:logging": "tsx --test src/lib/logStatus.test.ts",
     "test:ai-grounding": "tsx --test src/lib/fauxLoreMechanics.test.ts",
     "test:image-framing": "tsx --test src/lib/imageFraming.test.ts",
-    "start": "node dist/server.cjs"
+    "start": "node dist/server.cjs",
+    "test:image-prompting": "tsx --test server/lib/imagePromptGuidance.test.ts"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
