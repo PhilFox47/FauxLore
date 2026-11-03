@@ -25,6 +25,7 @@ function fixture() {
   db.exec(
     "CREATE TABLE wrapped_stories (userId TEXT, timeframe TEXT, timeId TEXT, story TEXT, " +
       "coverArtUrl TEXT, coverArtStatus TEXT, coverArtRequestId TEXT, coverArtTimeZone TEXT, " +
+      "sceneArtJson TEXT, sceneArtStatus TEXT, sceneArtRequestId TEXT, " +
       "PRIMARY KEY(userId,timeframe,timeId));" +
     "CREATE TABLE media (id TEXT, userId TEXT, title TEXT, mediaType TEXT, genres TEXT);" +
     "CREATE TABLE logs (id TEXT, userId TEXT, mediaId TEXT, timestamp TEXT, metricType TEXT, delta REAL);",
@@ -229,6 +230,86 @@ test("abstract issue with real logs is allowed; a period with no verified activi
     await settle();
     assert.equal(read(db).coverArtStatus, "failed");
     assert.equal(prompts.length, 1, "No second image request should run without actual logs");
+  } finally { db.close(); }
+});
+
+test("original interior chapter artworks are generated once and stored independently", async () => {
+  const db = fixture();
+  const imageCalls: string[] = [];
+  try {
+    const staged = {
+      title: "The Geography of Improbable Taste",
+      dek: "A train and a hotel reveal a weird mix.",
+      scenes: [
+        { id: "wrapped-0", kind: "opening", title: "Your map", body: "Beginning." },
+        { id: "wrapped-1", kind: "location", title: "A train on a train", body: "Thriller and train.",
+          media: { id: "logged", title: "Mass Effect" } },
+        { id: "wrapped-2", kind: "location", title: "Eight titles at one hotel", body: "Many genres shared a hotel." },
+        { id: "wrapped-3", kind: "closing", title: "Continue", body: "An ending." },
+      ],
+    };
+    db.prepare("UPDATE wrapped_stories SET story=?").run(JSON.stringify(staged));
+    const service = createWrappedCoverService({
+      db: db as unknown as Db, canSpendTokens: () => true,
+      generateImage: async () => "/uploads/cover.png",
+      generateSceneImage: async (_, prompt) => {
+        imageCalls.push(prompt);
+        return "/uploads/ai-images/chapter-" + imageCalls.length + ".png";
+      },
+    });
+    assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), true);
+    assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), false, "Opening repeatedly must not spend tokens twice");
+    await settle();
+    const row = db.prepare("SELECT sceneArtJson,sceneArtStatus FROM wrapped_stories").get() as {
+      sceneArtJson: string; sceneArtStatus: string;
+    };
+    const artwork = JSON.parse(row.sceneArtJson);
+    assert.equal(row.sceneArtStatus, "done");
+    assert.deepEqual(Object.keys(artwork), ["wrapped-1", "wrapped-2"]);
+    assert.equal(imageCalls.length, 2);
+    assert.match(imageCalls[0], /A train on a train/);
+    assert.match(imageCalls[1], /Eight titles at one hotel/);
+    assert.doesNotMatch(imageCalls[0], /draw all media titles/i);
+    assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD, true), true, "Manual redraw regenerates chapter art only");
+    await settle();
+    assert.equal(imageCalls.length, 4);
+    assert.equal(JSON.parse((db.prepare("SELECT story FROM wrapped_stories").get() as any).story).title, staged.title);
+  } finally { db.close(); }
+});
+
+test("superseded Wrapped image jobs cannot overwrite newer artwork", async () => {
+  const db = fixture();
+  let releaseOld: ((url: string) => void) | undefined;
+  try {
+    const staged = {
+      title: "A strange week", dek: "The big moment",
+      scenes: [
+        { id: "wrapped-0", kind: "opening", title: "Start", body: "Intro" },
+        { id: "wrapped-1", kind: "location", title: "The train", body: "Train." },
+        { id: "wrapped-2", kind: "closing", title: "Finish", body: "Outro" },
+      ],
+    };
+    db.prepare("UPDATE wrapped_stories SET story=?").run(JSON.stringify(staged));
+    let calls = 0;
+    const service = createWrappedCoverService({
+      db: db as unknown as Db, canSpendTokens: () => true,
+      generateImage: async () => "/uploads/cover.png",
+      generateSceneImage: async () => {
+        calls++;
+        if (calls === 1) return new Promise<string>(resolve => { releaseOld = resolve; });
+        return "/uploads/new-chapter.png";
+      },
+    });
+    assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), true);
+    db.prepare("UPDATE wrapped_stories SET sceneArtStatus=NULL,sceneArtRequestId=NULL,sceneArtJson=NULL").run();
+    assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), true);
+    await settle();
+    assert.equal((db.prepare("SELECT sceneArtJson FROM wrapped_stories").get() as any).sceneArtJson,
+      JSON.stringify({ "wrapped-1": "/uploads/new-chapter.png" }));
+    releaseOld?.("/uploads/obsolete-chapter.png");
+    await settle();
+    assert.equal((db.prepare("SELECT sceneArtJson FROM wrapped_stories").get() as any).sceneArtJson,
+      JSON.stringify({ "wrapped-1": "/uploads/new-chapter.png" }));
   } finally { db.close(); }
 });
 
