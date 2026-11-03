@@ -3,7 +3,7 @@ import { normalizeDynamicScene } from "../lib/dynamicScenes";
 import type { DynamicSceneComposition } from "../lib/dynamicScenes";
 import type { WrappedStory } from "./wrappedAi";
 import { selectIllustratedScenes } from "../lib/wrappedSceneArt";
-import { MAX_DATA_SLIDES, isDataLayout, isStrongSceneData } from "../lib/wrappedEditorial";
+import { MAX_DATA_SLIDES, isDataLayout, isStrongSceneData, isStrongVerifiedAnalytic, editorialJobFromKind } from "../lib/wrappedEditorial";
 import type { StoryPeriod } from "../lib/storyDiscovery";
 
 type DirectorReply = { compositions?: Array<{ sceneId: string; composition: unknown }> };
@@ -21,14 +21,20 @@ export function wrappedVisualDirectorBrief(
   const scenes = story.scenes.filter(scene => !wanted || wanted.has(scene.id)).map(scene => ({
     sceneId: scene.id,
     kind: scene.kind,
+    editorialJob: scene.editorialJob || editorialJobFromKind(scene.kind),
     title: scene.title,
     body: scene.body.slice(0, 900),
     eyebrow: scene.eyebrow,
     palette: scene.design?.palette || "violet",
     imageMediaIds: [...new Set([scene.media, ...(scene.artworks || [])]
       .filter(m => m?.cover).map(m => m!.id))].slice(0, 6),
-    canUseData: isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) &&
-      isStrongSceneData(scene.kind, scene.bars),
+    canUseData: (isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
+      scene.editorialJob === "data-reveal") &&
+      (isStrongSceneData(scene.kind, scene.bars) || isStrongVerifiedAnalytic(scene.analytic)),
+    verifiedAnalytic: scene.analytic ? {
+      kind: scene.analytic.kind, unit: scene.analytic.unit,
+      points: scene.analytic.points,
+    } : null,
     verifiedBars: (scene.bars || []).slice(0, 6).map((bar, index) => ({
       index, label: bar.label, value: bar.value, note: bar.note,
     })),
@@ -47,8 +53,10 @@ export function wrappedVisualDirectorBrief(
     "VERIFIED, ALREADY WRITTEN SCENES (do not change their copy):\n" + JSON.stringify(scenes),
     "STRICT DATA BUDGET FOR THIS " + timeframe.toUpperCase() + ": at most " +
       MAX_DATA_SLIDES[timeframe] + " infographic/data slide(s) across the ENTIRE issue. This is a maximum, NOT a quota. The Story Director has already limited chart jobs; do not create new ones in the visual pass.",
+    "STORY-JOB CONTRACT: Every scene carries an editorialJob (hook, verdict, contrast, turning-point, pattern, data-reveal, place, reflection, payoff). Your job is to STAGE that narrative function, not replace it with a different argument or pick a template for variety. The writer has already validated the factual point and the allowed data treatment. Respect its intent and sequence. A verdict wants dramatic focus, a turning-point needs an earned before/after reveal, a reflection wants breathing room. Do not automatically chart something just because figures exist.",
+    "FOUR ANALYTIC STAGES, ONE APPROPRIATE PURPOSE: verifiedAnalytic.kind may be shift (before/after with a bold delta), duel (two ratings in deliberate opposition), arc (early/middle/late phase progression), or dominance (one exceptional work's large share). These are real, distinct renderers. If canUseData=true AND the story's claim fundamentally benefits from the statistic, choose presentation:data and set direction.dataTreatment to the EXACT verifiedAnalytic.kind. Otherwise choose cinematic/typography. NEVER invent a treatment or numerical values. Do not use a shift graph for a quoted review or a duel for a temporal arc.",
     "COMPOSE EVERY SCENE IN THE PROVIDED LIST. No skipping: exactly one composition for EACH sceneId listed, nothing else. Choose a distinctive but coherent cinematic-magazine treatment for each story beat, with a deliberate visual rhythm across the issue.",
-    "NEW CINEMATIC EDITORIAL DIRECTION: Every composition MUST include direction:{presentation:'cinematic'|'data'|'typography'|'composed',textSide:'left'|'right'|'center',textPosition:'top'|'middle'|'bottom',imageFocus:'left'|'center'|'right'}. Use actual JSON double-quoted strings. This is a SAFE editorial plan, NOT arbitrary CSS or executable code.",
+    "NEW CINEMATIC EDITORIAL DIRECTION: Every composition MUST include direction:{presentation:'cinematic'|'data'|'typography'|'composed',textSide:'left'|'right'|'center',textPosition:'top'|'middle'|'bottom',imageFocus:'left'|'center'|'right',dataTreatment?:'shift'|'duel'|'arc'|'dominance'}. dataTreatment is ONLY valid when presentation:data and must match verifiedAnalytic.kind exactly. Use actual JSON double-quoted strings. This is a SAFE editorial plan, NOT arbitrary CSS or executable code.",
     "CINEMATIC means a SINGLE beautiful generated illustration bleeds edge-to-edge behind magazine typography, not an image rectangle inside a colourful card. Choose cinematic primarily for canStageCinematic=true scenes. The React renderer handles safe text spacing, gradients and contrast. A true full-art cinematic scene needs ONE striking motif and a clear visual thesis. For opening art, write artConcept specifying the thesis as an evocative scene. For chapter art, add a single scene-art element AND a 10-180 character artConcept specific to this beat. The image generator will receive EXACTLY this text placement and focal direction.",
     "IMAGE COMPOSITION IS JOINT ART DIRECTION: textSide describes where the overlaid typography will be; imageFocus describes where the primary image subject must be. Keep them mostly opposite (text LEFT, focal RIGHT, or vice versa), and reserve the text area as quiet, dark negative space. Center text is appropriate only for intentionally symmetrical imagery. textPosition determines the upper, middle or lower visual rhythm of the typography.",
     "DATA means a significant verified comparison is the HERO. Choose presentation:'data' and stat elements ONLY when canUseData=true AND the difference is editorially important. A 33% to 49% increase does not justify a whole chart! Do not recycle the same claim as both a text and a chart slide. If the same format change has already been explained, use quiet typography or image-led narrative instead. TYPOGRAPHY is a deliberately quiet text-led scene; COMPOSED is a rare fallback for a genuine sequence. Do NOT default to composed.",
@@ -85,8 +93,10 @@ export function applyWrappedVisualCompositions(
       const dataLike = composition.direction?.presentation === "data" ||
         composition.elements.some(element => element.type === "stat");
       if (dataLike) {
-        if (!isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
-            !isStrongSceneData(scene.kind, scene.bars) ||
+        if (!(isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
+              scene.editorialJob === "data-reveal") ||
+            !(isStrongSceneData(scene.kind, scene.bars) ||
+              isStrongVerifiedAnalytic(scene.analytic)) ||
             dataCount >= MAX_DATA_SLIDES[timeframe]) {
           // A visual-only reroll may not turn ordinary prose into a new
           // infographic or bypass the narrative's evidence/quantity budget.
