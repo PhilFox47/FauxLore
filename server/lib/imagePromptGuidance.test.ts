@@ -83,3 +83,12 @@ test("GPT Image 2.5 Wrapped cover briefs do not inherit boss or loot portrait co
   assert.doesNotMatch(prompt, /Level changes the drama of the scene/);
   assert.doesNotMatch(prompt, /Rarity is an inventory/);
 });
+
+test("Wrapped chapter illustrations use independent editorial guidance, not title-page rules", () => {
+  const p = gptImage25DeliveryPrompt("A train arriving at a strange midnight station.", "wrapped-scene");
+  assert.match(p, /interior scene/);
+  assert.match(p, /single strong visual metaphor/);
+  assert.match(p, /no character lineup|Do NOT try to draw all logged media titles/i);
+  assert.doesNotMatch(p, /Keep the left portion darker and uncluttered/);
+  assert.doesNotMatch(p, /Rarity is an inventory/);
+});
