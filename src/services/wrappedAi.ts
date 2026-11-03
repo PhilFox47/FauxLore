@@ -10,6 +10,8 @@ export interface WrappedStory {
   title: string;
   dek: string;
   scenes: (StoryScene & { evidenceIds: string[] })[];
+  /** Optimistic revision for independently rerolling visual compositions. */
+  visualRevision?: number;
   generatedAt?: string;
   /** Separate image asset, never part of AI-authored story JSON. */
   coverArtUrl?: string | null;
