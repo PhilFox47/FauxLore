@@ -253,7 +253,7 @@ export async function generateAiWrapped(args: {
       const story = normalizeWrappedStory(parseJson(answer), evidence, media);
       // A second, independent creative call composes only selected visual
       // highlights. Any failure falls back to the already valid story layouts.
-      return await generateWrappedVisualCompositions({ story, apiKey, model });
+      return await generateWrappedVisualCompositions({ story, apiKey, model, timeframe: evidence.timeframe });
     } catch (err: any) { lastFailure = err?.message || 'Invalid story'; }
   }
   throw new Error('Wrapped Director failed validation twice: ' + lastFailure);
