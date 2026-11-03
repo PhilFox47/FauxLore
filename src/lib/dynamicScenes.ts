@@ -11,7 +11,7 @@ export type DynamicSceneTone = "primary" | "secondary" | "accent";
 export type DynamicSceneSize = "sm" | "md" | "lg" | "xl";
 export type DynamicSceneShape = "orb" | "ring" | "line" | "panel" | "pill";
 export type DynamicSceneElementType =
-  "title" | "body" | "eyebrow" | "quote" | "media" | "stat" | "beat" | "shape" | "title-art";
+  "title" | "body" | "eyebrow" | "quote" | "media" | "scene-art" | "stat" | "beat" | "shape" | "title-art";
 
 export interface SceneBox {
   /** Percentage coordinates in the desktop design canvas (0-100). */
@@ -37,11 +37,13 @@ export interface DynamicSceneElement {
 export interface DynamicSceneComposition {
   version: 1;
   backdrop: DynamicSceneBackdrop;
+  /** A single descriptive visual metaphor used only for rendered scene artwork. */
+  artConcept?: string;
   elements: DynamicSceneElement[];
 }
 
 const elementTypes = new Set<DynamicSceneElementType>([
-  "title", "body", "eyebrow", "quote", "media", "stat", "beat", "shape", "title-art",
+  "title", "body", "eyebrow", "quote", "media", "scene-art", "stat", "beat", "shape", "title-art",
 ]);
 const backdrops = new Set<DynamicSceneBackdrop>(["cinematic","spotlight","grid","minimal","halftone"]);
 const sizes = new Set<DynamicSceneSize>(["sm","md","lg","xl"]);
@@ -117,6 +119,7 @@ export function normalizeDynamicScene(
     };
     if (type === "quote" && !scene.quote) throw new Error("Quote must come from a verified journal");
     if (type === "title-art" && scene.kind !== "opening") throw new Error("Title art is opening-only");
+    if (type === "scene-art" && (scene.kind === "opening" || scene.kind === "closing")) throw new Error("Interior art is for story beats, not the opening or epilogue");
     if (type === "media") {
       if (typeof raw.mediaId !== "string" || !allowedMedia.has(raw.mediaId)) {
         throw new Error("Media art must refer to a verified scene cover");
@@ -137,7 +140,7 @@ export function normalizeDynamicScene(
     }
     // Ambient motion is deliberately limited to decorative and image assets.
     if ((element.motion === "float" || element.motion === "pulse") &&
-      !["shape", "media", "title-art"].includes(element.type)) {
+      !["shape", "media", "title-art", "scene-art"].includes(element.type)) {
       throw new Error("Text and data must not endlessly animate");
     }
     elements.push(element);
@@ -146,7 +149,9 @@ export function normalizeDynamicScene(
   const bodies = elements.filter(element => element.type === "body");
   if (titles.length !== 1 || bodies.length !== 1) throw new Error("Dynamic composition needs one title and one body");
   if (overlapRatio(titles[0].box, bodies[0].box) > .12) throw new Error("Dynamic scene title overlaps body");
-  if (elements.filter(element => element.type === "shape").length > 4 ||
+  if (elements.filter(element => element.type === "scene-art").length > 1 ||
+      elements.filter(element => element.type === "title-art").length > 1 ||
+      elements.filter(element => element.type === "shape").length > 4 ||
       elements.filter(element => element.type === "media").length > 2 ||
       elements.filter(element => element.type === "stat").length > 4) {
     throw new Error("Dynamic scene is too cluttered");
@@ -154,6 +159,11 @@ export function normalizeDynamicScene(
   return {
     version: 1,
     backdrop: value.backdrop as DynamicSceneBackdrop,
+    ...(elements.some(element => element.type === "scene-art") &&
+      typeof value.artConcept === "string" && value.artConcept.trim().length >= 6 &&
+      value.artConcept.length <= 240 && !/[<>]/.test(value.artConcept)
+        ? { artConcept: value.artConcept.trim().replace(/\s+/g, " ") }
+        : {}),
     elements,
   };
 }
