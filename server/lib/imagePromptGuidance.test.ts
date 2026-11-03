@@ -79,7 +79,7 @@ test("GPT Image 2.5 Wrapped cover briefs do not inherit boss or loot portrait co
   assert.match(prompt, /ONE central visual thesis/);
   assert.match(prompt, /at most ONE source media work/i);
   assert.match(prompt, /no character lineup/i);
-  assert.match(prompt, /left portion darker and uncluttered/);
+  assert.match(prompt, /rather than assuming the title always appears on the left/);
   assert.doesNotMatch(prompt, /Level changes the drama of the scene/);
   assert.doesNotMatch(prompt, /Rarity is an inventory/);
 });
@@ -89,6 +89,6 @@ test("Wrapped chapter illustrations use independent editorial guidance, not titl
   assert.match(p, /interior scene/);
   assert.match(p, /single strong visual metaphor/);
   assert.match(p, /no character lineup|Do NOT try to draw all logged media titles/i);
-  assert.doesNotMatch(p, /Keep the left portion darker and uncluttered/);
+  assert.match(p, /text side and subject focal side may vary/);
   assert.doesNotMatch(p, /Rarity is an inventory/);
 });
