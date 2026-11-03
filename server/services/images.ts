@@ -8,7 +8,7 @@ import { recordAiCallStart, recordAiCall, nextCallId, recordPayload } from "../l
 import { longRequestDispatcher } from "../lib/httpDispatcher";
 import { cliProxyBaseUrl, cliProxyImageSize, cliProxyImagePrompt, cliProxyImageEditBody, imageEditSupportsTextFallback } from "../lib/cliProxy";
 import { imagePromptCraft, resolveImagePromptProfile, gptImage25DeliveryPrompt } from "../lib/imagePromptGuidance";
-import { buildEnragedBossImagePrompt, localImageReferenceDataUrl } from "../lib/enrageImages";
+import { buildBossStateImagePrompt, basePortraitForTransition, localImageReferenceDataUrl } from "../lib/bossStateImages";
 import { imageFrameSize, imageFrameMatches, withImageFrame, type ImageFrame } from "../../src/lib/imageFraming";
 import { AUTHENTICITY, SHARPNESS, enemyTier, rarityArt } from "../lib/artDirection";
 import { codexArtStyleBlock, type CodexService } from "./codex";
@@ -63,7 +63,12 @@ const BOSS_NEGATIVE_EXTRA = "multiple characters, duplicate, collage, cluttered 
 const LOOT_NEGATIVE_EXTRA = "hands, fingers, person, multiple items, cluttered scene, environment, landscape";
 
 /** Provider-aware image generation and local storage. */
-export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImagesDir: string; codex: CodexService }) {
+export function createImageService({ db, aiImagesDir, codex, canSpendTokens = () => true }: {
+  db: Db;
+  aiImagesDir: string;
+  codex: CodexService;
+  canSpendTokens?: (userId: string) => boolean;
+}) {
   function readImageConfig() {
     let row: any = {};
     try {
@@ -357,15 +362,16 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
         if (!saved.changes) return; // A newer generation superseded this one.
       }
 
+      const visualState = boss.status === "Defeated" ? "defeated" : boss.enraged ? "enraged" : null;
       let referenceDataUrl: string | null = null;
-      let textOnlyEnragePrompt: string | null = null;
-      if (boss.enraged) {
+      let textOnlyStatePrompt: string | null = null;
+      if (visualState) {
         const cfg = readImageConfig();
         if (cfg.useCli && cfg.gptImage25) {
-          referenceDataUrl = localImageReferenceDataUrl(boss.enrageOriginalImageUrl, aiImagesDir);
+          referenceDataUrl = localImageReferenceDataUrl(basePortraitForTransition(boss), aiImagesDir);
         }
         if (!referenceDataUrl) {
-          console.warn(`[images] Enrage reference unavailable or unsupported for ${bossId}; using source-faithful text-only generation.`);
+          console.warn(`[images] ${visualState} reference unavailable or unsupported for ${bossId}; using source-faithful text-only generation.`);
         }
         const identity = {
           name: boss.name,
@@ -375,16 +381,21 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
           sourceType: mediaType,
           imagePrompt,
         };
-        textOnlyEnragePrompt = buildEnragedBossImagePrompt(identity, false);
-        imagePrompt = referenceDataUrl ? buildEnragedBossImagePrompt(identity, true) : textOnlyEnragePrompt;
+        textOnlyStatePrompt = buildBossStateImagePrompt(visualState, identity, false);
+        imagePrompt = referenceDataUrl
+          ? buildBossStateImagePrompt(visualState, identity, true)
+          : textOnlyStatePrompt;
       }
 
       const imageUrl = await internalGenerateImageWithNanoGpt(
-        aiConfig.apiKey, imagePrompt, BOSS_NEGATIVE_EXTRA, "landscape-3:2", referenceDataUrl, textOnlyEnragePrompt,
+        aiConfig.apiKey, imagePrompt, BOSS_NEGATIVE_EXTRA, "landscape-3:2", referenceDataUrl, textOnlyStatePrompt,
       );
       const saved = db.prepare(
-        "UPDATE world_bosses SET imageUrl = ?, imageStatus = 'done', imageGenerationToken = NULL WHERE id = ? AND userId = ? AND imageGenerationToken = ?",
-      ).run(imageUrl, bossId, userId, generationToken);
+        `UPDATE world_bosses SET imageUrl = ?, imageStatus = 'done', imageGenerationToken = NULL,
+          basePortraitImageUrl = CASE WHEN ? = 1 AND basePortraitImageUrl IS NULL
+            THEN ? ELSE basePortraitImageUrl END
+          WHERE id = ? AND userId = ? AND imageGenerationToken = ?`,
+      ).run(imageUrl, visualState ? 0 : 1, imageUrl, bossId, userId, generationToken);
       if (!saved.changes) console.log(`[images] Discarded superseded image for boss ${bossId}.`);
     } catch (e) {
       console.error("Boss Image Background Gen Error:", e);
@@ -393,6 +404,31 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
         "UPDATE world_bosses SET imageStatus = 'failed', imageGenerationToken = NULL WHERE id = ? AND userId = ? AND imageGenerationToken = ?",
       ).run(bossId, userId, generationToken);
     }
+  }
+
+  /**
+   * A state transition to Defeated queues one Victory artwork. Called ONLY
+   * after an actual Active -> Defeated transition, not on ordinary GET requests.
+   * The pre-state portrait is frozen before any old in-flight job can finish.
+   */
+  function queueBossVictoryArtwork(userId: string, bossId: string): void {
+    const boss: any = db.prepare("SELECT * FROM world_bosses WHERE id = ? AND userId = ?").get(bossId, userId);
+    if (!boss || boss.status !== "Defeated") return;
+    const base = basePortraitForTransition(boss);
+    const allowed = canSpendTokens(userId);
+    db.prepare(
+      `UPDATE world_bosses SET
+        basePortraitImageUrl = COALESCE(basePortraitImageUrl, ?),
+        imageStatus = ?, imageGenerationToken = ?
+        WHERE id = ? AND userId = ? AND status = 'Defeated'`,
+    ).run(base, allowed ? "pending" : "failed", uuidv4(), bossId, userId);
+    if (!allowed) {
+      console.log(`[images] Defeated boss ${bossId}: image generation deferred for inactive account.`);
+      return;
+    }
+    void generateBossImageBackground(userId, bossId).catch(error => {
+      console.error("[images] Could not start Victory artwork:", error);
+    });
   }
 
   /** Art-directs an enemy portrait for a boss that has no stored prompt. */
@@ -557,6 +593,7 @@ Return ONLY the final image prompt text, nothing else.`;
     describeImageModel,
     internalGenerateImageWithNanoGpt,
     generateBossImageBackground,
+    queueBossVictoryArtwork,
     generateArtifactImageBackground,
   };
 }
