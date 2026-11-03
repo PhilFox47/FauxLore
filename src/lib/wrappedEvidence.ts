@@ -1,5 +1,6 @@
 import { format, isWithinInterval, parseISO, startOfISOWeek, startOfMonth, startOfYear, endOfISOWeek, endOfMonth, endOfYear, subHours, subWeeks, subMonths, subYears } from 'date-fns';
 import { calculateScaledDelta } from './scaling';
+import { analyzeMediaFocus, focusEditorialCalibration } from './periodFocus';
 import type { MediaItem, ProgressLog, Settings } from '../types/schema';
 import type { StoryBar, StoryBeat, StoryKind, StoryPeriod } from './storyDiscovery';
 
@@ -20,6 +21,8 @@ export interface WrappedEvidence {
   facts: WrappedFact[];
   media: { id: string; title: string; type: string; year?: number; genres: string[]; rating?: number; review?: string }[];
   bounds: { start: string; end: string };
+  /** Norm-relative editorial warning; not a required factual story beat. */
+  editorialCalibration: string;
 }
 
 const period = (date: Date, kind: StoryPeriod) => kind === 'week'
@@ -64,10 +67,25 @@ export function buildWrappedEvidence(args: {
     byType.set(m.mediaType, (byType.get(m.mediaType) || 0) + pages);
   }
   const ranking = [...byMedia].filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
-  const touched = [...new Set(logs.map(l => l.mediaId))].map(id => byId.get(id)).filter((m): m is MediaItem => !!m);
+  const touched = [...new Set(progress.filter(l => value(l) > 0).map(l => l.mediaId))]
+    .map(id => byId.get(id)).filter((m): m is MediaItem => !!m);
+  const focus = analyzeMediaFocus({
+    timeframe, periodStart: timeIdDate(timeframe, timeId),
+    logs: progress, history, media, settings,
+  });
   const days = new Set(progress.filter(l => value(l) > 0).map(l => format(subHours(parseISO(l.timestamp), 5), 'yyyy-MM-dd')));
   add({ id: 'overview', kind: 'rhythm', title: 'What the period contained',
     evidence: logs.length + ' log entries, ' + days.size + ' distinct active days, ' + touched.length + ' media titles; ' + round(total) + ' normalized Master Pages. These are NOT hours.' });
+  if (focus.unusuallyFocused && focus.leadingTitle && focus.baselineLeadingShare !== null) {
+    const id = ranking[0]?.[0];
+    add({ id: 'focus-0', kind: 'insight', title: 'Unusually strong focus: ' + focus.leadingTitle,
+      mediaId: id,
+      evidence: focus.leadingTitle + ' accounted for ' + Math.round(focus.leadingShare * 100) +
+        '% of normalized Master Pages this period, versus ' +
+        Math.round(focus.baselineLeadingShare * 100) + '% for the leading title on average across ' +
+        focus.baselinePeriods + ' earlier comparable active ' + timeframe +
+        ' periods. This is unusual concentration even if other works were logged. These are weighted progress units, NOT hours.' });
+  }
   ranking.slice(0, 10).forEach(([id, pages], i) => {
     const m = byId.get(id)!;
     add({ id: 'media-' + i, kind: 'spotlight', title: m.title, mediaId: id,
@@ -135,18 +153,10 @@ export function buildWrappedEvidence(args: {
       evidence: 'User explicitly logged activity at "' + place + '" on ' + dates.length + ' different dates, with ' + titles.length +
         ' titles: ' + titles.slice(0, 10).join(', ') + '. The place label does NOT prove travel purpose or emotional state.' });
   });
-  // Show correlations and juxtapositions as evidence, not invented causation.
-  const dates = new Map<string, Set<string>>();
-  for (const l of progress) {
-    const date = format(subHours(parseISO(l.timestamp), 5), 'yyyy-MM-dd');
-    if (!dates.has(date)) dates.set(date, new Set());
-    dates.get(date)!.add(l.mediaId);
-  }
-  [...dates].filter(([, v]) => v.size >= 2).slice(0, 12).forEach(([date, ids], i) => {
-    add({ id: 'crossover-' + i, kind: 'insight', title: 'Different worlds on ' + date, mediaIds: [...ids],
-      evidence: 'On ' + date + ' the user logged ' + [...ids].map(id => byId.get(id)?.title).filter(Boolean).join(' and ') +
-        '. Co-occurrence alone does not establish why the user switched.' });
-  });
+  // Do NOT manufacture a 'crossover' fact from ordinary same-day media use.
+  // This tracker spans all entertainment media; such combinations are routine.
+  // Specific, meaningful coincidences remain available through logged
+  // locations, journal thoughts, reviews and other verified evidence above.
   const previousIdSet = new Set(logs.map(l => l.id));
   const oldProgress = history.filter(l => !previousIdSet.has(l.id) && l.metricType !== 'statusChange');
   for (const m of touched) {
@@ -205,6 +215,7 @@ export function buildWrappedEvidence(args: {
   }
   return {
     timeframe, timeId, facts,
+    editorialCalibration: focusEditorialCalibration(focus),
     bounds: { start: format(period(start, timeframe).start, 'yyyy-MM-dd'), end: format(period(start, timeframe).end, 'yyyy-MM-dd') },
     media: touched.map(m => ({ id: m.id, title: m.title, type: m.mediaType, year: m.year, genres: (m.genres || []).slice(0, 6),
       rating: m.userRating, review: m.userReview?.slice(0, 450) })).slice(0, 45),
