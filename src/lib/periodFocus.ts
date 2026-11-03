@@ -53,7 +53,9 @@ function summarize(
     // Inverse concentration (Simpson effective titles) is robust to background
     // items with tiny progress; unlike a raw title count it measures attention.
     effectiveTitles: shares.length ? 1 / shares.reduce((s, v) => s + v * v, 0) : 0,
-    typeShares: new Map([...perType].map(([type, amount]) => [type, total ? amount / total : 0])),
+    typeShares: new Map<string, number>(
+      [...perType].map(([type, amount]): [string, number] => [type, total ? amount / total : 0]),
+    ),
   };
 }
 
