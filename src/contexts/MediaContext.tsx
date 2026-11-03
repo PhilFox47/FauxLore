@@ -156,10 +156,10 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     refreshData();
   }, [refreshData, user?.id]);
 
-  // Enrage edits run AFTER the taunt response. Poll just the boss endpoint
-  // while an enraged artwork job is pending, without reloading the whole app.
+  // Boss state images run after Enrage and Defeat events. Poll only the boss
+  // endpoint while either variant is pending, without reloading the whole app.
   useEffect(() => {
-    if (!user || !worldBosses.some(b => b.enraged && (b.imageStatus === 'pending' || b.imageStatus === 'generating'))) return;
+    if (!user || !worldBosses.some(b => (b.enraged || b.status === 'Defeated') && (b.imageStatus === 'pending' || b.imageStatus === 'generating'))) return;
     let cancelled = false;
     const timer = setInterval(() => {
       void DatabaseService.getWorldBosses()
