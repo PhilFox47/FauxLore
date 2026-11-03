@@ -308,6 +308,16 @@ export const DatabaseService = {
     return res.json();
   },
 
+  /** Redraw only the non-opening cinematic scene illustrations. */
+  async regenerateWrappedSceneArt(timeframe: 'week' | 'month' | 'year', timeId: string): Promise<WrappedStory> {
+    const res = await apiFetch('/api/wrapped/' + timeframe + '/' + encodeURIComponent(timeId) + '/scene-art', { method: 'POST' });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.error || 'Could not regenerate chapter artwork (' + res.status + ')');
+    }
+    return res.json();
+  },
+
   async getGeneratedAchievements(): Promise<GeneratedAchievement[]> {
     const res = await apiFetch('/api/achievements');
     if (!res.ok) throw new Error('Failed to load achievements');
