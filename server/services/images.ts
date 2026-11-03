@@ -8,7 +8,7 @@ import { recordAiCallStart, recordAiCall, nextCallId, recordPayload } from "../l
 import { longRequestDispatcher } from "../lib/httpDispatcher";
 import { cliProxyBaseUrl, cliProxyImageSize, cliProxyImagePrompt, cliProxyImageEditBody, imageEditSupportsTextFallback } from "../lib/cliProxy";
 import { imagePromptCraft, resolveImagePromptProfile, gptImage25DeliveryPrompt } from "../lib/imagePromptGuidance";
-import { buildBossStateImagePrompt, basePortraitForTransition, localImageReferenceDataUrl } from "../lib/bossStateImages";
+import { buildBossStateImagePrompt, bossVisualState, basePortraitForTransition, localImageReferenceDataUrl } from "../lib/bossStateImages";
 import { imageFrameSize, imageFrameMatches, withImageFrame, type ImageFrame } from "../../src/lib/imageFraming";
 import { AUTHENTICITY, SHARPNESS, enemyTier, rarityArt } from "../lib/artDirection";
 import { codexArtStyleBlock, type CodexService } from "./codex";
@@ -362,7 +362,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
         if (!saved.changes) return; // A newer generation superseded this one.
       }
 
-      const visualState = boss.status === "Defeated" ? "defeated" : boss.enraged ? "enraged" : null;
+      const visualState = bossVisualState(boss);
       let referenceDataUrl: string | null = null;
       let textOnlyStatePrompt: string | null = null;
       if (visualState) {
