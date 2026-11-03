@@ -22,6 +22,25 @@ export function isSignificantTasteGap(user: number, critics: number): boolean {
     Math.abs(user - critics) >= 1;
 }
 
+/** Compatibility gate for already-saved stories during a visual-only reroll.
+ * The authoritative values are normalized 0..100 chart bars supplied by the
+ * app, never invented by the visual model.
+ */
+export function isStrongSceneData(
+  kind: string, bars?: Array<{ value: number }> | null,
+): boolean {
+  if (!bars || bars.length < 2 || !bars.every(b => Number.isFinite(b.value) && b.value >= 0 && b.value <= 100)) {
+    return false;
+  }
+  if (kind === 'outlier') {
+    return isSignificantFormatShift(bars[1].value / 100, bars[0].value / 100);
+  }
+  if (kind === 'taste') {
+    return Math.abs(bars[0].value - bars[1].value) >= 20;
+  }
+  return false;
+}
+
 export const MAX_DATA_SLIDES: Record<StoryPeriod, number> = {
   week: 1,
   month: 2,
