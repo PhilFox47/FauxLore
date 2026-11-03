@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "../context";
-import { selectIllustratedScenes, selectWrappedSceneStyleMediaId, buildWrappedSceneArtPrompt, buildWrappedClosingTableauPrompt } from "../../src/lib/wrappedSceneArt";
+import { selectIllustratedScenes, selectWrappedSceneStyleMediaId, buildWrappedSceneArtPrompt, buildWrappedClosingTableauPrompt, buildWrappedAchievementFinalePrompt } from "../../src/lib/wrappedSceneArt";
 import type { WrappedCodexStyle } from "../lib/wrappedCodexStyle";
 import type { StoryScene } from "../../src/lib/storyDiscovery";
 import { imageFramingGuidance, type EditorialDirection } from "../../src/lib/dynamicScenes";
@@ -326,7 +326,7 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
       if (!row || ["pending","generating"].includes(row.sceneArtStatus || "") ||
           (!regenerate && row.sceneArtStatus === "failed")) return false;
       const story = JSON.parse(row.story) as WrappedCoverStory & { scenes: StoryScene[] };
-      const ids = selectIllustratedScenes(story.scenes);
+      const ids = [...selectIllustratedScenes(story.scenes), "achievement-finale"];
       if (!ids.length) return false;
       let images: Record<string, string> = {};
       try { images = JSON.parse(row.sceneArtJson || "{}"); } catch { images = {}; }
@@ -364,7 +364,7 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
       ).get(userId, timeframe, timeId, token) as { story: string; sceneArtJson?: string | null } | undefined;
       if (!row) return;
       const story = JSON.parse(row.story) as WrappedCoverStory & { scenes: StoryScene[] };
-      const ids = selectIllustratedScenes(story.scenes);
+      const ids = [...selectIllustratedScenes(story.scenes), "achievement-finale"];
       let images: Record<string, string> = {};
       try {
         if (row.sceneArtJson) images = JSON.parse(row.sceneArtJson);
@@ -382,16 +382,18 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
         const batch = needed.slice(i, i + 2);
         const produced = await Promise.allSettled(batch.map(async id => {
           const scene = story.scenes.find(s => s.id === id);
-          if (!scene) throw new Error("Unknown artwork scene " + id);
-          const prompt = scene.kind === "closing"
-            ? buildWrappedClosingTableauPrompt(story, scene, visualSelfFor(userId))
-            : buildWrappedSceneArtPrompt(
-              story, scene, visualSelfFor(userId),
-              (() => {
-                const featuredMediaId = selectWrappedSceneStyleMediaId(scene);
-                return featuredMediaId ? optionalCodexStyle(userId, featuredMediaId) : null;
-              })(),
-            );
+          const prompt = id === "achievement-finale"
+            ? buildWrappedAchievementFinalePrompt(story)
+            : scene?.kind === "closing"
+              ? buildWrappedClosingTableauPrompt(story, scene, visualSelfFor(userId))
+              : scene ? buildWrappedSceneArtPrompt(
+                story, scene, visualSelfFor(userId),
+                (() => {
+                  const featuredMediaId = selectWrappedSceneStyleMediaId(scene);
+                  return featuredMediaId ? optionalCodexStyle(userId, featuredMediaId) : null;
+                })(),
+              ) : null;
+          if (!prompt) throw new Error("Unknown artwork scene " + id);
           return { id, imageUrl: await generateSceneImage(userId, prompt) };
         }));
         for (const result of produced) {
