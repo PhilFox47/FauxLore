@@ -4,7 +4,7 @@ import { AI_PERSONAS } from "../../src/lib/personas";
 import { bossTarget } from "../lib/bossTargets";
 
 export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser } = ctx;
+  const { db, getAuthUser, queueBossVictoryArtwork } = ctx;
 
   app.get("/api/settings", (req, res) => {
     try {
