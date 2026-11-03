@@ -72,7 +72,9 @@ export function applyWrappedVisualCompositions(
   }
   const seen = new Set<string>();
   const maps = new Map<string, DynamicSceneComposition>();
-  let dataCount = 0;
+  let dataCount = story.scenes.filter(scene =>
+    !!scene.composition && (scene.composition.direction?.presentation === "data" ||
+      scene.composition.elements.some(element => element.type === "stat"))).length;
   for (const proposal of reply.compositions) {
     if (!proposal || typeof proposal.sceneId !== "string" || seen.has(proposal.sceneId)) continue;
     seen.add(proposal.sceneId);
