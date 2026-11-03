@@ -4,6 +4,7 @@ import type { MediaItem, ProgressLog, Settings } from '../types/schema';
 import type { StructuredRecap, EditorialPlan } from '../services/recapAi';
 import type { GeneratedAchievement } from './generatedAchievements';
 import type { DynamicSceneComposition } from './dynamicScenes';
+import type { EditorialJob, VerifiedAnalytic } from './wrappedEditorial';
 
 export type StoryPeriod = 'week' | 'month' | 'year';
 export type StoryKind = 'opening' | 'insight' | 'outlier' | 'location' | 'journal' | 'spotlight' | 'taste' | 'return' | 'timeline' | 'rhythm' | 'achievement' | 'closing';
@@ -39,6 +40,10 @@ export interface StoryScene {
   achievement?: GeneratedAchievement;
   design?: StoryDesign;
   artworks?: StoryMedia[];
+  /** The story-level editorial purpose, retained through Visual Director and persistence. */
+  editorialJob?: EditorialJob;
+  /** Immutable, app-verified analytic subject. Never generated as arbitrary numbers by the AI. */
+  analytic?: VerifiedAnalytic;
   /** Optional AI-composed visual stage; absent/invalid = safe legacy layout. */
   composition?: DynamicSceneComposition;
 }
