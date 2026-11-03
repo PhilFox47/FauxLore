@@ -545,6 +545,7 @@ export function Recaps() {
         apiKey: settings.nanoGptApiKey || '',
         model: creativeModel(settings),
         timeframe, timeId, recap,
+        wrapped, // When already available, these main story beats are souvenirs too.
         context: evidence,
         previous: achievements,
       });
