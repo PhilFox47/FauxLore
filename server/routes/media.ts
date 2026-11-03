@@ -14,7 +14,7 @@ import { isRemoteCover } from "../services/coverCache";
 const ADULT_TERMS = new Set(["erotic", "nsfw", "eroge", "sexual content"]);
 
 export function registerMediaRoutes(app: Express, ctx: ServerContext) {
-  const { db, getAuthUser, normalizeMedia, safeJsonParse, autoTag, activity, coverCache, refreshMangaCovers } = ctx;
+  const { db, getAuthUser, normalizeMedia, safeJsonParse, autoTag, activity, coverCache, refreshMangaCovers, queueBossVictoryArtwork } = ctx;
 
   app.get("/api/public/covers", (req, res) => {
     try {
