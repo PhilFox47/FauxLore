@@ -3,7 +3,7 @@ import test from "node:test";
 import Database from "better-sqlite3";
 import type { Db } from "../context";
 import {
-  wrappedCoverBounds, buildWrappedCoverPrompt, createWrappedCoverService,
+  wrappedCoverBounds, buildWrappedCoverPrompt, selectWrappedCoverFocus, createWrappedCoverService,
   type WrappedCoverStory,
 } from "./wrappedCovers";
 
@@ -68,10 +68,57 @@ test("cover prompt reflects the actual saved issue, reserves text overlay space 
   assert.match(prompt, /Strange Days in a Familiar Universe/);
   assert.match(prompt, /Mass Effect/);
   assert.match(prompt, /journey continues/);
+  assert.match(prompt, /ONE clear hero motif/);
+  assert.match(prompt, /Only ONE focal subject/);
+  assert.doesNotMatch(prompt, /connecting the MOST meaningful two or three themes/);
   assert.match(prompt, /cobalt/);
   assert.match(prompt, /LEFT 45 percent/);
   assert.match(prompt, /NO text/);
   assert.doesNotMatch(prompt, /Unlogged Title/);
+});
+
+test("one editorial image must not become an all-media lineup even when several sources are supplied", () => {
+  const prompt = buildWrappedCoverPrompt(story, TIMEFRAME, PERIOD, [
+    { id: "logged", title: "Mass Effect", type: "Game", genres: ["Sci-Fi"] },
+    { id: "secondary", title: "Dungeon Crawler Carl", type: "Book", genres: ["Fantasy"] },
+    { id: "third", title: "Final Fantasy XIV", type: "Game", genres: ["MMORPG"] },
+  ]);
+  assert.match(prompt, /Mass Effect/);
+  assert.doesNotMatch(prompt, /Dungeon Crawler Carl|Final Fantasy XIV/);
+  assert.match(prompt, /Do not illustrate each logged title/);
+  assert.match(prompt, /not a required subject/);
+  assert.match(prompt, /No lineup of characters/);
+  assert.doesNotMatch(prompt, /These works were actually logged/);
+});
+
+test("editorial prominence beats raw activity volume when choosing ONE primary media influence", () => {
+  const chosen = selectWrappedCoverFocus(story, [
+    { id: "background", title: "A Very Busy Side Quest", type: "Game", count: 60, sceneScore: 0 },
+    { id: "logged", title: "Mass Effect", type: "Game", count: 2, sceneScore: 12 },
+    { id: "other", title: "Another Novel", type: "Book", count: 20, sceneScore: 5 },
+  ]);
+  assert.equal(chosen?.title, "Mass Effect");
+  assert.deepEqual(Object.keys(chosen || {}).sort(), ["genres", "id", "title", "type"].sort());
+});
+
+test("abstract period thesis may generate key art with no named franchise", () => {
+  const abstractStory = {
+    ...story, title: "The Long Way Home", dek: "A period about patience and coming back",
+    scenes: [
+      { kind: "opening", title: "Begin", evidenceIds: [] },
+      { kind: "insight", title: "Finding your feet", evidenceIds: ["reflection-0"] },
+      { kind: "closing", title: "End", evidenceIds: [] },
+    ],
+  };
+  assert.equal(selectWrappedCoverFocus(abstractStory, [
+    { id: "one", title: "Mass Effect", type: "Game", count: 3, sceneScore: 0 },
+    { id: "two", title: "Another Book", type: "Book", count: 20, sceneScore: 0 },
+  ]), null);
+  const prompt = buildWrappedCoverPrompt(abstractStory, TIMEFRAME, PERIOD, []);
+  assert.match(prompt, /The Long Way Home/);
+  assert.match(prompt, /no single media title is the dominant visual anchor/i);
+  assert.doesNotMatch(prompt, /Mass Effect|Another Book/);
+  assert.match(prompt, /ONE memorable visual metaphor/);
 });
 
 test("one cover per saved Wrapped; media subjects are restricted to user-owned progress logs", async () => {
