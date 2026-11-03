@@ -185,6 +185,8 @@ export function initSchema(db: Db) {
       coverArtUrl TEXT,
       coverArtStatus TEXT,
       coverArtRequestId TEXT,
+      -- The browser's reporting timezone anchors period-specific log selection.
+      coverArtTimeZone TEXT,
       PRIMARY KEY (userId, timeframe, timeId),
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
