@@ -149,6 +149,9 @@ export function initSchema(db: Db) {
       googleBooksApiKey TEXT,
       timezone TEXT,
       aiPersona TEXT,
+      -- Per-account, opt-in visual likeness description for Wrapped images.
+      visualSelfInsertMode TEXT NOT NULL DEFAULT 'never',
+      visualSelfDescription TEXT NOT NULL DEFAULT '',
       masterPageConfig TEXT,
       yearlyGoals TEXT,
       lastActiveDate TEXT,
