@@ -4,6 +4,7 @@ import { getAiConfig, nanoGenerateText, parseJsonLoose } from "../lib/ai";
 import { getPersonaDescription } from "../../src/lib/personas";
 import { FAUXLORE_BOSS_ATTRIBUTION } from '../../src/lib/fauxLoreMechanics';
 import { AUTHENTICITY, LEVEL_DESCRIPTIONS, SHARPNESS, enemyTier } from "../lib/artDirection";
+import { imagePromptCraft, imagePromptProfileFromDb } from "../lib/imagePromptGuidance";
 import { bossTarget, bossUnit } from "../lib/bossTargets";
 import { type CodexService } from "./codex";
 import { codexTaskContext } from "./codexV3Context";
@@ -68,6 +69,11 @@ export function createWorldBossService(
     });
     const codexBlock = codexTaskContext(db,codexRow,"enemy");
     const tier = enemyTier(level);
+    const imageProfile = imagePromptProfileFromDb(db);
+    const imageCraft = imagePromptCraft(imageProfile);
+    const imageSharpness = imageProfile.gptImage25
+      ? "Keep the character's canonical face, body, silhouette and equipment fully readable. Match depth of field and lighting to the original medium and scene."
+      : SHARPNESS;
 
     const past = previousEnemies(userId, mediaItem.id);
     const historyBlock = past.length
@@ -101,7 +107,8 @@ HOW TO WRITE IT:
 5. Art-direct its portrait yourself as a single ready-to-use text-to-image prompt.
 
 THE IMAGE PROMPT MUST:
-- Be 2-4 natural sentences that stand entirely on their own, written for the "Z-Image-Turbo" diffusion model (it follows natural language and renders any art style, including real text and logos).
+${imageCraft}
+- Preserve the subject's recognized canonical appearance, silhouette, face or creature anatomy, colors, costume and signature equipment. Describe specific visible anchors from the Codex rather than relying on the name alone; if the entity is invented for FauxLore, build it only from the source's established design language.
 - Render the subject in the ACTUAL art style, medium and palette of "${mediaItem.title}"${codexRow?.data?.artStyle?.summary ? ` — the Codex records it as: ${codexRow.data.artStyle.summary}` : ""}. Name that style explicitly and reference the franchise to anchor the look. Never default to generic 2D cartoon or flat vector art unless the source really is that.
 - ${AUTHENTICITY(mediaItem.title)}
 - Compose this image as a HORIZONTAL 3:2 LANDSCAPE canvas suitable for a wide enemy card, with safe margins around all essential parts of the subject/action. Never a vertical poster.
@@ -109,9 +116,9 @@ THE IMAGE PROMPT MUST:
 - Capture a MOMENT, not a pose. This one should be ${tier.action}. Pick the specific action that suits THIS enemy — what it would actually be doing — rather than the first one on that list, and describe the follow-through: what is moving, what is being flung or trailing behind it, where its weight is.
 - Frame it with ${tier.camera}. Vary the framing to suit the enemy: full body, three-quarter, or a tight close-up on the part of it that matters.
 - Never a neutral figure standing straight and facing the lens. No mugshots, no character-select line-ups, no arms hanging at its sides, no posing for a photograph — it should not be aware of the camera at all.
-- Describe its anatomy, armour, weapons, materials, aura and expression, all pitched at Level ${level}.
-- ${SHARPNESS}
-- Contain no watermarks, no signatures, no lettering and no duplicate characters.
+- Describe its actual anatomy, armour, weapons, materials and expression. Convey Level ${level} through scale, situation, gesture and cinematography, not by redesigning a recognizable character or adding unearned supernatural powers.
+- ${imageSharpness}
+- Contain no watermarks, signatures, invented writing, unrelated logos or duplicate characters. Preserve any existing canonical markings on the subject.
 
 Return ONLY a pure JSON object, no markdown fence, no commentary:
 {
