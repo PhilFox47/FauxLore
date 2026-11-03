@@ -133,6 +133,24 @@ export function buildWrappedClosingTableauPrompt(
 }
 
 /**
+ * Final achievement verdict follows the editorial closing, and needs a
+ * background too. Keep this image independent of the achievements actually
+ * awarded, so it cannot fabricate trophies or personal accomplishments.
+ */
+export function buildWrappedAchievementFinalePrompt(
+  issue: { title: string; dek: string },
+): string {
+  return [
+    "Create ONE atmospheric 3:2 FULL-BLEED BACKGROUND for the final Dungeon System Verdict epilogue of a personal Wrapped.",
+    "The issue's theme is: " + issue.title.slice(0, 180) + ". " + issue.dek.slice(0, 260),
+    "A distinctive, elegant dark-fantasy archive, monumental mysterious hall, empty trophy chamber or quiet bureaucratic dungeon threshold. Pick ONE evocative setting with ONE architectural or symbolic hero detail, rather than a collage. The mood is theatrical, witty, faintly ominous but celebratory.",
+    "This art lives BEHIND interactive achievement cards. Maintain generous dark negative space through the center and lower half, with visual interest at the far edges. Render an atmospheric environment ONLY; the app supplies the real achievements, cards, scores and buttons.",
+    "No specific awarded achievements, no characters holding trophies, no user likeness, no fake medals, no banners, no text, letters, logos, charts, cover images, collage, printed symbols or UI.",
+    "A coherent scene, cinematic lighting, muted gold and shadow, landscape 3:2. No invented personal activity or results.",
+  ].join("\n\n");
+}
+
+/**
  * Reveal is gated until the title and chapter illustrations finish, so the
  * user never sees a transient placeholder or a newly restyled scene with an
  * older mismatched image.
