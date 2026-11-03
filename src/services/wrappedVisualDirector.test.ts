@@ -92,7 +92,7 @@ test("second-pass visual director describes explicit safe cinematic versus data 
   assert.match(brief, /CINEMATIC EDITORIAL DIRECTION/);
   assert.match(brief, /textSide/);
   assert.match(brief, /imageFocus/);
-  assert.match(brief, /DATA means a verified comparison/);
+  assert.match(brief, /DATA means a significant verified comparison/);
   assert.match(brief, /TYPOGRAPHY is a deliberately quiet/);
   assert.match(brief, /BLEEDS edge-to-edge|bleeds edge-to-edge/i);
 });
@@ -112,4 +112,56 @@ test("model's editorial staging is normalized without allowing executable design
   assert.equal("css" in (clean.direction || {}), false);
   assert.equal("eventHandler" in (clean.direction || {}), false);
   assert.deepEqual(directed.scenes[1].bars, story.scenes[1].bars);
+});
+
+test("visual stage cannot invent a second week infographic or turn prose into data", () => {
+  const shared = { ...composition,
+    direction: { presentation: "data", textSide: "left", textPosition: "middle", imageFocus: "right" },
+  };
+  const monthlyStory: WrappedStory = {
+    ...story,
+    scenes: [
+      story.scenes[0],
+      story.scenes[1],
+      { ...story.scenes[1], id: "wrapped-2", title: "A second large rating gap",
+        evidenceIds: ["taste-2"] },
+      { ...story.scenes[1], id: "wrapped-3", kind: "insight", title: "An ordinary insight",
+        bars: undefined, evidenceIds: ["location-1"] },
+      { ...story.scenes[2], id: "wrapped-4" },
+    ],
+  };
+  const applied = applyWrappedVisualCompositions(monthlyStory, {
+    compositions: [
+      { sceneId: "wrapped-1", composition: shared },
+      { sceneId: "wrapped-2", composition: shared },
+      { sceneId: "wrapped-3", composition: { ...shared,
+        elements: shared.elements.slice(0, 2) } },
+    ],
+  }, monthlyStory.scenes.length, "week");
+  assert.equal(applied.scenes[1].composition?.direction?.presentation, "data");
+  assert.equal(applied.scenes[2].composition, undefined);
+  assert.equal(applied.scenes[3].composition, undefined);
+  const brief = wrappedVisualDirectorBrief(monthlyStory, undefined, "month");
+  assert.match(brief, /at most 2 infographic\/data slide/);
+  assert.match(brief, /canUseData/);
+  assert.match(brief, /do not create new ones in the visual pass/i);
+});
+
+test("the monthly visual director accepts two verified data slides but not a third", () => {
+  const sample: WrappedStory = { ...story,
+    scenes: [
+      story.scenes[0],
+      story.scenes[1],
+      { ...story.scenes[1], id: "wrapped-2", evidenceIds: ["taste-2"] },
+      { ...story.scenes[1], id: "wrapped-3", evidenceIds: ["taste-3"] },
+      { ...story.scenes[2], id: "wrapped-4" },
+    ],
+  };
+  const directed = { ...composition,
+    direction: { presentation: "data", textSide: "left", textPosition: "middle", imageFocus: "right" },
+  };
+  const result = applyWrappedVisualCompositions(sample, { compositions:
+    sample.scenes.slice(1, 4).map(scene => ({ sceneId: scene.id, composition: directed })),
+  }, sample.scenes.length, "month");
+  assert.equal(result.scenes.filter(scene => scene.composition?.direction?.presentation === "data").length, 2);
 });
