@@ -1,7 +1,7 @@
 import { apiFetch } from './db';
 import { generateWrappedVisualCompositions } from './wrappedVisualDirector';
 import { getPersonaDescription } from '../lib/personas';
-import { MAX_DATA_SLIDES, evidenceStoryFunctions, isDataLayout } from '../lib/wrappedEditorial';
+import { MAX_DATA_SLIDES, evidenceStoryFunctions, isDataLayout, isStrongVerifiedAnalytic, normalizeEditorialJob } from '../lib/wrappedEditorial';
 import type { MediaItem } from '../types/schema';
 import type { WrappedEvidence, WrappedFact } from '../lib/wrappedEvidence';
 import type { StoryScene, StoryKind, StoryDesign, StoryLayout, StoryPalette, StoryVisual } from '../lib/storyDiscovery';
@@ -68,6 +68,8 @@ export function normalizeWrappedStory(raw: any, evidence: WrappedEvidence, media
       throw new Error('Scene references unknown or missing evidence IDs');
     const facts = refs.map(id => factIndex.get(id)!);
     const visual = facts.find(f => f.kind === kind && (f.bars?.length || f.beats?.length));
+    const verifiedAnalysis = facts.find(f => !!f.analytic && isStrongVerifiedAnalytic(f.analytic))?.analytic;
+    const editorialJob = normalizeEditorialJob(item?.editorialJob, kind);
     if ((kind === 'outlier' || kind === 'taste') && !visual?.bars?.length)
       throw new Error('Comparison requires measured visual data');
     if (kind === 'timeline' && !visual?.beats?.length) throw new Error('Timeline needs measured events');
@@ -80,8 +82,12 @@ export function normalizeWrappedStory(raw: any, evidence: WrappedEvidence, media
     const rawLayout = supplied.layout as StoryLayout;
     const rawPalette = supplied.palette as StoryPalette;
     const rawVisual = supplied.visual as StoryVisual;
-    if (isDataLayout(kind, rawLayout, rawVisual) && !visual?.bars?.length) {
+    if ((isDataLayout(kind, rawLayout, rawVisual) || editorialJob === 'data-reveal') &&
+        !visual?.bars?.length && !verifiedAnalysis) {
       throw new Error('Infographic needs a significant, verified statistical comparison; use editorial art or prose instead');
+    }
+    if (editorialJob === 'data-reveal' && !verifiedAnalysis && !visual?.bars?.length) {
+      throw new Error('Data-reveal job needs a verified analytic source');
     }
     const permittedIds = new Set(
       (kind === 'opening' || kind === 'closing' ? evidence.media.map(m => m.id) :
@@ -110,7 +116,8 @@ export function normalizeWrappedStory(raw: any, evidence: WrappedEvidence, media
     };
     return {
       id: 'wrapped-' + index,
-      kind,
+      kind, editorialJob,
+      ...(verifiedAnalysis ? { analytic: verifiedAnalysis } : {}),
       title, body, eyebrow: clean(item?.eyebrow, 90) || 'YOUR STORY',
       evidenceIds: refs, detail: clean(item?.detail, 1200) || undefined,
       sourceLabel: facts[0]?.title || 'Your activity', design,
@@ -130,7 +137,8 @@ export function normalizeWrappedStory(raw: any, evidence: WrappedEvidence, media
     throw new Error('Story repeats one discovery');
   const middleScenes = scenes.slice(1, -1);
   const chartScenes = middleScenes.filter(scene =>
-    isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual));
+    isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
+    scene.editorialJob === 'data-reveal');
   if (chartScenes.length > MAX_DATA_SLIDES[evidence.timeframe]) {
     throw new Error('Infographic budget exceeded: at most ' +
       MAX_DATA_SLIDES[evidence.timeframe] + ' strong data slide(s) for a ' +
@@ -199,6 +207,8 @@ export async function generateAiWrapped(args: {
     "EDITORIAL QUALITY BAR: A scene must have an actual POINT, not merely announce a list of logged titles, a big total or a mix of genres. Ask what a specific recorded experience, opinion, documented choice or significant personal-baseline deviation reveals about THIS period. Develop a surprising, justified interpretation or a meaningful contrast. If you cannot earn a distinct insight from a fact, leave it out rather than manufacturing a slide. Avoid repetitive multi-cover catalog scenes.",
     "MEDIA VARIETY IS BASELINE, NOT A PLOT: FauxLore tracks practically every entertainment type, so using several titles, formats or genres on the same day is routine. Do not frame ordinary switching as chaos, indecision, restlessness, a genre identity crisis, a spectacle, or evidence of exceptional eclectic taste. Do not make a 'many doors/worlds/channels' concept, multi-genre list, or habitual switching the central thesis or recurring joke. Routine mixed-location logs are not automatically extraordinary either. Never infer psychological motives from mere co-occurrence.",
     "FOCUS AND ACTUAL CHANGE ARE MORE NEWSWORTHY: Only describe unusually narrow attention or an exceptional change in format if the evidence supplies an explicit historical comparison. A period can contain many background titles AND still be strikingly focused on one work or format. Lead with the real exception, not the ordinary background variety. Prioritize specific work reactions, notable reviews, factual personal journal moments, fresh developments and earned connections over media-count commentary.",
+    "STORY-JOB FIRST: For every scene, decide the editorialJob BEFORE choosing a layout. Allowed jobs: hook, verdict, contrast, turning-point, pattern, data-reveal, place, reflection, payoff. Hook/Payoff are reserved for opening/closing. A verdict needs a real opinion, a turning-point needs temporal proof, data-reveal needs a verified analytic fact. Give each scene a distinct narrative PURPOSE; do not select layout for variety and retrofit a claim around it. Output editorialJob for each scene.",
+    "FOUR PURPOSEFUL ANALYTIC STAGES: When a verified fact has an analytic kind, the Visual Director can stage shift (meaningful before/after format share), duel (genuine user/critic disagreement), arc (three verified monthly phases), or dominance (one unusually central work vs everything else). These are four DIFFERENT arguments, not four required chart skins. Only a story whose point really depends on the verified numbers should ask for data-reveal. If the emotional insight is more interesting, use cinematic or textual staging instead.",
     "DATA GATE IS NON-NEGOTIABLE: Infographics are NOT an obligatory scene format and should be rare. Only propose an outlier or taste chart when its provided verified bars represent a truly meaningful change, not a trivial 10-16 percentage-point fluctuation or a tiny critic-rating gap. Never repeat a previous conclusion in graphical form. A chart must reveal an extra insight that prose or a cinematic scene cannot communicate as well. Use zero charts when there is no genuinely strong comparison.",
     "CHART BUDGET: A weekly Wrapped may have at most 1 infographic/data scene, monthly at most 2, yearly at most 3. These are CEILINGS, not targets. Do not spend a chart slot merely for visual variety. A mild comparison can support prose without becoming a slide.",
     "EDITORIAL FUNCTION REPEAT GUARD: A single thematic finding may appear once as an argument. Two slides making the same point in different visual skins are invalid. Combine correlated format shifts (e.g. books up, games down) into ONE coherent editorial insight, not two charts. Distinct media reactions and arguments are welcome; different wording is NOT a different argument.",
@@ -216,20 +226,22 @@ export async function generateAiWrapped(args: {
     "The visual choice is important: if the point is 'two creators battling for attention', choose an asymmetrical split or visual contrast; if it is one beloved work, make the actual cover enormous; if it's a data anomaly, make the data the focal point; if it's a quote, give the quote room to breathe. Don't let every scene look like a document page.",
     "The very first scene must be opening and the final scene closing. They are written by YOU, not generic 'Welcome'/'Next chapter' copy. Middle scenes cite 1-5 distinct IDs from the evidence cards. Choose at least TWO different facts across the whole story.",
     "For outlier or taste choose a source fact of the SAME kind with VERIFIED bars. For timeline cite a timeline fact with recorded events. For journal cite a journal fact, and the app will insert the EXACT user quote. YOU do not fabricate numbers, bars, dates, media titles, quotes, emotions, spoilers or user activity. Bold interpretations and fictional rhetorical accusations are welcome but they must not masquerade as factual evidence.",
+    "MONTH-CLUSTER STORY PLANNING: On monthly issues examine the early/middle/late CLUSTERS with their top actual works, relative progress shares, logged locations and genuine journal excerpts. Build links between phases when they are earned. A phase card alone is not a story. Choose points that show how the full month felt or genuinely changed, rather than assigning a genre to each third or narrating merely that different media appeared.",
     "WEEKS tend to reward intimate oddities; MONTHS patterns and contradictions; YEARS larger arcs and contrasts. These are options, not a formula.",
     "Target " + targets[evidence.timeframe] + " scenes INCLUDING opening and closing. It may be shorter if the evidence cannot support them. Minimum is 3. Quality beats quota.",
     "The voice uses original ENGLISH and the selected persona. No canned AI phrases, obligatory big moral lesson, list of numerical records, or generic dramatic clichés. You are an opinionated storyteller, not a productivity coach.",
-    "Respond ONLY as JSON: {\"title\":\"an original issue title\",\"dek\":\"an independent hook\",\"scenes\":[{\"kind\":\"opening\",\"eyebrow\":\"SYSTEM NOTICE\",\"title\":\"an original title\",\"body\":\"new narration\",\"evidenceIds\":[],\"design\":{\"layout\":\"cover-hero\",\"palette\":\"cobalt\",\"visual\":\"cover\",\"align\":\"left\",\"mediaIds\":[]}},{\"kind\":\"insight\",\"eyebrow\":\"A STRANGE PATTERN\",\"title\":\"an original insight\",\"body\":\"new interpretation\",\"evidenceIds\":[\"existing-fact-id\"],\"design\":{\"layout\":\"editorial\",\"palette\":\"emerald\",\"visual\":\"none\",\"align\":\"left\",\"mediaIds\":[]}},{\"kind\":\"closing\",\"eyebrow\":\"FINALE\",\"title\":\"a memorable ending\",\"body\":\"the original payoff\",\"evidenceIds\":[],\"design\":{\"layout\":\"type-poster\",\"palette\":\"rose\",\"visual\":\"none\",\"align\":\"center\",\"mediaIds\":[]}}]}. Example is SHAPE ONLY; select different layouts, sources and text based on the data.",
+    "Respond ONLY as JSON: {\"title\":\"an original issue title\",\"dek\":\"an independent hook\",\"scenes\":[{\"kind\":\"opening\",\"editorialJob\":\"hook\",\"eyebrow\":\"SYSTEM NOTICE\",\"title\":\"an original title\",\"body\":\"new narration\",\"evidenceIds\":[],\"design\":{\"layout\":\"cover-hero\",\"palette\":\"cobalt\",\"visual\":\"cover\",\"align\":\"left\",\"mediaIds\":[]}},{\"kind\":\"insight\",\"eyebrow\":\"A STRANGE PATTERN\",\"title\":\"an original insight\",\"body\":\"new interpretation\",\"evidenceIds\":[\"existing-fact-id\"],\"design\":{\"layout\":\"editorial\",\"palette\":\"emerald\",\"visual\":\"none\",\"align\":\"left\",\"mediaIds\":[]}},{\"kind\":\"closing\",\"eyebrow\":\"FINALE\",\"title\":\"a memorable ending\",\"body\":\"the original payoff\",\"evidenceIds\":[],\"design\":{\"layout\":\"type-poster\",\"palette\":\"rose\",\"visual\":\"none\",\"align\":\"center\",\"mediaIds\":[]}}]}. Example is SHAPE ONLY; select different layouts, sources and text based on the data.",
     "Do not output chart values, images or literal quotes; these are supplied from the cited fact records. Inside JSON use plain strings, no Markdown.",
   ].join('\n');
   const user = [
     'TIMEFRAME ' + evidence.timeframe + ' ' + evidence.timeId + ': ' + evidence.bounds.start + ' to ' + evidence.bounds.end,
     'EDITORIAL BASELINE CALIBRATION (these rules override any temptation to call ordinary switching unusual):\n' + evidence.editorialCalibration,
     evidence.monthlyCoverage ?
-      'MONTH COVERAGE CONTRACT (structurally checked; cite each required month-phase fact in your middle scenes):\n' +
+      'MONTH COVERAGE CONTRACT AND VERIFIED SUBPHASE CLUSTERS (substantive scenes need evidenceIds and concrete insights, not artificial phase symmetry):\n' +
       JSON.stringify(evidence.monthlyCoverage) : '',
     'VERIFIED EVIDENCE CARDS:\n' + JSON.stringify(evidence.facts.map(f => ({
       id: f.id, kind: f.kind, title: f.title, evidence: f.evidence, phase: f.phase || null, recentOnly: !!f.recentOnly,
+      analyticKind: f.analytic?.kind || null,
       mediaIds: [...(f.mediaId ? [f.mediaId] : []), ...(f.mediaIds || [])], hasBars: !!f.bars?.length, hasTimeline: !!f.beats?.length, hasQuote: !!f.quote,
     }))),
     'MEDIA REFERENCE:\n' + JSON.stringify(evidence.media),
