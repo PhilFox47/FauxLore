@@ -108,7 +108,7 @@ export function EditorialStorySlide({ scene, direction, imageUrl, number, total,
               </div>
               {metric.note && <p className="mt-2 text-xs text-white/55">{metric.note}</p>}
             </motion.div>)}
-          </div>
+          </div>}
         </div>
       ) : (
         <div className={"flex flex-1 flex-col py-14 md:py-20 " + vert + " " + side}>
