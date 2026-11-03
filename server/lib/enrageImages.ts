@@ -19,12 +19,12 @@ export function buildEnragedBossImagePrompt(boss: EnrageBossIdentity, hasReferen
   const name = [boss.name, boss.title].filter(Boolean).join(", ");
   const original = String(boss.imagePrompt || "").trim();
   return [
-    \`Create an ENRAGED version of the SAME specific enemy: \${name}, from "\${boss.sourceTitle}" (\${boss.sourceType || "media"}).\`,
+    `Create an ENRAGED version of the SAME specific enemy: ${name}, from "${boss.sourceTitle}" (${boss.sourceType || "media"}).`,
     hasReference
       ? "The supplied image is the ORIGINAL portrait of this exact enemy. Treat it as the authority for recognizable identity: preserve the original face, anatomy, body proportions, silhouette, materials, colors, outfit, armor, distinctive markings and equipment. This is an image-to-image transformation, NOT a new character."
       : "No image reference is available. Reconstruct the same enemy from the original description and source, preserving its recognizable canonical appearance rather than designing a replacement.",
-    boss.description ? \`Enemy context: \${boss.description.trim()}\` : "",
-    original ? \`Original art direction (identity and source style, not its old emotion or static pose): \${original}\` : "",
+    boss.description ? `Enemy context: ${boss.description.trim()}` : "",
+    original ? `Original art direction (identity and source style, not its old emotion or static pose): ${original}` : "",
     "Now show the enemy pushed into a visibly enraged state during a new, escalating moment. Interpret rage according to THIS particular enemy and source world. A machine may show strained mechanisms and electrical stress; an animal may become feral; a human may become desperate or reckless; a comic opponent may escalate in an absurd but recognizable way. Use only cues fitting this subject. These are examples, NOT a list of effects to apply.",
     "Increase urgency through a purposeful action, body language, environmental reaction, framing and source-appropriate lighting. The state should feel meaningfully more dangerous, furious or unhinged than the original, not merely recolored red or surrounded by generic flames. Keep the original artistic medium and visual language.",
     "One main subject only, horizontal 3:2 composition with essential parts fully visible. Do not turn the character into a different creature, swap outfits or weapons, add gratuitous mutations, or invent unrelated logos or lettering.",
@@ -51,7 +51,7 @@ export function localImageReferenceDataUrl(url: unknown, aiImagesDir: string): s
       : actual.type === "png" ? "image/png"
       : actual.type === "webp" ? "image/webp" : null;
     if (!mime) return null;
-    return \`data:\${mime};base64,\${bytes.toString("base64")}\`;
+    return `data:${mime};base64,${bytes.toString("base64")}`;
   } catch {
     return null;
   }
