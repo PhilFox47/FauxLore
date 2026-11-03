@@ -239,14 +239,16 @@ new scenes can use precise placement and a specific art concept.
 
 **Data** is intentionally image-free: verified numbers are presented as
 dominant editorial graphics with clear labels and understated dividers.
-**Typography** provides quiet, spacious editorial finales and reflective
-interludes. `composed` and the original fixed layouts remain available for
-advanced sequences, invalid/failed AI compositions or old stories without a
-dynamic design.
+**Narrative typography** remains spacious and readable, but it is now
+layered over a source-aware generated full-bleed illustration. Obsolete
+`composed`/poster/mosaic layouts are no longer used by Story Mode as
+alternatives to a generated narrative background.
 
-The image selector budgets **up to three original interior chapter images**
-plus the opening illustration, but excludes `outlier`/`taste` statistical
-comparison scenes from paid image requests. This is a maximum, not a quota.
+**All narrative scenes receive original art:** a dedicated opening cover,
+every non-data interior scene, a special closing tableau and even the
+independent Achievement finale. Only actual infographic/data slides stay
+image-free. There is no arbitrary three-image cap; longer month/year
+issues naturally request more images.
 The story-writing prompt now explicitly forbids consecutive slides repeating
 the same claim with different visuals: a hook should not spoil the next
 infographic. After **Restyle scenes**, the opening illustration and chapter
@@ -271,13 +273,12 @@ fictional/source characters. Settings use per-user database columns, not
 system-wide image settings, and missing fields in partial settings POSTs
 preserve existing values.
 
-Both the Wrapped opening cover and up to three original chapter illustrations
-read that account's profile at render time. The AI receives a bounded
-appearance description as optional factual guidance. This does not affect
-story narration, achievements, other account images or previously saved
-artwork. To apply a changed description to an existing Wrapped, explicitly
-use **Redraw title artwork** and/or **Redraw chapter artwork**; no automatic
-mass-regeneration occurs.
+The Wrapped opening and eligible narrative scenes read that account's
+profile at render time. The visual descriptions remain optional factual
+guidance; the special Achievement finale remains generic rather than
+inventing a likeness or earned result. To apply a new appearance to saved
+illustrations, use **Redraw title artwork** and/or **Redraw all scene artwork**
+without regenerating story or achievements.
 
 Private appearance text is redacted from exportable image diagnostics.
 The configured external image provider still receives those appearance
@@ -288,29 +289,42 @@ settings schema can later be extended to opt-in image references.
 
 Tests: `npm run test:visual-self` (also included in `npm run test:wrapped`).
 
-### Wrapped: original chapter illustrations and complete first reveal
+### Wrapped: original full-bleed art on every narrative slide
 
-The same configured image provider can now generate **up to three additional,
-original 3:2 chapter illustrations** for important interior story beats, chosen
-deterministically by narrative relevance. Prompts are written from the actual
-scene premise and optional model-authored `artConcept`, not a list of every
-logged medium. One strong editorial metaphor or coherent scene is preferred to
-a franchise collage. Each illustration is stored by the scene's ID and
-persisted separately from story text and the opening title image.
+All Wrapped story slides except actual infographics/data charts now get a
+**unique generated full-bleed background**. The opening uses its independent
+title illustration; every narrative chapter receives scene-specific art
+grounded in its factual thesis and optional existing Codex style. A quiet
+typographic chapter still has a visually rich background. Media covers and
+poster walls are no longer rendered in Wrapped Story Mode; the originals
+remain in the **Deep Dive**.
 
-**First reveal waits for artwork**: a newly generated or previously unillustrated
-Wrapped shows a deliberate loading screen until its title and chapter images
-finish, or generation fails. This avoids flashing an unrelated media-cover
-placeholder before the real illustration appears. If an image fails, verified
-story text and the traditional cover/scene renderer remain available. Restyling
-also repaints the chapter illustrations, and waits until the new visuals are
-ready to avoid showing mismatched old artwork with the new compositions.
-The **Redraw chapter artwork** control retries or rerolls only interior images.
+The **closing** uses a separate "final tableau" prompt: one cinematic visual
+epilogue that synthesizes the overall story without a collage of franchise
+objects or a row of media covers. Its renderer is a distinct contemplative
+closing stage with the story's final reflection and a Deep Dive transition,
+not a souvenir strip. Afterward, the separate Dungeon System Achievement
+finale gets an atmospheric image behind the genuine interactive achievement
+cards. Its illustration does not fabricate specific awards.
 
-Jobs have separate request tokens and statuses, are limited to three interior
-images per issue, and do not auto-retry on failed providers. They are not
-re-generated at every visit. `npm run test:wrapped` covers their lifecycle,
-restart recovery and stale-image protection.
+**Image lifecycle:** At first display, Wrapped waits for the background art
+jobs to finish. Existing archived Wrapped stories with only 1-3 chapter
+images are automatically **backfilled with only missing scenes** when opened
+and permitted by account activity state; saved art is never needlessly
+re-generated. Redraw all scene artwork deliberately refreshes every eligible
+scene plus both finale backgrounds. Title art is independently rerollable.
+The server stores each image by stable scene ID with request tokens that
+prevent stale jobs overwriting newer versions. Jobs run at most **two image
+calls concurrently** to avoid excessive provider spikes and finish only
+when the whole batch settles. Provider failures preserve successfully
+generated art and allow a manual retry; they do not trigger a paid automatic
+retry loop. Missing images fall back to a neutral cinematic stage plus a
+visible warning, **not official cover-card layouts**.
+
+All completed work remains stored independently from the story and
+achievements. The regression suite exercises long Wrapped issues, legacy
+backfills, infographics, closing/finale prompts, stale jobs and retries.
+Tests: `npm run test:wrapped`.
 
 ### Wrapped image art: optional Codex house style
 
@@ -324,8 +338,9 @@ than defaulting every subject to generic photographic fantasy artwork.
 
 - **Gating:** The scene must clearly identify one featured media entry.
   A title/body mentioning one work, or a one-work spotlight/return, qualifies.
-  Mixed-media scenes, ambiguous auto-selected covers, data scenes, opening/
-  closing transitions and typography-first scenes do not force a style.
+  Mixed-media scenes, ambiguous auto-selected covers, data scenes and
+  opening/closing transitions do not force a style. Typography-led narrative
+  scenes can still inherit an unambiguous medium's Codex visual language.
 - **Free lookup:** Only already completed, user-owned Codex data is read.
   Missing or visually vague Codex entries fall back to standard art. A book
   with no intrinsic rendered form does not acquire a fabricated canonical
