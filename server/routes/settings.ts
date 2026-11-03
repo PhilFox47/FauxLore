@@ -2,6 +2,7 @@ import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { AI_PERSONAS } from "../../src/lib/personas";
 import { bossTarget } from "../lib/bossTargets";
+import { normalizeVisualSelfMode, normalizeVisualSelfDescription } from "../../src/lib/visualSelf";
 
 export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, queueBossVictoryArtwork } = ctx;
@@ -14,6 +15,8 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
       if (!row) return res.json({ userId });
       res.json({
         ...row,
+        visualSelfInsertMode: normalizeVisualSelfMode(row.visualSelfInsertMode),
+        visualSelfDescription: normalizeVisualSelfDescription(row.visualSelfDescription),
         masterPageConfig: row.masterPageConfig ? JSON.parse(row.masterPageConfig) : undefined,
         yearlyGoals: row.yearlyGoals ? JSON.parse(row.yearlyGoals) : undefined,
         mediaDifficulty: row.mediaDifficulty ? JSON.parse(row.mediaDifficulty) : undefined,
@@ -38,15 +41,15 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
       const userRec: any = db.prepare('SELECT role FROM users WHERE id = ?').get(userId);
       const isAdmin = userRec?.role === 'Admin';
       
-      const oldSettings: any = db.prepare('SELECT aiPersona, enemyDifficulty, mediaDifficulty, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, nanoGptSearchProvider, geminiApiKey, googleBooksApiKey, bookMetadataProviders FROM settings WHERE userId = ?').get(userId);
+      const oldSettings: any = db.prepare('SELECT aiPersona, enemyDifficulty, mediaDifficulty, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, nanoGptSearchProvider, geminiApiKey, googleBooksApiKey, bookMetadataProviders, visualSelfInsertMode, visualSelfDescription FROM settings WHERE userId = ?').get(userId);
       const oldDifficulty = oldSettings?.enemyDifficulty ?? 1.0;
       const newDifficulty = settings.enemyDifficulty ?? 1.0;
       const oldMediaDifficulty = oldSettings?.mediaDifficulty || null;
       const newMediaDifficulty = settings.mediaDifficulty ? JSON.stringify(settings.mediaDifficulty) : null;
       
       db.prepare(`
-        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, nanoGptSearchProvider, geminiApiKey, googleBooksApiKey, bookMetadataProviders, timezone, aiPersona, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs, disableAutoDrop, pushEnabled, pushTypes, inactivityReminderDays)
-        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @nanoGptProvider, @nanoGptSearchProvider, @geminiApiKey, @googleBooksApiKey, @bookMetadataProviders, @timezone, @aiPersona, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs, @disableAutoDrop, @pushEnabled, @pushTypes, @inactivityReminderDays)
+        INSERT INTO settings (userId, igdbClientId, igdbClientSecret, tmdbApiKey, hardcoverApiKey, nanoGptApiKey, nanoGptModel, nanoGptWebModel, nanoGptCreativeModel, nanoGptProvider, nanoGptSearchProvider, geminiApiKey, googleBooksApiKey, bookMetadataProviders, timezone, aiPersona, visualSelfInsertMode, visualSelfDescription, masterPageConfig, yearlyGoals, lastActiveDate, currentStreak, enemyDifficulty, mediaDifficulty, questOffsets, questRerollsUsed, questConfigs, disableAutoDrop, pushEnabled, pushTypes, inactivityReminderDays)
+        VALUES (@userId, @igdbClientId, @igdbClientSecret, @tmdbApiKey, @hardcoverApiKey, @nanoGptApiKey, @nanoGptModel, @nanoGptWebModel, @nanoGptCreativeModel, @nanoGptProvider, @nanoGptSearchProvider, @geminiApiKey, @googleBooksApiKey, @bookMetadataProviders, @timezone, @aiPersona, @visualSelfInsertMode, @visualSelfDescription, @masterPageConfig, @yearlyGoals, @lastActiveDate, @currentStreak, @enemyDifficulty, @mediaDifficulty, @questOffsets, @questRerollsUsed, @questConfigs, @disableAutoDrop, @pushEnabled, @pushTypes, @inactivityReminderDays)
         ON CONFLICT(userId) DO UPDATE SET
           igdbClientId=excluded.igdbClientId,
           igdbClientSecret=excluded.igdbClientSecret,
@@ -63,6 +66,8 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
           bookMetadataProviders=excluded.bookMetadataProviders,
           timezone=excluded.timezone,
           aiPersona=excluded.aiPersona,
+          visualSelfInsertMode=excluded.visualSelfInsertMode,
+          visualSelfDescription=excluded.visualSelfDescription,
           masterPageConfig=excluded.masterPageConfig,
           yearlyGoals=excluded.yearlyGoals,
           lastActiveDate=excluded.lastActiveDate,
@@ -105,6 +110,14 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
         aiPersona: AI_PERSONAS.some((p) => p.id === settings.aiPersona)
           ? settings.aiPersona
           : (oldSettings?.aiPersona || null),
+        // A partial settings POST must not inadvertently erase the private
+        // likeness profile. Explicit "" is still allowed to clear it.
+        visualSelfInsertMode: settings.visualSelfInsertMode === undefined
+          ? normalizeVisualSelfMode(oldSettings?.visualSelfInsertMode)
+          : normalizeVisualSelfMode(settings.visualSelfInsertMode),
+        visualSelfDescription: settings.visualSelfDescription === undefined
+          ? normalizeVisualSelfDescription(oldSettings?.visualSelfDescription)
+          : normalizeVisualSelfDescription(settings.visualSelfDescription),
         masterPageConfig: settings.masterPageConfig ? JSON.stringify(settings.masterPageConfig) : null,
         yearlyGoals: settings.yearlyGoals ? JSON.stringify(settings.yearlyGoals) : null,
         lastActiveDate: settings.lastActiveDate || null,
@@ -149,6 +162,8 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
       const saved: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId);
       res.json({
         ...saved,
+        visualSelfInsertMode: normalizeVisualSelfMode(saved.visualSelfInsertMode),
+        visualSelfDescription: normalizeVisualSelfDescription(saved.visualSelfDescription),
         masterPageConfig: saved.masterPageConfig ? JSON.parse(saved.masterPageConfig) : undefined,
         yearlyGoals: saved.yearlyGoals ? JSON.parse(saved.yearlyGoals) : undefined,
         mediaDifficulty: saved.mediaDifficulty ? JSON.parse(saved.mediaDifficulty) : undefined,
