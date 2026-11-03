@@ -219,8 +219,10 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
       })();
       if (saved === "missing") return res.status(404).json({ error: "Wrapped not found" });
       if (saved === "stale") return res.status(409).json({ error: "Wrapped visuals changed; reload before rerolling." });
-      // Newly composed scene images should match the new visual metaphor,
-      // rather than briefly reusing imagery from a different composition.
+      // The same editorial text-side / image-focus plan is used by BOTH
+      // generators. A layout-only reroll therefore repaints the title and
+      // interior images so no old crop contradicts the new typography.
+      queueWrappedCoverArt(userId, timeframe, timeId, true);
       queueWrappedSceneArtwork(userId, timeframe, timeId, true);
       res.json(savedStory(userId, timeframe, timeId));
     } catch (error: any) {
