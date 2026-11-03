@@ -1,16 +1,21 @@
 import type { StoryScene } from "./storyDiscovery";
+import { imageFramingGuidance } from "./dynamicScenes";
 import { visualSelfImageClause, type VisualSelfProfile } from "./visualSelf";
 
 /**
- * Pick two ACTUAL story beats for original illustrations. Never turn this
+ * Pick up to three story-driven beats for original illustrations. Never turn this
  * into "one image per media title": image generation serves the narrative.
  * Same deterministic selection is used by the Visual Director and server.
  */
 export function selectIllustratedScenes<T extends Pick<StoryScene, "id" | "kind" | "title" | "body">>(
-  scenes: T[], maximum = 2,
+  scenes: T[], maximum = 3,
 ): string[] {
   if (maximum <= 0) return [];
-  const available = scenes.slice(1, -1).map((scene, index) => {
+  const available = scenes.slice(1, -1)
+    // Verified comparisons have their own premium visual grammar. Spending
+    // image-generation calls on a stat-first scene usually weakens the point.
+    .filter(scene => scene.kind !== "outlier" && scene.kind !== "taste")
+    .map((scene, index) => {
     const rank: Record<string, number> = {
       location: 8, insight: 7, spotlight: 6, return: 6,
       journal: 5, rhythm: 5, outlier: 4, timeline: 4, taste: 4,
@@ -46,7 +51,8 @@ export function buildWrappedSceneArtPrompt(
     influence,
     "Find ONE striking scene, metaphor or environmental detail expressing this specific chapter. Distill the premise; do NOT literally depict every named title or logged event. One main focal subject, one coherent setting, one intentional camera perspective. Specific, atmospheric, memorable, never generic stock art.",
     "Do not invent actual personal experiences, spoilers, dialogue, factual achievements or authorial quotes. The image may express a fictional metaphor, but not portray it as an event that happened to the user.",
-    "Horizontal 3:2 composition, generous negative space and a legible hero subject positioned toward the right. Make it work as a subdued cinematic background behind white app typography if necessary.",
+    "Horizontal landscape 3:2. This is a TRUE FULL-BLEED cinematic background behind the chapter's typography, not a small inset image, a framed photograph or a rectangular card. " +
+      imageFramingGuidance(scene.composition?.direction),
     "NO text, logos, printed lettering, statistics, charts, mosaics, screenshots, user-interface elements, split panels, poster walls or watermarks.",
     visualSelfImageClause(visualSelf),
   ].filter(Boolean).join("\n\n");
