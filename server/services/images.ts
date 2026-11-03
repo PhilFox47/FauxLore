@@ -40,14 +40,6 @@ const IMAGE_DEFAULTS = {
 };
 
 /**
- * Whether the configured model is a few-step distillation.
- *
- * Matched on the name because that is all we have: NanoGPT does not report a
- * model's family, and its docs are not fetchable from the server. The names all
- * advertise it — turbo, lightning, schnell, hyper, lcm — because the speed is
- * the selling point.
- */
-/**
  * Tidies a resolution typed by hand into the form the API expects.
  *
  * The setting is a free-text field and the failure it produces is silent: a
