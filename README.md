@@ -91,22 +91,30 @@ CLIProxyAPI settings:
 - **Image model:** Use a supported image model (e.g. `gpt-image-2`).
   Ordinary image generation uses `/v1/images/generations` with `b64_json`;
   FauxLore saves the decoded images in its existing uploads directory.
-  **Enraging a boss with an existing local portrait** instead sends that exact
-  original portrait as a private base64 data URL to `/v1/images/edits` when the
-  configured model is GPT Image 2.5. A source-aware enrage prompt preserves the
-  same enemy's identity while changing its action, expression and context.
-  The original portrait URL is retained so manual regenerations use the same
-  reference rather than progressively editing an edited image. Taunt responds
-  immediately; the artwork finishes in the background and the UI polls for it.
-  If there is no usable original image or the edit route is unavailable, FauxLore
-  generates from a dedicated text-only enrage prompt and logs the fallback.
-  Authentication, timeouts and rate limits do not trigger duplicate paid calls.
-  Diffusion steps and CFG do **not** apply; image sizes map to 1024×1024,
-  1536×1024 or 1024×1536.
+  **Boss state artwork (Enrage + Victory):** The first normal portrait is
+  recorded as an immutable base reference. Taunting an enemy generates a
+  source-appropriate enraged depiction; defeating one generates a defeated
+  aftermath instead, preserving its original silhouette, face, outfit and gear.
+  Even if an enraged enemy is defeated, Victory edits use the ORIGINAL image,
+  not the enraged version. GPT Image 2.5 uses `/v1/images/edits` with the
+  original local image encoded privately; NanoGPT and unsupported edits use
+  separate, accurate text-only state prompts. Defeat is not automatically
+  death or gore; comedic and nonviolent enemies lose in their own style.
 
-  Enrage image regression tests: `npm run test:enrage-images`.
-  This only checks local behavior; a live gateway integration test is needed to
-  verify the configured CLIProxyAPI version's edit endpoint.
+  The trigger covers progress logs, completing media and difficulty changes.
+  Both state transitions return promptly, then render in the background; the
+  UI polls for completion. Image generation tokens prevent older overlapping
+  renders from overwriting a new state, and a reroll clears the previous enemy's
+  reference. A legacy `enrageOriginalImageUrl` snapshot is still supported;
+  the canonical field going forward is `basePortraitImageUrl`.
+  Unavailable references and unsupported edit routes fall back to text-only
+  generation; auth, rate-limit and transient failures do not silently retry
+  with a second paid call. Diffusion steps and CFG do **not** apply; image
+  sizes map to 1024×1024, 1536×1024 or 1024×1536.
+
+  Image state regression tests: `npm run test:boss-state-images`.
+  This tests local prompt and reference handling; a live gateway test is still
+  required to verify the configured CLIProxyAPI image-edit endpoint.
 
 **Provider isolation:** When CLIProxyAPI is selected, ordinary text, image
 generation, and explicit web-search requests use CLIProxyAPI. Codex research
