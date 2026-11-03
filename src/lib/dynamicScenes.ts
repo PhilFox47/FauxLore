@@ -1,4 +1,5 @@
 import type { StoryScene } from "./storyDiscovery";
+import type { AnalyticTreatment } from "./wrappedEditorial";
 
 /**
  * Generative visual composition DSL v1. The model never writes HTML, CSS,
@@ -20,6 +21,8 @@ export interface EditorialDirection {
   textSide: EditorialTextSide;
   textPosition: EditorialTextPosition;
   imageFocus: EditorialImageFocus;
+  /** Renderer choice locked to the scene's verified analytic kind. */
+  dataTreatment?: AnalyticTreatment;
 }
 /** Only editorial placement metadata; generated artwork never supplies CSS. */
 export function imageFramingGuidance(direction?: Partial<EditorialDirection> | null): string {
@@ -117,7 +120,7 @@ function overlapRatio(a: SceneBox, b: SceneBox): number {
  */
 export function normalizeDynamicScene(
   value: unknown,
-  scene: Pick<StoryScene, "kind" | "title" | "body" | "quote" | "bars" | "beats" | "media" | "artworks">,
+  scene: Pick<StoryScene, "kind" | "title" | "body" | "quote" | "bars" | "beats" | "media" | "artworks" | "analytic">,
 ): DynamicSceneComposition {
   if (!obj(value) || value.version !== 1 || !backdrops.has(value.backdrop as DynamicSceneBackdrop) ||
     !Array.isArray(value.elements) || value.elements.length < 2 || value.elements.length > 11) {
@@ -199,8 +202,17 @@ export function normalizeDynamicScene(
       textSides.has(value.direction.textSide as EditorialTextSide) &&
       textPositions.has(value.direction.textPosition as EditorialTextPosition) &&
       imageFoci.has(value.direction.imageFocus as EditorialImageFocus)) {
+    const proposedTreatment = value.direction.dataTreatment;
+    if (proposedTreatment != null &&
+        (value.direction.presentation !== "data" ||
+          typeof proposedTreatment !== "string" ||
+          proposedTreatment !== scene.analytic?.kind)) {
+      throw new Error("Analytic treatment must match an app-verified dataset");
+    }
     direction = {
       presentation: value.direction.presentation as EditorialPresentation,
+      ...(value.direction.presentation === "data" && scene.analytic
+        ? { dataTreatment: scene.analytic.kind } : {}),
       textSide: value.direction.textSide as EditorialTextSide,
       textPosition: value.direction.textPosition as EditorialTextPosition,
       imageFocus: value.direction.textSide === value.direction.imageFocus
