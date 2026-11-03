@@ -1,6 +1,7 @@
 import { apiFetch } from './db';
 import { generateWrappedVisualCompositions } from './wrappedVisualDirector';
 import { getPersonaDescription } from '../lib/personas';
+import { MAX_DATA_SLIDES, evidenceStoryFunctions, isDataLayout } from '../lib/wrappedEditorial';
 import type { MediaItem } from '../types/schema';
 import type { WrappedEvidence, WrappedFact } from '../lib/wrappedEvidence';
 import type { StoryScene, StoryKind, StoryDesign, StoryLayout, StoryPalette, StoryVisual } from '../lib/storyDiscovery';
@@ -79,6 +80,9 @@ export function normalizeWrappedStory(raw: any, evidence: WrappedEvidence, media
     const rawLayout = supplied.layout as StoryLayout;
     const rawPalette = supplied.palette as StoryPalette;
     const rawVisual = supplied.visual as StoryVisual;
+    if (isDataLayout(kind, rawLayout, rawVisual) && !visual?.bars?.length) {
+      throw new Error('Infographic needs a significant, verified statistical comparison; use editorial art or prose instead');
+    }
     const permittedIds = new Set(
       (kind === 'opening' || kind === 'closing' ? evidence.media.map(m => m.id) :
         facts.flatMap(f => [...(f.mediaId ? [f.mediaId] : []), ...(f.mediaIds || [])]))
@@ -124,6 +128,60 @@ export function normalizeWrappedStory(raw: any, evidence: WrappedEvidence, media
   if (new Set(refs).size < 2) throw new Error('Story must find at least two different factual anchors');
   if (scenes.length > 4 && new Set(scenes.slice(1, -1).map(s => s.evidenceIds.join('|'))).size < 2)
     throw new Error('Story repeats one discovery');
+  const middleScenes = scenes.slice(1, -1);
+  const chartScenes = middleScenes.filter(scene =>
+    isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual));
+  if (chartScenes.length > MAX_DATA_SLIDES[evidence.timeframe]) {
+    throw new Error('Infographic budget exceeded: at most ' +
+      MAX_DATA_SLIDES[evidence.timeframe] + ' strong data slide(s) for a ' +
+      evidence.timeframe + '. Remove weak or redundant charts.');
+  }
+  // Editorial jobs must actually differ: a second format-share chart with
+  // another type of media is still the SAME "our mix changed" story.
+  const usedFunctions = new Map<string, number>();
+  middleScenes.forEach((scene, index) => {
+    for (const functionKey of evidenceStoryFunctions(scene.evidenceIds)) {
+      const prior = usedFunctions.get(functionKey);
+      if (prior !== undefined) {
+        throw new Error('Scene ' + (index + 2) + ' repeats the editorial function "' +
+          functionKey + '" from scene ' + (prior + 2) +
+          '. Combine the evidence into one scene or tell a genuinely different story.');
+      }
+      usedFunctions.set(functionKey, index);
+    }
+  });
+  if (evidence.timeframe === 'month' && evidence.monthlyCoverage) {
+    const coverage = evidence.monthlyCoverage;
+    if (coverage.requiredPhases.length >= 2) {
+      const seen = new Set<string>();
+      let phaseSceneCount = 0;
+      for (const scene of middleScenes) {
+        const phases = scene.evidenceIds
+          .map(id => factIndex.get(id)?.phase)
+          .filter((phase): phase is NonNullable<typeof phase> => !!phase);
+        if (phases.length) phaseSceneCount++;
+        for (const phase of phases) seen.add(phase);
+      }
+      const missing = coverage.requiredPhases.filter(phase => !seen.has(phase));
+      if (missing.length || phaseSceneCount < coverage.minPhaseScenes) {
+        throw new Error('Monthly coverage missing ' + missing.join(', ') +
+          (missing.length ? ' phase(s)' : ' independent phase-supported scenes') +
+          '. Anchor substantive scenes in the early, middle and late month facts, not just recent highlights.');
+      }
+    }
+    // Only cap LAST-WEEK-ONLY stories if that week itself did not dominate
+    // the measured month; never force artificial balance on a late-heavy month.
+    if (middleScenes.length >= 3 && coverage.lastWeekShare < .60) {
+      const lastWeekOnly = middleScenes.filter(scene =>
+        scene.evidenceIds.length > 0 &&
+        scene.evidenceIds.every(id => factIndex.get(id)?.recentOnly === true));
+      if (lastWeekOnly.length > Math.floor(middleScenes.length / 2)) {
+        throw new Error('Monthly story overrepresents the final seven days: ' +
+          lastWeekOnly.length + ' last-week-only scenes out of ' +
+          middleScenes.length + '. Cover earlier substantive activity.');
+      }
+    }
+  }
   return { version: 2, title: clean(data.title, 180) || scenes[0].title,
     dek: clean(data.dek, 500) || scenes[0].body.slice(0, 350), scenes };
 }
@@ -141,6 +199,10 @@ export async function generateAiWrapped(args: {
     "EDITORIAL QUALITY BAR: A scene must have an actual POINT, not merely announce a list of logged titles, a big total or a mix of genres. Ask what a specific recorded experience, opinion, documented choice or significant personal-baseline deviation reveals about THIS period. Develop a surprising, justified interpretation or a meaningful contrast. If you cannot earn a distinct insight from a fact, leave it out rather than manufacturing a slide. Avoid repetitive multi-cover catalog scenes.",
     "MEDIA VARIETY IS BASELINE, NOT A PLOT: FauxLore tracks practically every entertainment type, so using several titles, formats or genres on the same day is routine. Do not frame ordinary switching as chaos, indecision, restlessness, a genre identity crisis, a spectacle, or evidence of exceptional eclectic taste. Do not make a 'many doors/worlds/channels' concept, multi-genre list, or habitual switching the central thesis or recurring joke. Routine mixed-location logs are not automatically extraordinary either. Never infer psychological motives from mere co-occurrence.",
     "FOCUS AND ACTUAL CHANGE ARE MORE NEWSWORTHY: Only describe unusually narrow attention or an exceptional change in format if the evidence supplies an explicit historical comparison. A period can contain many background titles AND still be strikingly focused on one work or format. Lead with the real exception, not the ordinary background variety. Prioritize specific work reactions, notable reviews, factual personal journal moments, fresh developments and earned connections over media-count commentary.",
+    "DATA GATE IS NON-NEGOTIABLE: Infographics are NOT an obligatory scene format and should be rare. Only propose an outlier or taste chart when its provided verified bars represent a truly meaningful change, not a trivial 10-16 percentage-point fluctuation or a tiny critic-rating gap. Never repeat a previous conclusion in graphical form. A chart must reveal an extra insight that prose or a cinematic scene cannot communicate as well. Use zero charts when there is no genuinely strong comparison.",
+    "CHART BUDGET: A weekly Wrapped may have at most 1 infographic/data scene, monthly at most 2, yearly at most 3. These are CEILINGS, not targets. Do not spend a chart slot merely for visual variety. A mild comparison can support prose without becoming a slide.",
+    "EDITORIAL FUNCTION REPEAT GUARD: A single thematic finding may appear once as an argument. Two slides making the same point in different visual skins are invalid. Combine correlated format shifts (e.g. books up, games down) into ONE coherent editorial insight, not two charts. Distinct media reactions and arguments are welcome; different wording is NOT a different argument.",
+    "MONTHLY COVERAGE: A monthly must not become an enlarged last-week Wrapped. The source contains verifiable month-early, month-middle and month-late fact cards (when those phases have activity). Cite each required substantial phase somewhere in the interior and support at least TWO separate scenes with phase-specific facts when at least two phases are substantive. Synthesize the entire month; don't make three obligatory diary chapters. If less than 60% of the month's normalized progress occurred in the final seven days, no more than half the interior scenes may rely ONLY on that final week. For years, sample across quarters rather than treating December as the whole year.",
     "EACH SLIDE MUST ADVANCE THE STORY: Give adjacent slides genuinely different jobs. The opening creates an evocative question, surprising incident or emotional setting; it must NOT already explain the same numerical comparison the very next scene will reveal. If a slide merely repeats the previous claim with a chart, merge them or find another meaningful observation. A big visual change alone does not count as a new idea. Reusing the same media in a different, genuinely revealing interpretation is fine.",
     "VISUAL-FIRST STORYTELLING: Choose vivid, concrete scenes and coherent metaphors that deserve cinematic full-bleed illustration when appropriate. Leave a genuine data comparison to its data, and give reflective conclusions breathing room as typographic moments. Do not write descriptions that only summarize media inventory.",
     "Write original, vivid, sharply observant narration for EVERY slide. Never recycle the evidence text as prose. Start from a provocative idea, implication, absurd comparison or opinion, then earn it with selected facts. The user lived through the events and does NOT need a log read back to them.",
@@ -163,8 +225,12 @@ export async function generateAiWrapped(args: {
   const user = [
     'TIMEFRAME ' + evidence.timeframe + ' ' + evidence.timeId + ': ' + evidence.bounds.start + ' to ' + evidence.bounds.end,
     'EDITORIAL BASELINE CALIBRATION (these rules override any temptation to call ordinary switching unusual):\n' + evidence.editorialCalibration,
+    evidence.monthlyCoverage ?
+      'MONTH COVERAGE CONTRACT (structurally checked; cite each required month-phase fact in your middle scenes):\n' +
+      JSON.stringify(evidence.monthlyCoverage) : '',
     'VERIFIED EVIDENCE CARDS:\n' + JSON.stringify(evidence.facts.map(f => ({
-      id: f.id, kind: f.kind, title: f.title, evidence: f.evidence, mediaIds: [...(f.mediaId ? [f.mediaId] : []), ...(f.mediaIds || [])], hasBars: !!f.bars?.length, hasTimeline: !!f.beats?.length, hasQuote: !!f.quote,
+      id: f.id, kind: f.kind, title: f.title, evidence: f.evidence, phase: f.phase || null, recentOnly: !!f.recentOnly,
+      mediaIds: [...(f.mediaId ? [f.mediaId] : []), ...(f.mediaIds || [])], hasBars: !!f.bars?.length, hasTimeline: !!f.beats?.length, hasQuote: !!f.quote,
     }))),
     'MEDIA REFERENCE:\n' + JSON.stringify(evidence.media),
     previous ? 'PREVIOUS WRAPPED VERSION: Avoid recycling its ideas or punchlines:\n' + previous.scenes.map(s => s.title + ' / ' + s.body.slice(0, 200)).join('\n') : '',
