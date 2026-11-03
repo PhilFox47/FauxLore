@@ -142,7 +142,7 @@ async function startServer() {
     },
     notify,
   });
-  const { generateBossImageBackground, queueBossVictoryArtwork, generateArtifactImageBackground, generateWrappedCoverImage, describeImageModel } = createImageService({
+  const { generateBossImageBackground, queueBossVictoryArtwork, generateArtifactImageBackground, generateWrappedCoverImage, generateWrappedSceneImage, describeImageModel } = createImageService({
     db, aiImagesDir, codex, canSpendTokens: userId => !activity.isFrozen(userId),
   });
   const { queue: queueWrappedCoverArt } = createWrappedCoverService({
