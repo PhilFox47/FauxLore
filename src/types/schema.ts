@@ -203,8 +203,10 @@ export interface WorldBoss {
   imageUrl?: string;
   imageStatus?: 'pending' | 'generating' | 'done' | 'failed';
   imagePrompt?: string; // written by the enemy generator, reused when drawing the portrait
-  /** Saved before Enrage, so later retries reference the same original enemy. */
+  /** Legacy Enrage snapshot (still readable for existing bosses). */
   enrageOriginalImageUrl?: string | null;
+  /** Immutable original portrait used by both Enrage and Victory edits. */
+  basePortraitImageUrl?: string | null;
   /** Taunted: bigger target, bigger stakes, one extra week. Never more than once. */
   enraged?: boolean;
   enragedAt?: string;
