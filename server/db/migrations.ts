@@ -10,6 +10,10 @@ import { bossTarget, bossUnit } from "../lib/bossTargets";
  * production databases: every step is wrapped in try/catch and only adds.
  */
 export function runMigrations(db: Db) {
+  // Private, per-user Wrapped visual likeness profile. No automatic profile
+  // inference or migration from account photos: users opt in explicitly.
+  try { db.prepare("ALTER TABLE settings ADD COLUMN visualSelfInsertMode TEXT NOT NULL DEFAULT 'never'").run(); } catch {}
+  try { db.prepare("ALTER TABLE settings ADD COLUMN visualSelfDescription TEXT NOT NULL DEFAULT ''").run(); } catch {}
   // Wrapped cover artwork is independent of story JSON, and a failed render
   // must never invalidate or overwrite the saved editorial issue.
   for (const col of ["coverArtUrl", "coverArtStatus", "coverArtRequestId", "coverArtTimeZone", "sceneArtJson", "sceneArtStatus", "sceneArtRequestId"]) {
