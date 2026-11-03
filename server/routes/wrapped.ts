@@ -217,12 +217,25 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
           const scene = current.scenes.find(scene => scene.id === proposal.sceneId);
           if (!scene) throw new Error("Unknown scene ID");
           seen.add(proposal.sceneId);
-          byScene.set(proposal.sceneId, normalizeDynamicScene(proposal.composition, scene));
+          const composition = normalizeDynamicScene(proposal.composition, scene);
+          if ((composition.direction?.presentation === 'data' ||
+            composition.elements.some(element => element.type === 'stat')) &&
+            (!isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
+              !scene.bars?.length)) {
+            throw new Error('Visual-only rerolls cannot invent data scenes or unsupported charts');
+          }
+          byScene.set(proposal.sceneId, composition);
         }
         const scenes = current.scenes.map(scene => {
           const { composition: ignored, ...other } = scene;
           return { ...other, ...(byScene.has(scene.id) ? { composition: byScene.get(scene.id) } : {}) };
         });
+        const composedDataCount = scenes.slice(1, -1).filter(scene =>
+          scene.composition?.direction?.presentation === 'data' ||
+          scene.composition?.elements?.some((element: any) => element.type === 'stat')).length;
+        if (composedDataCount > MAX_DATA_SLIDES[timeframe]) {
+          throw new Error('Visual reroll exceeds ' + timeframe + ' infographic limit');
+        }
         const next = JSON.stringify({ ...current, visualRevision: visualRevision + 1, scenes });
         const result = db.prepare(
           "UPDATE wrapped_stories SET story=? WHERE userId=? AND timeframe=? AND timeId=? AND generatedAt=?",
