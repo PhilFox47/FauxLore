@@ -6,7 +6,7 @@ import type { Db } from "../context";
 import { getAiConfig, nanoGenerateText } from "../lib/ai";
 import { recordAiCallStart, recordAiCall, nextCallId, recordPayload } from "../lib/diagnostics";
 import { longRequestDispatcher } from "../lib/httpDispatcher";
-import { cliProxyBaseUrl, cliProxyImageSize, cliProxyImagePrompt } from "../lib/cliProxy";
+import { cliProxyBaseUrl, cliProxyImageSize, cliProxyImagePrompt, cliProxyImageEditBody, imageEditSupportsTextFallback } from "../lib/cliProxy";
 import { imagePromptCraft, resolveImagePromptProfile, gptImage25DeliveryPrompt } from "../lib/imagePromptGuidance";
 import { buildEnragedBossImagePrompt, localImageReferenceDataUrl } from "../lib/enrageImages";
 import { imageFrameSize, imageFrameMatches, withImageFrame, type ImageFrame } from "../../src/lib/imageFraming";
@@ -175,13 +175,9 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
 
       async function requestCliImage(edit: boolean, attempt: 1 | 2): Promise<string> {
         const route = edit ? "/images/edits" : "/images/generations";
-        const body: Record<string, unknown> = {
-          model: cfg.model,
-          prompt: finalPrompt,
-          size,
-          response_format: "b64_json",
-          ...(edit ? { images: [{ image_url: referenceDataUrl }] } : { n: 1 }),
-        };
+        const body: Record<string, unknown> = edit
+          ? cliProxyImageEditBody(cfg.model, finalPrompt, size, referenceDataUrl || "")
+          : { model: cfg.model, prompt: finalPrompt, size, n: 1, response_format: "b64_json" };
         const callId = nextCallId();
         const shape = { callId, model: cfg.model, scope: "images", attempt, promptChars: finalPrompt.length };
         const startedAt = Date.now();
@@ -235,7 +231,7 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
           // Only unsupported/bad-edit-request responses fall back. Do not pay
           // for a second render after timeouts, rate limits or server failures.
           const status = Number(e?.httpStatus || 0);
-          if (![400, 404, 405, 415, 422, 501].includes(status)) throw e;
+          if (!imageEditSupportsTextFallback(status)) throw e;
           console.warn(`[images] CLIProxyAPI edit unavailable (HTTP ${status}); using text-only enrage fallback.`);
           return requestCliImage(false, 2);
         }
