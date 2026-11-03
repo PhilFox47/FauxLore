@@ -37,11 +37,11 @@ const metricSize = {
 const toneClass = (tone: DynamicSceneTone, accent: string): string =>
   tone === "accent" ? accent : tone === "secondary" ? "text-white/70" : "text-white";
 
-function NodeContent({ node, scene, coverArtUrl, accent, glow, edge }: {
+function NodeContent({ node, scene, coverArtUrl, accent, glow, edge, reduce }: {
   node: DynamicSceneElement;
   scene: StoryScene;
   coverArtUrl?: string | null;
-  accent: string; glow: string; edge: string;
+  accent: string; glow: string; edge: string; reduce: boolean;
 }) {
   const color = toneClass(node.tone, accent);
   switch (node.type) {
@@ -75,8 +75,8 @@ function NodeContent({ node, scene, coverArtUrl, accent, glow, edge }: {
         </div>
         <p className={"text-sm font-semibold " + accent}>{stat.label}</p>
         <div className="mt-2 w-full h-2 bg-white/10 rounded-full overflow-hidden" aria-hidden="true">
-          <motion.div initial={{ width: 0 }} whileInView={{ width: Math.max(0, Math.min(100, stat.value)) + "%" }}
-            viewport={{ once: true }} transition={{ duration: .85, delay: node.delay }}
+          <motion.div initial={reduce ? false : { width: 0 }} whileInView={{ width: Math.max(0, Math.min(100, stat.value)) + "%" }}
+            viewport={{ once: true }} transition={{ duration: reduce ? 0 : .85, delay: reduce ? 0 : node.delay }}
             className={"h-full rounded-full " + glow} />
         </div>
         <p className="text-xs text-white/55 mt-1">{stat.note}</p>
@@ -166,7 +166,7 @@ export function DynamicStorySlide({ scene, composition, number, total, coverArtU
   const renderNode = (node: DynamicSceneElement, mobileLayout: boolean) =>
     <Entrance key={node.id} node={node} reduce={reduce} mobile={mobileLayout}>
       <NodeContent node={node} scene={scene} coverArtUrl={coverArtUrl}
-        accent={theme.accent} glow={theme.glow} edge={theme.edge} />
+        accent={theme.accent} glow={theme.glow} edge={theme.edge} reduce={reduce} />
     </Entrance>;
 
   return <motion.article initial={reduce ? false : { opacity: 0, scale: .985 }} animate={{ opacity: 1, scale: 1 }}
@@ -174,7 +174,9 @@ export function DynamicStorySlide({ scene, composition, number, total, coverArtU
     transition={{ duration: reduce ? 0 : .35 }}
     className={"relative isolate overflow-hidden rounded-[2rem] md:rounded-[2.75rem] border " +
       theme.edge + " " + background + " shadow-2xl"}>
-    {scene.kind === "opening" && coverArtUrl && <img src={coverArtUrl} loading="eager" alt="" aria-hidden="true"
+    {scene.kind === "opening" && coverArtUrl &&
+      !composition.elements.some(node => node.type === "title-art") &&
+      <img src={coverArtUrl} loading="eager" alt="" aria-hidden="true"
       className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none" />}
     {composition.backdrop === "grid" && <div aria-hidden="true"
       className="absolute inset-0 opacity-20 pointer-events-none"
