@@ -11,9 +11,10 @@ type DirectorReply = { compositions?: Array<{ sceneId: string; composition: unkn
  * already verified by normalizeWrappedStory enters this pass. Numbers, quotes
  * and media URLs cannot be written by the model: it only references bound IDs.
  */
-export function wrappedVisualDirectorBrief(story: WrappedStory): string {
+export function wrappedVisualDirectorBrief(story: WrappedStory, onlySceneIds?: string[]): string {
   const illustrated = new Set(selectIllustratedScenes(story.scenes));
-  const scenes = story.scenes.map(scene => ({
+  const wanted = onlySceneIds ? new Set(onlySceneIds) : null;
+  const scenes = story.scenes.filter(scene => !wanted || wanted.has(scene.id)).map(scene => ({
     sceneId: scene.id,
     kind: scene.kind,
     title: scene.title,
@@ -37,7 +38,7 @@ export function wrappedVisualDirectorBrief(story: WrappedStory): string {
   return [
     "ISSUE: " + story.title + "\n" + story.dek,
     "VERIFIED, ALREADY WRITTEN SCENES (do not change their copy):\n" + JSON.stringify(scenes),
-    "COMPOSE EVERY SCENE. No skipping: one composition for EACH sceneId, from opening through closing. The previous 2-3-scene limitation caused most of a Wrapped to fall back to the same old templates. This is the visual director's main deliverable. Give each scene a DISTINCT artistic concept and layout, not the same left-copy/right-media split.",
+    "COMPOSE EVERY SCENE IN THE PROVIDED LIST. No skipping: exactly one composition for EACH sceneId listed, nothing else. The previous 2-3-scene limitation caused most of a Wrapped to fall back to the same old templates. Give each scene a DISTINCT artistic concept and layout, not the same left-copy/right-media split.",
     "Each scene must include the EXISTING title and body exactly once using elements of type title and body. No new prose. Desktop elements use rectangle box coordinates x,y,w,h in percentages from 0-100, without exceeding canvas bounds. Do NOT overlap the title and body. Place enough room for the full title and narration: titleBoxes must often be 35-65% wide, 25-45% tall. For long headings use very generous dimensions and size sm or md rather than xl. Never put text in a scrollable box.",
     "Visual composition MUST have a point. Choose one artistic device that tells the reader WHY this specific event matters: an evocative illustration, a dominant verified statistic, a meaningful contrast, an unusually shaped typography treatment, or a timeline that illustrates change. Decorative circles and cover tiles alone are NOT an idea. If a design could be reused for any random scene, it is not good enough.",
     "Elements: title, body, eyebrow, media (requires mediaId from imageMediaIds), title-art (opening only), scene-art (ONLY where canGenerateOriginalSceneArt is true), quote (only with hasVerifiedQuote), stat (verifiedBars index), beat (verifiedBeats index), shape (shape: orb|ring|line|panel|pill). No URLs, HTML, CSS, custom text or invented data.",
@@ -72,7 +73,7 @@ export function applyWrappedVisualCompositions(
     }
   }
   return { ...story, scenes: story.scenes.map(scene => ({
-    ...scene, composition: maps.get(scene.id),
+    ...scene, composition: maps.get(scene.id) || scene.composition,
   })) };
 }
 
@@ -82,7 +83,7 @@ export async function generateWrappedVisualCompositions(args: {
   apiKey: string;
 }): Promise<WrappedStory> {
   const { story, model, apiKey } = args;
-  try {
+  const request = async (userPrompt: string): Promise<unknown> => {
     const result = await apiFetch("/api/nano-gpt/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-nano-gpt-key": apiKey },
@@ -92,7 +93,7 @@ export async function generateWrappedVisualCompositions(args: {
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: "You are the VISUAL DIRECTOR for a personal Wrapped. Create visually original, safe, data-bound compositions. JSON ONLY. Never generate code." },
-          { role: "user", content: wrappedVisualDirectorBrief(story) },
+          { role: "user", content: userPrompt },
         ],
       }),
     });
@@ -101,14 +102,32 @@ export async function generateWrappedVisualCompositions(args: {
     const content = payload?.choices?.[0]?.message?.content;
     if (typeof content !== "string") throw new Error("Visual Director returned no JSON");
     const answer = content.trim();
-    try { return applyWrappedVisualCompositions(story, JSON.parse(answer)); }
+    try { return JSON.parse(answer); }
     catch (error) {
       const from = answer.indexOf("{"), to = answer.lastIndexOf("}");
       if (from < 0 || to <= from) throw error;
-      return applyWrappedVisualCompositions(story, JSON.parse(answer.slice(from, to + 1)));
+      return JSON.parse(answer.slice(from, to + 1));
     }
+  };
+  let resultStory = story;
+  try {
+    resultStory = applyWrappedVisualCompositions(story, await request(wrappedVisualDirectorBrief(story)));
   } catch (error) {
-    console.warn("[wrapped-visuals] Using reliable legacy layouts after Visual Director error:", error);
-    return story;
+    console.warn("[wrapped-visuals] Primary design pass failed; retrying only missing scenes:", error);
   }
+  // One targeted repair call when an incomplete/invalid model reply leaves
+  // scenes on the old template. This is cheap relative to redoing the story
+  // and does not regenerate any accepted scene or its factual content.
+  const missing = resultStory.scenes.filter(scene => !scene.composition).map(scene => scene.id);
+  if (missing.length) {
+    try {
+      const repairPrompt = wrappedVisualDirectorBrief(resultStory, missing) +
+        "\n\nTARGETED REPAIR: the prior visual design was absent or invalid for these scene IDs: " +
+        missing.join(", ") + ". Return exactly these scenes. Use generous title and body boxes and strong ideas.";
+      resultStory = applyWrappedVisualCompositions(resultStory, await request(repairPrompt));
+    } catch (error) {
+      console.warn("[wrapped-visuals] Some scenes retain reliable preset layouts:", error);
+    }
+  }
+  return resultStory;
 }
