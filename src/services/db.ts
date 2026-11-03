@@ -290,6 +290,24 @@ export const DatabaseService = {
     return res.json();
   },
 
+  /** Save only an AI-composed scene design with revision protection. */
+  async saveWrappedVisualCompositions(
+    timeframe: 'week' | 'month' | 'year', timeId: string,
+    generatedAt: string, visualRevision: number,
+    compositions: Array<{ sceneId: string; composition: unknown }>,
+  ): Promise<WrappedStory> {
+    const res = await apiFetch('/api/wrapped/' + timeframe + '/' + encodeURIComponent(timeId) + '/scenes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ generatedAt, visualRevision, compositions }),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.error || 'Could not save custom scene visuals (' + res.status + ')');
+    }
+    return res.json();
+  },
+
   async getGeneratedAchievements(): Promise<GeneratedAchievement[]> {
     const res = await apiFetch('/api/achievements');
     if (!res.ok) throw new Error('Failed to load achievements');
