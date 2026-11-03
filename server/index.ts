@@ -20,6 +20,7 @@ import { createNotifications } from "./services/notifications";
 import { reportBrowserStatus } from "./integrations/gamestorylog";
 import { createBackupManager } from "./services/backup";
 import { createImageService } from "./services/images";
+import { createWrappedCoverService } from "./services/wrappedCovers";
 import { createCoverCache } from "./services/coverCache";
 import { createWorldBossService } from "./services/worldBoss";
 import { createCodexService } from "./services/codex";
@@ -141,8 +142,13 @@ async function startServer() {
     },
     notify,
   });
-  const { generateBossImageBackground, queueBossVictoryArtwork, generateArtifactImageBackground, describeImageModel } = createImageService({
+  const { generateBossImageBackground, queueBossVictoryArtwork, generateArtifactImageBackground, generateWrappedCoverImage, describeImageModel } = createImageService({
     db, aiImagesDir, codex, canSpendTokens: userId => !activity.isFrozen(userId),
+  });
+  const { queue: queueWrappedCoverArt } = createWrappedCoverService({
+    db,
+    generateImage: generateWrappedCoverImage,
+    canSpendTokens: userId => !activity.isFrozen(userId),
   });
   const coverCache = createCoverCache({ coversDir });
   const { spawnWorldBoss, generateEnemy } = createWorldBossService({ db, generateBossImageBackground, codex });
@@ -222,6 +228,7 @@ async function startServer() {
     generateBossImageBackground,
     queueBossVictoryArtwork,
     generateArtifactImageBackground,
+    queueWrappedCoverArt,
     codex,
     describeImageModel,
     flavorLibrary,
