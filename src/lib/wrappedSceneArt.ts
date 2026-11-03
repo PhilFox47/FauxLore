@@ -72,7 +72,9 @@ export function shouldHoldWrappedForArtwork(issue: {
 } | null): boolean {
   if (!issue) return false;
   const active = (status?: string | null) => status === "pending" || status === "generating";
-  if (active(issue.coverArtStatus) && !issue.coverArtUrl) return true;
+  // A restyle may move the text from left to right, so even an EXISTING
+  // title image is temporarily outdated while a newly framed one renders.
+  if (active(issue.coverArtStatus)) return true;
   // A visual restyle may have already saved the new composition while its
   // replacement artwork is still being painted. Do not flash old art with
   // the NEW composition; reveal the complete issue together.
