@@ -11,7 +11,10 @@ const story: WrappedStory = {
     { id: "wrapped-0", kind: "opening", eyebrow: "OPENING", title: "The Return", body: "A small beginning.", evidenceIds: [] },
     { id: "wrapped-1", kind: "taste", eyebrow: "THE CONTRAST", title: "The Critics Lost",
       body: "One particular game challenged the consensus.", evidenceIds: ["taste-1"],
-      bars: [{ label: "My rating", value: 90, note: "Measured" }],
+      bars: [
+        { label: "My rating", value: 90, note: "4.5 / 5" },
+        { label: "Critics", value: 50, note: "2.5 / 5" },
+      ],
       media: { id: "media-1", title: "Space Game", type: "Game", cover: "https://example.com/space.jpg" },
     },
     { id: "wrapped-2", kind: "closing", eyebrow: "CLOSING", title: "Until Next Time", body: "A modest ending.", evidenceIds: [] },
