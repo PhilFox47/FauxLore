@@ -89,6 +89,11 @@ export function buildWrappedEvidence(args: {
   const inFinalWeek = (l: ProgressLog) => dayOf(l) > daysInMonth - 7;
   const scopeFor = (items: ProgressLog[]) => timeframe === 'month' && items.length > 0 &&
     items.every(inFinalWeek);
+  const phaseFor = (items: ProgressLog[]): MonthPhase | undefined => {
+    if (timeframe !== 'month' || !items.length) return undefined;
+    const phases = [...new Set(items.map(item => monthPhase(dayOf(item))))];
+    return phases.length === 1 ? phases[0] : undefined;
+  };
   let monthlyCoverage: MonthlyCoverage | undefined;
   if (timeframe === 'month') {
     const names: MonthPhase[] = ['early', 'middle', 'late'];
@@ -179,6 +184,7 @@ export function buildWrappedEvidence(args: {
   ranking.slice(0, 10).forEach(([id, pages], i) => {
     const m = byId.get(id)!;
     add({ id: 'media-' + i, kind: 'spotlight', title: m.title, mediaId: id,
+      phase: phaseFor(progress.filter(l => l.mediaId === id && value(l) > 0)),
       recentOnly: scopeFor(progress.filter(l => l.mediaId === id && value(l) > 0)),
       evidence: m.title + ' (' + m.mediaType + ') logged ' + round(pages) + ' Master Pages (' +
         (total > 0 ? Math.round(pages / total * 100) : 0) + '% of this period); ' +
@@ -198,7 +204,7 @@ export function buildWrappedEvidence(args: {
     const m = byId.get(l.mediaId)!;
     const quote = l.thoughts!.trim().slice(0, 2000);
     add({ id: 'journal-' + l.id, kind: 'journal', title: 'Journal: ' + m.title, mediaId: m.id,
-      recentOnly: scopeFor([l]),
+      phase: phaseFor([l]), recentOnly: scopeFor([l]),
       evidence: 'On ' + stamp(l) + (l.location ? ' at ' + l.location : '') + ', reflected on ' + m.title + (l.thoughtPrompt ? ' in reply to '+l.thoughtPrompt.slice(0,160) : '') + ': ' + quote,
       quote });
   });
@@ -206,7 +212,7 @@ export function buildWrappedEvidence(args: {
   progress.filter(l => !!l.note?.trim() && byId.has(l.mediaId)).slice(0, 20).forEach(l => {
     const m = byId.get(l.mediaId)!;
     add({ id: 'reference-' + l.id, kind: 'insight', title: 'Session reference: ' + m.title, mediaId: m.id,
-      recentOnly: scopeFor([l]),
+      phase: phaseFor([l]), recentOnly: scopeFor([l]),
       evidence: 'On ' + stamp(l) + ', organizational note for ' + m.title + ': ' + l.note!.trim().slice(0, 450) +
         '. This is contextual metadata, NOT a personal opinion.' });
   });
@@ -221,6 +227,8 @@ export function buildWrappedEvidence(args: {
     if (!m) continue;
     const average = sessions.reduce((sum, s) => sum + s.score, 0) / sessions.length;
     add({ id: 'session-enjoyment-' + mediaId, kind: 'insight', title: 'Session enjoyment: ' + m.title, mediaId,
+      phase: phaseFor(progress.filter(l => l.mediaId === mediaId &&
+        typeof l.sessionEnjoyment === 'number')),
       recentOnly: scopeFor(progress.filter(l => l.mediaId === mediaId &&
         typeof l.sessionEnjoyment === 'number')),
       evidence: sessions.length + ' separately rated sessions, average ' + round(average) + '/5. Chronological session scores: ' +
@@ -267,7 +275,7 @@ export function buildWrappedEvidence(args: {
       .slice(0, 2).map(([id]) => byId.get(id)?.title).filter(Boolean);
     const dates = [...new Set(matches.map(l => format(subHours(parseISO(l.timestamp), 5), 'yyyy-MM-dd')))];
     add({ id: 'place-' + i, kind: 'location', title: 'Recorded place: ' + place,
-      recentOnly: scopeFor(matches),
+      phase: phaseFor(matches), recentOnly: scopeFor(matches),
       mediaId: mostSubstantial.length ? [...locationTotals].sort((a, b) => b[1] - a[1])[0]?.[0] : matches[0]?.mediaId,
       mediaIds: [...new Set(matches.map(l => l.mediaId))],
       evidence: 'User explicitly logged progress at "' + place + '" on ' + dates.length +
@@ -287,6 +295,7 @@ export function buildWrappedEvidence(args: {
       .map(l => parseISO(l.timestamp).getTime()).sort((a, b) => b - a)[0];
     const gap = first && last ? Math.floor((first - last) / 86400000) : 0;
     if (gap >= 30) add({ id: 'comeback-' + m.id, kind: 'return', title: 'Return to ' + m.title, mediaId: m.id,
+      phase: phaseFor(progress.filter(l => l.mediaId === m.id && value(l) > 0)),
       recentOnly: scopeFor(progress.filter(l => l.mediaId === m.id && value(l) > 0)),
       evidence: 'Gap between logged progress sessions for ' + m.title + ': ' + gap + ' days. This is NOT proof of abandonment.' });
   }
