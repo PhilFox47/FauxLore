@@ -8,6 +8,7 @@ import { recordAiCallStart, recordAiCall, nextCallId, recordPayload } from "../l
 import { longRequestDispatcher } from "../lib/httpDispatcher";
 import { cliProxyBaseUrl, cliProxyImageSize, cliProxyImagePrompt } from "../lib/cliProxy";
 import { imagePromptCraft, resolveImagePromptProfile, gptImage25DeliveryPrompt } from "../lib/imagePromptGuidance";
+import { buildEnragedBossImagePrompt, localImageReferenceDataUrl } from "../lib/enrageImages";
 import { imageFrameSize, imageFrameMatches, withImageFrame, type ImageFrame } from "../../src/lib/imageFraming";
 import { AUTHENTICITY, SHARPNESS, enemyTier, rarityArt } from "../lib/artDirection";
 import { codexArtStyleBlock, type CodexService } from "./codex";
@@ -158,7 +159,7 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
     return JSON.parse(text);
   }
 
-  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = "", frame: ImageFrame = "square"): Promise<string> {
+  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = "", frame: ImageFrame = "square", referenceDataUrl: string | null = null): Promise<string> {
     const cfg = readImageConfig();
     const negativePrompt = [cfg.negative, extraNegative].filter(Boolean).join(", ");
     const framedPrompt = withImageFrame(prompt, frame);
@@ -167,54 +168,82 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
     if (cfg.useCli) {
       const sys: any = db.prepare("SELECT cliProxyBaseUrl FROM system_settings WHERE id = 'system'").get() || {};
       const baseUrl = cliProxyBaseUrl(sys.cliProxyBaseUrl);
-      const body = {
-        model: cfg.model,
-        prompt: cfg.gptImage25
-          ? gptImage25DeliveryPrompt(framedPrompt, frame === "square" ? "loot" : "boss", cfg.customNegative)
-          : cliProxyImagePrompt(framedPrompt, negativePrompt),
-        size: cliProxyImageSize(requestedSize),
-        n: 1,
-        response_format: "b64_json",
-      };
-      const callId = nextCallId();
-      const shape = { callId, model: cfg.model, scope: "images", attempt: 1, promptChars: body.prompt.length };
-      const startedAt = Date.now();
-      recordAiCallStart(shape);
-      recordPayload(callId, "images", { prompt: JSON.stringify(body) });
-      try {
-        const response = await fetch(`${baseUrl}/images/generations`, {
-          method: "POST",
-          ...(longRequestDispatcher ? { dispatcher: longRequestDispatcher } : {}),
-          signal: AbortSignal.timeout(600_000),
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify(body),
-        } as any);
-        if (!response.ok) {
-          const detail = (await response.text()).slice(0, 500);
-          throw Object.assign(new Error(`CLIProxyAPI image generation HTTP ${response.status}: ${detail}`), { httpStatus: response.status });
+      const finalPrompt = cfg.gptImage25
+        ? gptImage25DeliveryPrompt(framedPrompt, frame === "square" ? "loot" : "boss", cfg.customNegative)
+        : cliProxyImagePrompt(framedPrompt, negativePrompt);
+      const size = cliProxyImageSize(requestedSize);
+
+      async function requestCliImage(edit: boolean, attempt: 1 | 2): Promise<string> {
+        const route = edit ? "/images/edits" : "/images/generations";
+        const body: Record<string, unknown> = {
+          model: cfg.model,
+          prompt: finalPrompt,
+          size,
+          response_format: "b64_json",
+          ...(edit ? { images: [{ image_url: referenceDataUrl }] } : { n: 1 }),
+        };
+        const callId = nextCallId();
+        const shape = { callId, model: cfg.model, scope: "images", attempt, promptChars: finalPrompt.length };
+        const startedAt = Date.now();
+        recordAiCallStart(shape);
+        // NEVER put embedded reference-image bytes into diagnostics or logs.
+        recordPayload(callId, "images", {
+          prompt: JSON.stringify({ ...body, ...(edit ? { images: "[one local image; bytes redacted]" } : {}) }),
+          route,
+        });
+        try {
+          const response = await fetch(\`\${baseUrl}\${route}\`, {
+            method: "POST",
+            ...(longRequestDispatcher ? { dispatcher: longRequestDispatcher } : {}),
+            signal: AbortSignal.timeout(600_000),
+            headers: { "Content-Type": "application/json", Authorization: \`Bearer \${apiKey}\` },
+            body: JSON.stringify(body),
+          } as any);
+          if (!response.ok) {
+            const detail = (await response.text()).slice(0, 500);
+            throw Object.assign(new Error(\`CLIProxyAPI image \${edit ? "edit" : "generation"} HTTP \${response.status}: \${detail}\`), { httpStatus: response.status });
+          }
+          const result: any = await response.json();
+          const first = result?.data?.[0];
+          const encoded = first?.b64_json || (typeof first?.url === "string"
+            ? first.url.match(/^data:image\/(?:png|jpeg|webp);base64,(.+)$/)?.[1] : null);
+          if (!encoded) throw new Error("CLIProxyAPI returned no base64 image.");
+          const buffer = Buffer.from(encoded, "base64");
+          const actual = imageSize(buffer);
+          if (!actual) throw new Error("CLIProxyAPI returned invalid image bytes.");
+          const ext = ({ png: ".png", jpg: ".jpg", jpeg: ".jpg", webp: ".webp" } as Record<string, string>)[String(actual.type).toLowerCase()] || ".png";
+          const fileName = \`\${uuidv4()}\${ext}\`;
+          fs.writeFileSync(path.join(aiImagesDir, fileName), buffer);
+          const got = \`\${actual.width}x\${actual.height}\`;
+          if (!imageFrameMatches(frame, actual.width, actual.height)) {
+            console.warn(\`[images] \${cfg.model} returned an unexpected \${got} canvas for \${frame}; check Image Generation Diagnostics.\`);
+          }
+          console.log(\`[images] CLIProxyAPI \${cfg.model} \${edit ? "edited with original reference" : "generated"} \${got}\`);
+          recordPayload(callId, "images", { reply: \`image saved: \${got}; binary redacted\` });
+          recordAiCall({ ...shape, durationMs: Date.now() - startedAt, httpStatus: response.status });
+          return \`/uploads/ai-images/\${fileName}\`;
+        } catch (e: any) {
+          recordAiCall({ ...shape, durationMs: Date.now() - startedAt, httpStatus: e?.httpStatus, error: e?.message || String(e) });
+          throw e;
         }
-        const result: any = await response.json();
-        const first = result?.data?.[0];
-        const encoded = first?.b64_json || (typeof first?.url === "string"
-          ? first.url.match(/^data:image\/(?:png|jpeg|webp);base64,(.+)$/)?.[1] : null);
-        if (!encoded) throw new Error("CLIProxyAPI returned no base64 image.");
-        const buffer = Buffer.from(encoded, "base64");
-        const actual = imageSize(buffer);
-        const ext = ({ png: ".png", jpg: ".jpg", jpeg: ".jpg", webp: ".webp" } as Record<string, string>)[String(actual?.type || "").toLowerCase()] || ".png";
-        const fileName = `${uuidv4()}${ext}`;
-        fs.writeFileSync(path.join(aiImagesDir, fileName), buffer);
-        const got = actual?.width && actual?.height ? `${actual.width}x${actual.height}` : "unknown";
-        if (actual && !imageFrameMatches(frame, actual.width, actual.height)) {
-          console.warn(`[images] ${cfg.model} returned an unexpected ${got} canvas for ${frame}; check Image Generation Diagnostics.`);
-        }
-        console.log(`[images] CLIProxyAPI ${cfg.model} requested ${body.size} (${frame}), returned ${got}`);
-        recordPayload(callId, "images", { reply: `image saved: ${got}; binary redacted` });
-        recordAiCall({ ...shape, durationMs: Date.now() - startedAt, httpStatus: response.status });
-        return `/uploads/ai-images/${fileName}`;
-      } catch (e: any) {
-        recordAiCall({ ...shape, durationMs: Date.now() - startedAt, httpStatus: e?.httpStatus, error: e?.message || String(e) });
-        throw e;
       }
+
+      if (referenceDataUrl && cfg.gptImage25) {
+        try {
+          return await requestCliImage(true, 1);
+        } catch (e: any) {
+          // Only unsupported/bad-edit-request responses fall back. Do not pay
+          // for a second render after timeouts, rate limits or server failures.
+          const status = Number(e?.httpStatus || 0);
+          if (![400, 404, 405, 415, 422, 501].includes(status)) throw e;
+          console.warn(\`[images] CLIProxyAPI edit unavailable (HTTP \${status}); using text-only enrage fallback.\`);
+          return requestCliImage(false, 2);
+        }
+      }
+      if (referenceDataUrl) {
+        console.warn(\`[images] Reference supplied, but model \${cfg.model} does not use the GPT Image 2.5 edit endpoint; generating from text.\`);
+      }
+      return requestCliImage(false, 1);
     }
 
     // Steps and guidance are not among the API's common fields at all — they are
