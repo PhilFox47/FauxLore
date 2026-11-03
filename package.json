@@ -15,7 +15,8 @@
     "test:ai-grounding": "tsx --test src/lib/fauxLoreMechanics.test.ts",
     "test:image-framing": "tsx --test src/lib/imageFraming.test.ts",
     "start": "node dist/server.cjs",
-    "test:image-prompting": "tsx --test server/lib/imagePromptGuidance.test.ts"
+    "test:image-prompting": "tsx --test server/lib/imagePromptGuidance.test.ts",
+    "test:enrage-images": "tsx --test server/lib/enrageImages.test.ts"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
