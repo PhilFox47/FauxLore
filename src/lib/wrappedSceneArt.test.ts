@@ -27,11 +27,14 @@ test("no story content flashes while its first title and two scene images render
   const halfway = { ...initial, coverArtUrl: "/uploads/ai-images/cover.png",
     coverArtStatus: "done", sceneArt: { "wrapped-1": "/uploads/ai-images/one.png" } };
   assert.equal(shouldHoldWrappedForArtwork(halfway), true);
-  const complete = { ...halfway, sceneArt: { ...halfway.sceneArt, "wrapped-2": "/uploads/ai-images/two.png" } };
+  const complete = { ...halfway, sceneArtStatus: "done",
+    sceneArt: { ...halfway.sceneArt, "wrapped-2": "/uploads/ai-images/two.png" } };
   assert.equal(shouldHoldWrappedForArtwork(complete), false);
   assert.equal(shouldHoldWrappedForArtwork({ ...initial, coverArtStatus: "failed", sceneArtStatus: "failed" }), false);
+  assert.equal(shouldHoldWrappedForArtwork({ ...complete, sceneArtStatus: "generating" }), true,
+    "new compositions must not flash previous chapter images during restyling");
   assert.equal(shouldHoldWrappedForArtwork({ ...complete, coverArtStatus: "generating" }), false,
-    "successful previous art remains visible during an explicit redraw");
+    "a redraw of the title cover may retain its old successful artwork");
 });
 
 test("chapter prompts have one strong editorial idea and never demand a source collage", () => {
