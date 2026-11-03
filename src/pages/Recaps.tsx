@@ -2655,6 +2655,13 @@ ${wrappedContext || 'No background material.'}
                                Creating a new Wrapped. The previous saved version remains visible until the replacement is stored successfully.
                              </p>
                            )}
+                           {(wrapped.coverArtStatus === 'failed' || wrapped.sceneArtStatus === 'failed') && (
+                             <div role="alert" className="rounded-xl border border-amber-400/30 bg-amber-950/20 text-amber-100 px-4 py-3 text-sm">
+                               Some Wrapped illustrations could not be generated. Your saved story and existing images are safe.
+                               {' '}Use {wrapped.coverArtStatus === 'failed' ? 'Retry title artwork' : 'Retry scene artwork'} below to complete the image set.
+                               Missing art is shown without a substitute media-cover collage.
+                             </div>
+                           )}
                            {initialArtworkPending ? (
                              <div role="status" aria-live="polite"
                                className="min-h-[480px] flex flex-col items-center justify-center text-center rounded-[2.5rem] p-8 bg-gradient-to-br from-blue-950/20 via-zinc-950 to-black border border-violet-400/20 space-y-5">
@@ -2663,8 +2670,8 @@ ${wrappedContext || 'No background material.'}
                                <p className="max-w-xl text-zinc-300 text-sm sm:text-base">
                                  {['pending','generating'].includes(wrapped.coverArtStatus || '') && !wrapped.coverArtUrl
                                    ? 'Creating the cinematic opening illustration.'
-                                   : 'Finishing the original artwork for the important chapters.'}
-                                 {' '}The story will appear when its artwork is ready. If image generation fails, the verified story uses its existing layouts and media covers.
+                                   : 'Painting individual backgrounds for every narrative scene, including the final tableau and achievements.'}
+                                 {' '}The story will appear when its artwork is ready. If an image fails, you can retry without regenerating the story; official media covers stay in Deep Dive.
                                </p>
                                <RefreshCw className="w-5 h-5 animate-spin text-violet-300" />
                              </div>
@@ -2711,8 +2718,8 @@ ${wrappedContext || 'No background material.'}
                                  {['pending','generating'].includes(wrapped.sceneArtStatus || '')
                                    ? <RefreshCw className="w-4 h-4 animate-spin" />
                                    : <ImageIcon className="w-4 h-4" />}
-                                 {['pending','generating'].includes(wrapped.sceneArtStatus || '') ? 'Painting chapters...'
-                                   : wrapped.sceneArtStatus === 'failed' ? 'Retry chapter artwork' : 'Redraw chapter artwork'}
+                                 {['pending','generating'].includes(wrapped.sceneArtStatus || '') ? 'Painting all scenes...'
+                                   : wrapped.sceneArtStatus === 'failed' ? 'Retry scene artwork' : 'Redraw all scene artwork'}
                                </button>
                                {currentRecap && (
                                  <button onClick={() => void retryAchievements()}
