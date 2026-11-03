@@ -329,32 +329,64 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
    * it leans on the media's Codex when one exists rather than searching again.
    */
   async function generateBossImageBackground(userId: string, bossId: string) {
+    // A token guards against old asynchronous renders overwriting the current
+    // image after a taunt, a reroll or a second manual regeneration.
+    const generationToken = uuidv4();
+    const boss: any = db.prepare("SELECT * FROM world_bosses WHERE id = ? AND userId = ?").get(bossId, userId);
+    if (!boss) return;
+    db.prepare(
+      "UPDATE world_bosses SET imageStatus = 'generating', imageGenerationToken = ? WHERE id = ? AND userId = ?",
+    ).run(generationToken, bossId, userId);
+
     try {
       const aiConfig = getAiConfig(db, userId);
-      if (!aiConfig) return;
-      const nanoGptKey = aiConfig.apiKey;
-
-      const boss: any = db.prepare("SELECT * FROM world_bosses WHERE id = ? AND userId = ?").get(bossId, userId);
-      if (!boss) return;
-      const mediaItem: any = db.prepare("SELECT title, mediaType FROM media WHERE id = ?").get(boss.mediaId);
+      if (!aiConfig) throw new Error("AI image provider is not configured.");
+      const mediaItem: any = db.prepare("SELECT title, mediaType FROM media WHERE id = ? AND userId = ?").get(boss.mediaId, userId);
       const mediaTitle = mediaItem?.title || "an unknown work";
       const mediaType = mediaItem?.mediaType || "media";
-
-      db.prepare("UPDATE world_bosses SET imageStatus = 'generating' WHERE id = ?").run(bossId);
 
       let imagePrompt = (boss.imagePrompt || "").trim();
       if (!imagePrompt) {
         imagePrompt = await writeBossImagePrompt(userId, boss, mediaTitle, mediaType);
         if (!imagePrompt) throw new Error("Empty boss prompt");
-        db.prepare("UPDATE world_bosses SET imagePrompt = ? WHERE id = ?").run(imagePrompt, bossId);
+        const saved = db.prepare(
+          "UPDATE world_bosses SET imagePrompt = ? WHERE id = ? AND userId = ? AND imageGenerationToken = ?",
+        ).run(imagePrompt, bossId, userId, generationToken);
+        if (!saved.changes) return; // A newer generation superseded this one.
       }
 
-      const imageUrl = await internalGenerateImageWithNanoGpt(nanoGptKey, imagePrompt, BOSS_NEGATIVE_EXTRA, "landscape-3:2");
-      db.prepare("UPDATE world_bosses SET imageUrl = ?, imageStatus = 'done' WHERE id = ?").run(imageUrl, bossId);
+      let referenceDataUrl: string | null = null;
+      if (boss.enraged) {
+        const cfg = readImageConfig();
+        if (cfg.useCli && cfg.gptImage25) {
+          referenceDataUrl = localImageReferenceDataUrl(boss.enrageOriginalImageUrl, aiImagesDir);
+        }
+        if (!referenceDataUrl) {
+          console.warn(`[images] Enrage reference unavailable or unsupported for ${bossId}; using source-faithful text-only generation.`);
+        }
+        imagePrompt = buildEnragedBossImagePrompt({
+          name: boss.name,
+          title: boss.title,
+          description: boss.description,
+          sourceTitle: mediaTitle,
+          sourceType: mediaType,
+          imagePrompt,
+        }, !!referenceDataUrl);
+      }
+
+      const imageUrl = await internalGenerateImageWithNanoGpt(
+        aiConfig.apiKey, imagePrompt, BOSS_NEGATIVE_EXTRA, "landscape-3:2", referenceDataUrl,
+      );
+      const saved = db.prepare(
+        "UPDATE world_bosses SET imageUrl = ?, imageStatus = 'done', imageGenerationToken = NULL WHERE id = ? AND userId = ? AND imageGenerationToken = ?",
+      ).run(imageUrl, bossId, userId, generationToken);
+      if (!saved.changes) console.log(`[images] Discarded superseded image for boss ${bossId}.`);
     } catch (e) {
       console.error("Boss Image Background Gen Error:", e);
-      // No auto-retry — mark as failed so the UI can offer a manual regenerate.
-      try { db.prepare("UPDATE world_bosses SET imageStatus = 'failed' WHERE id = ?").run(bossId); } catch (_) {}
+      // Failed edits leave the original portrait untouched; users can retry.
+      db.prepare(
+        "UPDATE world_bosses SET imageStatus = 'failed', imageGenerationToken = NULL WHERE id = ? AND userId = ? AND imageGenerationToken = ?",
+      ).run(bossId, userId, generationToken);
     }
   }
 
