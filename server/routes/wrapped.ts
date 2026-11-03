@@ -160,6 +160,58 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  /** Replace ONLY the composed visual stages; the narrative and cover survive. */
+  app.post("/api/wrapped/:timeframe/:timeId/scenes", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      if (!activity.requireActive(userId, res)) return;
+      const { timeframe, timeId } = req.params;
+      if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
+      const { generatedAt, visualRevision, compositions } = req.body || {};
+      if (!string(generatedAt, 80) || !Number.isInteger(visualRevision) ||
+        visualRevision < 0 || visualRevision > 1000000 ||
+        !Array.isArray(compositions) || compositions.length < 1 || compositions.length > 3) {
+        return res.status(400).json({ error: "Invalid visual reroll request" });
+      }
+      const seen = new Set<string>();
+      const saved = db.transaction(() => {
+        const row = db.prepare(
+          "SELECT story, generatedAt FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=?",
+        ).get(userId, timeframe, timeId) as { story: string; generatedAt: string } | undefined;
+        if (!row) return "missing";
+        const current = JSON.parse(row.story) as { visualRevision?: number; scenes: any[] };
+        if (row.generatedAt !== generatedAt || (current.visualRevision || 0) !== visualRevision) {
+          return "stale";
+        }
+        const byScene = new Map<string, unknown>();
+        for (const proposal of compositions) {
+          if (!isObject(proposal) || !string(proposal.sceneId, 80) || seen.has(proposal.sceneId)) {
+            throw new Error("Duplicate or malformed scene selection");
+          }
+          const scene = current.scenes.find(scene => scene.id === proposal.sceneId);
+          if (!scene) throw new Error("Unknown scene ID");
+          seen.add(proposal.sceneId);
+          byScene.set(proposal.sceneId, normalizeDynamicScene(proposal.composition, scene));
+        }
+        const scenes = current.scenes.map(scene => {
+          const { composition: ignored, ...other } = scene;
+          return { ...other, ...(byScene.has(scene.id) ? { composition: byScene.get(scene.id) } : {}) };
+        });
+        const next = JSON.stringify({ ...current, visualRevision: visualRevision + 1, scenes });
+        const result = db.prepare(
+          "UPDATE wrapped_stories SET story=? WHERE userId=? AND timeframe=? AND timeId=? AND generatedAt=?",
+        ).run(next, userId, timeframe, timeId, generatedAt);
+        return result.changes ? "saved" : "stale";
+      })();
+      if (saved === "missing") return res.status(404).json({ error: "Wrapped not found" });
+      if (saved === "stale") return res.status(409).json({ error: "Wrapped visuals changed; reload before rerolling." });
+      res.json(savedStory(userId, timeframe, timeId));
+    } catch (error: any) {
+      res.status(400).json({ error: "Could not validate composed scenes: " + String(error?.message || error) });
+    }
+  });
+
   app.post("/api/wrapped/:timeframe/:timeId/start", (req, res) => {
     try {
       const userId = getAuthUser(req, res);
