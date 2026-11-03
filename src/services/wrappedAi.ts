@@ -1,4 +1,5 @@
 import { apiFetch } from './db';
+import { generateWrappedVisualCompositions } from './wrappedVisualDirector';
 import { getPersonaDescription } from '../lib/personas';
 import type { MediaItem } from '../types/schema';
 import type { WrappedEvidence, WrappedFact } from '../lib/wrappedEvidence';
