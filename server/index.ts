@@ -145,9 +145,10 @@ async function startServer() {
   const { generateBossImageBackground, queueBossVictoryArtwork, generateArtifactImageBackground, generateWrappedCoverImage, generateWrappedSceneImage, describeImageModel } = createImageService({
     db, aiImagesDir, codex, canSpendTokens: userId => !activity.isFrozen(userId),
   });
-  const { queue: queueWrappedCoverArt } = createWrappedCoverService({
+  const { queue: queueWrappedCoverArt, queueScenes: queueWrappedSceneArtwork } = createWrappedCoverService({
     db,
     generateImage: generateWrappedCoverImage,
+    generateSceneImage: generateWrappedSceneImage,
     canSpendTokens: userId => !activity.isFrozen(userId),
   });
   const coverCache = createCoverCache({ coversDir });
