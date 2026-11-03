@@ -97,7 +97,8 @@ test('last-week-only scenes cannot dominate a month whose final week did not dom
   assert.throws(() => normalizeWrappedStory(story(
     scene('insight', 'Beginning', ['month-early']),
     scene('insight', 'Middle', ['month-middle']),
-    ...extra.map(id => scene('insight', id, [id])),
+    ...extra.map((id, index) => scene('insight', id,
+      index === 0 ? [id, 'month-late'] : [id])),
   ), extended, media), /overrepresents the final seven days/);
 });
 
