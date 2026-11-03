@@ -7,6 +7,7 @@ import { getAiConfig, nanoGenerateText } from "../lib/ai";
 import { recordAiCallStart, recordAiCall, nextCallId, recordPayload } from "../lib/diagnostics";
 import { longRequestDispatcher } from "../lib/httpDispatcher";
 import { cliProxyBaseUrl, cliProxyImageSize, cliProxyImagePrompt } from "../lib/cliProxy";
+import { imagePromptCraft, resolveImagePromptProfile, gptImage25DeliveryPrompt } from "../lib/imagePromptGuidance";
 import { imageFrameSize, imageFrameMatches, withImageFrame, type ImageFrame } from "../../src/lib/imageFraming";
 import { AUTHENTICITY, SHARPNESS, enemyTier, rarityArt } from "../lib/artDirection";
 import { codexArtStyleBlock, type CodexService } from "./codex";
@@ -64,48 +65,11 @@ export function normalizeResolution(value?: string | null): string | undefined {
   return m ? `${Number(m[1])}x${Number(m[2])}` : raw;
 }
 
-function isDistilled(model: string): boolean {
-  return /\b(turbo|lightning|schnell|hyper|lcm|flash|fast)\b/i.test(model);
-}
-
-/**
- * How to brief the art director, given the model the prompt is actually for.
- *
- * It used to name "Z-Image-Turbo" in the prompt regardless of what was
- * configured, so after a model change the art director was still writing for a
- * model nobody was using. Worse, the two families want genuinely different
- * prompts: a distilled model wants short and direct, because it has few steps to
- * resolve anything complicated, while a full model like Seedream reads long
- * natural language properly and rewards it.
- *
- * Two Seedream behaviours are worth writing to specifically. It weights what
- * comes EARLY in the prompt more heavily, so the subject belongs in the first
- * clause rather than after a paragraph of style notes. And it is documented as
- * losing coherence past roughly 150 words, where instructions start contradicting
- * each other — which is why the length is given as a range with a ceiling rather
- * than "be vivid".
- */
-function promptCraft(model: string, distilled: boolean): string {
-  if (distilled) {
-    return `You are writing for "${model}", a distilled few-step diffusion model. It has very few steps to resolve an image, so keep the prompt direct and concrete — name the subject, the style and the framing plainly and do not bury them in subordinate clauses.
-
-- 2-4 natural sentences. Concrete nouns over adjectives.`;
-  }
-  return `You are writing for "${model}", a full diffusion model that reads natural language properly and renders many art styles, materials and real text well.
-
-Three things about how it reads a prompt, and they matter more than any adjective you could add:
-- IT WEIGHTS THE OPENING MOST. Whatever comes first carries the most influence, so OPEN with the subject and the single most important thing about how it looks. Style, setting, lighting and detail come after it, in that order. A prompt that opens with the art style and reaches the subject in sentence three has spent its strongest position on the wrong thing.
-- WRITE PROSE, NOT TAGS. Flowing sentences that describe a scene, the way you would brief a photographer or an illustrator. A comma-separated pile of keywords is read as one confused sentence and produces a confused image.
-- 40 TO 90 WORDS, one paragraph. Under about 15 leaves too much to invention; past roughly 150 the instructions start contradicting each other and coherence drops. Say each thing once, precisely, and stop.
-
-- Put every exclusion INTO the prose as something the image simply is, not as a list of what to avoid — "clean unmarked surfaces" rather than "no watermark". A separate negative list may not reach this model at all, and a negation the model does read can summon the very thing it names.`;
-}
-
 // Subject-specific negatives appended to the (configurable) base negative.
 const BOSS_NEGATIVE_EXTRA = "multiple characters, duplicate, collage, cluttered scene, static standing pose, T-pose, arms at sides, mugshot, passport photo, character select screen, posing for the camera";
 const LOOT_NEGATIVE_EXTRA = "hands, fingers, person, multiple items, cluttered scene, environment, landscape";
 
-/** AI image generation (NanoGPT art-direction prompt -> NanoGPT Z-Image-Turbo) and local storage. */
+/** Provider-aware image generation and local storage. */
 export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImagesDir: string; codex: CodexService }) {
   function readImageConfig() {
     let row: any = {};
@@ -114,11 +78,14 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
     } catch (e) { /* columns may not exist yet on very old DBs */ }
     const useCli = row.aiProvider === "cliProxy";
     const model = useCli ? (row.cliProxyImageModel || "gpt-image-2") : (row.imageModel || IMAGE_DEFAULTS.model);
-    const distilled = !useCli && isDistilled(model);
+    const profile = resolveImagePromptProfile(useCli ? "cliProxy" : "nanoGpt", model);
+    const distilled = profile.distilled;
     return {
       model,
       useCli,
       distilled,
+      gptImage25: profile.gptImage25,
+      customNegative: String(row.imageNegativePrompt || ""),
       size: normalizeResolution(row.imageSize) || IMAGE_DEFAULTS.size,
       // Only defaulted for the family they were measured on. An explicit setting
       // is always honoured — someone who typed a number meant it.
@@ -210,7 +177,9 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
       const baseUrl = cliProxyBaseUrl(sys.cliProxyBaseUrl);
       const body = {
         model: cfg.model,
-        prompt: cliProxyImagePrompt(framedPrompt, negativePrompt),
+        prompt: cfg.gptImage25
+          ? gptImage25DeliveryPrompt(framedPrompt, frame === "square" ? "loot" : "boss", cfg.customNegative)
+          : cliProxyImagePrompt(framedPrompt, negativePrompt),
         size: cliProxyImageSize(requestedSize),
         n: 1,
         response_format: "b64_json",
@@ -382,7 +351,7 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
 
     const prompt = `You are an expert art director writing ONE text-to-image prompt.
 
-${promptCraft(imageCfg.model, imageCfg.distilled)}
+${imagePromptCraft(imageCfg)}
 
 SUBJECT: a single RPG enemy named "${fullName}", from the media "${mediaTitle}" (a ${mediaType}). It is ${tier.word}, and should look ${tier.look}, set against ${tier.scene}, caught ${tier.action}.${boss.description ? `\nIts flavour text reads: "${boss.description}"` : ""}
 
@@ -455,7 +424,7 @@ Return ONLY the final image prompt text, nothing else.`;
 
     const prompt = `You are an expert art director writing ONE text-to-image prompt.
 
-${promptCraft(imageCfg.model, imageCfg.distilled)}
+${imagePromptCraft(imageCfg)}
 
 SUBJECT: a single RPG loot item named "${artifact.name}", described as "${artifact.description}", from the media "${mediaTitle}". Rarity: ${artifact.rarity}. At this rarity the item should read as ${art.grandeur}, carrying ${art.aura}.
 
@@ -469,10 +438,10 @@ THE PROMPT MUST:
 - Keep the object TYPE literal and correct. If it is a sword it is a sword; a cassette tape a cassette; a book a book; a flower a flower. NEVER substitute a generic ring, gem, orb or "magic trinket" unless the item genuinely is one. Believable proportions, a recognizable real object.
 - Render it in the ACTUAL art style and material design of "${mediaTitle}". NAME that style explicitly using the house style above, reusing its craft terms verbatim rather than paraphrasing them, and reference the franchise to anchor the look. Avoid generic flat cartoon icons.
 - ${AUTHENTICITY(mediaTitle)}
-- Scale the item's grandeur to its rarity: ${art.grandeur}.
+- Select source-faithful presentation for its rarity: ${art.grandeur}. Its rarity must not change canonical materials, silhouette, colors or built-in features.
 - Compose for a SQUARE 1:1 image with the entire object centered and safely inside the canvas, no tall poster framing.
-- Present ONE hero item only, centered, as a polished inventory icon / studio product shot, on this rarity-specific background: ${art.background}. A soft contact shadow under the item.
-- Describe its exact materials, shape, engravings and wear.
+- Present ONE recognizable item on a restrained studio backdrop: ${art.background}. Use ${art.aura} as an environmental lighting cue ONLY, not an effect emitted by the object. A subtle contact shadow may ground the item.
+- Describe its genuine materials, proportions, original markings, form and wear; never invent ornaments, supernatural effects or logos to communicate rarity.
 - ${SHARPNESS}
 - No hands, no person, no extra props — just the single item on its background.
 
