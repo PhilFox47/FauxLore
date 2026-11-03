@@ -187,6 +187,10 @@ export function initSchema(db: Db) {
       coverArtRequestId TEXT,
       -- The browser's reporting timezone anchors period-specific log selection.
       coverArtTimeZone TEXT,
+      -- Chapter illustrations are separate from story JSON and title artwork.
+      sceneArtJson TEXT,
+      sceneArtStatus TEXT,
+      sceneArtRequestId TEXT,
       PRIMARY KEY (userId, timeframe, timeId),
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
