@@ -98,3 +98,19 @@ test('API drops fabricated media, unverified stats or impossible geometry but ke
   assert.equal(validated.scenes[1].title, 'Unlikely bedfellows');
   assert.equal(validated.scenes.length, 3);
 });
+
+test('server rejects data-heavy new stories even if the client claims valid compositions', () => {
+  const issue: any = story();
+  const chart = (id: string) => ({
+    id, kind: 'taste', eyebrow: 'STATS', title: 'A critic difference',
+    body: 'An evidence-linked statistical comparison.', evidenceIds: [id],
+    bars: [{ label: 'User', value: 90, note: '4.5 / 5' },
+      { label: 'Critics', value: 50, note: '2.5 / 5' }],
+    design: design('infographic', 'bars'),
+  });
+  issue.scenes = [issue.scenes[0], chart('taste-a'), chart('taste-b'), issue.scenes[2]];
+  assert.throws(() => validateStory(issue, 'week'), /Infographic limit exceeded/);
+  assert.equal(validateStory(issue, 'month').scenes.length, 4);
+  issue.scenes.splice(3, 0, chart('taste-c'));
+  assert.throws(() => validateStory(issue, 'month'), /Infographic limit exceeded/);
+});
