@@ -37,6 +37,7 @@ import { StoryMode } from '../components/StoryMode';
 import { buildWrappedEvidence } from '../lib/wrappedEvidence';
 import { generateAiWrapped } from '../services/wrappedAi';
 import { generateWrappedVisualCompositions } from '../services/wrappedVisualDirector';
+import { selectIllustratedScenes } from '../lib/wrappedSceneArt';
 import type { WrappedStory } from '../services/wrappedAi';
 import type { AchievementDraft } from '../lib/generatedAchievements';
 import { DatabaseService } from '../services/db';
@@ -436,6 +437,14 @@ export function Recaps() {
 
   const wrappedKey = timeframe + ':' + timeId;
   const wrapped = wrappedStories[wrappedKey] || null;
+  const requiredSceneArtIds = wrapped ? selectIllustratedScenes(wrapped.scenes) : [];
+  // Never flash placeholder covers or partially rendered story artwork. On
+  // explicit redraws keep displaying the PREVIOUS successful image instead.
+  const initialArtworkPending = !!wrapped && (
+    (!wrapped.coverArtUrl && (wrapped.coverArtStatus === 'pending' || wrapped.coverArtStatus === 'generating')) ||
+    ((wrapped.sceneArtStatus === 'pending' || wrapped.sceneArtStatus === 'generating') &&
+      requiredSceneArtIds.some(id => !wrapped.sceneArt?.[id]))
+  );
   const wrappedHasLoaded = wrappedLoaded.has(wrappedKey);
   const canUseAi = settings?.aiProvider === 'cliProxy' || !!settings?.nanoGptApiKey;
 
@@ -461,7 +470,8 @@ export function Recaps() {
   // Image generation is independent of the story save. Poll only while the
   // cover is being created; keep the last saved illustration visible on reroll.
   useEffect(() => {
-    if (!wrapped || (wrapped.coverArtStatus !== 'pending' && wrapped.coverArtStatus !== 'generating')) return;
+    if (!wrapped || !['pending', 'generating'].includes(wrapped.coverArtStatus || '') &&
+      !['pending', 'generating'].includes(wrapped.sceneArtStatus || '')) return;
     let cancelled = false;
     let fetching = false;
     const issueVersion = wrapped.generatedAt;
@@ -480,7 +490,18 @@ export function Recaps() {
         .finally(() => { fetching = false; });
     }, 4000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [timeframe, timeId, wrappedKey, wrapped?.generatedAt, wrapped?.coverArtStatus]);
+  }, [timeframe, timeId, wrappedKey, wrapped?.generatedAt, wrapped?.coverArtStatus, wrapped?.sceneArtStatus]);
+
+  const regenerateWrappedSceneArt = async () => {
+    if (!wrapped || !!wrappedGeneratingKey || !canUseAi || !!activity?.frozen ||
+      ['pending', 'generating'].includes(wrapped.sceneArtStatus || '')) return;
+    try {
+      const updated = await DatabaseService.regenerateWrappedSceneArt(timeframe, timeId);
+      setWrappedStories(prev => ({ ...prev, [wrappedKey]: updated }));
+    } catch (error: any) {
+      toast.error('Chapter artwork: ' + (error?.message || String(error)));
+    }
+  };
 
   const regenerateWrappedCover = async () => {
     if (!wrapped || wrapped.coverArtStatus === 'pending' || wrapped.coverArtStatus === 'generating' ||
@@ -2603,11 +2624,27 @@ ${wrappedContext || 'No background material.'}
                                Creating a new Wrapped. The previous saved version remains visible until the replacement is stored successfully.
                              </p>
                            )}
-                           <StoryMode key={wrappedKey + ':' + (wrapped.generatedAt || '')}
-                             scenes={storyScenes} timeframe={timeframe} timeId={timeId}
-                             achievements={periodAchievements}
-                             coverArtUrl={wrapped.coverArtUrl} coverArtStatus={wrapped.coverArtStatus}
-                             onDeepDive={() => setViewMode('deep')} />
+                           {initialArtworkPending ? (
+                             <div role="status" aria-live="polite"
+                               className="min-h-[480px] flex flex-col items-center justify-center text-center rounded-[2.5rem] p-8 bg-gradient-to-br from-cobalt-950/20 via-zinc-950 to-black border border-violet-400/20 space-y-5">
+                               <ImageIcon className="w-12 h-12 text-violet-300 animate-pulse" />
+                               <h2 className="text-3xl sm:text-4xl font-black text-white">Painting your Wrapped...</h2>
+                               <p className="max-w-xl text-zinc-300 text-sm sm:text-base">
+                                 {['pending','generating'].includes(wrapped.coverArtStatus || '') && !wrapped.coverArtUrl
+                                   ? 'Creating the cinematic opening illustration.'
+                                   : 'Finishing the original artwork for the important chapters.'}
+                                 {' '}The story will appear when its artwork is ready. If image generation fails, the verified story uses its existing layouts and media covers.
+                               </p>
+                               <RefreshCw className="w-5 h-5 animate-spin text-violet-300" />
+                             </div>
+                           ) : (
+                             <StoryMode key={wrappedKey + ':' + (wrapped.generatedAt || '')}
+                               scenes={storyScenes} timeframe={timeframe} timeId={timeId}
+                               achievements={periodAchievements}
+                               coverArtUrl={wrapped.coverArtUrl} coverArtStatus={wrapped.coverArtStatus}
+                               sceneArt={wrapped.sceneArt} sceneArtStatus={wrapped.sceneArtStatus}
+                               onDeepDive={() => setViewMode('deep')} />
+                           )}
                            <div className="flex flex-col items-center gap-3">
                              <div className="flex flex-wrap justify-center items-center gap-3">
                                <button onClick={() => void generateWrapped()}
@@ -2634,6 +2671,17 @@ ${wrappedContext || 'No background material.'}
                                  {wrapped.coverArtStatus === 'pending' || wrapped.coverArtStatus === 'generating'
                                    ? 'Painting title artwork...'
                                    : wrapped.coverArtStatus === 'failed' ? 'Retry title artwork' : 'Redraw title artwork'}
+                               </button>
+                               <button onClick={() => void regenerateWrappedSceneArt()}
+                                 disabled={!!wrappedGeneratingKey || !canUseAi || !!activity?.frozen ||
+                                   ['pending', 'generating'].includes(wrapped.sceneArtStatus || '')}
+                                 title="Regenerate two chapter illustrations without changing the story"
+                                 className="px-5 py-3 flex items-center gap-2 rounded-xl border border-sky-400/20 text-sky-200 bg-sky-400/10 hover:bg-sky-400/20 disabled:opacity-40 text-sm font-bold">
+                                 {['pending','generating'].includes(wrapped.sceneArtStatus || '')
+                                   ? <RefreshCw className="w-4 h-4 animate-spin" />
+                                   : <ImageIcon className="w-4 h-4" />}
+                                 {['pending','generating'].includes(wrapped.sceneArtStatus || '') ? 'Painting chapters...'
+                                   : wrapped.sceneArtStatus === 'failed' ? 'Retry chapter artwork' : 'Redraw chapter artwork'}
                                </button>
                                {currentRecap && (
                                  <button onClick={() => void retryAchievements()}
