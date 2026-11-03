@@ -1,6 +1,8 @@
-import { format, isWithinInterval, parseISO, startOfISOWeek, startOfMonth, startOfYear, endOfISOWeek, endOfMonth, endOfYear, subHours, subWeeks, subMonths, subYears } from 'date-fns';
+import { format, isWithinInterval, parseISO, startOfISOWeek, startOfMonth, startOfYear, endOfISOWeek, endOfMonth, endOfYear, getDaysInMonth, subHours, subWeeks, subMonths, subYears } from 'date-fns';
 import { calculateScaledDelta } from './scaling';
 import { analyzeMediaFocus, focusEditorialCalibration } from './periodFocus';
+import { isSignificantFormatShift, isSignificantTasteGap, monthPhase, monthPhaseLabel, requiredMonthlyPhases } from './wrappedEditorial';
+import type { MonthPhase, MonthlyCoverage } from './wrappedEditorial';
 import type { MediaItem, ProgressLog, Settings } from '../types/schema';
 import type { StoryBar, StoryBeat, StoryKind, StoryPeriod } from './storyDiscovery';
 
@@ -14,6 +16,10 @@ export interface WrappedFact {
   quote?: string;
   bars?: StoryBar[];
   beats?: StoryBeat[];
+  /** Verified date scope for enforceable monthly storytelling coverage. */
+  phase?: MonthPhase;
+  /** All supporting activity falls in the month's final seven days. */
+  recentOnly?: boolean;
 }
 export interface WrappedEvidence {
   timeframe: StoryPeriod;
@@ -23,6 +29,8 @@ export interface WrappedEvidence {
   bounds: { start: string; end: string };
   /** Norm-relative editorial warning; not a required factual story beat. */
   editorialCalibration: string;
+  /** Month phases with material logged activity; absent for week and year. */
+  monthlyCoverage?: MonthlyCoverage;
 }
 
 const period = (date: Date, kind: StoryPeriod) => kind === 'week'
@@ -73,6 +81,57 @@ export function buildWrappedEvidence(args: {
     timeframe, periodStart: timeIdDate(timeframe, timeId),
     logs: progress, history, media, settings,
   });
+  const monthStart = timeIdDate(timeframe, timeId);
+  const daysInMonth = getDaysInMonth(monthStart);
+  const dayOf = (l: ProgressLog) => Number(format(subHours(parseISO(l.timestamp), 5), 'd'));
+  const inFinalWeek = (l: ProgressLog) => dayOf(l) > daysInMonth - 7;
+  const scopeFor = (items: ProgressLog[]) => timeframe === 'month' && items.length > 0 &&
+    items.every(inFinalWeek);
+  let monthlyCoverage: MonthlyCoverage | undefined;
+  if (timeframe === 'month') {
+    const names: MonthPhase[] = ['early', 'middle', 'late'];
+    const segments = new Map<MonthPhase, ProgressLog[]>(names.map(phase => [phase, []]));
+    for (const log of progress) if (value(log) > 0) {
+      segments.get(monthPhase(dayOf(log)))!.push(log);
+    }
+    const totals = new Map(names.map(phase => [
+      phase, segments.get(phase)!.reduce((sum, log) => sum + value(log), 0),
+    ] as const));
+    const shares = Object.fromEntries(names.map(phase => [phase,
+      total > 0 ? totals.get(phase)! / total : 0,
+    ])) as Record<MonthPhase, number>;
+    const requiredPhases = requiredMonthlyPhases(shares);
+    monthlyCoverage = {
+      requiredPhases,
+      lastWeekShare: total > 0
+        ? progress.filter(log => inFinalWeek(log)).reduce((sum, log) => sum + value(log), 0) / total
+        : 0,
+      minPhaseScenes: Math.min(requiredPhases.length, 2),
+    };
+    // Supply verified, phase-scoped evidence. A month's first ten days are
+    // NEVER displaced merely because its final week has more recent reviews.
+    for (const phase of names) {
+      const entries = segments.get(phase)!;
+      if (!entries.length) continue;
+      const byTitle = new Map<string, number>();
+      for (const entry of entries) byTitle.set(entry.mediaId,
+        (byTitle.get(entry.mediaId) || 0) + value(entry));
+      const highlights = [...byTitle].sort((a, b) => b[1] - a[1])
+        .slice(0, 3).map(([id, pages]) =>
+          (byId.get(id)?.title || 'Unknown work') + ' (' + round(pages) + ' MP)');
+      add({
+        id: 'month-' + phase, kind: 'insight', phase,
+        recentOnly: scopeFor(entries),
+        title: 'Monthly chapter: ' + phase + ' (' + monthPhaseLabel[phase] + ')',
+        mediaIds: [...byTitle].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => id),
+        evidence: 'During ' + monthPhaseLabel[phase] + ', ' + entries.length +
+          ' positive progress log(s) accounted for ' + Math.round(shares[phase] * 100) +
+          '% of the entire month\'s normalized Master Pages. Most substantial recorded works: ' +
+          highlights.join(', ') +
+          '. This is a SOURCE FOR THIS PART OF THE MONTH, not an obligation to list everything or invent an emotional arc.',
+      });
+    }
+  }
   const days = new Set(progress.filter(l => value(l) > 0).map(l => format(subHours(parseISO(l.timestamp), 5), 'yyyy-MM-dd')));
   add({ id: 'overview', kind: 'rhythm', title: 'What the period contained',
     evidence: logs.length + ' log entries, ' + days.size + ' distinct active days, ' + touched.length + ' media titles; ' + round(total) + ' normalized Master Pages. These are NOT hours.' });
@@ -89,6 +148,7 @@ export function buildWrappedEvidence(args: {
   ranking.slice(0, 10).forEach(([id, pages], i) => {
     const m = byId.get(id)!;
     add({ id: 'media-' + i, kind: 'spotlight', title: m.title, mediaId: id,
+      recentOnly: scopeFor(progress.filter(l => l.mediaId === id && value(l) > 0)),
       evidence: m.title + ' (' + m.mediaType + ') logged ' + round(pages) + ' Master Pages (' +
         (total > 0 ? Math.round(pages / total * 100) : 0) + '% of this period); ' +
         progress.filter(l => l.mediaId === id).length + ' progress entries. ' +
@@ -107,6 +167,7 @@ export function buildWrappedEvidence(args: {
     const m = byId.get(l.mediaId)!;
     const quote = l.thoughts!.trim().slice(0, 2000);
     add({ id: 'journal-' + l.id, kind: 'journal', title: 'Journal: ' + m.title, mediaId: m.id,
+      recentOnly: scopeFor([l]),
       evidence: 'On ' + stamp(l) + (l.location ? ' at ' + l.location : '') + ', reflected on ' + m.title + (l.thoughtPrompt ? ' in reply to '+l.thoughtPrompt.slice(0,160) : '') + ': ' + quote,
       quote });
   });
@@ -114,6 +175,7 @@ export function buildWrappedEvidence(args: {
   progress.filter(l => !!l.note?.trim() && byId.has(l.mediaId)).slice(0, 20).forEach(l => {
     const m = byId.get(l.mediaId)!;
     add({ id: 'reference-' + l.id, kind: 'insight', title: 'Session reference: ' + m.title, mediaId: m.id,
+      recentOnly: scopeFor([l]),
       evidence: 'On ' + stamp(l) + ', organizational note for ' + m.title + ': ' + l.note!.trim().slice(0, 450) +
         '. This is contextual metadata, NOT a personal opinion.' });
   });
@@ -128,19 +190,31 @@ export function buildWrappedEvidence(args: {
     if (!m) continue;
     const average = sessions.reduce((sum, s) => sum + s.score, 0) / sessions.length;
     add({ id: 'session-enjoyment-' + mediaId, kind: 'insight', title: 'Session enjoyment: ' + m.title, mediaId,
+      recentOnly: scopeFor(progress.filter(l => l.mediaId === mediaId &&
+        typeof l.sessionEnjoyment === 'number')),
       evidence: sessions.length + ' separately rated sessions, average ' + round(average) + '/5. Chronological session scores: ' +
         sessions.map(s => s.date + '=' + s.score + '/5').join(', ') +
         '. These are individual-session reactions and NOT the full-work rating.' });
   }
   touched.filter(m => m.userRating != null && m.reviewScore != null)
     .sort((a, b) => Math.abs((b.userRating || 0) - (b.reviewScore || 0)) - Math.abs((a.userRating || 0) - (a.reviewScore || 0)))
-    .slice(0, 8).forEach(m => add({ id: 'taste-' + m.id, kind: 'taste', title: 'Taste versus critics: ' + m.title, mediaId: m.id,
-      evidence: 'Currently saved rating for ' + m.title + ': user ' + m.userRating + '/5, critics ' + m.reviewScore +
-        '/5. Ratings are current library values; the app does NOT have a historical rating snapshot for this period.' +
-        (m.userReview ? ' Review: ' + m.userReview.slice(0, 500) : ''),
-      bars: [{ label: 'You', value: round((m.userRating || 0) * 20), note: m.userRating + ' / 5' },
-        { label: 'Critics', value: round((m.reviewScore || 0) * 20), note: m.reviewScore + ' / 5' }],
-    }));
+    .slice(0, 8).forEach(m => {
+      const largeGap = isSignificantTasteGap(m.userRating!, m.reviewScore!);
+      add({ id: 'taste-' + m.id, kind: largeGap ? 'taste' : 'insight',
+        title: (largeGap ? 'Meaningful critic disagreement: ' : 'Personal take: ') + m.title,
+        mediaId: m.id,
+        recentOnly: scopeFor(progress.filter(l => l.mediaId === m.id && value(l) > 0)),
+        evidence: 'Currently saved rating for ' + m.title + ': user ' + m.userRating + '/5, critics ' + m.reviewScore +
+          '/5. Ratings are current library values; the app does NOT have a historical rating snapshot for this period.' +
+          (largeGap ? ' This gap is large enough to consider a visual comparison, but only if the story gains something from it.' :
+            ' This small gap is NOT an infographic-worthy disagreement; a specific written review may still be worth discussing.') +
+          (m.userReview ? ' Review: ' + m.userReview.slice(0, 500) : ''),
+        ...(largeGap ? { bars: [
+          { label: 'You', value: round((m.userRating || 0) * 20), note: m.userRating + ' / 5' },
+          { label: 'Critics', value: round((m.reviewScore || 0) * 20), note: m.reviewScore + ' / 5' },
+        ] } : {}),
+      });
+    });
   const places = new Map<string, ProgressLog[]>();
   for (const l of progress) if (l.location?.trim()) {
     const key = l.location.trim();
@@ -156,6 +230,7 @@ export function buildWrappedEvidence(args: {
       .slice(0, 2).map(([id]) => byId.get(id)?.title).filter(Boolean);
     const dates = [...new Set(matches.map(l => format(subHours(parseISO(l.timestamp), 5), 'yyyy-MM-dd')))];
     add({ id: 'place-' + i, kind: 'location', title: 'Recorded place: ' + place,
+      recentOnly: scopeFor(matches),
       mediaId: mostSubstantial.length ? [...locationTotals].sort((a, b) => b[1] - a[1])[0]?.[0] : matches[0]?.mediaId,
       mediaIds: [...new Set(matches.map(l => l.mediaId))],
       evidence: 'User explicitly logged progress at "' + place + '" on ' + dates.length +
@@ -175,6 +250,7 @@ export function buildWrappedEvidence(args: {
       .map(l => parseISO(l.timestamp).getTime()).sort((a, b) => b - a)[0];
     const gap = first && last ? Math.floor((first - last) / 86400000) : 0;
     if (gap >= 30) add({ id: 'comeback-' + m.id, kind: 'return', title: 'Return to ' + m.title, mediaId: m.id,
+      recentOnly: scopeFor(progress.filter(l => l.mediaId === m.id && value(l) > 0)),
       evidence: 'Gap between logged progress sessions for ' + m.title + ': ' + gap + ' days. This is NOT proof of abandonment.' });
   }
   const start = timeIdDate(timeframe, timeId);
@@ -192,7 +268,7 @@ export function buildWrappedEvidence(args: {
     [...byType].sort((a, b) => b[1] - a[1]).slice(0, 6).forEach(([type, pages]) => {
       const share = pages / total;
       const baseline = past.reduce((s, p) => s + (p.shares.get(type) || 0) / p.pages, 0) / past.length;
-      if (Math.abs(share - baseline) >= 0.12) add({
+      if (isSignificantFormatShift(share, baseline)) add({
         id: 'outlier-' + type, kind: 'outlier', title: type + ' vs your usual mix',
         evidence: type + ' accounted for ' + Math.round(share * 100) + '% of Master Pages this period, compared with ' +
           Math.round(baseline * 100) + '% across ' + past.length + ' earlier active ' + timeframe +
@@ -225,6 +301,7 @@ export function buildWrappedEvidence(args: {
   }
   return {
     timeframe, timeId, facts,
+    ...(monthlyCoverage ? { monthlyCoverage } : {}),
     editorialCalibration: focusEditorialCalibration(focus),
     bounds: { start: format(period(start, timeframe).start, 'yyyy-MM-dd'), end: format(period(start, timeframe).end, 'yyyy-MM-dd') },
     media: touched.map(m => ({ id: m.id, title: m.title, type: m.mediaType, year: m.year, genres: (m.genres || []).slice(0, 6),
