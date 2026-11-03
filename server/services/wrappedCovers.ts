@@ -285,7 +285,7 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
   }
 
   /**
-   * Two chapter images per issue. Separate job tokens prevent a previous
+   * Up to three chapter images per issue. Separate job tokens prevent a previous
    * illustration or a superseded story from replacing newer artwork.
    */
   function queueScenes(userId: string, timeframe: WrappedTimeframe, timeId: string, regenerate = false): boolean {
