@@ -1,6 +1,8 @@
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { ENRAGE_TARGET_MULTIPLIER } from "../../src/lib/rpgSystem";
+import { isLocalGeneratedImage } from "../lib/enrageImages";
+import { v4 as uuidv4 } from "uuid";
 
 export function registerBossRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, generateBossImageBackground, spawnWorldBoss, generateEnemy, activity } = ctx;
@@ -99,14 +101,29 @@ export function registerBossRoutes(app: Express, ctx: ServerContext) {
       // early buys the rest of this week as well as the next one.
       const newExpiry = new Date(new Date(boss.expiresAt).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
+      // Snapshot the PRE-ENRAGE portrait before any rendering starts. Future
+      // manual regenerations must reference this, never the already-enraged image.
+      const originalImageUrl = boss.imageStatus === "done" && isLocalGeneratedImage(boss.imageUrl)
+        ? boss.imageUrl : null;
+      const shouldRender = !activity.isFrozen(userId as string);
+      const now = new Date().toISOString();
       db.prepare(
         `UPDATE world_bosses
-            SET enraged = 1, enragedAt = ?, targetProgress = ?, expiresAt = ?, updatedAt = ?
+            SET enraged = 1, enragedAt = ?, targetProgress = ?, expiresAt = ?, updatedAt = ?,
+                enrageOriginalImageUrl = ?, imageStatus = ?, imageGenerationToken = ?
           WHERE id = ? AND userId = ?`,
-      ).run(new Date().toISOString(), newTarget, newExpiry, new Date().toISOString(), boss.id, userId);
+      ).run(now, newTarget, newExpiry, now, originalImageUrl,
+        shouldRender ? "pending" : "failed", uuidv4(), boss.id, userId);
 
-      const updated = db.prepare('SELECT * FROM world_bosses WHERE id = ?').get(boss.id) as any;
+      const updated = db.prepare('SELECT * FROM world_bosses WHERE id = ? AND userId = ?').get(boss.id, userId) as any;
+      // Respond promptly. Image edits can be slow; the existing portrait remains
+      // visible until a new image replaces it (or a manual retry is requested).
       res.json({ ...updated, enraged: true });
+      if (shouldRender) {
+        void generateBossImageBackground(userId as string, boss.id).catch((e) => {
+          console.error("[images] Could not start enraged artwork generation:", e);
+        });
+      }
     } catch (e: any) {
       res.status(500).json({ error: String(e?.message || e) });
     }
@@ -126,8 +143,10 @@ export function registerBossRoutes(app: Express, ctx: ServerContext) {
       const enemy = mediaItem ? await generateEnemy(userId, mediaItem, boss.level) : null;
 
       if (enemy) {
-        db.prepare("UPDATE world_bosses SET name = ?, title = ?, description = ?, imagePrompt = ?, updatedAt = ? WHERE id = ? AND userId = ?")
-          .run(enemy.name, enemy.title || null, enemy.description || null, enemy.imagePrompt || null, new Date().toISOString(), boss.id, userId);
+        // A rerolled enemy is a NEW identity. Never reuse the previous one's
+        // frozen pre-enrage reference, even if its enraged status persists.
+        db.prepare("UPDATE world_bosses SET name = ?, title = ?, description = ?, imagePrompt = ?, enrageOriginalImageUrl = NULL, imageGenerationToken = ?, updatedAt = ? WHERE id = ? AND userId = ?")
+          .run(enemy.name, enemy.title || null, enemy.description || null, enemy.imagePrompt || null, uuidv4(), new Date().toISOString(), boss.id, userId);
         // Awaited so the client's spinner covers the redraw and one refresh shows
         // the finished enemy.
         await generateBossImageBackground(userId, boss.id);
