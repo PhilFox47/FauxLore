@@ -147,11 +147,21 @@ export function buildWrappedEvidence(args: {
     places.set(key, [...(places.get(key) || []), l]);
   }
   [...places].sort((a, b) => b[1].length - a[1].length).slice(0, 12).forEach(([place, matches], i) => {
-    const titles = [...new Set(matches.map(l => l.mediaId))].map(id => byId.get(id)?.title).filter(Boolean);
+    const locationTotals = new Map<string, number>();
+    for (const log of matches) {
+      const amount = value(log);
+      if (amount > 0) locationTotals.set(log.mediaId, (locationTotals.get(log.mediaId) || 0) + amount);
+    }
+    const mostSubstantial = [...locationTotals].sort((a, b) => b[1] - a[1])
+      .slice(0, 2).map(([id]) => byId.get(id)?.title).filter(Boolean);
     const dates = [...new Set(matches.map(l => format(subHours(parseISO(l.timestamp), 5), 'yyyy-MM-dd')))];
-    add({ id: 'place-' + i, kind: 'location', title: 'Recorded place: ' + place, mediaId: matches[0]?.mediaId, mediaIds: [...new Set(matches.map(l => l.mediaId))],
-      evidence: 'User explicitly logged activity at "' + place + '" on ' + dates.length + ' different dates, with ' + titles.length +
-        ' titles: ' + titles.slice(0, 10).join(', ') + '. The place label does NOT prove travel purpose or emotional state.' });
+    add({ id: 'place-' + i, kind: 'location', title: 'Recorded place: ' + place,
+      mediaId: mostSubstantial.length ? [...locationTotals].sort((a, b) => b[1] - a[1])[0]?.[0] : matches[0]?.mediaId,
+      mediaIds: [...new Set(matches.map(l => l.mediaId))],
+      evidence: 'User explicitly logged progress at "' + place + '" on ' + dates.length +
+        ' different recorded dates. Principal media here by normalized progress: ' +
+        (mostSubstantial.join(' and ') || 'none measurable') +
+        '. Other titles may also have been logged; their number is not inherently noteworthy. The place label does NOT prove travel purpose, reasons for media selection or emotional state.' });
   });
   // Do NOT manufacture a 'crossover' fact from ordinary same-day media use.
   // This tracker spans all entertainment media; such combinations are routine.
