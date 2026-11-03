@@ -2,6 +2,7 @@ import { apiFetch } from "./db";
 import { normalizeDynamicScene } from "../lib/dynamicScenes";
 import type { DynamicSceneComposition } from "../lib/dynamicScenes";
 import type { WrappedStory } from "./wrappedAi";
+import { selectIllustratedScenes } from "../lib/wrappedSceneArt";
 
 type DirectorReply = { compositions?: Array<{ sceneId: string; composition: unknown }> };
 
@@ -11,6 +12,7 @@ type DirectorReply = { compositions?: Array<{ sceneId: string; composition: unkn
  * and media URLs cannot be written by the model: it only references bound IDs.
  */
 export function wrappedVisualDirectorBrief(story: WrappedStory): string {
+  const illustrated = new Set(selectIllustratedScenes(story.scenes));
   const scenes = story.scenes.map(scene => ({
     sceneId: scene.id,
     kind: scene.kind,
@@ -28,26 +30,31 @@ export function wrappedVisualDirectorBrief(story: WrappedStory): string {
     })),
     hasVerifiedQuote: !!scene.quote,
     hasTitleArt: scene.kind === "opening",
+    canGenerateOriginalSceneArt: illustrated.has(scene.id),
+    titleChars: scene.title.length,
+    bodyChars: scene.body.length,
   }));
   return [
     "ISSUE: " + story.title + "\n" + story.dek,
     "VERIFIED, ALREADY WRITTEN SCENES (do not change their copy):\n" + JSON.stringify(scenes),
-    "Choose 2 or 3 DIFFERENT scenes worth special visual staging. Strong candidates: opening, a central high point, or closing; choose according to story and pace. Avoid three nearly identical compositions.",
-    "Each scene must feature the EXISTING title and body exactly once, via elements of type title and body; all other visual content is optional. On desktop arrange elements using independent rectangle boxes with percentage coordinates x,y,w,h from 0 to 100, without exceeding canvas bounds. Do NOT overlap title and body.",
-    "Allowed element types: title, body, eyebrow, media (requires mediaId from imageMediaIds), title-art (opening only; uses generated issue cover), quote (only when hasVerifiedQuote), stat (requires verifiedBars index), beat (requires verifiedBeats index), shape (requires shape: orb|ring|line|panel|pill). Do not provide image URLs, original text, new numbers or any freeform HTML.",
-    "Each element requires id (short unique ASCII), type, box:{x,y,w,h}, size:sm|md|lg|xl, tone:primary|secondary|accent, motion:none|fade|rise|slide|pop|float|pulse, delay:0..3. Only media/title-art/shape may use endlessly animated float or pulse. Keep a total of 2-11 elements per scene and at most 4 shapes, 2 media images and 4 data stats.",
-    "Backdrops: cinematic, spotlight, grid, minimal, halftone. The saved story palette is inherited. You may put imagery behind typography, use striking negative space, stagger reveals or create asymmetry. Compose for a wide cinematic canvas; mobile uses a readable vertical arrangement.",
-    "Be unusually creative in visual form: one scene might be a sweeping typographic manifesto, another a single gigantic verified percentage, another a carefully framed media image, an orbit of abstract shapes or a cinematic timeline. Do NOT force every data visual or image into every scene. Choose only what advances the narrative moment.",
-    "No invented achievements, personal actions, media, numerical facts, quotations, citations or spoilers. Quote, bar and beat content is inserted verbatim by FauxLore from verified source data. You may never supply CSS, HTML, SVG markup, JavaScript, event handlers or URLs.",
-    "Respond ONLY as JSON: {\"compositions\":[{\"sceneId\":\"wrapped-0\",\"composition\":{\"version\":1,\"backdrop\":\"spotlight\",\"elements\":[{\"id\":\"hero\",\"type\":\"title\",\"box\":{\"x\":6,\"y\":22,\"w\":76,\"h\":19},\"size\":\"xl\",\"tone\":\"primary\",\"motion\":\"rise\",\"delay\":0},{\"id\":\"copy\",\"type\":\"body\",\"box\":{\"x\":8,\"y\":56,\"w\":65,\"h\":27},\"size\":\"md\",\"tone\":\"secondary\",\"motion\":\"fade\",\"delay\":0.3}]}}]}. Example is SHAPE ONLY; make each scene visually distinct.",
+    "COMPOSE EVERY SCENE. No skipping: one composition for EACH sceneId, from opening through closing. The previous 2-3-scene limitation caused most of a Wrapped to fall back to the same old templates. This is the visual director's main deliverable. Give each scene a DISTINCT artistic concept and layout, not the same left-copy/right-media split.",
+    "Each scene must include the EXISTING title and body exactly once using elements of type title and body. No new prose. Desktop elements use rectangle box coordinates x,y,w,h in percentages from 0-100, without exceeding canvas bounds. Do NOT overlap the title and body. Place enough room for the full title and narration: titleBoxes must often be 35-65% wide, 25-45% tall. For long headings use very generous dimensions and size sm or md rather than xl. Never put text in a scrollable box.",
+    "Visual composition MUST have a point. Choose one artistic device that tells the reader WHY this specific event matters: an evocative illustration, a dominant verified statistic, a meaningful contrast, an unusually shaped typography treatment, or a timeline that illustrates change. Decorative circles and cover tiles alone are NOT an idea. If a design could be reused for any random scene, it is not good enough.",
+    "Elements: title, body, eyebrow, media (requires mediaId from imageMediaIds), title-art (opening only), scene-art (ONLY where canGenerateOriginalSceneArt is true), quote (only with hasVerifiedQuote), stat (verifiedBars index), beat (verifiedBeats index), shape (shape: orb|ring|line|panel|pill). No URLs, HTML, CSS, custom text or invented data.",
+    "For the special moments marked canGenerateOriginalSceneArt=true, prioritize exactly ONE big scene-art element with a short artConcept: a concrete, distinct editorial scene or strong visual metaphor SPECIFIC to that chapter, not a collage or generic fantasy glow. This artwork will be generated separately and used as a single cinematic backdrop or large feature. DO NOT place media covers over the scene-art merely to prove which titles were consumed.",
+    "Every element requires id (unique ASCII), type, box:{x,y,w,h}, size:sm|md|lg|xl, tone:primary|secondary|accent, motion:none|fade|rise|slide|pop|float|pulse, delay:0..3. Only images or shapes can use looping float/pulse. Max 11 elements (incl. up to 4 shapes, 2 media, 4 stats). When using scene-art add artConcept of 10-180 characters describing the ONE strong image idea, grounded in this slide.",
+    "Backdrops: cinematic, spotlight, grid, minimal, halftone. Saved story palette is inherited. Compose for a wide cinematic desktop canvas; mobile will switch to a vertical reading order. Give text room for its actual length. Avoid overlapping or very narrow text blocks.",
+    "Make the issue feel like one cohesive editorial experience with genuinely different visual rhythms: full-bleed scenes, data-driven typographic statements, negative-space compositions, evocative single images, restrained minimalist moments. Do NOT repeat cover-wall grids, random floating jackets, decorative circles or dull split layouts scene after scene.",
+    "The verified facts and user quotes are immutable, inserted by FauxLore from stored data. Never invent a real-world achievement, plot encounter, statistic, quote or spoiler; no executable code, URLs, freeform markup or personal details beyond the provided scene.",
+    "Return JSON: {\\"compositions\\":[{\\"sceneId\\":\\"wrapped-0\\",\\"composition\\":{\\"version\\":1,\\"backdrop\\":\\"cinematic\\",\\"elements\\":[{\\"id\\":\\"title\\",\\"type\\":\\"title\\",\\"box\\":{\\"x\\":6,\\"y\\":14,\\"w\\":75,\\"h\\":34},\\"size\\":\\"lg\\",\\"tone\\":\\"primary\\",\\"motion\\":\\"rise\\",\\"delay\\":0},{\\"id\\":\\"body\\",\\"type\\":\\"body\\",\\"box\\":{\\"x\\":6,\\"y\\":55,\\"w\\":65,\\"h\\":36},\\"size\\":\\"md\\",\\"tone\\":\\"secondary\\",\\"motion\\":\\"fade\\",\\"delay\\":0.3}]}}]}. SHAPE EXAMPLE ONLY, include EVERY actual sceneId. Include artConcept on scene-art compositions.",
   ].join("\n\n");
 }
 
 export function applyWrappedVisualCompositions(
-  story: WrappedStory, raw: unknown, maxCompositions = 3,
+  story: WrappedStory, raw: unknown, maxCompositions = story.scenes.length,
 ): WrappedStory {
   const reply = raw as DirectorReply;
-  if (!reply || !Array.isArray(reply.compositions) || reply.compositions.length > 8) {
+  if (!reply || !Array.isArray(reply.compositions) || reply.compositions.length > 14) {
     throw new Error("Visual Director did not return composition proposals");
   }
   const seen = new Set<string>();
