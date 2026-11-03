@@ -1,7 +1,6 @@
 import type { StoryScene } from "./storyDiscovery";
 import { imageFramingGuidance } from "./dynamicScenes";
 import { visualSelfImageClause, type VisualSelfProfile } from "./visualSelf";
-import { isDataLayout } from "./wrappedEditorial";
 
 /**
  * All narrative slides get an original full-bleed background. The opening
@@ -12,7 +11,8 @@ export function isWrappedInfographicScene(
   scene: Pick<StoryScene, "kind" | "design" | "editorialJob" | "composition">,
 ): boolean {
   return scene.editorialJob === "data-reveal" ||
-    isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
+    scene.design?.layout === "infographic" ||
+    ["bars", "rings", "tiles"].includes(scene.design?.visual || "") ||
     scene.composition?.direction?.presentation === "data" ||
     !!scene.composition?.elements?.some(element => element.type === "stat");
 }
