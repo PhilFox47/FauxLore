@@ -312,6 +312,36 @@ images per issue, and do not auto-retry on failed providers. They are not
 re-generated at every visit. `npm run test:wrapped` covers their lifecycle,
 restart recovery and stale-image protection.
 
+### Wrapped image art: optional Codex house style
+
+A media-specific Wrapped scene illustration can now use the **existing,
+ready Codex** for the one clearly featured work. FauxLore reads the same
+`artStyle` data already used for enemy/item illustrations: native form,
+medium, named techniques, palette, line/rendering, lighting, composition and
+character design. The resulting prompt keeps the chapter's ONE visual idea
+and composition, but renders it in the source's actual visual language rather
+than defaulting every subject to generic photographic fantasy artwork.
+
+- **Gating:** The scene must clearly identify one featured media entry.
+  A title/body mentioning one work, or a one-work spotlight/return, qualifies.
+  Mixed-media scenes, ambiguous auto-selected covers, data scenes, opening/
+  closing transitions and typography-first scenes do not force a style.
+- **Free lookup:** Only already completed, user-owned Codex data is read.
+  Missing or visually vague Codex entries fall back to standard art. A book
+  with no intrinsic rendered form does not acquire a fabricated canonical
+  cinematography. No extra AI research or Codex regeneration is triggered.
+- **Safety:** Source information is treated as bounded style DATA, not
+  permission to rewrite what the user did, invent events, draw unrelated
+  characters, or override the scene's text-safe framing.
+- **Title illustration:** When the Wrapped cover genuinely has one media
+  anchor, its Codex can influence the overall illustration's palette and
+  technique, but the editorial thesis remains first.
+- **Existing art:** Previously generated files stay unchanged. Use the
+  chapter artwork redraw or redraw title artwork to apply the new style.
+  There is no additional configuration or database migration.
+
+Focused regression tests: `npm run test:wrapped-codex-style`.
+
 ### Wrapped editorial phase 2: analytic roles, meaningful data art and monthly chapters
 
 The Wrapped director now decides each scene's **editorialJob** (hook,
