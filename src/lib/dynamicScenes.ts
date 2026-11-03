@@ -1,0 +1,167 @@
+import type { StoryScene } from "./storyDiscovery";
+
+/**
+ * Generative visual composition DSL v1. The model never writes HTML, CSS,
+ * JavaScript, URLs, or user-visible numeric facts. React renders known
+ * components and resolves every reference from a previously verified scene.
+ */
+export type DynamicSceneBackdrop = "cinematic" | "spotlight" | "grid" | "minimal" | "halftone";
+export type DynamicSceneMotion = "none" | "fade" | "rise" | "slide" | "pop" | "float" | "pulse";
+export type DynamicSceneTone = "primary" | "secondary" | "accent";
+export type DynamicSceneSize = "sm" | "md" | "lg" | "xl";
+export type DynamicSceneShape = "orb" | "ring" | "line" | "panel" | "pill";
+export type DynamicSceneElementType =
+  "title" | "body" | "eyebrow" | "quote" | "media" | "stat" | "beat" | "shape" | "title-art";
+
+export interface SceneBox {
+  /** Percentage coordinates in the desktop design canvas (0-100). */
+  x: number; y: number; w: number; h: number;
+}
+
+export interface DynamicSceneElement {
+  id: string;
+  type: DynamicSceneElementType;
+  box: SceneBox;
+  size: DynamicSceneSize;
+  tone: DynamicSceneTone;
+  motion: DynamicSceneMotion;
+  delay: number;
+  /** Only meaningful for a verified scene media reference. */
+  mediaId?: string;
+  /** Only meaningful for a verified scene bar or timeline beat. */
+  index?: number;
+  /** Only meaningful for a pure decorative shape. */
+  shape?: DynamicSceneShape;
+}
+
+export interface DynamicSceneComposition {
+  version: 1;
+  backdrop: DynamicSceneBackdrop;
+  elements: DynamicSceneElement[];
+}
+
+const elementTypes = new Set<DynamicSceneElementType>([
+  "title", "body", "eyebrow", "quote", "media", "stat", "beat", "shape", "title-art",
+]);
+const backdrops = new Set<DynamicSceneBackdrop>(["cinematic","spotlight","grid","minimal","halftone"]);
+const sizes = new Set<DynamicSceneSize>(["sm","md","lg","xl"]);
+const tones = new Set<DynamicSceneTone>(["primary","secondary","accent"]);
+const motions = new Set<DynamicSceneMotion>(["none","fade","rise","slide","pop","float","pulse"]);
+const shapes = new Set<DynamicSceneShape>(["orb","ring","line","panel","pill"]);
+
+const obj = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === "object" && !Array.isArray(value);
+const numeric = (value: unknown, min: number, max: number): value is number =>
+  typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
+
+function parseBox(raw: unknown): SceneBox {
+  if (!obj(raw) || !numeric(raw.x, 0, 95) || !numeric(raw.y, 0, 95) ||
+      !numeric(raw.w, 5, 100) || !numeric(raw.h, 5, 100) ||
+      raw.x + raw.w > 100.01 || raw.y + raw.h > 100.01) {
+    throw new Error("Dynamic scene element is outside the design canvas");
+  }
+  return { x: raw.x, y: raw.y, w: raw.w, h: raw.h };
+}
+
+function overlapRatio(a: SceneBox, b: SceneBox): number {
+  const width = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+  const height = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  return width * height / Math.min(a.w * a.h, b.w * b.h);
+}
+
+/**
+ * Shared by the AI client, the Express save endpoint and the React renderer.
+ * It rejects unsafe structures, then RECONSTRUCTS only approved fields.
+ *
+ * If a composition fails validation, callers should simply use the existing
+ * fixed layout, not fail an otherwise valid Wrapped.
+ */
+export function normalizeDynamicScene(
+  value: unknown,
+  scene: Pick<StoryScene, "kind" | "title" | "body" | "quote" | "bars" | "beats" | "media" | "artworks">,
+): DynamicSceneComposition {
+  if (!obj(value) || value.version !== 1 || !backdrops.has(value.backdrop as DynamicSceneBackdrop) ||
+    !Array.isArray(value.elements) || value.elements.length < 2 || value.elements.length > 11) {
+    throw new Error("Invalid dynamic scene composition");
+  }
+  if (JSON.stringify(value).length > 12500) throw new Error("Dynamic scene exceeds size budget");
+  if (scene.title.length > 200 || scene.body.length > 5000) throw new Error("Scene text too long");
+  const allowedMedia = new Set<string>(
+    [...(scene.media ? [scene.media] : []), ...(scene.artworks || [])]
+      .filter(media => !!media.cover).map(media => media.id),
+  );
+  const elements: DynamicSceneElement[] = [];
+  const ids = new Set<string>();
+  for (const raw of value.elements) {
+    if (!obj(raw) || typeof raw.id !== "string" || !/^[a-z0-9_-]{1,32}$/i.test(raw.id) ||
+      ids.has(raw.id) || !elementTypes.has(raw.type as DynamicSceneElementType) ||
+      !sizes.has(raw.size as DynamicSceneSize) ||
+      !tones.has(raw.tone as DynamicSceneTone) ||
+      !motions.has(raw.motion as DynamicSceneMotion) ||
+      !numeric(raw.delay, 0, 3)) {
+      throw new Error("Invalid dynamic scene element");
+    }
+    ids.add(raw.id);
+    const box = parseBox(raw.box);
+    const type = raw.type as DynamicSceneElementType;
+    if (type === "title" && (box.w < 22 || box.h < 10) ||
+      type === "body" && (box.w < 24 || box.h < 18)) {
+      throw new Error("Dynamic scene text needs sufficient space");
+    }
+    const element: DynamicSceneElement = {
+      id: raw.id, type, box,
+      size: raw.size as DynamicSceneSize,
+      tone: raw.tone as DynamicSceneTone,
+      motion: raw.motion as DynamicSceneMotion,
+      delay: raw.delay,
+    };
+    if (type === "quote" && !scene.quote) throw new Error("Quote must come from a verified journal");
+    if (type === "title-art" && scene.kind !== "opening") throw new Error("Title art is opening-only");
+    if (type === "media") {
+      if (typeof raw.mediaId !== "string" || !allowedMedia.has(raw.mediaId)) {
+        throw new Error("Media art must refer to a verified scene cover");
+      }
+      element.mediaId = raw.mediaId;
+    }
+    if (type === "stat" || type === "beat") {
+      const facts = type === "stat" ? scene.bars : scene.beats;
+      if (!Number.isInteger(raw.index) || !facts || (raw.index as number) < 0 ||
+          (raw.index as number) >= facts.length) {
+        throw new Error("Dynamic scene data must reference a verified index");
+      }
+      element.index = raw.index as number;
+    }
+    if (type === "shape") {
+      if (!shapes.has(raw.shape as DynamicSceneShape)) throw new Error("Unknown scene shape");
+      element.shape = raw.shape as DynamicSceneShape;
+    }
+    // Ambient motion is deliberately limited to decorative and image assets.
+    if ((element.motion === "float" || element.motion === "pulse") &&
+      !["shape", "media", "title-art"].includes(element.type)) {
+      throw new Error("Text and data must not endlessly animate");
+    }
+    elements.push(element);
+  }
+  const titles = elements.filter(element => element.type === "title");
+  const bodies = elements.filter(element => element.type === "body");
+  if (titles.length !== 1 || bodies.length !== 1) throw new Error("Dynamic composition needs one title and one body");
+  if (overlapRatio(titles[0].box, bodies[0].box) > .12) throw new Error("Dynamic scene title overlaps body");
+  if (elements.filter(element => element.type === "shape").length > 4 ||
+      elements.filter(element => element.type === "media").length > 2 ||
+      elements.filter(element => element.type === "stat").length > 4) {
+    throw new Error("Dynamic scene is too cluttered");
+  }
+  return {
+    version: 1,
+    backdrop: value.backdrop as DynamicSceneBackdrop,
+    elements,
+  };
+}
+
+/** A broken older or in-flight AI composition falls back to the fixed layout. */
+export function safeDynamicScene(
+  value: unknown,
+  scene: Parameters<typeof normalizeDynamicScene>[1],
+): DynamicSceneComposition | null {
+  try { return normalizeDynamicScene(value, scene); } catch { return null; }
+}
