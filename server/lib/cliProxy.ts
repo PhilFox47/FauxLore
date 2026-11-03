@@ -26,3 +26,26 @@ export function cliProxyImagePrompt(prompt: string, negative: string): string {
   // CLIProxyAPI has no negative_prompt/CFG field; constraints become best-effort prose.
   return `${prompt}\n\nImage constraints: avoid ${negative}. Do not add unnecessary extra subjects or props.`;
 }
+
+/**
+ * CLIProxyAPI's GPT Image 2.5 image edit endpoint accepts the original picture
+ * as an inline data URL in JSON images[]. Never log this payload: it embeds the
+ * actual reference image bytes.
+ */
+export function cliProxyImageEditBody(model: string, prompt: string, size: string, dataUrl: string) {
+  if (!/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) {
+    throw new Error("A valid locally encoded PNG/JPEG/WebP reference is required for image edits.");
+  }
+  return {
+    model,
+    prompt,
+    size,
+    response_format: "b64_json",
+    images: [{ image_url: dataUrl }],
+  };
+}
+
+/** Only unsupported/invalid edit requests may fall back to ordinary generation. */
+export function imageEditSupportsTextFallback(httpStatus: unknown): boolean {
+  return [400, 404, 405, 415, 422, 501].includes(Number(httpStatus));
+}
