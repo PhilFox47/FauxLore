@@ -236,6 +236,10 @@ export function runMigrations(db: Db) {
   try { db.prepare("ALTER TABLE settings ADD COLUMN disableAutoDrop INTEGER DEFAULT 0").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE world_bosses ADD COLUMN enraged INTEGER DEFAULT 0").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE world_bosses ADD COLUMN enragedAt TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE world_bosses ADD COLUMN enrageOriginalImageUrl TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE world_bosses ADD COLUMN imageGenerationToken TEXT").run(); } catch (e) {}
+  // A process restart cancels in-memory image jobs; expose a retry, not an endless spinner.
+  try { db.prepare("UPDATE world_bosses SET imageStatus = 'failed' WHERE imageStatus IN ('pending', 'generating')").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE users ADD COLUMN lastActiveAt TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE sessions ADD COLUMN impersonatedBy TEXT").run(); } catch (e) {}
   // Broken items (0 durability) should never remain equipped.
