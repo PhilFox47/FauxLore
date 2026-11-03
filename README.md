@@ -143,9 +143,15 @@ Tests: `npm run test:achievements`.
 ### Wrapped: AI-generated title illustrations
 
 Every **Weekly, Monthly and Yearly Wrapped** can have one independent 3:2
-title illustration on its opening slide. The app derives a single cohesive
-editorial image prompt from the saved Wrapped's title, actual narrative themes,
-and media titles verified against that account's activity logs in the period.
+title illustration on its opening slide. These images are **editorial key art,
+NOT visual summaries or collages**. Art direction starts from the saved
+Wrapped's central thesis and ONE relevant story beat, producing one strong
+visual metaphor / hero motif rather than trying to depict every logged title.
+When a specific work genuinely dominates the Wrapped narrative, the image
+may borrow at most ONE verified work as optional visual inspiration. Otherwise
+the cover can be completely abstract and feature no franchise imagery at all.
+Logs still verify that a real period of activity exists; no invented user
+actions, unrelated game characters, cover grids or multiple worlds are added.
 The reporting timezone is stored with the issue to respect period boundaries.
 The image does **not** contain typography: the real Wrapped title is overlaid
 by the UI. Existing official media covers on every other slide are unchanged.
@@ -155,8 +161,9 @@ CLIProxyAPI, or the configured NanoGPT image model). It is generated and saved
 in the background after a new story is stored, and once when an existing older
 Wrapped is first opened. The same saved image is reused on later visits;
 opening an issue never generates another cover if one already exists. A
-**Redraw title artwork** button rerolls only the illustration, leaving the
-narrative, statistics and achievements untouched. Failed image generation
+**Redraw title artwork** button rerolls only the illustration using the
+current one-motif art direction, leaving the narrative, statistics and
+achievements untouched. Existing generated images stay as-is until redrawn. Failed image generation
 leaves the saved Wrapped intact and shows a retry button.
 
 Story and cover generation have separate request tokens so old in-flight
