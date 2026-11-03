@@ -220,6 +220,7 @@ async function startServer() {
     generateEnemy,
     generateLoot,
     generateBossImageBackground,
+    queueBossVictoryArtwork,
     generateArtifactImageBackground,
     codex,
     describeImageModel,
