@@ -201,8 +201,10 @@ export interface WorldBoss {
   createdAt: string;
   updatedAt?: string;
   imageUrl?: string;
-  imageStatus?: 'generating' | 'done' | 'failed';
+  imageStatus?: 'pending' | 'generating' | 'done' | 'failed';
   imagePrompt?: string; // written by the enemy generator, reused when drawing the portrait
+  /** Saved before Enrage, so later retries reference the same original enemy. */
+  enrageOriginalImageUrl?: string | null;
   /** Taunted: bigger target, bigger stakes, one extra week. Never more than once. */
   enraged?: boolean;
   enragedAt?: string;
