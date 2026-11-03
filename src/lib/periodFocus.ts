@@ -19,6 +19,7 @@ export interface MediaFocusAnalysis {
   baselineEffectiveTitles: number | null;
   /** Only true when concentration is markedly above this person's historical norm. */
   unusuallyFocused: boolean;
+  formatShifts: Array<{ type: string; currentShare: number; baselineShare: number }>;
 }
 
 const bounds = (date: Date, kind: FocusPeriod) => kind === 'week'
@@ -32,6 +33,7 @@ function summarize(
   logs: ProgressLog[], byId: Map<string, MediaItem>, settings?: Settings | null,
 ) {
   const perTitle = new Map<string, number>();
+  const perType = new Map<string, number>();
   for (const log of logs) {
     if (log.metricType === 'statusChange') continue;
     const media = byId.get(log.mediaId);
@@ -39,6 +41,7 @@ function summarize(
     const amount = calculateScaledDelta(log.delta || 0, media, settings);
     if (!Number.isFinite(amount) || amount <= 0) continue;
     perTitle.set(media.id, (perTitle.get(media.id) || 0) + amount);
+    perType.set(media.mediaType, (perType.get(media.mediaType) || 0) + amount);
   }
   const values = [...perTitle].sort((a, b) => b[1] - a[1]);
   const total = values.reduce((s, [,v]) => s + v, 0);
@@ -50,6 +53,7 @@ function summarize(
     // Inverse concentration (Simpson effective titles) is robust to background
     // items with tiny progress; unlike a raw title count it measures attention.
     effectiveTitles: shares.length ? 1 / shares.reduce((s, v) => s + v * v, 0) : 0,
+    typeShares: new Map([...perType].map(([type, amount]) => [type, total ? amount / total : 0])),
   };
 }
 
@@ -87,6 +91,15 @@ export function analyzeMediaFocus(args: {
     ? past.reduce((s, p) => s + p.leadingShare, 0) / past.length : null;
   const baselineEffectiveTitles = past.length >= 3
     ? past.reduce((s, p) => s + p.effectiveTitles, 0) / past.length : null;
+  const formatShifts = past.length >= 3 ? [...current.typeShares]
+    .map(([type, currentShare]) => ({
+      type, currentShare,
+      baselineShare: past.reduce((s, p) => s + (p.typeShares.get(type) || 0), 0) / past.length,
+    }))
+    .filter(shift => Math.abs(shift.currentShare - shift.baselineShare) >= 0.12)
+    .sort((a, b) =>
+      Math.abs(b.currentShare - b.baselineShare) - Math.abs(a.currentShare - a.baselineShare))
+    .slice(0, 3) : [];
   const unusuallyFocused = current.titleCount > 0 && baselineLeadingShare !== null &&
     current.leadingShare >= 0.30 &&
     current.leadingShare - baselineLeadingShare >= 0.12 &&
@@ -100,6 +113,7 @@ export function analyzeMediaFocus(args: {
     baselineLeadingShare,
     baselineEffectiveTitles,
     unusuallyFocused,
+    formatShifts,
   };
 }
 
@@ -115,7 +129,13 @@ export function focusEditorialCalibration(focus: MediaFocusAnalysis): string {
   const stats = 'Leading title share: ' + Math.round(focus.leadingShare * 100) +
     '% this period versus ' + Math.round(focus.baselineLeadingShare * 100) +
     '% average in ' + focus.baselinePeriods + ' previous active comparable periods (normalized Master Pages, NOT hours).';
-  return note + ' ' + stats + ' ' + (
+  const shifts = focus.formatShifts.length
+    ? ' REAL FORMAT SHIFTS (relative to personal baseline, normalized progress shares): ' +
+      focus.formatShifts.map(s => s.type + ' ' + Math.round(s.currentShare * 100) +
+        '% now versus ' + Math.round(s.baselineShare * 100) + '% usual').join('; ') +
+      '. These differences may be more meaningful than the number of titles.'
+    : '';
+  return note + ' ' + stats + shifts + ' ' + (
     focus.unusuallyFocused
       ? 'UNUSUAL CONCENTRATION DETECTED: ' + (focus.leadingTitle || 'One title') +
         ' occupied substantially more of this period than the personal baseline. This MAY be an editorial angle if it connects to compelling evidence. Other titles remaining in the logs do not negate the focus.'
