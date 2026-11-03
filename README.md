@@ -144,9 +144,10 @@ Tests: `npm run test:achievements`.
 
 Wrapped is now a **two-pass experience**. The existing Story Director first
 writes a fully evidence-grounded editorial story. A separate Visual Director
-then chooses **2-3 scenes** worth custom art direction (typically an opening,
-a narrative turning point or the finale) and describes their placement in a
-restricted scene-composition JSON format. This format supports freely positioned
+then designs **every scene** individually, from opening to finale, using a
+restricted scene-composition JSON format. Weak or invalid compositions still
+fall back to the original layout; the Director is asked to create a meaningful
+visual concept, not just more decorative circles or book-cover grids. This format supports freely positioned
 headlines, narration, media artwork, title art, verified numeric comparisons,
 chronological beats, real user quotes and geometric shapes, plus entry and
 subtle ambient animations.
@@ -154,8 +155,9 @@ subtle ambient animations.
 These scenes use `DynamicStorySlide` and a bounded percentage-coordinate desktop
 canvas. Mobile automatically uses a readable vertical composition rather than
 scaling the desktop layout. Motion respects reduced-motion preferences.
-The remaining slides retain the existing trustworthy preset layouts, as do
-older Wrapped issues without a composition and any invalid AI output.
+Older Wrapped issues without a composition and any invalid AI output
+retain their trustworthy preset layouts. Dynamic headline/body rectangles
+automatically fit their content rather than becoming scrollable text windows.
 
 **Security and factual integrity:** The model cannot output or execute HTML,
 CSS or JavaScript. The shared `normalizeDynamicScene` schema is enforced both
@@ -172,12 +174,37 @@ the written Wrapped still saves and displays. Use **Restyle scenes** on an
 existing Wrapped to generate fresh designs without changing its story text,
 statistics, achievements or title illustration. Rerolls use a saved
 `visualRevision` token, rejecting stale changes from other tabs; existing
-visuals remain visible if a reroll fails.
+visuals remain visible if a reroll fails. Restyling also regenerates the
+interior illustrations to match newly proposed visual concepts.
 
 Tests: `npm run test:wrapped-visuals` (or `npm run test:wrapped`).
 These exercise parser isolation, media/stat provenance, invalid layouts,
 AI proposals and the save boundary; a live GPT model + browser render test
 still requires the local configured provider.
+
+### Wrapped: original chapter illustrations and complete first reveal
+
+The same configured image provider can now generate **up to two additional,
+original 3:2 chapter illustrations** for important interior story beats, chosen
+deterministically by narrative relevance. Prompts are written from the actual
+scene premise and optional model-authored `artConcept`, not a list of every
+logged medium. One strong editorial metaphor or coherent scene is preferred to
+a franchise collage. Each illustration is stored by the scene's ID and
+persisted separately from story text and the opening title image.
+
+**First reveal waits for artwork**: a newly generated or previously unillustrated
+Wrapped shows a deliberate loading screen until its title and chapter images
+finish, or generation fails. This avoids flashing an unrelated media-cover
+placeholder before the real illustration appears. If an image fails, verified
+story text and the traditional cover/scene renderer remain available. Restyling
+also repaints the chapter illustrations, and waits until the new visuals are
+ready to avoid showing mismatched old artwork with the new compositions.
+The **Redraw chapter artwork** control retries or rerolls only interior images.
+
+Jobs have separate request tokens and statuses, are limited to two interior
+images per issue, and do not auto-retry on failed providers. They are not
+re-generated at every visit. `npm run test:wrapped` covers their lifecycle,
+restart recovery and stale-image protection.
 
 ### Wrapped: AI-generated title illustrations
 
@@ -193,7 +220,8 @@ Logs still verify that a real period of activity exists; no invented user
 actions, unrelated game characters, cover grids or multiple worlds are added.
 The reporting timezone is stored with the issue to respect period boundaries.
 The image does **not** contain typography: the real Wrapped title is overlaid
-by the UI. Existing official media covers on every other slide are unchanged.
+by the UI. Official media covers remain available as factual references and
+fallbacks on interior slides that do not have original chapter illustrations.
 
 The cover uses the selected global image provider (GPT Image 2.5 via
 CLIProxyAPI, or the configured NanoGPT image model). It is generated and saved
