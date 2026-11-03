@@ -65,9 +65,9 @@ export function shouldHoldWrappedForArtwork(issue: {
   if (!issue) return false;
   const active = (status?: string | null) => status === "pending" || status === "generating";
   if (active(issue.coverArtStatus) && !issue.coverArtUrl) return true;
-  if (active(issue.sceneArtStatus)) {
-    return selectIllustratedScenes(issue.scenes)
-      .some(id => !issue.sceneArt?.[id]);
-  }
+  // A visual restyle may have already saved the new composition while its
+  // replacement artwork is still being painted. Do not flash old art with
+  // the NEW composition; reveal the complete issue together.
+  if (active(issue.sceneArtStatus)) return true;
   return false;
 }
