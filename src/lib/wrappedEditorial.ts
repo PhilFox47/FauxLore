@@ -12,7 +12,9 @@ export function isSignificantFormatShift(current: number, baseline: number): boo
   if (![current, baseline].every(v => Number.isFinite(v) && v >= 0 && v <= 1)) return false;
   const difference = Math.abs(current - baseline);
   const largeRelativeChange = Math.max(current, baseline) >= 2 * Math.max(.001, Math.min(current, baseline));
-  return difference >= .25 || (difference >= .18 && largeRelativeChange);
+  // Bars are rounded to one decimal by the existing chart pipeline. Allow
+  // microscopic float error at the threshold, never meaningful weak changes.
+  return difference + 1e-6 >= .25 || (difference + 1e-6 >= .18 && largeRelativeChange);
 }
 
 /** Ratings are on a 0..5 scale; a 0.5-star gap isn't a story-sized chart. */
