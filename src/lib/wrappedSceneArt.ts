@@ -48,3 +48,26 @@ export function buildWrappedSceneArtPrompt(
     "NO text, logos, printed lettering, statistics, charts, mosaics, screenshots, user-interface elements, split panels, poster walls or watermarks.",
   ].filter(Boolean).join("\n\n");
 }
+
+/**
+ * Initial reveal is gated until the FIRST title and chapter illustrations
+ * finish, so the user never sees a transient media-cover placeholder.
+ * Regenerating artwork intentionally keeps the previous successful assets
+ * visible during the new job.
+ */
+export function shouldHoldWrappedForArtwork(issue: {
+  scenes: StoryScene[];
+  coverArtUrl?: string | null;
+  coverArtStatus?: string | null;
+  sceneArt?: Record<string, string>;
+  sceneArtStatus?: string | null;
+} | null): boolean {
+  if (!issue) return false;
+  const active = (status?: string | null) => status === "pending" || status === "generating";
+  if (active(issue.coverArtStatus) && !issue.coverArtUrl) return true;
+  if (active(issue.sceneArtStatus)) {
+    return selectIllustratedScenes(issue.scenes)
+      .some(id => !issue.sceneArt?.[id]);
+  }
+  return false;
+}
