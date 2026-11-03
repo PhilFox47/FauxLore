@@ -4,6 +4,7 @@ import {
   subMonths, subWeeks, subYears,
 } from 'date-fns';
 import { calculateScaledDelta } from './scaling';
+import { isSignificantFormatShift } from './wrappedEditorial';
 import type { MediaItem, ProgressLog, Settings } from '../types/schema';
 
 export type FocusPeriod = 'week' | 'month' | 'year';
@@ -98,7 +99,7 @@ export function analyzeMediaFocus(args: {
       type, currentShare,
       baselineShare: past.reduce((s, p) => s + (p.typeShares.get(type) || 0), 0) / past.length,
     }))
-    .filter(shift => Math.abs(shift.currentShare - shift.baselineShare) >= 0.12)
+    .filter(shift => isSignificantFormatShift(shift.currentShare, shift.baselineShare))
     .sort((a, b) =>
       Math.abs(b.currentShare - b.baselineShare) - Math.abs(a.currentShare - a.baselineShare))
     .slice(0, 3) : [];
