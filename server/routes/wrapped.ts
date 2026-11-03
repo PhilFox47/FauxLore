@@ -168,8 +168,17 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
       if (!userId) return;
       const { timeframe, timeId } = req.params;
       if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
-      const { requestId, story } = req.body || {};
+      const { requestId, story, timeZone } = req.body || {};
       if (!string(requestId, 100)) return res.status(400).json({ error: "Missing generation token" });
+      // Client timezone matches the evidence cards' browser-local period bounds.
+      // Never allow an arbitrary timezone or oversized string into stored data.
+      let reportTimeZone = "UTC";
+      if (typeof timeZone === "string" && timeZone.length <= 80) {
+        try {
+          new Intl.DateTimeFormat("en-US", { timeZone }).format(new Date());
+          reportTimeZone = timeZone;
+        } catch { /* Older clients and invalid zones fall back to UTC. */ }
+      }
       const cleaned = validateStory(story);
       const allowedMax = timeframe === "week" ? 6 : timeframe === "month" ? 9 : 14;
       if (cleaned.scenes.length > allowedMax) return res.status(400).json({ error: "Too many scenes" });
@@ -179,11 +188,12 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
           .get(userId, timeframe, timeId) as { requestId: string } | undefined;
         if (!pending || pending.requestId !== requestId) return false;
         db.prepare(
-          "INSERT INTO wrapped_stories(userId,timeframe,timeId,story,generatedAt,coverArtUrl,coverArtStatus,coverArtRequestId) " +
-          "VALUES(?,?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now'),NULL,NULL,NULL) " +
+          "INSERT INTO wrapped_stories(userId,timeframe,timeId,story,generatedAt,coverArtUrl,coverArtStatus,coverArtRequestId,coverArtTimeZone) " +
+          "VALUES(?,?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now'),NULL,NULL,NULL,?) " +
           "ON CONFLICT(userId,timeframe,timeId) DO UPDATE SET story=excluded.story, " +
-          "generatedAt=excluded.generatedAt, coverArtUrl=NULL, coverArtStatus=NULL, coverArtRequestId=NULL",
-        ).run(userId, timeframe, timeId, JSON.stringify(cleaned));
+          "generatedAt=excluded.generatedAt, coverArtUrl=NULL, coverArtStatus=NULL, " +
+          "coverArtRequestId=NULL, coverArtTimeZone=excluded.coverArtTimeZone",
+        ).run(userId, timeframe, timeId, JSON.stringify(cleaned), reportTimeZone);
         db.prepare("DELETE FROM wrapped_requests WHERE userId=? AND timeframe=? AND timeId=?")
           .run(userId, timeframe, timeId);
         return true;
