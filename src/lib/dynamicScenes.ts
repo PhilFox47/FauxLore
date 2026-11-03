@@ -206,7 +206,8 @@ export function normalizeDynamicScene(
     version: 1,
     backdrop: value.backdrop as DynamicSceneBackdrop,
     ...(direction ? { direction } : {}),
-    ...(elements.some(element => element.type === "scene-art") &&
+    ...((scene.kind === "opening" ||
+      elements.some(element => element.type === "scene-art")) &&
       typeof value.artConcept === "string" && value.artConcept.trim().length >= 6 &&
       value.artConcept.length <= 240 && !/[<>]/.test(value.artConcept)
         ? { artConcept: value.artConcept.trim().replace(/\s+/g, " ") }
