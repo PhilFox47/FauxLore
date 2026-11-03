@@ -59,12 +59,17 @@ export function imagePromptCraft(profile: ImagePromptProfile): string {
  * Final render priorities for GPT Image 2.5, including OLD stored image prompts.
  * This does not rewrite old assets and does not change NanoGPT's request format.
  */
-export function gptImage25DeliveryPrompt(prompt: string, kind: "loot" | "boss" | "wrapped", customExclusions = ""): string {
+export function gptImage25DeliveryPrompt(prompt: string, kind: "loot" | "boss" | "wrapped" | "wrapped-scene", customExclusions = ""): string {
   const priorities = kind === "loot"
     ? [
         "The single item is the subject. Preserve its recognizable construction, silhouette, proportions, true materials, established color scheme and functional marks.",
         "Rarity is an inventory/UI classification, NOT permission to enchant or redesign the object. Keep any non-canonical colored illumination subtle and entirely in the backdrop. Intrinsic glows or elaborate details belong on the item only when established by its source.",
         "Use a quiet studio presentation with one complete, unobstructed item. No people, hands, duplicate items or unrelated props.",
+      ]
+    : kind === "wrapped-scene" ? [
+        "Illustrate ONE specific interior scene from a personal Wrapped story, not a title page. Express the supplied chapter premise as a single strong visual metaphor or environment, grounded in the chapter's actual story.",
+        "Do NOT try to draw all logged media titles, a collage of book jackets, a franchise lineup or a layout of separate panels. Prefer one memorable focal subject and atmosphere with natural negative space.",
+        "Keep visual content away from the center-left enough for the application to overlay legible copy, but do not bake in any typography, numbers, logos or UI. No fabricated personal achievements or story events.",
       ]
     : kind === "wrapped" ? [
         "This is singular, high-impact editorial KEY ART, not an illustrated inventory of the media consumed. Find ONE central visual thesis, ONE unmistakable hero motif and ONE coherent moment.",
