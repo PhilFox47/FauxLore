@@ -2668,7 +2668,7 @@ ${wrappedContext || 'No background material.'}
                                <button onClick={() => void regenerateWrappedSceneArt()}
                                  disabled={!!wrappedGeneratingKey || !canUseAi || !!activity?.frozen ||
                                    ['pending', 'generating'].includes(wrapped.sceneArtStatus || '')}
-                                 title="Regenerate two chapter illustrations without changing the story"
+                                 title="Regenerate up to three chapter illustrations without changing the story"
                                  className="px-5 py-3 flex items-center gap-2 rounded-xl border border-sky-400/20 text-sky-200 bg-sky-400/10 hover:bg-sky-400/20 disabled:opacity-40 text-sm font-bold">
                                  {['pending','generating'].includes(wrapped.sceneArtStatus || '')
                                    ? <RefreshCw className="w-4 h-4 animate-spin" />
