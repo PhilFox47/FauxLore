@@ -184,7 +184,7 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
       const { generatedAt, visualRevision, compositions } = req.body || {};
       if (!string(generatedAt, 80) || !Number.isInteger(visualRevision) ||
         visualRevision < 0 || visualRevision > 1000000 ||
-        !Array.isArray(compositions) || compositions.length < 1 || compositions.length > 3) {
+        !Array.isArray(compositions) || compositions.length < 1 || compositions.length > 14) {
         return res.status(400).json({ error: "Invalid visual reroll request" });
       }
       const seen = new Set<string>();
