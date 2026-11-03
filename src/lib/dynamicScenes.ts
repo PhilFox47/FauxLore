@@ -6,6 +6,33 @@ import type { StoryScene } from "./storyDiscovery";
  * components and resolves every reference from a previously verified scene.
  */
 export type DynamicSceneBackdrop = "cinematic" | "spotlight" | "grid" | "minimal" | "halftone";
+/**
+ * Editorial stage instead of arbitrary layout boxes. Safe enums are shared
+ * by the visual director, server validator, image prompter and React renderer.
+ * The old coordinate-based compositions remain backward compatible.
+ */
+export type EditorialPresentation = "cinematic" | "data" | "typography" | "composed";
+export type EditorialTextSide = "left" | "right" | "center";
+export type EditorialTextPosition = "top" | "middle" | "bottom";
+export type EditorialImageFocus = "left" | "center" | "right";
+export interface EditorialDirection {
+  presentation: EditorialPresentation;
+  textSide: EditorialTextSide;
+  textPosition: EditorialTextPosition;
+  imageFocus: EditorialImageFocus;
+}
+/** Only editorial placement metadata; generated artwork never supplies CSS. */
+export function imageFramingGuidance(direction?: Partial<EditorialDirection> | null): string {
+  const side = direction?.textSide === "right" ? "right" : direction?.textSide === "center" ? "center" : "left";
+  const focus = direction?.imageFocus === "left" ? "left" : direction?.imageFocus === "center" ? "center" : "right";
+  const space = side === "center"
+    ? "Keep the central 55% relatively dark, quiet and uncluttered so centered overlaid typography remains readable."
+    : "Keep the " + side.toUpperCase() + " 55% darker, quieter and free of faces or vital objects for overlaid story text.";
+  return "EDITORIAL IMAGE FRAMING: This image will BLEED edge-to-edge behind the story's typography. " +
+    space + " Put the principal visual subject toward the " + focus.toUpperCase() +
+    " of the frame, with enough room for cinematic cropping on mobile. " +
+    "NO baked-in text, lettering or framed poster panels.";
+}
 export type DynamicSceneMotion = "none" | "fade" | "rise" | "slide" | "pop" | "float" | "pulse";
 export type DynamicSceneTone = "primary" | "secondary" | "accent";
 export type DynamicSceneSize = "sm" | "md" | "lg" | "xl";
@@ -37,6 +64,8 @@ export interface DynamicSceneElement {
 export interface DynamicSceneComposition {
   version: 1;
   backdrop: DynamicSceneBackdrop;
+  /** Preferred visual staging; original box layout remains a safe fallback. */
+  direction?: EditorialDirection;
   /** A single descriptive visual metaphor used only for rendered scene artwork. */
   artConcept?: string;
   elements: DynamicSceneElement[];
@@ -46,6 +75,10 @@ const elementTypes = new Set<DynamicSceneElementType>([
   "title", "body", "eyebrow", "quote", "media", "scene-art", "stat", "beat", "shape", "title-art",
 ]);
 const backdrops = new Set<DynamicSceneBackdrop>(["cinematic","spotlight","grid","minimal","halftone"]);
+const presentations = new Set<EditorialPresentation>(["cinematic","data","typography","composed"]);
+const textSides = new Set<EditorialTextSide>(["left","right","center"]);
+const textPositions = new Set<EditorialTextPosition>(["top","middle","bottom"]);
+const imageFoci = new Set<EditorialImageFocus>(["left","center","right"]);
 const sizes = new Set<DynamicSceneSize>(["sm","md","lg","xl"]);
 const tones = new Set<DynamicSceneTone>(["primary","secondary","accent"]);
 const motions = new Set<DynamicSceneMotion>(["none","fade","rise","slide","pop","float","pulse"]);
@@ -156,9 +189,23 @@ export function normalizeDynamicScene(
       elements.filter(element => element.type === "stat").length > 4) {
     throw new Error("Dynamic scene is too cluttered");
   }
+  let direction: EditorialDirection | undefined;
+  if (obj(value.direction) &&
+      presentations.has(value.direction.presentation as EditorialPresentation) &&
+      textSides.has(value.direction.textSide as EditorialTextSide) &&
+      textPositions.has(value.direction.textPosition as EditorialTextPosition) &&
+      imageFoci.has(value.direction.imageFocus as EditorialImageFocus)) {
+    direction = {
+      presentation: value.direction.presentation as EditorialPresentation,
+      textSide: value.direction.textSide as EditorialTextSide,
+      textPosition: value.direction.textPosition as EditorialTextPosition,
+      imageFocus: value.direction.imageFocus as EditorialImageFocus,
+    };
+  }
   return {
     version: 1,
     backdrop: value.backdrop as DynamicSceneBackdrop,
+    ...(direction ? { direction } : {}),
     ...(elements.some(element => element.type === "scene-art") &&
       typeof value.artConcept === "string" && value.artConcept.trim().length >= 6 &&
       value.artConcept.length <= 240 && !/[<>]/.test(value.artConcept)
