@@ -2,6 +2,7 @@ import React, { useLayoutEffect, useRef } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import type { StoryScene } from "../lib/storyDiscovery";
+import { EditorialStorySlide } from "./EditorialStorySlide";
 import type {
   DynamicSceneComposition, DynamicSceneElement, DynamicSceneTone,
 } from "../lib/dynamicScenes";
@@ -203,6 +204,23 @@ export function DynamicStorySlide({ scene, composition, number, total, coverArtU
   onDeepDive: () => void;
 }) {
   const reduce = !!useReducedMotion();
+  // For illustrated stages, prefer a single coherent editorial composition
+  // over absolute-positioned image rectangles inside a padded coloured card.
+  // Old compositions with an existing generated image also benefit on redraw,
+  // without requiring a new story or a new image-provider request.
+  const stageImage = scene.kind === "opening" ? coverArtUrl : sceneArtUrl;
+  const direction = composition.direction || {
+    presentation: stageImage ? "cinematic" as const : "composed" as const,
+    textSide: "left" as const,
+    textPosition: "middle" as const,
+    imageFocus: "right" as const,
+  };
+  if ((direction.presentation === "cinematic" && !!stageImage) ||
+      direction.presentation === "typography" ||
+      (direction.presentation === "data" && !!scene.bars?.length)) {
+    return <EditorialStorySlide scene={scene} direction={direction} imageUrl={stageImage}
+      number={number} total={total} onDeepDive={onDeepDive} />;
+  }
   const theme = themes[scene.design?.palette || "violet"];
   // The scene's eyebrow already appears in the surrounding presentation
   // chrome; repeating it inside the AI composition wastes space.
