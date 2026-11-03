@@ -282,6 +282,90 @@ test("original interior chapter artworks are generated once and stored independe
   } finally { db.close(); }
 });
 
+test("a previously finished three-image Wrapped backfills only missing full-bleed slides", async () => {
+  const db = fixture();
+  const generated: string[] = [];
+  try {
+    const old = {
+      title: "October's stronger stories", dek: "One event mattered more",
+      scenes: [
+        { id: "wrapped-0", kind: "opening", title: "Welcome", body: "Intro" },
+        { id: "wrapped-1", kind: "spotlight", title: "Already painted", body: "An older scene" },
+        { id: "wrapped-2", kind: "outlier", title: "A real comparison", body: "The clean chart",
+          editorialJob: "data-reveal", design: { layout: "infographic", visual: "bars" } },
+        { id: "wrapped-3", kind: "journal", title: "The missing story", body: "A personal observation" },
+        { id: "wrapped-4", kind: "closing", title: "End of the Line", body: "A quiet ending" },
+      ],
+    };
+    db.prepare("UPDATE wrapped_stories SET story=?,sceneArtJson=?,sceneArtStatus='done'")
+      .run(JSON.stringify(old), JSON.stringify({ "wrapped-1": "/uploads/previous-art.png" }));
+    const service = createWrappedCoverService({
+      db: db as unknown as Db, canSpendTokens: () => true,
+      generateImage: async () => "/uploads/title.png",
+      generateSceneImage: async (_userId, prompt) => {
+        generated.push(prompt);
+        return "/uploads/new-" + generated.length + ".png";
+      },
+    });
+    assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), true,
+      "An older done status is not proof every narrative slide has original art");
+    await settle();
+    const result = db.prepare("SELECT sceneArtJson,sceneArtStatus FROM wrapped_stories").get() as any;
+    const images = JSON.parse(result.sceneArtJson);
+    assert.equal(result.sceneArtStatus, "done");
+    assert.equal(images["wrapped-1"], "/uploads/previous-art.png",
+      "Already painted chapters must not incur a duplicate paid call");
+    assert.equal(images["wrapped-2"], undefined, "Infographics stay clean");
+    assert.deepEqual(Object.keys(images),
+      ["wrapped-1", "wrapped-3", "wrapped-4", "achievement-finale"]);
+    assert.equal(generated.length, 3);
+    assert.match(generated[1], /FULL-BLEED FINAL TABLEAU/);
+    assert.match(generated[2], /Dungeon System Verdict/);
+    assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), false);
+  } finally { db.close(); }
+});
+
+test("failed image batches keep finished art, stop extra calls and allow explicit retry", async () => {
+  const db = fixture();
+  let calls = 0;
+  let fail = true;
+  try {
+    const staged = {
+      title: "A month with a finale", dek: "A meaningful series of events",
+      scenes: [
+        { id: "wrapped-0", kind: "opening", title: "Start", body: "Intro" },
+        { id: "wrapped-1", kind: "insight", title: "First", body: "First chapter" },
+        { id: "wrapped-2", kind: "insight", title: "Second", body: "Second chapter" },
+        { id: "wrapped-3", kind: "closing", title: "Finish", body: "Conclusion" },
+      ],
+    };
+    db.prepare("UPDATE wrapped_stories SET story=?").run(JSON.stringify(staged));
+    const service = createWrappedCoverService({
+      db: db as unknown as Db, canSpendTokens: () => true,
+      generateImage: async () => "/uploads/title.png",
+      generateSceneImage: async (_userId, prompt) => {
+        calls++;
+        if (fail && prompt.includes("Second chapter")) throw Error("image provider offline");
+        return "/uploads/art-" + calls + ".png";
+      },
+    });
+    assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), true);
+    await settle();
+    assert.equal(calls, 2, "Stop after the first bounded batch fails");
+    const first = db.prepare("SELECT sceneArtJson,sceneArtStatus FROM wrapped_stories").get() as any;
+    assert.equal(first.sceneArtStatus, "failed");
+    assert.equal(JSON.parse(first.sceneArtJson)["wrapped-1"], "/uploads/art-1.png");
+    assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), false,
+      "GET must not endlessly retry paid failures");
+    fail = false;
+    assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD, true), true);
+    await settle();
+    const retried = db.prepare("SELECT sceneArtJson,sceneArtStatus FROM wrapped_stories").get() as any;
+    assert.equal(retried.sceneArtStatus, "done");
+    assert.equal(Object.keys(JSON.parse(retried.sceneArtJson)).length, 4);
+  } finally { db.close(); }
+});
+
 test("superseded Wrapped image jobs cannot overwrite newer artwork", async () => {
   const db = fixture();
   let releaseOld: ((url: string) => void) | undefined;
