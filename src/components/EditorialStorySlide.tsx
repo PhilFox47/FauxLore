@@ -57,7 +57,7 @@ export function EditorialStorySlide({ scene, direction, imageUrl, number, total,
       (visual ? "min-h-[640px] md:min-h-[735px]" : "min-h-[580px] md:min-h-[680px]")}
   >
     {visual ? <>
-      <img src={imageUrl} alt="" aria-hidden="true" loading="eager" referrerPolicy="no-referrer"
+      <img src={imageUrl || undefined} alt="" aria-hidden="true" loading="eager" referrerPolicy="no-referrer"
         style={{ objectPosition: imagePosition[direction.imageFocus] }}
         className="absolute inset-0 h-full w-full object-cover pointer-events-none" />
       <div className={"absolute inset-0 pointer-events-none " + gradients[direction.textSide]} aria-hidden="true" />
