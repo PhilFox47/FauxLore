@@ -158,7 +158,8 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
     try {
       const parsed = JSON.parse(row.sceneArtJson || "{}");
       if (isObject(parsed)) for (const [id,url] of Object.entries(parsed)) {
-        if (/^wrapped-[0-9]{1,2}$/.test(id) && typeof url === "string" && isAllowedArtworkUrl(url)) {
+        if ((/^wrapped-[0-9]{1,2}$/.test(id) || id === "achievement-finale") &&
+            typeof url === "string" && isAllowedArtworkUrl(url)) {
           sceneArt[id] = url;
         }
       }
