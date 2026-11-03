@@ -185,8 +185,7 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
         recordAiCallStart(shape);
         // NEVER put embedded reference-image bytes into diagnostics or logs.
         recordPayload(callId, "images", {
-          prompt: JSON.stringify({ ...body, ...(edit ? { images: "[one local image; bytes redacted]" } : {}) }),
-          route,
+          prompt: JSON.stringify({ endpoint: route, ...body, ...(edit ? { images: "[one local image; bytes redacted]" } : {}) }),
         });
         try {
           const response = await fetch(`${baseUrl}${route}`, {
