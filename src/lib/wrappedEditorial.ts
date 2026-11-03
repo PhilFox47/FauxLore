@@ -66,6 +66,7 @@ export function evidenceStoryFunctions(ids: string[]): string[] {
     else if (id.startsWith('focus-')) keys.add('title-concentration');
     else if (id.startsWith('taste-')) keys.add('taste:' + id.slice(6));
     else if (id === 'timeline') keys.add('period-leaders');
+    else if (id === 'month-arc') keys.add('month-phase-concentration');
     else if (id.startsWith('session-enjoyment-')) keys.add('session-reaction:' + id.slice(18));
     // Other facts can support multiple DIFFERENT scenes. Mere overlap of a
     // media or location ID does not prove a repeated editorial point.
