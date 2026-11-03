@@ -59,12 +59,17 @@ export function imagePromptCraft(profile: ImagePromptProfile): string {
  * Final render priorities for GPT Image 2.5, including OLD stored image prompts.
  * This does not rewrite old assets and does not change NanoGPT's request format.
  */
-export function gptImage25DeliveryPrompt(prompt: string, kind: "loot" | "boss", customExclusions = ""): string {
+export function gptImage25DeliveryPrompt(prompt: string, kind: "loot" | "boss" | "wrapped", customExclusions = ""): string {
   const priorities = kind === "loot"
     ? [
         "The single item is the subject. Preserve its recognizable construction, silhouette, proportions, true materials, established color scheme and functional marks.",
         "Rarity is an inventory/UI classification, NOT permission to enchant or redesign the object. Keep any non-canonical colored illumination subtle and entirely in the backdrop. Intrinsic glows or elaborate details belong on the item only when established by its source.",
         "Use a quiet studio presentation with one complete, unobstructed item. No people, hands, duplicate items or unrelated props.",
+      ]
+    : kind === "wrapped" ? [
+        "This is ONE evocative editorial cover for the user's actual Wrapped period, not a boss portrait, item card or collage of existing covers.",
+        "Unify the named media themes into a coherent cinematic illustration with intentional art direction. Do not invent user achievements, story events or personal experiences.",
+        "Keep the left portion darker and uncluttered so the app can overlay its own title and subtitle. Add NO baked-in titles, typography, logos, watermarks or interface.",
       ]
     : [
         "Preserve the canonical character or creature's recognizable anatomy, armor, silhouette, palette and signature equipment. Level changes the drama of the scene, not the actual species or character design.",
