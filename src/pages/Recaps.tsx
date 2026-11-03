@@ -36,6 +36,7 @@ import { AchievementReveal } from '../components/AchievementReveal';
 import { StoryMode } from '../components/StoryMode';
 import { buildWrappedEvidence } from '../lib/wrappedEvidence';
 import { generateAiWrapped } from '../services/wrappedAi';
+import { generateWrappedVisualCompositions } from '../services/wrappedVisualDirector';
 import type { WrappedStory } from '../services/wrappedAi';
 import type { AchievementDraft } from '../lib/generatedAchievements';
 import { DatabaseService } from '../services/db';
@@ -108,6 +109,8 @@ export function Recaps() {
   const [wrappedLoaded, setWrappedLoaded] = useState<Set<string>>(new Set());
   const [wrappedErrors, setWrappedErrors] = useState<Record<string, string>>({});
   const [wrappedGeneratingKey, setWrappedGeneratingKey] = useState<string | null>(null);
+  const [visualDirectingKey, setVisualDirectingKey] = useState<string | null>(null);
+  const visualDirectingRef = useRef<string | null>(null);
   const wrappedFetchingRef = useRef<Set<string>>(new Set());
   const wrappedAutoAttemptedRef = useRef<Set<string>>(new Set());
   const wrappedGenerationRef = useRef<string | null>(null);
@@ -487,6 +490,37 @@ export function Recaps() {
       setWrappedStories(previous => ({ ...previous, [wrappedKey]: updated }));
     } catch (error: any) {
       toast.error('Wrapped cover: ' + (error?.message || 'Image generation could not start.'));
+    }
+  };
+
+  /** Recompose saved scenes without rewriting their facts, text or cover. */
+  const restyleWrappedVisuals = async () => {
+    const source = wrapped;
+    const key = wrappedKey;
+    if (!source?.generatedAt || !settings || !canUseAi || activity?.frozen ||
+      wrappedGenerationRef.current || visualDirectingRef.current) return;
+    visualDirectingRef.current = key;
+    setVisualDirectingKey(key);
+    try {
+      // Start without the previous designs. The AI must really invent new
+      // compositions instead of merely returning the old ones unchanged.
+      const naked: WrappedStory = { ...source, scenes: source.scenes.map(({ composition, ...scene }) => scene) };
+      const designed = await generateWrappedVisualCompositions({
+        story: naked, apiKey: settings.nanoGptApiKey || '', model: creativeModel(settings),
+      });
+      const compositions = designed.scenes
+        .filter(scene => !!scene.composition)
+        .map(scene => ({ sceneId: scene.id, composition: scene.composition! }));
+      if (!compositions.length) throw new Error('Visual Director returned no valid compositions. Existing visuals were kept.');
+      const saved = await DatabaseService.saveWrappedVisualCompositions(
+        timeframe, timeId, source.generatedAt, source.visualRevision || 0, compositions,
+      );
+      setWrappedStories(prev => ({ ...prev, [key]: saved }));
+    } catch (error: any) {
+      toast.error('Visual Director: ' + (error?.message || String(error)));
+    } finally {
+      visualDirectingRef.current = null;
+      setVisualDirectingKey(null);
     }
   };
 
@@ -2581,6 +2615,14 @@ ${wrappedContext || 'No background material.'}
                                  className="px-5 py-3 flex items-center gap-2 rounded-xl border border-violet-400/20 text-violet-200 bg-violet-400/10 hover:bg-violet-400/20 disabled:opacity-40 text-sm font-bold">
                                  <RefreshCw className={'w-4 h-4 ' + (wrappedGeneratingKey === wrappedKey ? 'animate-spin' : '')} />
                                  {wrappedGeneratingKey === wrappedKey ? 'Directing a new Wrapped...' : 'Reroll the Wrapped story'}
+                               </button>
+                               <button onClick={() => void restyleWrappedVisuals()}
+                                 disabled={!!wrappedGeneratingKey || !!visualDirectingKey ||
+                                   !canUseAi || !!activity?.frozen}
+                                 title="Redesign selected scenes without changing the story, title artwork or achievements"
+                                 className="px-5 py-3 flex items-center gap-2 rounded-xl border border-emerald-400/20 text-emerald-200 bg-emerald-400/10 hover:bg-emerald-400/20 disabled:opacity-40 text-sm font-bold">
+                                 <Presentation className={'w-4 h-4 ' + (visualDirectingKey === wrappedKey ? 'animate-pulse' : '')} />
+                                 {visualDirectingKey === wrappedKey ? 'Directing new scenes...' : 'Restyle scenes'}
                                </button>
                                <button onClick={() => void regenerateWrappedCover()}
                                  disabled={!!wrappedGeneratingKey || !canUseAi || !!activity?.frozen ||
