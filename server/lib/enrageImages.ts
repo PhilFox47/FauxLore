@@ -43,7 +43,7 @@ export function localImageReferenceDataUrl(url: unknown, aiImagesDir: string): s
   try {
     const filePath = path.join(aiImagesDir, match[1]);
     const stat = fs.lstatSync(filePath);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0 || stat.size > 15 * 1024 * 1024) return null;
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0 || stat.size > 10 * 1024 * 1024) return null;
     const bytes = fs.readFileSync(filePath);
     const actual = imageSize(bytes);
     if (!actual || !actual.width || !actual.height) return null;
