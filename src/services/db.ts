@@ -266,7 +266,10 @@ export const DatabaseService = {
     const res = await apiFetch('/api/wrapped/' + timeframe + '/' + encodeURIComponent(timeId), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId, story }),
+      body: JSON.stringify({
+        requestId, story,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      }),
     });
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
