@@ -37,7 +37,8 @@ export function EditorialStorySlide({ scene, direction, imageUrl, number, total,
 }) {
   const reduceMotion = !!useReducedMotion();
   const visual = direction.presentation === "cinematic" && !!imageUrl;
-  const hasMetrics = direction.presentation === "data" && !!scene.bars?.length;
+  const hasMetrics = direction.presentation === "data" &&
+    (!!scene.bars?.length || !!scene.analytic);
   const heroTitle = scene.title.length > 65 ? "text-4xl sm:text-5xl lg:text-6xl"
     : "text-5xl sm:text-6xl lg:text-[clamp(4rem,6vw,6.4rem)]";
   const side = positioning[direction.textSide];
