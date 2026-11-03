@@ -182,6 +182,36 @@ These exercise parser isolation, media/stat provenance, invalid layouts,
 AI proposals and the save boundary; a live GPT model + browser render test
 still requires the local configured provider.
 
+### Wrapped: optional visual self-insert
+
+**Settings → Base Preferences → Visual Self-Insert** stores a private,
+account-specific appearance description (up to 700 characters) with three
+modes: **Never** (default, no appearance sent to image providers), **Auto**
+(use the owner only when a natural human protagonist benefits the image), and
+**Prefer** (favor the owner over a generic human when the scene genuinely
+needs a personal protagonist). Both Auto and Prefer require a non-empty
+description and NEVER force a person into an abstract concept or replace
+fictional/source characters. Settings use per-user database columns, not
+system-wide image settings, and missing fields in partial settings POSTs
+preserve existing values.
+
+Both the Wrapped opening cover and up to two original chapter illustrations
+read that account's profile at render time. The AI receives a bounded
+appearance description as optional factual guidance. This does not affect
+story narration, achievements, other account images or previously saved
+artwork. To apply a changed description to an existing Wrapped, explicitly
+use **Redraw title artwork** and/or **Redraw chapter artwork**; no automatic
+mass-regeneration occurs.
+
+Private appearance text is redacted from exportable image diagnostics.
+The configured external image provider still receives those appearance
+details when the user enables Auto/Prefer, so users should only provide
+details they're comfortable transmitting. No reference-photo upload or
+biometric face matching is implemented in this text-first version; the
+settings schema can later be extended to opt-in image references.
+
+Tests: `npm run test:visual-self` (also included in `npm run test:wrapped`).
+
 ### Wrapped: original chapter illustrations and complete first reveal
 
 The same configured image provider can now generate **up to two additional,
