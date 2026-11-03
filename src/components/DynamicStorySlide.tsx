@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useLayoutEffect, useRef } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import type { StoryScene } from "../lib/storyDiscovery";
@@ -37,20 +37,65 @@ const metricSize = {
 const toneClass = (tone: DynamicSceneTone, accent: string): string =>
   tone === "accent" ? accent : tone === "secondary" ? "text-white/70" : "text-white";
 
-function NodeContent({ node, scene, coverArtUrl, accent, glow, edge, reduce }: {
+/**
+ * Fit actual content to the chosen desktop rectangle. Unlike the previous
+ * overflow-auto implementation, text NEVER becomes a scrolling mini-window.
+ * ResizeObserver covers smaller viewports and late font loading.
+ */
+function FittedText({ value, className, kind, size }: {
+  value: string; className: string; kind: "title" | "body"; size: DynamicSceneElement["size"];
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const text = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const frame = box.current, content = text.current;
+    if (!frame || !content) return;
+    const initial = kind === "title"
+      ? { sm: 42, md: 54, lg: 74, xl: 94 }[size]
+      : { sm: 16, md: 19, lg: 22, xl: 26 }[size];
+    const fit = () => {
+      if (!frame.clientWidth || !frame.clientHeight) return;
+      let fontSize = initial;
+      const minimum = kind === "title" ? 21 : 13;
+      content.style.fontSize = fontSize + "px";
+      while (fontSize > minimum && (content.scrollHeight > frame.clientHeight + 1 ||
+        content.scrollWidth > frame.clientWidth + 1)) {
+        fontSize -= 2;
+        content.style.fontSize = fontSize + "px";
+      }
+    };
+    fit();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(fit) : null;
+    observer?.observe(frame);
+    void document.fonts?.ready?.then(fit);
+    return () => observer?.disconnect();
+  }, [value, size, kind]);
+  return <div ref={box} className="w-full h-full overflow-hidden">
+    <div ref={text} className={className + " w-full break-words [overflow-wrap:anywhere]"}>{value}</div>
+  </div>;
+}
+
+function NodeContent({ node, scene, coverArtUrl, sceneArtUrl, accent, glow, edge, reduce, mobile }: {
   node: DynamicSceneElement;
   scene: StoryScene;
   coverArtUrl?: string | null;
-  accent: string; glow: string; edge: string; reduce: boolean;
+  sceneArtUrl?: string;
+  accent: string; glow: string; edge: string; reduce: boolean; mobile: boolean;
 }) {
   const color = toneClass(node.tone, accent);
   switch (node.type) {
     case "title":
-      return <h2 className={"font-black leading-[1.05] tracking-[-.05em] break-words " +
-        headlineSize[node.size] + " " + color}>{scene.title}</h2>;
+      return mobile
+        ? <h2 className={"font-black leading-[1.07] tracking-[-.05em] break-words " +
+            headlineSize[node.size] + " " + color}>{scene.title}</h2>
+        : <FittedText value={scene.title} size={node.size} kind="title"
+            className={"font-black leading-[1.05] tracking-[-.05em] " + color} />;
     case "body":
-      return <div className={"font-medium leading-relaxed whitespace-pre-line break-words " +
-        bodySize[node.size] + " " + color}>{scene.body}</div>;
+      return mobile
+        ? <p className={"font-medium leading-relaxed whitespace-pre-line break-words " +
+            bodySize[node.size] + " " + color}>{scene.body}</p>
+        : <FittedText value={scene.body} size={node.size} kind="body"
+            className={"font-medium leading-[1.55] whitespace-pre-line " + color} />;
     case "eyebrow":
       return <div className={"text-xs tracking-[.23em] uppercase font-black " + color}>{scene.eyebrow}</div>;
     case "quote":
@@ -67,6 +112,11 @@ function NodeContent({ node, scene, coverArtUrl, accent, glow, edge, reduce }: {
     case "title-art":
       return coverArtUrl ? <img src={coverArtUrl} alt="" aria-hidden="true" loading="eager"
         className="w-full h-full object-cover rounded-xl opacity-90" /> : null;
+    case "scene-art": {
+      const source = sceneArtUrl || scene.media?.cover || scene.artworks?.find(m => !!m.cover)?.cover;
+      return source ? <img src={source} alt="" aria-hidden="true" referrerPolicy="no-referrer"
+        className="w-full h-full object-cover rounded-xl opacity-95 shadow-2xl" loading="eager" /> : null;
+    }
     case "stat": {
       const stat = scene.bars?.[node.index ?? -1];
       return stat ? <div className="h-full flex flex-col justify-center" aria-label={stat.label + ": " + stat.value + " percent"}>
@@ -129,7 +179,7 @@ function Entrance({ node, children, reduce, mobile }: {
     className={mobile
       ? (decoration ? "hidden" : "relative w-full min-w-0 " +
         (node.type === "media" || node.type === "title-art" ? "min-h-48 max-h-72" : ""))
-      : "absolute min-w-0 min-h-0 " + (decoration ? "pointer-events-none" : "overflow-auto")}>
+      : "absolute min-w-0 min-h-0 " + (decoration ? "pointer-events-none" : "overflow-hidden")}>
     <div className={"w-full h-full " + (mobile ? "py-1" : "")}>{children}</div>
   </motion.div>;
 }
@@ -144,18 +194,23 @@ const priority = (node: DynamicSceneElement) =>
  * CSS strings, or user-defined JS. Mobile is semantic flow rather than
  * scaled desktop coordinates, so text stays readable on small screens.
  */
-export function DynamicStorySlide({ scene, composition, number, total, coverArtUrl, onDeepDive }: {
+export function DynamicStorySlide({ scene, composition, number, total, coverArtUrl, sceneArtUrl, onDeepDive }: {
   scene: StoryScene;
   composition: DynamicSceneComposition;
   number: number; total: number;
   coverArtUrl?: string | null;
+  sceneArtUrl?: string;
   onDeepDive: () => void;
 }) {
   const reduce = !!useReducedMotion();
   const theme = themes[scene.design?.palette || "violet"];
   const foreground = composition.elements.filter(e => e.type !== "shape");
   const desktop = [...composition.elements].sort((a, b) => priority(a) - priority(b));
-  const mobile = [...foreground].sort((a, b) => priority(a) - priority(b));
+  const mobilePriority = (node: DynamicSceneElement) =>
+    node.type === "eyebrow" ? 0 : node.type === "title" ? 1 :
+    node.type === "scene-art" || node.type === "title-art" || node.type === "media" ? 2 :
+    node.type === "body" ? 3 : 4;
+  const mobile = [...foreground].sort((a, b) => mobilePriority(a) - mobilePriority(b));
   const background = {
     cinematic: "bg-gradient-to-br " + theme.canvas,
     spotlight: "bg-gradient-to-tl " + theme.canvas,
@@ -165,8 +220,8 @@ export function DynamicStorySlide({ scene, composition, number, total, coverArtU
   }[composition.backdrop];
   const renderNode = (node: DynamicSceneElement, mobileLayout: boolean) =>
     <Entrance key={node.id} node={node} reduce={reduce} mobile={mobileLayout}>
-      <NodeContent node={node} scene={scene} coverArtUrl={coverArtUrl}
-        accent={theme.accent} glow={theme.glow} edge={theme.edge} reduce={reduce} />
+      <NodeContent node={node} scene={scene} coverArtUrl={coverArtUrl} sceneArtUrl={sceneArtUrl}
+        accent={theme.accent} glow={theme.glow} edge={theme.edge} reduce={reduce} mobile={mobileLayout} />
     </Entrance>;
 
   return <motion.article initial={reduce ? false : { opacity: 0, scale: .985 }} animate={{ opacity: 1, scale: 1 }}
@@ -178,6 +233,11 @@ export function DynamicStorySlide({ scene, composition, number, total, coverArtU
       !composition.elements.some(node => node.type === "title-art") &&
       <img src={coverArtUrl} loading="eager" alt="" aria-hidden="true"
       className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none" />}
+    {sceneArtUrl && !composition.elements.some(node => node.type === "scene-art") &&
+      <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+        <img src={sceneArtUrl} className="w-full h-full object-cover opacity-55" loading="eager" alt="" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-black/35" />
+      </div>}
     {composition.backdrop === "grid" && <div aria-hidden="true"
       className="absolute inset-0 opacity-20 pointer-events-none"
       style={{ backgroundImage: "linear-gradient(#fff2 1px, transparent 1px), linear-gradient(90deg,#fff2 1px,transparent 1px)", backgroundSize: "40px 40px" }} />}
