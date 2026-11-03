@@ -27,6 +27,7 @@ function fixture() {
       "coverArtUrl TEXT, coverArtStatus TEXT, coverArtRequestId TEXT, coverArtTimeZone TEXT, " +
       "sceneArtJson TEXT, sceneArtStatus TEXT, sceneArtRequestId TEXT, " +
       "PRIMARY KEY(userId,timeframe,timeId));" +
+    "CREATE TABLE settings (userId TEXT PRIMARY KEY, visualSelfInsertMode TEXT, visualSelfDescription TEXT);" +
     "CREATE TABLE media (id TEXT, userId TEXT, title TEXT, mediaType TEXT, genres TEXT);" +
     "CREATE TABLE logs (id TEXT, userId TEXT, mediaId TEXT, timestamp TEXT, metricType TEXT, delta REAL);",
   );
@@ -323,5 +324,73 @@ test("dormant users do not cause automatic image spend", async () => {
     });
     assert.equal(service.queue("user", TIMEFRAME, PERIOD), false);
     assert.equal(read(db).coverArtStatus, null);
+  } finally { db.close(); }
+});
+
+test("Wrapped imagery respects ONLY its account's opt-in appearance and covers never use a different user's description", async () => {
+  const db = fixture();
+  const prompts: string[] = [];
+  try {
+    db.prepare("INSERT INTO settings(userId,visualSelfInsertMode,visualSelfDescription) VALUES(?,?,?)")
+      .run("user", "never", "short ginger hair, very distinctive nose");
+    db.prepare("INSERT INTO settings(userId,visualSelfInsertMode,visualSelfDescription) VALUES(?,?,?)")
+      .run("another-user", "prefer", "bright-purple hair, face tattoos");
+    const service = createWrappedCoverService({
+      db: db as unknown as Db,
+      canSpendTokens: () => true,
+      generateImage: async (_, prompt) => {
+        prompts.push(prompt);
+        return "/uploads/ai-images/user-" + prompts.length + ".png";
+      },
+    });
+    assert.equal(service.queue("user", TIMEFRAME, PERIOD), true);
+    await settle();
+    assert.doesNotMatch(prompts[0], /short ginger hair|bright-purple hair|OPTIONAL USER LIKENESS/);
+    db.prepare("UPDATE settings SET visualSelfInsertMode='auto' WHERE userId='user'").run();
+    assert.equal(service.queue("user", TIMEFRAME, PERIOD, true), true);
+    await settle();
+    assert.match(prompts[1], /short ginger hair/);
+    assert.match(prompts[1], /ONLY WHEN a human protagonist naturally/);
+    assert.doesNotMatch(prompts[1], /bright-purple hair|face tattoos/);
+    db.prepare("UPDATE settings SET visualSelfInsertMode='prefer' WHERE userId='user'").run();
+    assert.equal(service.queue("user", TIMEFRAME, PERIOD, true), true);
+    await settle();
+    assert.match(prompts[2], /PREFER the account owner/);
+    assert.match(prompts[2], /short ginger hair/);
+  } finally { db.close(); }
+});
+
+test("chapter illustrations receive the same account-scoped optional likeness instructions", async () => {
+  const db = fixture();
+  const prompts: string[] = [];
+  try {
+    db.prepare("INSERT INTO settings(userId,visualSelfInsertMode,visualSelfDescription) VALUES(?,?,?)")
+      .run("user", "prefer", "short brown hair and blue glasses");
+    const staged = {
+      title: "This week's detours", dek: "A quiet train ride between worlds.",
+      scenes: [
+        { id: "wrapped-0", kind: "opening", title: "A journey", body: "Intro." },
+        { id: "wrapped-1", kind: "location", title: "A train on a train",
+          body: "Some travel memories from a train." },
+        { id: "wrapped-2", kind: "closing", title: "Home", body: "Ending." },
+      ],
+    };
+    db.prepare("UPDATE wrapped_stories SET story=? WHERE userId='user'").run(JSON.stringify(staged));
+    const service = createWrappedCoverService({
+      db: db as unknown as Db,
+      canSpendTokens: () => true,
+      generateImage: async () => "/uploads/unused.png",
+      generateSceneImage: async (_, prompt) => {
+        prompts.push(prompt);
+        return "/uploads/ai-images/personal-chapter.png";
+      },
+    });
+    assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), true);
+    await settle();
+    assert.equal(prompts.length, 1);
+    assert.match(prompts[0], /short brown hair and blue glasses/);
+    assert.match(prompts[0], /PREFER the account owner/);
+    assert.match(prompts[0], /A train on a train/);
+    assert.match(prompts[0], /not a requirement/);
   } finally { db.close(); }
 });
