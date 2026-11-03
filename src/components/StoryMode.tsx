@@ -5,6 +5,8 @@ import {
   Quote, ShieldAlert, Trophy
 } from 'lucide-react';
 import { AchievementCard } from './AchievementCard';
+import { DynamicStorySlide } from './DynamicStorySlide';
+import { safeDynamicScene } from '../lib/dynamicScenes';
 import type { GeneratedAchievement } from '../lib/generatedAchievements';
 import type { StoryScene, StoryLayout, StoryPalette, StoryVisual, StoryMedia } from '../lib/storyDiscovery';
 
@@ -144,6 +146,11 @@ function StorySlide({ scene, number, total, onDeepDive, coverArtUrl }: {
   scene: StoryScene; number: number; total: number; onDeepDive: () => void;
   coverArtUrl?: string | null;
 }) {
+  const dynamic = scene.composition ? safeDynamicScene(scene.composition, scene) : null;
+  if (dynamic) {
+    return <DynamicStorySlide scene={scene} composition={dynamic} number={number} total={total}
+      coverArtUrl={coverArtUrl} onDeepDive={onDeepDive} />;
+  }
   const layout = scene.design?.layout || fallbackLayout[scene.kind];
   const isWrappedTitleArt = scene.kind === 'opening' && !!coverArtUrl;
   const color = PALETTES[scene.design?.palette || 'violet'];
