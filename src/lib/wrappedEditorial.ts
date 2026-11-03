@@ -93,3 +93,85 @@ export interface MonthlyCoverage {
 export function requiredMonthlyPhases(shares: Record<MonthPhase, number>): MonthPhase[] {
   return (['early', 'middle', 'late'] as MonthPhase[]).filter(phase => shares[phase] >= .12);
 }
+
+
+/**
+ * Four verified analytic vocabularies. The AI chooses a presentation, never
+ * authors the underlying values or labels. Keep percentages in 0..100.
+ */
+export type AnalyticTreatment = 'shift' | 'duel' | 'arc' | 'dominance';
+export interface AnalyticPoint {
+  label: string;
+  value: number;
+  note: string;
+}
+export interface VerifiedAnalytic {
+  kind: AnalyticTreatment;
+  unit: 'percent';
+  points: AnalyticPoint[];
+}
+
+export function normalizeVerifiedAnalytic(value: unknown): VerifiedAnalytic {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('Invalid analytic');
+  const data = value as Record<string, unknown>;
+  if (!['shift','duel','arc','dominance'].includes(String(data.kind)) ||
+    data.unit !== 'percent' || !Array.isArray(data.points)) throw Error('Invalid analytic kind');
+  const expected = data.kind === 'arc' ? 3 : 2;
+  if (data.points.length !== expected) throw Error('Invalid analytic point count');
+  const points = data.points.map(raw => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw Error('Malformed analytic point');
+    const p = raw as Record<string, unknown>;
+    if (typeof p.label !== 'string' || p.label.trim().length < 1 || p.label.length > 90 ||
+      typeof p.value !== 'number' || !Number.isFinite(p.value) || p.value < 0 || p.value > 100 ||
+      typeof p.note !== 'string' || p.note.length > 220) throw Error('Invalid analytic point');
+    return { label: p.label.trim(), value: p.value, note: p.note.trim() };
+  });
+  return { kind: data.kind as AnalyticTreatment, unit: 'percent', points };
+}
+
+/** A metric must earn its own slide, even if it has an attractive renderer. */
+export function isStrongVerifiedAnalytic(input: VerifiedAnalytic | undefined | null): boolean {
+  if (!input) return false;
+  try {
+    const data = normalizeVerifiedAnalytic(input);
+    const [first, second, third] = data.points;
+    if (data.kind === 'shift') return isSignificantFormatShift(second.value / 100, first.value / 100);
+    if (data.kind === 'duel') return Math.abs(second.value - first.value) >= 20;
+    if (data.kind === 'dominance') return first.value >= 50 &&
+      Math.abs(first.value + second.value - 100) < 1.5;
+    return !!third &&
+      Math.max(first.value, second.value, third.value) -
+      Math.min(first.value, second.value, third.value) >= 25 &&
+      Math.abs(first.value + second.value + third.value - 100) < 1.5;
+  } catch { return false; }
+}
+
+export type EditorialJob =
+  'hook' | 'verdict' | 'contrast' | 'turning-point' | 'pattern' |
+  'data-reveal' | 'place' | 'reflection' | 'payoff';
+
+/** The story owns the dramaturgical role; the visual AI cannot change it. */
+export function editorialJobFromKind(kind: string): EditorialJob {
+  switch (kind) {
+    case 'opening': return 'hook';
+    case 'closing': return 'payoff';
+    case 'taste': return 'contrast';
+    case 'outlier': return 'data-reveal';
+    case 'timeline': return 'turning-point';
+    case 'journal': return 'reflection';
+    case 'location': return 'place';
+    case 'spotlight': return 'verdict';
+    case 'return': return 'turning-point';
+    default: return 'pattern';
+  }
+}
+export function normalizeEditorialJob(value: unknown, kind: string): EditorialJob {
+  const allowed: EditorialJob[] = [
+    'hook','verdict','contrast','turning-point','pattern',
+    'data-reveal','place','reflection','payoff',
+  ];
+  if (kind === 'opening') return 'hook';
+  if (kind === 'closing') return 'payoff';
+  const job = allowed.includes(value as EditorialJob) ? value as EditorialJob : editorialJobFromKind(kind);
+  return job;
+}
