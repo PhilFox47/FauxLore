@@ -192,16 +192,16 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
           route,
         });
         try {
-          const response = await fetch(\`\${baseUrl}\${route}\`, {
+          const response = await fetch(`${baseUrl}${route}`, {
             method: "POST",
             ...(longRequestDispatcher ? { dispatcher: longRequestDispatcher } : {}),
             signal: AbortSignal.timeout(600_000),
-            headers: { "Content-Type": "application/json", Authorization: \`Bearer \${apiKey}\` },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
             body: JSON.stringify(body),
           } as any);
           if (!response.ok) {
             const detail = (await response.text()).slice(0, 500);
-            throw Object.assign(new Error(\`CLIProxyAPI image \${edit ? "edit" : "generation"} HTTP \${response.status}: \${detail}\`), { httpStatus: response.status });
+            throw Object.assign(new Error(`CLIProxyAPI image ${edit ? "edit" : "generation"} HTTP ${response.status}: ${detail}`), { httpStatus: response.status });
           }
           const result: any = await response.json();
           const first = result?.data?.[0];
@@ -212,16 +212,16 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
           const actual = imageSize(buffer);
           if (!actual) throw new Error("CLIProxyAPI returned invalid image bytes.");
           const ext = ({ png: ".png", jpg: ".jpg", jpeg: ".jpg", webp: ".webp" } as Record<string, string>)[String(actual.type).toLowerCase()] || ".png";
-          const fileName = \`\${uuidv4()}\${ext}\`;
+          const fileName = `${uuidv4()}${ext}`;
           fs.writeFileSync(path.join(aiImagesDir, fileName), buffer);
-          const got = \`\${actual.width}x\${actual.height}\`;
+          const got = `${actual.width}x${actual.height}`;
           if (!imageFrameMatches(frame, actual.width, actual.height)) {
-            console.warn(\`[images] \${cfg.model} returned an unexpected \${got} canvas for \${frame}; check Image Generation Diagnostics.\`);
+            console.warn(`[images] ${cfg.model} returned an unexpected ${got} canvas for ${frame}; check Image Generation Diagnostics.`);
           }
-          console.log(\`[images] CLIProxyAPI \${cfg.model} \${edit ? "edited with original reference" : "generated"} \${got}\`);
-          recordPayload(callId, "images", { reply: \`image saved: \${got}; binary redacted\` });
+          console.log(`[images] CLIProxyAPI ${cfg.model} ${edit ? "edited with original reference" : "generated"} ${got}`);
+          recordPayload(callId, "images", { reply: `image saved: ${got}; binary redacted` });
           recordAiCall({ ...shape, durationMs: Date.now() - startedAt, httpStatus: response.status });
-          return \`/uploads/ai-images/\${fileName}\`;
+          return `/uploads/ai-images/${fileName}`;
         } catch (e: any) {
           recordAiCall({ ...shape, durationMs: Date.now() - startedAt, httpStatus: e?.httpStatus, error: e?.message || String(e) });
           throw e;
@@ -236,12 +236,12 @@ export function createImageService({ db, aiImagesDir, codex }: { db: Db; aiImage
           // for a second render after timeouts, rate limits or server failures.
           const status = Number(e?.httpStatus || 0);
           if (![400, 404, 405, 415, 422, 501].includes(status)) throw e;
-          console.warn(\`[images] CLIProxyAPI edit unavailable (HTTP \${status}); using text-only enrage fallback.\`);
+          console.warn(`[images] CLIProxyAPI edit unavailable (HTTP ${status}); using text-only enrage fallback.`);
           return requestCliImage(false, 2);
         }
       }
       if (referenceDataUrl) {
-        console.warn(\`[images] Reference supplied, but model \${cfg.model} does not use the GPT Image 2.5 edit endpoint; generating from text.\`);
+        console.warn(`[images] Reference supplied, but model ${cfg.model} does not use the GPT Image 2.5 edit endpoint; generating from text.`);
       }
       return requestCliImage(false, 1);
     }
