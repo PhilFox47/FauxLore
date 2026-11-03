@@ -140,8 +140,12 @@ function CopyBlock({ scene, large = false, center = false }: { scene: StoryScene
   </div>;
 }
 
-function StorySlide({ scene, number, total, onDeepDive }: { scene: StoryScene; number: number; total: number; onDeepDive: () => void }) {
+function StorySlide({ scene, number, total, onDeepDive, coverArtUrl }: {
+  scene: StoryScene; number: number; total: number; onDeepDive: () => void;
+  coverArtUrl?: string | null;
+}) {
   const layout = scene.design?.layout || fallbackLayout[scene.kind];
+  const isWrappedTitleArt = scene.kind === 'opening' && !!coverArtUrl;
   const color = PALETTES[scene.design?.palette || 'violet'];
   const align = scene.design?.align === 'center';
   const covers = (scene.artworks?.length ? scene.artworks : scene.media ? [scene.media] : [])
@@ -152,6 +156,7 @@ function StorySlide({ scene, number, total, onDeepDive }: { scene: StoryScene; n
   const timeline = !!scene.beats?.length;
   const quote = !!scene.quote;
   const chosenLayout: StoryLayout =
+    isWrappedTitleArt ? 'cover-hero' :
     layout === 'cover-wall' && covers.length < 2 ? (primary ? 'split-feature' : 'type-poster') :
     layout === 'cover-hero' && !primary?.cover ? 'type-poster' :
     layout === 'quote-poster' && !quote ? 'editorial' :
@@ -177,7 +182,12 @@ function StorySlide({ scene, number, total, onDeepDive }: { scene: StoryScene; n
     className={'relative isolate overflow-hidden rounded-[2rem] md:rounded-[2.75rem] border ' + color.border +
       ' bg-gradient-to-br ' + color.background + ' shadow-2xl ' + color.shadow}>
     <div className={'absolute -top-24 -right-24 w-[70%] h-[80%] rounded-full blur-[100px] pointer-events-none ' + color.glow} />
-    {chosenLayout === 'cover-hero' && primary?.cover && <>
+    {isWrappedTitleArt && <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+      <img src={coverArtUrl!} alt="" loading="eager" className="w-full h-full object-cover object-center opacity-90" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/75 to-black/10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
+    </div>}
+    {chosenLayout === 'cover-hero' && !isWrappedTitleArt && primary?.cover && <>
       <img src={primary.cover} alt="" aria-hidden="true" loading="eager" referrerPolicy="no-referrer"
         className="absolute inset-0 w-full h-full object-cover blur-[95px] opacity-25 scale-125" />
       <div className="absolute right-5 top-14 w-[28%] aspect-[2/3] sm:hidden opacity-85"><img src={primary.cover} alt="" aria-hidden="true" referrerPolicy="no-referrer" className="w-full h-full object-contain" /></div>
@@ -269,11 +279,13 @@ function AchievementFinale({ achievements, onDeepDive }: { achievements: Generat
 }
 
 /** An AI-directed scene sequence with an independently persisted achievement epilogue. */
-export function StoryMode({ scenes, timeframe, timeId, achievements = [], onDeepDive }: {
+export function StoryMode({ scenes, timeframe, timeId, achievements = [], onDeepDive, coverArtUrl, coverArtStatus }: {
   scenes: StoryScene[];
   timeframe: 'week' | 'month' | 'year';
   timeId: string;
   achievements?: GeneratedAchievement[];
+  coverArtUrl?: string | null;
+  coverArtStatus?: 'pending' | 'generating' | 'done' | 'failed' | null;
   onDeepDive: () => void;
 }) {
   const [index, setIndex] = useState(0);
@@ -306,6 +318,9 @@ export function StoryMode({ scenes, timeframe, timeId, achievements = [], onDeep
       <div>
         <p className="text-xs font-black text-violet-200 tracking-[.2em] uppercase">FauxLore Wrapped · {timeId}</p>
         <p className="text-xs text-zinc-500 mt-1">{scenes.length} AI-directed scenes · Dungeon verdict finale</p>
+        {(coverArtStatus === 'pending' || coverArtStatus === 'generating') && (
+          <p role="status" className="text-xs text-violet-200/80 mt-1">Illustrating this Wrapped's title cover…</p>
+        )}
       </div>
       <div className="flex gap-2">
         <button onClick={copyScene} aria-label="Copy current scene"
@@ -337,7 +352,7 @@ export function StoryMode({ scenes, timeframe, timeId, achievements = [], onDeep
         if (Math.abs(delta) >= 65) { setIndex(i => Math.max(0, Math.min(total - 1, i + (delta < 0 ? 1 : -1)))); setCopied(false); }
       }}>
       <AnimatePresence mode="wait">
-        {current ? <StorySlide key={current.id} scene={current} number={index + 1} total={total} onDeepDive={onDeepDive} /> :
+        {current ? <StorySlide key={current.id} scene={current} number={index + 1} total={total} onDeepDive={onDeepDive} coverArtUrl={coverArtUrl} /> :
           <AchievementFinale key="finale" achievements={achievements} onDeepDive={onDeepDive} />}
       </AnimatePresence>
     </div>
