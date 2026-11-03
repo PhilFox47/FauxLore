@@ -16,7 +16,8 @@
     "test:image-framing": "tsx --test src/lib/imageFraming.test.ts",
     "start": "node dist/server.cjs",
     "test:image-prompting": "tsx --test server/lib/imagePromptGuidance.test.ts",
-    "test:enrage-images": "tsx --test server/lib/enrageImages.test.ts"
+    "test:enrage-images": "npm run test:boss-state-images",
+    "test:boss-state-images": "tsx --test server/lib/bossStateImages.test.ts"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
