@@ -21,6 +21,8 @@ import { createNotifications } from "./services/notifications";
 import { reportBrowserStatus } from "./integrations/gamestorylog";
 import { createBackupManager } from "./services/backup";
 import { createImageService } from "./services/images";
+import { createArmoryPortraitService } from "./services/armoryPortrait";
+import { registerArmoryPortraitRoutes } from "./routes/armoryPortrait";
 import { createWrappedCoverService } from "./services/wrappedCovers";
 import { createWrappedCodexStyleResolver } from "./lib/wrappedCodexStyle";
 import { createCoverCache } from "./services/coverCache";
@@ -152,7 +154,7 @@ async function startServer() {
     },
     notify,
   });
-  const { generateBossImageBackground, queueBossVictoryArtwork, generateArtifactImageBackground, generateWrappedCoverImage, generateWrappedSceneImage, describeImageModel } = createImageService({
+  const { generateBossImageBackground, queueBossVictoryArtwork, generateArtifactImageBackground, generateWrappedCoverImage, generateWrappedSceneImage, generateArmoryPortraitImage, describeImageModel } = createImageService({
     db, aiImagesDir, codex, canSpendTokens: userId => !activity.isFrozen(userId),
   });
   const { queue: queueWrappedCoverArt, queueScenes: queueWrappedSceneArtwork } = createWrappedCoverService({
@@ -162,6 +164,7 @@ async function startServer() {
     getCodexStyle: createWrappedCodexStyleResolver(db, codex),
     canSpendTokens: userId => !activity.isFrozen(userId),
   });
+  const armoryPortraits = createArmoryPortraitService({db,aiImagesDir,generateImage:generateArmoryPortraitImage});
   const coverCache = createCoverCache({ coversDir });
   const { spawnWorldBoss, generateEnemy } = createWorldBossService({ db, generateBossImageBackground, codex });
   const { generateLoot } = createLootService({ db, codex });
@@ -267,6 +270,7 @@ async function startServer() {
   registerCodexRoutes(app, ctx);
   registerFlavorTextRoutes(app, ctx);
   registerArtifactRoutes(app, ctx);
+  registerArmoryPortraitRoutes(app, ctx, armoryPortraits);
   registerBossRoutes(app, ctx);
   registerFranchiseRoutes(app, ctx);
   registerSystemRoutes(app, ctx);
