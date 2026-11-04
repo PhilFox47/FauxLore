@@ -1,0 +1,36 @@
+name: Quick Moodlets and Recap Resonance
+
+on:
+  push:
+    branches: [claude]
+    paths:
+      - 'src/lib/quickMoodlets*'
+      - 'src/lib/recapSalience*'
+      - 'src/components/ProgressModal.tsx'
+      - 'src/components/SessionReflectionSignals.tsx'
+      - 'src/components/MediaDetailModal.tsx'
+      - 'src/types/schema.ts'
+      - 'src/pages/Recaps.tsx'
+      - 'src/lib/wrappedEvidence.ts'
+      - 'src/services/wrappedAi.ts'
+      - 'src/services/recapAi.ts'
+      - 'server/routes/logs.ts'
+      - 'server/db/schema.ts'
+      - 'server/db/migrations.ts'
+      - '.github/workflows/quick-moodlets.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Moodlet validation, salience and existing Wrapped evidence tests
+        run: node --import tsx --test src/lib/quickMoodlets.test.ts src/lib/recapSalience.test.ts src/lib/wrappedEvidence.test.ts
+      - name: Production build
+        run: npm run build
