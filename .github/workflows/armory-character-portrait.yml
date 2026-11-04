@@ -11,6 +11,8 @@ on:
       - 'src/lib/visualSelf.ts'
       - 'src/services/db.ts'
       - 'server/services/armoryPortrait*'
+      - 'server/services/armoryImagePipeline.test.ts'
+      - 'docs/armory-character-portrait.md'
       - 'server/services/images.ts'
       - 'server/routes/armoryPortrait*'
       - 'server/lib/cliProxy.ts'
@@ -32,7 +34,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Portrait framing, reference routing and persisted state
-        run: node --import tsx --test src/lib/armoryPortrait.test.ts server/services/armoryPortrait.test.ts
+        run: node --import tsx --test src/lib/armoryPortrait.test.ts server/services/armoryPortrait.test.ts server/services/armoryImagePipeline.test.ts
       - name: Existing image/edit regression
         run: node --import tsx --test server/lib/cliProxy.test.ts src/lib/imageFraming.test.ts server/lib/visualSelfReference.test.ts
       - name: Production build
