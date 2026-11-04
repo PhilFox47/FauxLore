@@ -53,7 +53,10 @@ test('ISO week boundaries handle New Year correctly',()=>{
   assert.deepEqual(wrappedPeriodRange('week','2020-W53'),{
     start:'2020-12-28',end:'2021-01-03',
   });
-  assert.equal(wrappedPeriodRange('week','2026-W53'),null);
+  assert.deepEqual(wrappedPeriodRange('week','2026-W53'),{
+    start:'2026-12-28',end:'2027-01-03',
+  });
+  assert.equal(wrappedPeriodRange('week','2025-W53'),null);
   assert.deepEqual(wrappedPeriodRange('week','2026-W01'),{
     start:'2025-12-29',end:'2026-01-04',
   });
