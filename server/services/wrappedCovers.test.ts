@@ -28,6 +28,7 @@ function fixture() {
       "sceneArtJson TEXT, sceneArtStatus TEXT, sceneArtRequestId TEXT, " +
       "PRIMARY KEY(userId,timeframe,timeId));" +
     "CREATE TABLE settings (userId TEXT PRIMARY KEY, visualSelfInsertMode TEXT, visualSelfDescription TEXT);" +
+    "CREATE TABLE visual_self_references (userId TEXT PRIMARY KEY, image BLOB NOT NULL, mime TEXT NOT NULL, updatedAt TEXT NOT NULL);" +
     "CREATE TABLE media (id TEXT, userId TEXT, title TEXT, mediaType TEXT, genres TEXT);" +
     "CREATE TABLE logs (id TEXT, userId TEXT, mediaId TEXT, timestamp TEXT, metricType TEXT, delta REAL);",
   );
