@@ -267,9 +267,29 @@ export const DatabaseService = {
     return res.json();
   },
 
-  async startWrappedGeneration(timeframe: 'week' | 'month' | 'year', timeId: string): Promise<string> {
-    const res = await apiFetch('/api/wrapped/' + timeframe + '/' + encodeURIComponent(timeId) + '/start', { method: 'POST' });
-    if (!res.ok) throw new Error('Could not start Wrapped generation');
+  /** Requires an explicit user action. Never invoke from loading effects. */
+  async requestWrappedManualIntent(timeframe: 'week' | 'month' | 'year', timeId: string): Promise<string> {
+    const res = await apiFetch('/api/wrapped/' + timeframe + '/' + encodeURIComponent(timeId) + '/intent', {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.error || 'Could not authorize manual Wrapped generation');
+    }
+    const result = await res.json();
+    return result.intentId;
+  },
+
+  async startWrappedGeneration(timeframe: 'week' | 'month' | 'year', timeId: string, intentId: string): Promise<string> {
+    const res = await apiFetch('/api/wrapped/' + timeframe + '/' + encodeURIComponent(timeId) + '/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ intentId }),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.error || 'Could not start Wrapped generation');
+    }
     const result = await res.json();
     return result.requestId;
   },
