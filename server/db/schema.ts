@@ -69,6 +69,8 @@ export function initSchema(db: Db) {
       thoughts TEXT,
       thoughtPrompt TEXT,
       sessionEnjoyment INTEGER CHECK(sessionEnjoyment IS NULL OR (sessionEnjoyment BETWEEN 1 AND 5)),
+      sessionImpact INTEGER CHECK(sessionImpact IS NULL OR (sessionImpact BETWEEN 1 AND 5)),
+      moodlets TEXT,
       location TEXT,
       isHistoric INTEGER DEFAULT 0,
       bonusMultiplier REAL DEFAULT 0,
