@@ -273,8 +273,11 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
       const codexStyle = subjects[0] ? optionalCodexStyle(userId, subjects[0].id) : null;
       const profile = visualSelfFor(userId);
       const openingPlan = story.scenes.find(scene => scene.kind === "opening")?.composition?.visualPlan;
+      const coverProfile: VisualSelfProfile = openingPlan &&
+        openingPlan.castMode !== "self" && openingPlan.castMode !== "in-world-self"
+          ? { ...profile, visualSelfInsertMode: "never" } : profile;
       const prompt = buildWrappedCoverPrompt(
-        story, timeframe, timeId, subjects, profile, codexStyle,
+        story, timeframe, timeId, subjects, coverProfile, codexStyle,
       );
       const url = await generateImage(userId, prompt, {
         useFaceReference: !!profile.visualSelfReferenceAvailable &&
