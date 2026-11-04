@@ -1,0 +1,34 @@
+name: Private Wrapped Face Reference
+
+on:
+  push:
+    branches: [claude]
+    paths:
+      - 'src/components/VisualSelfReferencePicker.tsx'
+      - 'src/components/SettingsModal.tsx'
+      - 'src/services/db.ts'
+      - 'src/lib/visualSelf.ts'
+      - 'src/lib/wrappedVisualAction.ts'
+      - 'server/lib/visualSelfReference*'
+      - 'server/routes/settings*'
+      - 'server/services/images.ts'
+      - 'server/services/wrappedCovers*'
+      - 'server/db/schema.ts'
+      - 'server/db/migrations.ts'
+      - '.github/workflows/wrapped-face-reference.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Private upload, authorization and face-casting tests
+        run: node --import tsx --test server/lib/visualSelfReference.test.ts server/routes/settings.reference.test.ts server/services/wrappedCovers.test.ts src/lib/visualSelf.test.ts src/lib/wrappedVisualAction.test.ts
+      - name: Production build
+        run: npm run build
