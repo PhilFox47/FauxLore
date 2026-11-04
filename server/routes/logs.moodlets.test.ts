@@ -62,6 +62,22 @@ test('optional impact and Moodlets persist, can be revised/cleared and reject un
     assert.equal(cleared.sessionImpact, null);
     assert.equal(cleared.sessionEnjoyment, null);
     assert.deepEqual(cleared.moodlets, []);
+    // Full-work reviews submitted on reflection page must be dated in the
+    // historical opinion ledger, not silently backfilled on a later restart.
+    db.prepare("UPDATE media SET status='Completed' WHERE id='moon'").run();
+    result = await put({ userRating: 4.5, userReview: 'An unforgettable ending' });
+    assert.equal(result.status, 200);
+    const history = db.prepare('SELECT userRating,userReview,recordedAt FROM media_opinion_history WHERE mediaId=? ORDER BY id')
+      .all('moon') as {userRating:number;userReview:string;recordedAt:string}[];
+    assert.equal(history.length,1);
+    assert.equal(history[0].userRating,4.5);
+    assert.equal(history[0].userReview,'An unforgettable ending');
+    assert.ok(Date.parse(history[0].recordedAt) > 0);
+    result = await put({ userRating: 4.5, userReview: 'An unforgettable ending' });
+    assert.equal(result.status, 200);
+    const count = db.prepare('SELECT COUNT(*) as n FROM media_opinion_history WHERE mediaId=?')
+      .get('moon') as {n:number};
+    assert.equal(count.n,1);
     const list = await fetch(base + '/api/logs');
     assert.equal(list.status, 200);
     const rows = await list.json() as Array<{moodlets:string[]}>;
