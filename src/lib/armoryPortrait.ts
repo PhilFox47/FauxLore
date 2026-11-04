@@ -25,6 +25,7 @@ export function portraitLoadoutKey(items: ArmoryPortraitItem[], faceRevision = "
 export function buildArmoryPortraitPrompt(
   items: ArmoryPortraitItem[], appearanceDescription: string,
   faceReference: boolean,
+  referencedSlots: ArmorySlot[] = [],
 ): string {
   const sorted = equippedPortraitItems(items);
   if (!sorted.length) throw new Error("Equip at least one item to create a character portrait.");
@@ -32,7 +33,9 @@ export function buildArmoryPortraitPrompt(
     `[${index + 1}] SLOT: ${item.slot.toUpperCase()} | ${item.name} (${item.rarity} ${item.type})`,
     `Visual description: ${String(item.description||"").slice(0,650)}`,
     item.imagePrompt ? `Original item art direction: ${String(item.imagePrompt).slice(0,650)}` : "",
-    item.imageUrl ? `Reference image #${faceReference ? index+2 : index+1} may depict this item if provided; use it as object-shape guidance, not as background or a separate portrait.` : "",
+    referencedSlots.includes(item.slot as ArmorySlot)
+      ? `REFERENCE IMAGE #${referencedSlots.indexOf(item.slot as ArmorySlot) + (faceReference ? 2 : 1)} IS THE EXACT ITEM FOR SLOT ${item.slot}. Keep its silhouette, colors and materials. No standalone panel.`
+      : "",
   ].filter(Boolean).join("\n")).join("\n\n");
 
   const empty = ARMORY_SLOTS.filter(slot=>!sorted.some(item=>item.slot===slot));
