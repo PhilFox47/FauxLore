@@ -1,0 +1,30 @@
+name: Wrapped Scene Diversity
+
+on:
+  push:
+    branches: [claude]
+    paths:
+      - 'src/lib/dynamicScenes.ts'
+      - 'src/lib/wrappedVisualDiversity*'
+      - 'src/services/wrappedVisualDirector*'
+      - 'src/lib/wrappedVisualAction*'
+      - 'src/lib/wrappedSceneArt*'
+      - 'server/services/wrappedCovers*'
+      - 'server/routes/wrapped.ts'
+      - '.github/workflows/wrapped-scene-diversity.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Director validation, April diversity, image prompt consistency and render fixtures
+        run: node --import tsx --test src/lib/dynamicScenes.test.ts src/lib/wrappedVisualDiversity.test.ts src/lib/wrappedVisualAction.test.ts src/lib/wrappedSceneArt.test.ts src/services/wrappedVisualDirector.test.ts server/services/wrappedCovers.test.ts
+      - name: Production build
+        run: npm run build
