@@ -3,6 +3,7 @@ import type { FlavorText } from '../lib/flavorTexts';
 import type { GeneratedAchievement, AchievementDraft, AchievementPeriod } from '../lib/generatedAchievements';
 import type { WrappedStory } from './wrappedAi';
 import { v4 as uuidv4 } from 'uuid';
+import { FAUXLORE_RUNTIME_BUILD } from '../lib/runtimeBuild';
 
 /** See `getEarnedFlavorTexts`. Short enough that finishing something shows up. */
 const FLAVOR_TTL_MS = 60_000;
@@ -16,6 +17,9 @@ export async function apiFetch(url: string, options: RequestInit = {}) {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  // The server's wrapped-generation audit can identify a browser bundle that
+  // was never updated, even if the container hosting the backend was.
+  headers['X-FauxLore-Client-Build'] = FAUXLORE_RUNTIME_BUILD;
   return fetch(url, { ...options, headers });
 }
 
