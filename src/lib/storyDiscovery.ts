@@ -5,6 +5,7 @@ import type { StructuredRecap, EditorialPlan } from '../services/recapAi';
 import type { GeneratedAchievement } from './generatedAchievements';
 import type { DynamicSceneComposition } from './dynamicScenes';
 import type { EditorialJob, VerifiedAnalytic } from './wrappedEditorial';
+import type { WrappedFinaleMode } from './wrappedFinale';
 
 export type StoryPeriod = 'week' | 'month' | 'year';
 export type StoryKind = 'opening' | 'insight' | 'outlier' | 'location' | 'journal' | 'spotlight' | 'taste' | 'return' | 'timeline' | 'rhythm' | 'achievement' | 'closing';
@@ -44,6 +45,10 @@ export interface StoryScene {
   editorialJob?: EditorialJob;
   /** Authored point of the scene, kept for subsequent editorial audits. */
   editorialThesis?: string;
+  /** Editorial ending mode; absent in saved pre-v10 issues. */
+  finaleMode?: WrappedFinaleMode;
+  /** The fresh, grounded final turn: kept for image direction and future audits. */
+  finalePayoff?: string;
   /** Immutable, app-verified analytic subject. Never generated as arbitrary numbers by the AI. */
   analytic?: VerifiedAnalytic;
   /** Optional AI-composed visual stage; absent/invalid = safe legacy layout. */
