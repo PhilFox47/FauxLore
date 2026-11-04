@@ -179,10 +179,15 @@ export function normalizeWrappedStory(raw: any, evidence: WrappedEvidence, media
         for (const phase of phases) seen.add(phase);
       }
       const missing = coverage.requiredPhases.filter(phase => !seen.has(phase));
-      if (missing.length || phaseSceneCount < coverage.minPhaseScenes) {
+      // A carefully argued ONE-scene cross-phase story is valid. Otherwise,
+      // multiple genuinely distinct interior scenes must cover multiple
+      // substantial phases; don't let several late-only scenes impersonate a
+      // full-month story. This preserves coverage without a scene quota.
+      const requiredSceneCount = Math.min(coverage.minPhaseScenes, middleScenes.length);
+      if (missing.length || phaseSceneCount < requiredSceneCount) {
         throw new Error('Monthly coverage missing ' + missing.join(', ') +
           (missing.length ? ' phase(s)' : ' independent phase-supported scenes') +
-          '. Anchor substantive scenes in the early, middle and late month facts, not just recent highlights.');
+          '. A single substantial cross-phase argument may cover the month without invented filler.');
       }
     }
     // Only cap LAST-WEEK-ONLY stories if that week itself did not dominate
