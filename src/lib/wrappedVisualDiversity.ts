@@ -137,7 +137,9 @@ function fallbackPlan(scene: ArtScene): WrappedVisualPlan {
 }
 
 /** With an invalid/missing AI plan, do NOT fall back to a generic self portrait. */
-export function stageWrappedVisualSequence<T extends ArtScene>(scenes: T[]): T[] {
+export function stageWrappedVisualSequence<T extends ArtScene>(
+  scenes: T[], options: { fillMissing?: boolean } = {},
+): T[] {
   const usedArchetypes = new Map<WrappedVisualArchetype, number>();
   const priorAction = new Set<string>();
   const priorCameras: WrappedCamera[] = [];
@@ -146,11 +148,21 @@ export function stageWrappedVisualSequence<T extends ArtScene>(scenes: T[]): T[]
   let tabletopCount = 0;
   let previousSignature = "";
   const totalIllustrated = scenes.filter(s => !infographic(s)).length;
+  const reflectiveIndices = scenes.map((s,i) => ({s,i}))
+    .filter(({s}) => !infographic(s) && s.composition?.visualPlan?.activityMode === "reflection" &&
+      s.composition.visualPlan.castMode !== "environment").map(({i}) => i);
+  const keepReflection = new Set(reflectiveIndices.sort((a,b) =>
+    Number(scenes[b].kind === "closing") - Number(scenes[a].kind === "closing") ||
+    Number(scenes[b].kind === "opening") - Number(scenes[a].kind === "opening") ||
+    a-b).slice(0,2));
   const allowedOwnerLeads = Math.max(2, Math.floor(totalIllustrated * 0.4));
 
   const output = scenes.map((scene, sceneIndex) => {
     if (infographic(scene)) return scene;
     const comp = scene.composition;
+    // Do not write an artificial composition back during the browser design
+    // pass; the server can still safely stage legacy stories at render time.
+    if (!comp && options.fillMissing === false) return scene;
     let plan: WrappedVisualPlan = {...(comp?.visualPlan || fallbackPlan(scene))};
     const setting = inferWrappedSetting(scene);
     plan.settingFamily = setting;
@@ -175,6 +187,13 @@ export function stageWrappedVisualSequence<T extends ArtScene>(scenes: T[]): T[]
         candidate !== "active-task-comedy" && !usedArchetypes.has(candidate)) || candidates[0];
     }
     if (plan.propStrategy === "tabletop") tabletopCount++;
+
+    if (plan.activityMode === "reflection" && plan.castMode !== "environment" &&
+        !keepReflection.has(sceneIndex)) {
+      plan.activityMode = "exploration";
+      plan.castMode = "environment";
+      plan.action = familyAction[setting];
+    }
 
     // Owner likeness is opt-in at render time; this cap only discourages
     // repetitive solo portrait staging in the visual plan. Canonical heroes
