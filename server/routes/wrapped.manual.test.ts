@@ -9,6 +9,9 @@ import { registerWrappedRoutes } from "./wrapped";
 test("opening an ungenerated historical month is read-only; old auto clients cannot start", async () => {
   const db = new Database(":memory:");
   initSchema(db);
+  // Wrapped generation requests are scoped to a real FK-backed account.
+  db.prepare("INSERT INTO users(id, username, passwordHash) VALUES (?, ?, ?)")
+    .run("phil", "phil", "test-only-hash");
   const app = express();
   app.use(express.json());
   let coverCalls = 0;
