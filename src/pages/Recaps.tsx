@@ -619,9 +619,9 @@ export function Recaps() {
     const existing = readRecap(currentRecap);
     if (!existing) return;
     try {
-    const opinionHistory = await DatabaseService.getMediaOpinionHistory(activeMedia.map(m => m.id));
-    const periodMedia = mediaOpinionsAsOf(activeMedia, opinionHistory, currentInterval.end);
-    const evidence = [
+      const opinionHistory = await DatabaseService.getMediaOpinionHistory(activeMedia.map(m => m.id));
+      const periodMedia = mediaOpinionsAsOf(activeMedia, opinionHistory, currentInterval.end);
+      const evidence = [
       'Period: ' + timeframe + ' ' + timeId,
       'Media touched: ' + JSON.stringify(periodMedia.map(m => ({
         title: m.title, mediaType: m.mediaType, genres: m.genres, userRating: m.userRating,
@@ -694,9 +694,9 @@ export function Recaps() {
       const opinionHistory = await DatabaseService.getMediaOpinionHistory(activeMedia.map(m => m.id));
       const periodMedia = mediaOpinionsAsOf(media, opinionHistory, currentInterval.end);
       const periodById = new Map(periodMedia.map(m => [m.id, m]));
-      const periodActiveMedia = activeMedia.map(m => periodById.get(m.id)!).filter(Boolean);
-      const periodCompletedMedia = completedMedia.map(m => periodById.get(m.id)!).filter(Boolean);
-      const periodDroppedMedia = droppedMedia.map(m => periodById.get(m.id)!).filter(Boolean);
+      const periodActiveMedia = activeMedia.map(m => periodById.get(m.id)!);
+      const periodCompletedMedia = completedMedia.map(m => periodById.get(m.id)!);
+      const periodDroppedMedia = droppedMedia.map(m => periodById.get(m.id)!);
       const periodInProgressMedia = periodActiveMedia.filter(m =>
         !completedMediaIds.has(m.id) && !droppedMediaIds.has(m.id));
       const periodTaste = buildTasteAlignment(periodActiveMedia);
