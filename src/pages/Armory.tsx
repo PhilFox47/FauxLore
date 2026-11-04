@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '../services/db';
 import { LootReveal } from '../components/LootReveal';
 import { GeneratedImage } from '../components/GeneratedImage';
+import { ArmoryCharacterPortrait } from '../components/ArmoryCharacterPortrait';
 
 import { MediaDetailModal } from '../components/MediaDetailModal';
 import { MediaFormModal } from '../components/MediaFormModal';
@@ -372,8 +373,8 @@ export function Armory() {
       <div className="flex-1 overflow-y-auto no-scrollbar p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-12">
           
-          {/* Character Paper Doll Section & Unlooted */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-12">
+          {/* Paper doll and manually generated full-body RPG character portrait */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start mb-8">
             
             {/* Paper Doll */}
             <div className="bg-gradient-to-br from-zinc-950 to-black border border-white/5 rounded-[2.5rem] p-5 sm:p-10 relative overflow-hidden shadow-[inset_0_2px_4px_rgba(255,255,255,0.02),0_20px_40px_-10px_rgba(0,0,0,0.8)]">
@@ -535,6 +536,11 @@ export function Armory() {
                </div>
             </div>
 
+            <ArmoryCharacterPortrait equipped={equipped} visualMode={settings?.visualSelfInsertMode} />
+          </div>
+
+          {/* Existing unlooted treasure section stays beneath the character loadout. */}
+          <div className="mb-12">
             {/* Unlooted Treasures */}
             <div className="space-y-6">
                <div>
