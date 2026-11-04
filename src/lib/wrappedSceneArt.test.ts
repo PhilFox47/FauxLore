@@ -220,7 +220,7 @@ test("closing tableau is one quiet symbolic epilogue, with no cards or literal m
     title: "A month in stories", dek: "A month about patience",
     scenes: [...scenes.slice(0, -1), closing],
   }, closing);
-  assert.match(prompt, /FULL-BLEED FINAL TABLEAU/);
+  assert.match(prompt, /FULL-BLEED CLOSING SCENE/);
   assert.match(prompt, /quiet lamp glows/);
   assert.match(prompt, /RIGHT 55% darker/);
   assert.match(prompt, /ONE visual metaphor/);
