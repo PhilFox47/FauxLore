@@ -4,6 +4,7 @@ import { FAUXLORE_RUNTIME_BUILD } from '../../src/lib/runtimeBuild';
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { normalizeDynamicScene } from "../../src/lib/dynamicScenes";
+import { finaleModes } from "../../src/lib/wrappedFinale";
 import { MAX_DATA_SLIDES, isDataLayout, isStrongSceneData, isStrongVerifiedAnalytic, normalizeEditorialJob, normalizeVerifiedAnalytic } from "../../src/lib/wrappedEditorial";
 import type { StoryPeriod } from "../../src/lib/storyDiscovery";
 
@@ -94,6 +95,13 @@ export function validateStory(raw: any, timeframe?: StoryPeriod): any {
       throw new Error("Weak or malformed analytics are not eligible for a data scene");
     }
     const editorialJob = normalizeEditorialJob(scene.editorialJob, scene.kind);
+    if (scene.finaleMode !== undefined && (scene.kind !== "closing" || !finaleModes.some(mode => mode === scene.finaleMode))) {
+      throw new Error("Invalid editorial finale mode");
+    }
+    if (scene.finalePayoff !== undefined &&
+        (scene.kind !== "closing" || !string(scene.finalePayoff, 450))) {
+      throw new Error("Invalid editorial finale payoff");
+    }
     const artworks = scene.artworks;
     if (artworks !== undefined && (!Array.isArray(artworks) || artworks.length > 6)) {
       throw new Error("Invalid artwork collection");
@@ -110,6 +118,8 @@ export function validateStory(raw: any, timeframe?: StoryPeriod): any {
       id, kind: scene.kind, eyebrow, title, body, evidenceIds: scene.evidenceIds,
       editorialJob,
       ...(string(scene.editorialThesis, 330) ? { editorialThesis: scene.editorialThesis.trim() } : {}),
+      ...(scene.finaleMode ? { finaleMode: scene.finaleMode } : {}),
+      ...(scene.finalePayoff ? { finalePayoff: scene.finalePayoff.trim() } : {}),
       ...(analytic ? { analytic } : {}),
       ...(string(scene.detail, 1200) ? { detail: scene.detail.trim() } : {}),
       ...(string(scene.quote, 3000) ? { quote: scene.quote.trim() } : {}),
