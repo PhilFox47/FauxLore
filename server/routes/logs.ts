@@ -401,8 +401,20 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
           WHERE id = ? AND userId = ?
         `).run(newTimestamp, newDelta, newNote, newThoughts, newThoughtPrompt, newEnjoyment, newImpact, newMoodlets, newLocation, logId, userId);
         if (hasReview) {
+          // A review entered at the end of Logging V2 MUST also be recorded in
+          // the opinion history, otherwise a later historical recap never sees
+          // when that personal verdict became available.
+          const before = db.prepare('SELECT userRating,userReview,dropReason FROM media WHERE id = ? AND userId = ?')
+            .get(existingLog.mediaId, userId) as {userRating:number|null;userReview:string|null;dropReason:string|null};
+          const recordedAt = new Date().toISOString();
           db.prepare('UPDATE media SET userRating = COALESCE(?, userRating), userReview = COALESCE(?, userReview), updatedAt = ? WHERE id = ? AND userId = ?')
-            .run(updates.userRating ?? null, updates.userReview ?? null, new Date().toISOString(), existingLog.mediaId, userId);
+            .run(updates.userRating ?? null, updates.userReview ?? null, recordedAt, existingLog.mediaId, userId);
+          const after = db.prepare('SELECT userRating,userReview,dropReason FROM media WHERE id = ? AND userId = ?')
+            .get(existingLog.mediaId, userId) as typeof before;
+          if (before.userRating !== after.userRating || before.userReview !== after.userReview) {
+            db.prepare('INSERT INTO media_opinion_history(userId,mediaId,recordedAt,userRating,userReview,dropReason) VALUES (?,?,?,?,?,?)')
+              .run(userId, existingLog.mediaId, recordedAt, after.userRating, after.userReview, after.dropReason);
+          }
         }
       })();
 
