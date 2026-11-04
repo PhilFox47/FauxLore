@@ -34,6 +34,19 @@ export const DatabaseService = {
     }
   },
 
+
+  async getMediaOpinionHistory(ids: string[]): Promise<import('../lib/mediaOpinionHistory').MediaOpinionSnapshot[]> {
+    const uniqueIds = [...new Set(ids)];
+    const history: import('../lib/mediaOpinionHistory').MediaOpinionSnapshot[] = [];
+    for (let index = 0; index < uniqueIds.length; index += 100) {
+      const chunk = uniqueIds.slice(index, index + 100);
+      const res = await apiFetch('/api/media/opinion-history?ids=' + encodeURIComponent(chunk.join(',')));
+      if (!res.ok) throw new Error('Could not load historical review data (' + res.status + ')');
+      history.push(...await res.json());
+    }
+    return history;
+  },
+
   async getMediaById(id: string): Promise<MediaItem | undefined> {
     try {
       const res = await apiFetch(`/api/media/${id}`);
