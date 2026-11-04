@@ -617,3 +617,60 @@ test("missing or throwing Codex resolvers never prevent image creation or retry 
     assert.equal((db.prepare("SELECT sceneArtStatus FROM wrapped_stories").get() as any).sceneArtStatus, "done");
   } finally { db.close(); }
 });
+
+test("only planned owner and in-world owner images receive a private face reference", async () => {
+  const db = fixture();
+  const sceneCalls: Array<{prompt:string;useFaceReference:boolean}> = [];
+  const coverCalls: Array<{prompt:string;useFaceReference:boolean}> = [];
+  try {
+    db.prepare("INSERT INTO settings(userId,visualSelfInsertMode,visualSelfDescription) VALUES(?,?,?)")
+      .run("user", "prefer", "short brown hair and a trimmed beard");
+    db.prepare("INSERT INTO settings(userId,visualSelfInsertMode,visualSelfDescription) VALUES(?,?,?)")
+      .run("another-user", "prefer", "a very different face");
+    db.prepare("INSERT INTO visual_self_references(userId,image,mime,updatedAt) VALUES(?,?,?,?)")
+      .run("user", Buffer.alloc(80), "image/png", new Date().toISOString());
+    db.prepare("INSERT INTO visual_self_references(userId,image,mime,updatedAt) VALUES(?,?,?,?)")
+      .run("another-user", Buffer.alloc(80, 8), "image/png", new Date().toISOString());
+    const plan = (castMode: string) => ({
+      activityMode: "action", castMode, camera: "wide",
+      action: "Actively navigate and interact with the fictional world's setting",
+    });
+    const issue = {
+      title: "Portrait as Participant", dek: "The user becomes part of the story.",
+      scenes: [
+        { id:"wrapped-0",kind:"opening",title:"Here I am",body:"A fictional gateway",
+          composition:{visualPlan:plan("self")} },
+        { id:"wrapped-1",kind:"spotlight",title:"Into the world",body:"The owner joins the action.",
+          composition:{visualPlan:plan("in-world-self")} },
+        { id:"wrapped-2",kind:"spotlight",title:"The hero",body:"A known fictional hero instead.",
+          composition:{visualPlan:plan("canon-character")} },
+        { id:"wrapped-3",kind:"closing",title:"Come home",body:"A personal final scene.",
+          composition:{visualPlan:plan("self")} },
+      ],
+    };
+    db.prepare("UPDATE wrapped_stories SET story=? WHERE userId='user'").run(JSON.stringify(issue));
+    const service = createWrappedCoverService({
+      db: db as unknown as Db, canSpendTokens:()=>true,
+      generateImage: async (_,prompt,options) => {
+        coverCalls.push({prompt,useFaceReference:!!options?.useFaceReference});
+        return "/uploads/cover-self.png";
+      },
+      generateSceneImage: async (_,prompt,options) => {
+        sceneCalls.push({prompt,useFaceReference:!!options?.useFaceReference});
+        return "/uploads/scene-" + sceneCalls.length + ".png";
+      },
+    });
+    assert.equal(service.queue("user",TIMEFRAME,PERIOD),true);
+    assert.equal(service.queueScenes("user",TIMEFRAME,PERIOD),true);
+    for (let n=0; n<10 && sceneCalls.length<4; n++) await settle();
+    assert.deepEqual(coverCalls.map(c=>c.useFaceReference),[true]);
+    assert.deepEqual(sceneCalls.map(c=>c.useFaceReference),[true,false,true,false],
+      "Original source hero and achievement art must never get the account owner's face");
+    assert.doesNotMatch(sceneCalls[1].prompt,/short brown hair|very different face/);
+    assert.doesNotMatch(sceneCalls[3].prompt,/short brown hair|very different face/);
+    db.prepare("UPDATE settings SET visualSelfInsertMode='never' WHERE userId='user'").run();
+    assert.equal(service.queueScenes("user",TIMEFRAME,PERIOD,true),true);
+    for (let n=0; n<10 && sceneCalls.length<8; n++) await settle();
+    assert.deepEqual(sceneCalls.slice(4).map(c=>c.useFaceReference),[false,false,false,false]);
+  } finally {db.close();}
+});
