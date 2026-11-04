@@ -8,6 +8,8 @@ export interface RecapMediaSignal {
   pages: number;
   pageShare: number;
   sessions: number;
+  firstSessionAt: string;
+  journalOrReview: boolean;
   impactCount: number;
   averageImpact: number | null;
   maxImpact: number | null;
@@ -53,7 +55,11 @@ export function analyzeRecapSalience(args: {
     const averageImpact = avg(impacts);
     return {
       mediaId: id, title: media.title, pages, pageShare: 0,
-      sessions: logs.length, impactCount: impacts.length,
+      sessions: logs.length,
+      firstSessionAt: logs.map(log => log.timestamp).sort()[0] || '',
+      journalOrReview: logs.some(log => !!log.thoughts?.trim()) ||
+        !!media.userReview?.trim(),
+      impactCount: impacts.length,
       averageImpact, maxImpact: impacts.length ? Math.max(...impacts) : null,
       enjoymentCount: enjoys.length, averageEnjoyment: avg(enjoys),
       journalCount: logs.filter(log => !!log.thoughts?.trim()).length,
@@ -69,7 +75,7 @@ export function analyzeRecapSalience(args: {
     // A 5/5 experience must remain visible even if only one session was logged.
     item.resonance = item.maxImpact !== null
       ? item.maxImpact >= 4 ? 'high' : item.averageImpact !== null && item.averageImpact >= 3 ? 'some' : 'low'
-      : item.journalCount > 0 || item.moodlets.some(m => m.id === 'moving' || m.id === 'thought-provoking')
+      : item.journalOrReview || item.moodlets.some(m => m.id === 'moving' || m.id === 'thought-provoking')
         ? 'some' : 'unknown';
     if (item.impactCount > 0 && item.maxImpact !== null && item.maxImpact >= 4 &&
       item.pageShare < 0.15) item.contrast = 'quiet-standout';
@@ -92,11 +98,22 @@ export function selectRecapEditorialCandidates(signals: RecapMediaSignal[], limi
   add(byResonance, 8);
   add([...signals].filter(s => !!s.contrast).sort((a, b) =>
     (a.contrast === 'quiet-standout' ? -1 : 1) - (b.contrast === 'quiet-standout' ? -1 : 1)), 4);
-  add([...signals].filter(s => s.journalCount > 0).sort((a, b) => b.journalCount - a.journalCount), 5);
+  add([...signals].filter(s => s.journalOrReview)
+    .sort((a, b) => b.journalCount - a.journalCount || a.pages - b.pages), 5);
   add([...signals].filter(s => s.moodlets.some(m => m.id === 'moving' || m.id === 'thought-provoking'))
     .sort((a, b) => b.moodlets.length - a.moodlets.length), 4);
   // Consumption still belongs in the story, but cannot monopolize its casting.
   add([...signals].sort((a, b) => b.pages - a.pages), 5);
+  // Even before Moodlets existed, previous months had meaningful minority
+  // media. Offer additional candidates distributed across the period, not only
+  // yet another top-five consumption list. These are POSSIBILITIES, not forced
+  // scenes: the Writer still needs an actual angle.
+  const minor = [...signals].filter(s => s.pages > 0 && s.pageShare < 0.15)
+    .sort((a, b) => a.firstSessionAt.localeCompare(b.firstSessionAt));
+  if (minor.length) {
+    const indices = [...new Set([0, Math.floor((minor.length - 1) / 2), minor.length - 1])];
+    add(indices.map(index => minor[index]), 3);
+  }
   return [...chosen.values()].slice(0, limit);
 }
 
@@ -111,6 +128,7 @@ export function recapSalienceBrief(signals: RecapMediaSignal[]): string {
       (s.impactCount ? '; reported impact ' + s.averageImpact + '/5 average, peak ' + s.maxImpact + '/5 in ' + s.impactCount + ' rated session(s)' : '; impact not rated (UNKNOWN, not low)') +
       (s.enjoymentCount ? '; enjoyment ' + s.averageEnjoyment + '/5 across ' + s.enjoymentCount + ' sessions' : '') +
       (s.journalCount ? '; ' + s.journalCount + ' personal journal reflection(s)' : '') +
+      (s.journalOrReview && !s.journalCount ? '; written work review on record by period end' : '') +
       (s.moodlets.length ? '; explicitly selected Moodlets: ' + s.moodlets.map(m => m.label + ' x' + m.count).join(', ') : '') +
       (s.contrast === 'quiet-standout' ? '; CONTRAST: little time, strong reported impact' :
         s.contrast === 'high-volume-low-impact' ? '; CONTRAST: high time investment, low reported impact' : '')),
