@@ -26,6 +26,7 @@ export function buildArmoryPortraitPrompt(
   items: ArmoryPortraitItem[], appearanceDescription: string,
   faceReference: boolean,
   referencedSlots: ArmorySlot[] = [],
+  ownerAllowed = true,
 ): string {
   const sorted = equippedPortraitItems(items);
   if (!sorted.length) throw new Error("Equip at least one item to create a character portrait.");
@@ -41,7 +42,9 @@ export function buildArmoryPortraitPrompt(
   const empty = ARMORY_SLOTS.filter(slot=>!sorted.some(item=>item.slot===slot));
   return [
     "CHARACTER PORTRAIT: a coherent SINGLE full-body RPG paper-doll illustration, VERTICAL 2:3 canvas (1024x1536).",
-    "Depict exactly ONE account owner as an adventurer posing confidently and naturally. Full body, face clearly recognizable and sharp, all equipped visible gear in frame, including footwear and held equipment. Sophisticated fantasy/RPG illustration, unified materials, lighting and a subtle evocative backdrop. The user is a real person imagined in an invented RPG setting, not a named franchise protagonist.",
+    ownerAllowed
+      ? "Depict exactly ONE account owner as an adventurer posing confidently and naturally. Full body, face clearly recognizable and sharp, all equipped visible gear in frame, including footwear and held equipment. Sophisticated fantasy/RPG illustration, unified materials, lighting and a subtle evocative backdrop. The user is a real person imagined in an invented RPG setting, not a named franchise protagonist."
+      : "Depict ONE original anonymous fantasy RPG avatar in a coherent full-body portrait, wearing the equipped gear. The account has disabled appearance sharing: do not guess or depict the account owner's real likeness.",
     faceReference
       ? "REFERENCE IMAGE #1 is the owner's ACTUAL FACE. Preserve the face shape, distinguishing features and hair while stylizing into the coherent RPG illustration. Do not copy the selfie pose, clothing or backdrop."
       : "No face photograph is supplied. Rely on the private appearance description below if present; do not claim exact facial likeness.",
