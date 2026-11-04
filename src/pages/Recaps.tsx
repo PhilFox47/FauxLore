@@ -1005,6 +1005,7 @@ ${wrappedContext || 'No background material.'}
         editorialPlan = await planRecapEditorial({
           apiKey: settings.nanoGptApiKey || '',
           model: creativeModel(settings),
+          persona: settings.aiPersona,
           timeframe,
           intervalLabel: formatIntervalLabel(),
           context: promptContext,
