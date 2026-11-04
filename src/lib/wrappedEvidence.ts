@@ -190,7 +190,7 @@ export function buildWrappedEvidence(args: {
   // Preserve a few genuine volume leaders for numeric coverage, but let
   // strongly felt minority titles compete for spotlight fact cards as well.
   const spotlightIds = [...new Set([
-    ...ranking.slice(0, 4).map(([id]) => id),
+    ...ranking.slice(0, 2).map(([id]) => id),
     ...editorialCandidates.map(candidate => candidate.mediaId),
   ])].slice(0, timeframe === 'year' ? 20 : 14);
   spotlightIds.forEach((id, i) => {
