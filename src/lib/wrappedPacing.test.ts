@@ -60,8 +60,10 @@ test('one cross-phase argument can cover a genuinely lean month without a second
     scenes:[starter,one,finisher]},data,[]);
   assert.equal(result.scenes.length,3);
   assert.equal(result.scenes[1].evidenceIds.length,3);
-  assert.throws(()=>normalizeWrappedStory({title:'Bad',dek:'Late only',
-    scenes:[starter,{...one,evidenceIds:['month-late']},finisher]},data,[]),/Monthly coverage missing|Story must find at least two/);
+  // Volume-only early/middle phases must not force an extra fake angle.
+  const lateOnly=normalizeWrappedStory({title:'Just the one important late detail',dek:'One honest thesis',
+    scenes:[starter,{...one,evidenceIds:['month-late']},finisher]},data,[]);
+  assert.equal(lateOnly.scenes.length,3);
 });
 
 test('prose length is content-responsive, not forced to one uniform word count',()=>{
@@ -89,4 +91,18 @@ test('one extraordinary late personal memory survives a month of routine early/m
     scenes:[starter,middle,{...finisher,evidenceIds:['journal-finale']}]},data,[]);
   assert.equal(wrapped.scenes.length,3);
   assert.deepEqual(wrapped.scenes[1].evidenceIds,['journal-finale']);
+});
+
+
+test('a lean story still cannot ignore a different phase with a documented personal memory',()=>{
+  const data:WrappedEvidence={...base([
+    {id:'journal-early',kind:'journal',phase:'early',title:'Early friendship',
+      mediaId:'friends',quote:'A day with people I care about.',evidence:'On Sep 4 we met in Discord for a shared celebration.'},
+    {id:'journal-late',kind:'journal',phase:'late',title:'Later finale',
+      mediaId:'ffxiv',quote:'An unforgettable MSQ finale.',evidence:'On Sep 27 the FC finished the MSQ together.'},
+  ]),monthlyCoverage:{requiredPhases:['early','late'],lastWeekShare:0.25,minPhaseScenes:2}};
+  const onlyLate={kind:'insight',title:'Late finale',body:'The logged Free Company ending was a personal milestone.',
+    evidenceIds:['journal-late'],design};
+  assert.throws(()=>normalizeWrappedStory({title:'Missing a real memory',dek:'Selective',
+    scenes:[starter,onlyLate,finisher]},data,[]),/Monthly coverage missing/);
 });
