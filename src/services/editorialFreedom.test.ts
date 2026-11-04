@@ -4,6 +4,8 @@ import { getPersonaDescription, getPersonaEditorialFreedom } from '../lib/person
 import { generateAiWrapped } from './wrappedAi';
 import { generateStructuredRecap, planRecapEditorial } from './recapAi';
 import { selectWrappedEditorialMemory } from '../lib/wrappedEditorialMemory';
+import { buildWrappedEvidence } from '../lib/wrappedEvidence';
+import type { ProgressLog, MediaItem } from '../types/schema';
 import type { WrappedEvidence } from '../lib/wrappedEvidence';
 
 const evidence:WrappedEvidence={
@@ -100,4 +102,38 @@ test('Deep Dive editorial planning and prose both receive the selected Dungeon l
     timeframe:'month',intervalLabel:'September 2026',context:'A logged evening.',
   }));
   assert.doesNotMatch(defaultVoice.system,/OWNER of the courtroom/);
+});
+
+
+test('September Director prompt separates issue/Porcupine bookkeeping from a meaningful Endwalker Journal',async()=>{
+  const media:MediaItem[]=[
+    {id:'comic',title:'Superhero Issues',mediaType:'Comic',status:'Active',
+      genres:[],tags:[],tropes:[],createdAt:'2026-01-01',updatedAt:'2026-09-30'},
+    {id:'ffxiv',title:'Final Fantasy XIV',mediaType:'Game',status:'Active',
+      genres:[],tags:[],tropes:[],createdAt:'2026-01-01',updatedAt:'2026-09-30'},
+  ];
+  const logs:ProgressLog[]=[
+    {id:'comic1',mediaId:'comic',timestamp:'2026-09-12T19:00:00Z',
+      metricType:'pagesRead',delta:25,note:'Issues #12-14: Porcupine fight, next up #15.'},
+    {id:'ffxiv1',mediaId:'ffxiv',timestamp:'2026-09-27T19:00:00Z',
+      metricType:'playtimeHours',delta:7.7,note:'Endwalker final MSQ',
+      thoughts:'Finishing Endwalker with the entire Free Company was a core memory.',
+      sessionImpact:5,moodlets:['moving','social']},
+  ];
+  const period=buildWrappedEvidence({timeframe:'month',timeId:'2026-09',
+    logs,history:logs,media});
+  assert.ok(!period.facts.some(f=>f.evidence.includes('Porcupine')),'Comic note must not be first-class evidence');
+  assert.ok(period.backgroundNotes?.some(n=>n.context.includes('Porcupine')));
+  assert.ok(period.facts.some(f=>f.kind==='journal'&&f.evidence.includes('core memory')));
+  const prompt=await captureFailingRequest(()=>generateAiWrapped({
+    apiKey:'test',model:'test-model',persona:'dungeon-system',evidence:period,media,
+  }));
+  assert.match(prompt.system,/SOURCE HIERARCHY.*Journal Thoughts/);
+  assert.match(prompt.system,/comic note saying|Porcupine fight/i);
+  assert.match(prompt.system,/EDITORIAL TRANSFER/);
+  assert.match(prompt.user,/PRIMARY VERIFIED EVIDENCE CARDS/);
+  assert.match(prompt.user,/ORGANIZATIONAL SESSION NOTES, BACKGROUND ONLY/);
+  const beforeNotes=prompt.user.split('ORGANIZATIONAL SESSION NOTES, BACKGROUND ONLY')[0];
+  assert.doesNotMatch(beforeNotes,/Porcupine/);
+  assert.match(prompt.user,/Finishing Endwalker.*core memory/);
 });
