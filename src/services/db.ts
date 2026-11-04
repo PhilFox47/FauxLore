@@ -2,6 +2,7 @@ import { MediaItem, ProgressLog, MetricType, MediaType, Artifact, MediaCodex } f
 import type { FlavorText } from '../lib/flavorTexts';
 import type { GeneratedAchievement, AchievementDraft, AchievementPeriod } from '../lib/generatedAchievements';
 import type { WrappedStory } from './wrappedAi';
+import type { WrappedEditorialMemoryItem } from '../lib/wrappedEditorialMemory';
 import { v4 as uuidv4 } from 'uuid';
 import { FAUXLORE_RUNTIME_BUILD } from '../lib/runtimeBuild';
 
@@ -300,6 +301,18 @@ export const DatabaseService = {
     const res = await apiFetch('/api/wrapped/' + timeframe + '/' + encodeURIComponent(timeId));
     if (!res.ok) throw new Error('Could not load Wrapped story (' + res.status + ')');
     return res.json();
+  },
+
+  /** Only call during a user-initiated Wrapped generation, not navigation. */
+  async getWrappedEditorialMemory(
+    timeframe:'week'|'month'|'year',timeId:string,mediaIds:string[]=[],
+  ):Promise<WrappedEditorialMemoryItem[]> {
+    const ids=[...new Set(mediaIds)].slice(0,120);
+    const res=await apiFetch('/api/wrapped/'+timeframe+'/'+encodeURIComponent(timeId)+
+      '/editorial-memory?ids='+encodeURIComponent(ids.join(',')),{cache:'no-store'});
+    if(!res.ok) throw new Error('Could not read editorial memory ('+res.status+')');
+    const data=await res.json();
+    return Array.isArray(data?.memory)?data.memory:[];
   },
 
   /** Requires an explicit user action. Never invoke from loading effects. */
