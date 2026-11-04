@@ -166,7 +166,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
     return JSON.parse(text);
   }
 
-  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = "", frame: ImageFrame = "square", referenceDataUrl: string | null = null, fallbackPrompt: string | null = null, intent: "boss" | "loot" | "wrapped" | "wrapped-scene" = frame === "square" ? "loot" : "boss"): Promise<string> {
+  async function internalGenerateImageWithNanoGpt(apiKey: string, prompt: string, extraNegative: string = "", frame: ImageFrame = "square", referenceDataUrl: string | string[] | null = null, fallbackPrompt: string | null = null, intent: "boss" | "loot" | "wrapped" | "wrapped-scene" | "armory-portrait" = frame === "square" ? "loot" : "boss", privateOutput = false): Promise<string> {
     const cfg = readImageConfig();
     const negativePrompt = [cfg.negative, extraNegative].filter(Boolean).join(", ");
     const framedPrompt = withImageFrame(prompt, frame);
@@ -219,6 +219,12 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
           const actual = imageSize(buffer);
           if (!actual) throw new Error("CLIProxyAPI returned invalid image bytes.");
           const ext = ({ png: ".png", jpg: ".jpg", jpeg: ".jpg", webp: ".webp" } as Record<string, string>)[String(actual.type).toLowerCase()] || ".png";
+          if (privateOutput) {
+            if (!imageFrameMatches(frame, actual.width, actual.height)) {
+              throw new Error("Portrait image model returned the wrong aspect ratio.");
+            }
+            return `data:image/${actual.type === "jpg" ? "jpeg" : actual.type};base64,${buffer.toString("base64")}`;
+          }
           const fileName = `${uuidv4()}${ext}`;
           fs.writeFileSync(path.join(aiImagesDir, fileName), buffer);
           const got = `${actual.width}x${actual.height}`;
@@ -321,6 +327,12 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
       const ext = ({ webp: ".webp", png: ".png", jpg: ".jpg", jpeg: ".jpg", gif: ".gif" } as Record<string, string>)[
         String(actual?.type || "").toLowerCase()
       ] || ".webp";
+      if (privateOutput) {
+        if (!actual || !imageFrameMatches(frame, actual.width, actual.height)) {
+          throw new Error("Portrait image model returned an invalid or incorrectly framed image.");
+        }
+        return `data:image/${actual.type === "jpg" ? "jpeg" : actual.type};base64,${buffer.toString("base64")}`;
+      }
       const fileName = `${uuidv4()}${ext}`;
       const filePath = path.join(aiImagesDir, fileName);
 
@@ -328,6 +340,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
 
       return `/uploads/ai-images/${fileName}`;
     } catch (e) {
+      if (privateOutput) throw e;
       console.error("Failed to store image locally, falling back to remote URL", e);
       return remoteUrl;
     }
@@ -565,6 +578,20 @@ Return ONLY the final image prompt text, nothing else.`;
     return readUserFaceReference(db, userId);
   }
 
+  /** Private, portrait-format render; bytes never enter the public /uploads folder. */
+  async function generateArmoryPortraitImage(userId: string, prompt: string, references: string[]): Promise<string> {
+    const config = getAiConfig(db, userId);
+    if (!config) throw new Error("AI image provider is not configured.");
+    const selected = readImageConfig();
+    // NanoGPT currently uses text-only; the visual references are offered
+    // only to compatible GPT Image edit models through CLIProxyAPI.
+    const usable = selected.useCli && /^gpt-image-/i.test(selected.model) ? references : [];
+    return internalGenerateImageWithNanoGpt(
+      config.apiKey, prompt, "lettering, logos, extra people, broken equipment, multiple panels",
+      "portrait-2:3", usable.length ? usable : null, null, "armory-portrait", true,
+    );
+  }
+
   /** One standalone 3:2 title illustration for an entire Wrapped story. */
   async function generateWrappedCoverImage(userId: string, prompt: string, options?: {useFaceReference?: boolean}): Promise<string> {
     const config = getAiConfig(db, userId);
@@ -632,5 +659,6 @@ Return ONLY the final image prompt text, nothing else.`;
     generateArtifactImageBackground,
     generateWrappedCoverImage,
     generateWrappedSceneImage,
+    generateArmoryPortraitImage,
   };
 }
