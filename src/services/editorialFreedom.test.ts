@@ -60,7 +60,7 @@ test('Dungeon System AI openly owns bad takes but real events still require rece
   assert.match(persona,/opinions and your ridiculous THEORIES have no leash/);
   assert.match(directive,/wild, knowingly unfair THEORIES/);
   assert.match(directive,/No constant/);
-  assert.match(directive,/Do not invent real events/);
+  assert.match(directive,/Never present a fictional or hypothetical EVENT/);
   assert.match(directive,/not personal vulnerability/i);
   assert.doesNotMatch(getPersonaEditorialFreedom('witty'),/OWNER of the courtroom/);
 });
