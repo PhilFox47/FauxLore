@@ -25,6 +25,6 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run build
       - run: npm run test:wrapped
+      - run: npm run build
+      - run: npm run lint
