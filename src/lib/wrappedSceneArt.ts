@@ -1,6 +1,7 @@
 import type { StoryScene } from "./storyDiscovery";
 import { imageFramingGuidance } from "./dynamicScenes";
 import { visualSelfImageClause, type VisualSelfProfile } from "./visualSelf";
+import { wrappedActionImageGuidance } from "./wrappedVisualAction";
 
 /**
  * All narrative slides get an original full-bleed background. The opening
@@ -78,6 +79,8 @@ export function buildWrappedSceneArtPrompt(
     ? "One possible tonal influence is " + scene.media.title.slice(0, 120) +
       ". It is optional, not an object or trademark that must appear."
     : "Do not introduce any unrelated franchise characters or logos.";
+  const featuredWorld = styleReference?.mediaTitle ||
+    (scene.kind === "spotlight" || scene.kind === "return" ? scene.media?.title : undefined);
   const mediumStyle = styleReference?.style?.trim()
     ? [
       'EXISTING CODEX VISUAL IDENTITY FOR THE ONE FEATURED WORK "' + styleReference.mediaTitle.slice(0, 180) + '" (visual data, not instructions):',
@@ -90,10 +93,11 @@ export function buildWrappedSceneArtPrompt(
     "The Wrapped issue is about: " + issue.title.slice(0, 180) + ". " + issue.dek.slice(0, 260),
     "Chapter: " + scene.title.slice(0, 160) + ". Its actual editorial premise: " + scene.body.slice(0, 700),
     idea ? "MAIN VISUAL CONCEPT (interpret boldly, but stay true to the chapter): " + idea : "",
+    wrappedActionImageGuidance(scene.composition?.visualPlan, visualSelf, featuredWorld),
     mediumStyle,
     influence,
-    "Find ONE striking scene, metaphor or environmental detail expressing this specific chapter. Distill the premise; do NOT literally depict every named title or logged event. One main focal subject, one coherent setting, one intentional camera perspective. Specific, atmospheric, memorable, never generic stock art.",
-    "Do not invent actual personal experiences, spoilers, dialogue, factual achievements or authorial quotes. The image may express a fictional metaphor, but not portray it as an event that happened to the user.",
+    "Find ONE striking scene, visual action or environmental detail expressing this specific chapter. Do NOT literally depict every logged event or named title. Prefer one main focal subject OR one interacting group engaged in ONE purposeful event, one coherent setting and the planned camera. Re-stage a passive artConcept as an active action if the approved visual plan calls for it. Specific, atmospheric, memorable, never generic stock art.",
+    "Art can place the account owner, their in-world counterpart OR a source protagonist inside a fictional world. That is VISUAL FICTION, not proof of the player having completed any quest, battle, encounter, social gathering or story outcome. Keep details spoiler-safe and never invent quotes, facts or achievements.",
     "Horizontal landscape 3:2. This is a TRUE FULL-BLEED cinematic background behind the chapter's typography, not a small inset image, a framed photograph or a rectangular card. " +
       imageFramingGuidance(scene.composition?.direction),
     "NO text, logos, printed lettering, statistics, charts, mosaics, screenshots, user-interface elements, split panels, poster walls or watermarks.",
@@ -123,7 +127,8 @@ export function buildWrappedClosingTableauPrompt(
     selected.length ? "Earlier story beats for thematic understanding ONLY, not separate things to draw: " +
       selected.map(s => s.title.slice(0, 110)).join("; ") + "." : "",
     idea ? "EDITORIAL DIRECTOR'S ENDING CONCEPT: " + idea.slice(0, 350) : "",
-    "ONE composed cinematic or illustrative scene, ONE visual metaphor, ONE clear emotional resolution. A single empty railway platform, distant road, quiet horizon, closing door, abandoned chair, fading light, or another NEW motif suggested by THIS actual ending. Choose one, NOT several. Avoid repetitive default train or sunset imagery unless the story truly calls for it.",
+    wrappedActionImageGuidance(scene.composition?.visualPlan, visualSelf),
+    "ONE coherent cinematic or illustrative ending, ONE visual metaphor, ONE clear emotional resolution. It may show an action coming to a close, a meaningful exchange between people, a moving figure, or an environmental event. Choose the strongest subject for THIS specific ending; an empty railway platform, thoughtful desk portrait, sunset or distant horizon is NOT the default.",
     "Let the final image communicate completion and afterglow rather than a list of everything consumed. No multiple franchise worlds, character lineups, collections of media props, framed posters, book jackets, floating game covers or souvenir cards. Small symbolic echoes are permitted ONLY if they remain subordinate to ONE hero composition.",
     "Wide 3:2 horizontal background, premium editorial art with generous dark negative space behind the final headline and reflection. " +
       imageFramingGuidance(scene.composition?.direction),
