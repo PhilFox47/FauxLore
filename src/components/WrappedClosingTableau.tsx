@@ -1,6 +1,7 @@
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import type { StoryScene } from "../lib/storyDiscovery";
+import { wrappedProseTier } from "../lib/wrappedPacing";
 
 /**
  * The final image is a single visual epilogue, not a souvenir shelf.
@@ -14,6 +15,10 @@ export function WrappedClosingTableau({ scene, imageUrl, number, total, onDeepDi
   onDeepDive: () => void;
 }) {
   const reduced = !!useReducedMotion();
+  const substantial = wrappedProseTier(scene.body) === "substantial";
+  const titleSize = substantial || scene.title.length >= 65
+    ? "text-4xl sm:text-5xl lg:text-7xl"
+    : "text-5xl sm:text-6xl lg:text-8xl";
   const direction = scene.composition?.direction;
   const textSide = direction?.textSide || "center";
   const alignment = textSide === "right" ? "ml-auto text-right items-end"
@@ -42,7 +47,8 @@ export function WrappedClosingTableau({ scene, imageUrl, number, total, onDeepDi
           {String(number).padStart(2, "0")} / {String(total).padStart(2, "0")}
         </span>
       </div>
-      <div className={"flex-1 flex flex-col justify-center gap-8 py-12 " + alignment}>
+      <div className={"flex-1 flex flex-col justify-center " +
+        (substantial ? "gap-5 py-8 " : "gap-8 py-12 ") + alignment}>
         <motion.div initial={reduced ? false : { scaleX: 0, opacity: 0 }}
           animate={{ scaleX: 1, opacity: 1 }}
           transition={{ duration: reduced ? 0 : .9, delay: reduced ? 0 : .35 }}
@@ -50,13 +56,14 @@ export function WrappedClosingTableau({ scene, imageUrl, number, total, onDeepDi
         <motion.h2 initial={reduced ? false : { opacity: 0, y: 25 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: reduced ? 0 : .75, delay: reduced ? 0 : .2 }}
-          className="max-w-5xl text-5xl sm:text-6xl lg:text-8xl font-black leading-[1.04] tracking-[-.065em] text-balance drop-shadow-[0_4px_30px_rgba(0,0,0,.8)] [overflow-wrap:anywhere]">
+          className={"max-w-5xl font-black leading-[1.04] tracking-[-.065em] text-balance drop-shadow-[0_4px_30px_rgba(0,0,0,.8)] [overflow-wrap:anywhere] " + titleSize}>
           {scene.title}
         </motion.h2>
         <motion.p initial={reduced ? false : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: reduced ? 0 : .7, delay: reduced ? 0 : .45 }}
-          className="max-w-3xl text-base sm:text-lg lg:text-xl leading-[1.7] font-medium text-white/90 whitespace-pre-line drop-shadow-[0_2px_12px_rgba(0,0,0,.8)]">
+          className={"max-w-3xl font-medium text-white/90 whitespace-pre-line drop-shadow-[0_2px_12px_rgba(0,0,0,.8)] " +
+            (substantial ? "text-base sm:text-lg leading-[1.58]" : "text-base sm:text-lg lg:text-xl leading-[1.7]")}>
           {scene.body}
         </motion.p>
         <motion.button type="button" onClick={onDeepDive}
