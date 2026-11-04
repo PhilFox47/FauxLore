@@ -130,7 +130,7 @@ test('September Director prompt separates issue/Porcupine bookkeeping from a mea
   }));
   assert.match(prompt.system,/SOURCE HIERARCHY.*Journal Thoughts/);
   assert.match(prompt.system,/comic note saying|Porcupine fight/i);
-  assert.match(prompt.system,/EDITORIAL TRANSFER/);
+  assert.match(prompt.system,/editorial TRANSFER/i);
   assert.match(prompt.user,/PRIMARY VERIFIED EVIDENCE CARDS/);
   assert.match(prompt.user,/ORGANIZATIONAL SESSION NOTES, BACKGROUND ONLY/);
   const beforeNotes=prompt.user.split('ORGANIZATIONAL SESSION NOTES, BACKGROUND ONLY')[0];
