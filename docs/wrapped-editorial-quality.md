@@ -4,21 +4,22 @@
 
 A Wrapped or Deep Dive must not mistake quantity for personal importance. A short, high-impact session or a handwritten journal about a shared experience should have a real chance to become the most substantial event of the period, regardless of Master Pages. A narrative slide should **make one point**, not simply re-list activity that was already logged.
 
-## P0: Reliable journal and Notes evidence
+## P0: Reflective Journal Thoughts and organizational Notes are DIFFERENT
 
-- Logs keep `note` (user-authored session Notes) and `thoughts` (explicit Journal Thoughts) distinct. **Do not silently migrate, reinterpret or label a Note as a Journal.**
-- `src/lib/personalMoments.ts` scores candidate messages from the period's actual logs using available **explicit** evidence: Impact, selected Moodlets, length, and concrete recorded language. These determine **selection**, not new factual claims.
-- `buildWrappedEvidence` now creates personal journal and authored Notes cards **before** volume, location and statistics. This prevents the 90-card limit from displacing journal entries. It also removes the old `slice(0,20)` selection of chronological Notes.
-- Notes are called **user-authored session notes**, not only administrative labels. Their verbatim content can support interpretation without being presented as a Journal-field quote.
-- Month-phase journal highlights choose the most significant written reflections from each substantive period phase rather than the first two in timestamp order.
-- Deep Dive also uses the shared moment selector; this avoids handing the Writer 140 random Notes while losing a late-month, high-impact personal memory.
-- The stored data and historical record are never rewritten by this editorial selection. Missing writing remains unknown and cannot be invented.
+- `logs.thoughts` = **Journal Thoughts**, intentionally written subjective reflections about the user's experience. Select and promote these before Master Pages, using explicit Impact and Moodlets to help the selection.
+- `logs.note` = **Notes**, usually organizational bookmarks: issue/chapter/episode numbers, in-fiction encounters, companions, session landmarks. These can provide factual context but must NOT be treated as emotional opinions or inherently meaningful events. A Porcupine fight recorded in Notes does not show that it mattered to the player.
+- `src/lib/personalMoments.ts` separately provides `selectPersonalMoments` (Journals ONLY) and `selectSessionContextNotes` (strictly capped organizational context). It never promotes Notes to personal writing based on length, plot-keyword mentions or Impact signals.
+- `buildWrappedEvidence` reserves early evidence for reflective Journals. It **does not create** `reference-*` insight cards from Notes; up to 8 Notes for a week/month, 14 for a year, with a per-media cap, appear as `backgroundNotes` outside the citable Evidence Card collection. This prevents note-only slides and notes from expanding the story's pacing budget.
+- Deep Dive uses the same distinction: a dedicated high-priority Journal reflection section and a tiny, separately labeled organizational Note appendix. The AI planner and writers are told to use notes only to clarify an independently meaningful argument.
+- Monthly phase highlights select significant Journal Thoughts rather than automatically using the first two records. A large chronological pile of ordinary Notes cannot bury a late high-impact Journal.
 
 ### September regression
 
-`src/lib/personalMoments.test.ts` reproduces 160 routine September logs plus two Final Fantasy XIV sessions, including a September 27 Endwalker MSQ conclusion with the Free Company. It checks both original `Notes` and edited `Journal Thoughts` modes: real wording, Impact 5 and Moving/Social appear as source evidence.
+`src/lib/personalMoments.test.ts` supplies 160 ordinary Notes and two Endwalker sessions. It verifies that a real Journal from September 27 (MSQ finale with the entire FC, high Impact and Moving/Social) receives first-class editorial evidence, while even a detailed Note stays in the background. Explicit Moodlets and Impact remain sourced separately.
 
-`server/routes/logs.moodlets.test.ts` additionally verifies the actual SQLite HTTP `PUT → GET → buildWrappedEvidence` path after a session is moved from Notes to Journal Thoughts.
+A separate Comic regression verifies that 'Porcupine fight' and specific Issue numbers are **not** citable insight cards. The Wrapped thesis gate rejects bare issue/plot inventories, and the AI prompt's evidence and background sections remain distinct.
+
+`server/routes/logs.moodlets.test.ts` still verifies the real HTTP Notes-to-Journal editing and persistence path.
 
 ## P1: Claim-first editorial scenes
 
