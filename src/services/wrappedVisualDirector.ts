@@ -26,6 +26,10 @@ export function wrappedVisualDirectorBrief(
     sceneId: scene.id,
     kind: scene.kind,
     editorialJob: scene.editorialJob || editorialJobFromKind(scene.kind),
+    // The entire ending is an editorial decision, not an obligatory quiet
+    // afterglow. Preserve its exact mode and payoff for independent imagery.
+    finaleMode: scene.kind === "closing" ? scene.finaleMode || null : null,
+    finalePayoff: scene.kind === "closing" ? scene.finalePayoff || null : null,
     verifiedEvidenceIds: scene.evidenceIds,
     title: scene.title,
     body: scene.body.slice(0, 900),
@@ -81,6 +85,7 @@ export function wrappedVisualDirectorBrief(
     "DATA means a significant verified comparison is the HERO. Choose presentation:'data' and stat elements ONLY when canUseData=true AND the difference is editorially important. A 33% to 49% increase does not justify a whole chart! Do not recycle claims across scenes. Use cinematic full-bleed art for ALL non-data scenes, including a quietly reflective text-led beat. Old typography/composed values may exist for compatibility, but new narrative visuals MUST be cinematic. Do not add official covers or image insets.",
     "TYPOGRAPHY is a deliberately quiet editorial treatment, but when it is narrative rather than a verified infographic it STILL needs its own original full-bleed atmospheric background. Typography is never a reason to omit an image for a non-data beat.",
     "Only verified INFOGRAPHIC data scenes get intentional graphical/typographic breathing room WITHOUT generated background art. A narrative quote, location, verdict, insight, timeline, reflection, spotlight or return remains image-led even if the text is quiet. Avoid stacked coloured cards, floating media covers, ornamental circles, poster walls and title/body text disconnected by empty gaps.",
+    "FINALE IS NOT ALWAYS TENDER: For a closing with finaleMode, stage exactly THAT mode and its payoff. A ruthless-roast or dungeon-verdict can look theatrical, triumphant, insulting, absurd or darkly funny. A sharp-reversal can be kinetic. An earned-sincerity may be genuinely still, but do not impose the same dim lamp, empty train platform, sunset, open door or sentimental fade-out on every Wrapped. Vary the staging based on the actual text; the modes are editorial intents, not a required rotation.",
     "THE STORY'S MEANING COMES FIRST: A visual device must express a specific observation, surprising connection, significant contrast, or earned emotional payoff. A scene about a train/book crossover can be a cinematic train emerging from an open novel; a media-share comparison should let real percentages dominate. Decorative piles of the week's many media objects are not an idea.",
     "The old coordinate elements are still REQUIRED for backwards compatibility and reliable fallback, but in cinematic/data/typography modes the renderer prioritizes the new direction plan. Give exactly ONE title and ONE body element with readable boxes, include accurate verified stat/beat/media references only when they improve the point. Avoid crowding. Never overlap title/body boxes.",
     "Allowed elements: title, body, eyebrow, media (mediaId must be from imageMediaIds), title-art (opening only), scene-art (only when canGenerateOriginalSceneArt=true), quote (only when hasVerifiedQuote), stat (verifiedBars index), beat (verifiedBeats index), shape (orb|ring|line|panel|pill). Every element needs id (unique ASCII), type, box:{x,y,w,h} on 0-100 canvas, size:sm|md|lg|xl, tone:primary|secondary|accent, motion:none|fade|rise|slide|pop|float|pulse, delay:0..3. No URLs, CSS, HTML, JS or invented text. Max 11 elements.",
