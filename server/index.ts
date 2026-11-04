@@ -12,6 +12,7 @@ import { getIgdbToken } from "./integrations/igdb";
 import { initSchema } from "./db/schema";
 import { runMigrations } from "./db/migrations";
 import { initDiagnostics, captureConsole, httpDiagnostics, diag } from "./lib/diagnostics";
+import { FAUXLORE_RUNTIME_BUILD } from "../src/lib/runtimeBuild";
 import { safeJsonParse, normalizeMedia } from "./lib/normalize";
 import { recalcTaxonomyUsageCounts } from "./lib/taxonomyCounts";
 import { createGetAuthUser } from "./services/auth";
@@ -92,11 +93,19 @@ async function startServer() {
   // nobody was watching.
   initDiagnostics(db);
   captureConsole();
-  diag.info("boot", "Server starting", { node: process.version, env: process.env.NODE_ENV || "development" });
+  diag.info("boot", "Server starting", { node: process.version, env: process.env.NODE_ENV || "development", runtimeBuild: FAUXLORE_RUNTIME_BUILD });
 
   // Registered after the database exists so the very first request cannot land
   // before there is somewhere to record it.
   app.use(httpDiagnostics());
+
+  // A diagnostic fingerprint of the actual server that answered the request.
+  // Accessible without secrets, and intentionally never cached.
+  app.get("/api/runtime-build", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ build: FAUXLORE_RUNTIME_BUILD, manualWrappedGeneration: true });
+  });
+
 
   const { createDatabaseBackup } = createBackupManager({ dbPath, backupsDir });
 
@@ -381,6 +390,13 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
+    // index.html revalidates on deploy; Vite asset names are content hashed.
+    app.use((req, res, next) => {
+      if (req.path === "/" || req.path === "/index.html" || req.path === "/recaps") {
+        res.setHeader("Cache-Control", "no-store, max-age=0");
+      }
+      next();
+    });
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
