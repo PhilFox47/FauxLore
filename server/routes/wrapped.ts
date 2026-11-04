@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createManualWrappedIntentGate } from '../lib/manualWrappedIntent';
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { normalizeDynamicScene } from "../../src/lib/dynamicScenes";
@@ -145,6 +145,7 @@ export function validateStory(raw: any, timeframe?: StoryPeriod): any {
 
 export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
   const { db, getAuthUser, activity, queueWrappedCoverArt, queueWrappedSceneArtwork } = ctx;
+  const manualIntent = createManualWrappedIntentGate();
   const findSaved = db.prepare(
     "SELECT story, generatedAt, coverArtUrl, coverArtStatus, sceneArtJson, sceneArtStatus FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=?",
   );
@@ -177,10 +178,8 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
       if (!userId) return;
       const { timeframe, timeId } = req.params;
       if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
-      // Older stored issues receive exactly one cover when next opened.
-      // A GET never retries failures or spends tokens for dormant accounts.
-      queueWrappedCoverArt(userId, timeframe, timeId);
-      queueWrappedSceneArtwork(userId, timeframe, timeId);
+      // Navigation must be read-only. No story, cover or chapter artwork jobs
+      // may be scheduled by merely viewing an earlier week/month/year.
       res.json(savedStory(userId, timeframe, timeId));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -289,13 +288,27 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  /** A deliberate Generate Recap / Reroll click grants one short-lived start. */
+  app.post("/api/wrapped/:timeframe/:timeId/intent", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      if (!activity.requireActive(userId, res)) return;
+      const { timeframe, timeId } = req.params;
+      if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
+      res.json({ intentId: manualIntent.issue({ userId, timeframe, timeId }) });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   app.post("/api/wrapped/:timeframe/:timeId/start", (req, res) => {
     try {
       const userId = getAuthUser(req, res);
       if (!userId) return;
       const { timeframe, timeId } = req.params;
       if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
-      const requestId = randomUUID();
+      if (!activity.requireActive(userId, res)) return;
+      const requestId = manualIntent.begin({ userId, timeframe, timeId }, req.body?.intentId);
+      if (!requestId) return res.status(428).json({ error: "Wrapped generation requires an explicit Generate Recap click." });
       db.prepare("INSERT INTO wrapped_requests(userId,timeframe,timeId,requestId) VALUES(?,?,?,?) " +
         "ON CONFLICT(userId,timeframe,timeId) DO UPDATE SET requestId=excluded.requestId")
         .run(userId, timeframe, timeId, requestId);
@@ -311,6 +324,9 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
       if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
       const { requestId, story, timeZone } = req.body || {};
       if (!string(requestId, 100)) return res.status(400).json({ error: "Missing generation token" });
+      if (!manualIntent.canSave({ userId, timeframe, timeId }, requestId)) {
+        return res.status(428).json({ error: "Wrapped save requires a manually authorized generation." });
+      }
       // Client timezone matches the evidence cards' browser-local period bounds.
       // Never allow an arbitrary timezone or oversized string into stored data.
       let reportTimeZone = "UTC";
@@ -341,6 +357,7 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
         return true;
       })();
       if (!saved) return res.status(409).json({ error: "A newer Wrapped generation superseded this one." });
+      manualIntent.complete(requestId);
       queueWrappedCoverArt(userId, timeframe, timeId);
       queueWrappedSceneArtwork(userId, timeframe, timeId);
       res.json(savedStory(userId, timeframe, timeId));
