@@ -291,8 +291,9 @@ export async function generateAiWrapped(args: {
       mediaIds: [...(f.mediaId ? [f.mediaId] : []), ...(f.mediaIds || [])], hasBars: !!f.bars?.length, hasTimeline: !!f.beats?.length, hasQuote: !!f.quote,
     }))),
     'MEDIA REFERENCE (personal ratings/reviews are present only when recorded by the period end):\n' + JSON.stringify(evidence.media),
-    // Older persisted stories may themselves contain opinions written in later weeks.
-    // Never reintroduce them as reference material during a historical reroll.
+    // Past editorial snapshots are supplied separately above, period-filtered
+    // and marked as prior *opinions*, never factual source evidence.
+    // The current period's verified cards remain the ONLY event receipts.
   ].filter(Boolean).join('\n\n');
   let lastFailure = '';
   for (let attempt = 0; attempt < 2; attempt++) {
