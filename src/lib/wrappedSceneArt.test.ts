@@ -208,7 +208,7 @@ test("data-reveal and chart compositions never consume background artwork", () =
   assert.deepEqual(selectIllustratedScenes([scenes[0], stats, composed, scenes[4]]), ["wrapped-4"]);
 });
 
-test("closing tableau is one quiet symbolic epilogue, with no cards or literal media inventory", () => {
+test("closing tableau follows its editorial mode without cover cards or media inventory", () => {
   const closing = { ...scenes[4], composition: {
     version: 1, backdrop: "cinematic" as const,
     direction: { presentation: "cinematic" as const, textSide: "right" as const,
@@ -223,7 +223,7 @@ test("closing tableau is one quiet symbolic epilogue, with no cards or literal m
   assert.match(prompt, /FULL-BLEED CLOSING SCENE/);
   assert.match(prompt, /quiet lamp glows/);
   assert.match(prompt, /RIGHT 55% darker/);
-  assert.match(prompt, /ONE visual metaphor/);
+  assert.match(prompt, /ONE hero composition/);
   assert.match(prompt, /No multiple franchise worlds/);
   assert.match(prompt, /book jackets, floating game covers or souvenir cards/);
   assert.doesNotMatch(prompt, /EXISTING CODEX VISUAL IDENTITY/);
