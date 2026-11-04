@@ -92,7 +92,7 @@ export function wrappedVisualDirectorBrief(
  * action/camera plan, but cannot create personal facts or change prose.
  */
 export function diversifyWrappedVisualPlans(story: WrappedStory): WrappedStory {
-  return { ...story, scenes: stageWrappedVisualSequence(story.scenes) };
+  return { ...story, scenes: stageWrappedVisualSequence(story.scenes, { fillMissing: false }) };
 }
 
 export function applyWrappedVisualCompositions(
