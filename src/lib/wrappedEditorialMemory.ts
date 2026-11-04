@@ -41,7 +41,7 @@ export function wrappedPeriodRange(timeframe:string,timeId:string):Range|null {
     const monday=new Date(Date.UTC(year,0,4-mondayIndex+(week-1)*7));
     const sunday=new Date(monday.getTime()+6*86400000);
     // W53 is valid only in ISO years with 53 weeks.
-    if (week===53 && (sunday.getUTCFullYear()!==year || sunday.getUTCMonth()!==11)) return null;
+    if (week===53 && new Date(monday.getTime()+3*86400000).getUTCFullYear()!==year) return null;
     return {start:date(monday),end:date(sunday)};
   }
   return null;
