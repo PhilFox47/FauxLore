@@ -10,7 +10,7 @@ import { cliProxyBaseUrl, cliProxyImageSize, cliProxyImagePrompt, cliProxyImageE
 import { imagePromptCraft, resolveImagePromptProfile, gptImage25DeliveryPrompt } from "../lib/imagePromptGuidance";
 import { buildBossStateImagePrompt, bossVisualState, basePortraitForTransition, localImageReferenceDataUrl } from "../lib/bossStateImages";
 import { imageFrameSize, imageFrameMatches, withImageFrame, type ImageFrame } from "../../src/lib/imageFraming";
-import { redactVisualSelfForDiagnostics } from "../../src/lib/visualSelf";
+import { redactVisualSelfForDiagnostics, normalizeVisualSelfMode } from "../../src/lib/visualSelf";
 import { readUserFaceReference } from "../lib/visualSelfReference";
 import { AUTHENTICITY, SHARPNESS, enemyTier, rarityArt } from "../lib/artDirection";
 import { codexArtStyleBlock, type CodexService } from "./codex";
@@ -556,13 +556,22 @@ Return ONLY the final image prompt text, nothing else.`;
     return nanoGenerateText(aiConfig, prompt, { temperature: 0.7, webSearch: !codexBlock, tier: "analytical", scope: "imageprompt", userId });
   }
 
+  /** Defense in depth: do not trust the cover/scene caller alone for consent. */
+  function faceReferenceForRender(userId: string, useFaceReference: boolean): string | null {
+    if (!useFaceReference) return null;
+    const row = db.prepare("SELECT visualSelfInsertMode FROM settings WHERE userId = ?")
+      .get(userId) as { visualSelfInsertMode?: string } | undefined;
+    if (normalizeVisualSelfMode(row?.visualSelfInsertMode) === "never") return null;
+    return readUserFaceReference(db, userId);
+  }
+
   /** One standalone 3:2 title illustration for an entire Wrapped story. */
   async function generateWrappedCoverImage(userId: string, prompt: string, options?: {useFaceReference?: boolean}): Promise<string> {
     const config = getAiConfig(db, userId);
     if (!config) throw new Error("AI image provider is not configured.");
     return internalGenerateImageWithNanoGpt(
       config.apiKey, prompt, "unreadable text, fake logos, watermarks, collage grids",
-      "landscape-3:2", options?.useFaceReference ? readUserFaceReference(db, userId) : null, null, "wrapped",
+      "landscape-3:2", faceReferenceForRender(userId, !!options?.useFaceReference), null, "wrapped",
     );
   }
 
@@ -572,7 +581,7 @@ Return ONLY the final image prompt text, nothing else.`;
     if (!config) throw new Error("AI image provider is not configured.");
     return internalGenerateImageWithNanoGpt(
       config.apiKey, prompt, "collages, grids, franchise logos, letterforms, captions",
-      "landscape-3:2", options?.useFaceReference ? readUserFaceReference(db, userId) : null, null, "wrapped-scene",
+      "landscape-3:2", faceReferenceForRender(userId, !!options?.useFaceReference), null, "wrapped-scene",
     );
   }
 
