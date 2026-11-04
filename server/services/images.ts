@@ -185,7 +185,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
         const effectivePrompt = overriddenPrompt || finalPrompt;
         const faceReference = edit && (intent === "wrapped" || intent === "wrapped-scene");
         const renderPrompt = faceReference
-          ? effectivePrompt + "\\n\\nFACE REFERENCE INPUT: The attached photo is a private face identity reference ONLY. If the scene depicts the account owner, preserve recognizable facial structure, eye region, hair and other features. Reimagine their pose, expression, costume, environment and source-media art style from the story brief. Do NOT simply reprint or crop the reference selfie, copy its background, or add a second portrait panel."
+          ? effectivePrompt + "\n\nFACE REFERENCE INPUT: The attached photo is a private face identity reference ONLY. If the scene depicts the account owner, preserve recognizable facial structure, eye region, hair and other features. Reimagine their pose, expression, costume, environment and source-media art style from the story brief. Do NOT simply reprint or crop the reference selfie, copy its background, or add a second portrait panel."
           : effectivePrompt;
         const body: Record<string, unknown> = edit
           ? cliProxyImageEditBody(cfg.model, renderPrompt, size, referenceDataUrl || "")
