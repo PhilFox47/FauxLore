@@ -1,0 +1,39 @@
+name: Armory Character Portrait
+
+on:
+  push:
+    branches: [claude]
+    paths:
+      - 'src/pages/Armory.tsx'
+      - 'src/components/ArmoryCharacterPortrait.tsx'
+      - 'src/lib/armoryPortrait*'
+      - 'src/lib/imageFraming.ts'
+      - 'src/lib/visualSelf.ts'
+      - 'src/services/db.ts'
+      - 'server/services/armoryPortrait*'
+      - 'server/services/images.ts'
+      - 'server/routes/armoryPortrait*'
+      - 'server/lib/cliProxy.ts'
+      - 'server/lib/imagePromptGuidance.ts'
+      - 'server/db/schema.ts'
+      - 'server/db/migrations.ts'
+      - 'server/index.ts'
+      - '.github/workflows/armory-character-portrait.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Portrait framing, reference routing and persisted state
+        run: node --import tsx --test src/lib/armoryPortrait.test.ts server/services/armoryPortrait.test.ts
+      - name: Existing image/edit regression
+        run: node --import tsx --test server/lib/cliProxy.test.ts src/lib/imageFraming.test.ts server/lib/visualSelfReference.test.ts
+      - name: Production build
+        run: npm run build
