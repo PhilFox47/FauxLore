@@ -63,3 +63,26 @@ test('Wrapped evidence includes the low-volume emotional work as verified, citea
   assert.match(evidence.editorialSalience,/To the Moon/);
   assert.match(evidence.editorialSalience,/Pyraplex/);
 });
+
+test('older months without impact data still offer minor work candidates, without inventing feelings', () => {
+  const oldMedia: MediaItem[] = [
+    { ...media[0], id: 'long-a', title: 'Long Game A' },
+    { ...media[0], id: 'long-b', title: 'Long Game B' },
+    { ...media[0], id: 'long-c', title: 'Long Game C' },
+    { ...media[0], id: 'little', title: 'Short Game' },
+  ];
+  const oldLogs = [
+    log('la', 'long-a', 15, { timestamp: '2026-05-02T12:00:00Z' }),
+    log('lb', 'long-b', 13, { timestamp: '2026-05-12T12:00:00Z' }),
+    log('lc', 'long-c', 14, { timestamp: '2026-05-23T12:00:00Z' }),
+    log('ll', 'little', 1, { timestamp: '2026-05-06T12:00:00Z' }),
+  ];
+  const signals = analyzeRecapSalience({ logs: oldLogs, media: oldMedia });
+  const picked = selectRecapEditorialCandidates(signals);
+  assert.ok(picked.some(s => s.mediaId === 'little'));
+  assert.equal(signals.find(s => s.mediaId === 'little')?.resonance, 'unknown');
+  const evidence = buildWrappedEvidence({
+    timeframe: 'month', timeId: '2026-05', logs: oldLogs, history: oldLogs, media: oldMedia,
+  });
+  assert.ok(evidence.facts.some(f => f.kind === 'spotlight' && f.mediaId === 'little'));
+});
