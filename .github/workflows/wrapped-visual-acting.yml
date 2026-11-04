@@ -10,6 +10,7 @@ on:
       - 'src/lib/wrappedSceneArt.ts'
       - 'src/services/wrappedVisualDirector.ts'
       - 'server/services/wrappedCovers.ts'
+      - 'server/services/wrappedCovers.test.ts'
       - '.github/workflows/wrapped-visual-acting.yml'
   workflow_dispatch:
 
