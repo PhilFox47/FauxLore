@@ -270,7 +270,7 @@ test("original interior chapter artworks are generated once and stored independe
     assert.equal(row.sceneArtStatus, "done");
     assert.deepEqual(Object.keys(artwork), ["wrapped-1", "wrapped-2", "wrapped-3", "achievement-finale"]);
     assert.equal(imageCalls.length, 4);
-    assert.match(imageCalls[2], /FULL-BLEED FINAL TABLEAU/);
+    assert.match(imageCalls[2], /FULL-BLEED CLOSING SCENE/);
     assert.match(imageCalls[2], /visual EPILOGUE/);
     assert.match(imageCalls[3], /Dungeon System Verdict/);
     assert.match(imageCalls[0], /A train on a train/);
@@ -320,7 +320,7 @@ test("a previously finished three-image Wrapped backfills only missing full-blee
     assert.deepEqual(Object.keys(images),
       ["wrapped-1", "wrapped-3", "wrapped-4", "achievement-finale"]);
     assert.equal(generated.length, 3);
-    assert.match(generated[1], /FULL-BLEED FINAL TABLEAU/);
+    assert.match(generated[1], /FULL-BLEED CLOSING SCENE/);
     assert.match(generated[2], /Dungeon System Verdict/);
     assert.equal(service.queueScenes("user", TIMEFRAME, PERIOD), false);
   } finally { db.close(); }
@@ -574,7 +574,7 @@ test("specific Wrapped chapter art uses one matching ready Codex style, not an u
     assert.match(prompts[0], /desaturated blue/);
     assert.match(prompts[0], /A second season is wanted/);
     assert.doesNotMatch(prompts[1], /CODEX VISUAL IDENTITY|desaturated blue/);
-    assert.match(prompts[2], /FULL-BLEED FINAL TABLEAU/);
+    assert.match(prompts[2], /FULL-BLEED CLOSING SCENE/);
     assert.match(prompts[3], /Dungeon System Verdict/);
   } finally { db.close(); }
 });
