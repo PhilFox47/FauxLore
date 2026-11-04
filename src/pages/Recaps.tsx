@@ -15,6 +15,8 @@ import { calculateRPGState } from '../lib/rpgSystem';
 import { MediaItem, MEDIA_COLORS, ProgressLog, RARITY_COLORS } from '../types/schema';
 import { cn } from '../lib/utils';
 import { mediaOpinionsAsOf } from '../lib/mediaOpinionHistory';
+import { analyzeRecapSalience, recapSalienceBrief, selectRecapEditorialCandidates } from '../lib/recapSalience';
+import { readMoodlets, describeMoodlets } from '../lib/quickMoodlets';
 import { generateMissingRecapParts, getMissingRecapParts } from '../lib/recapGeneration';
 import { FAUXLORE_RUNTIME_BUILD } from '../lib/runtimeBuild';
 import { summariseGroups, UNGROUPED } from '../lib/locationGroups';
@@ -708,6 +710,9 @@ export function Recaps() {
       const periodInProgressMedia = periodActiveMedia.filter(m =>
         !completedMediaIds.has(m.id) && !droppedMediaIds.has(m.id));
       const periodTaste = buildTasteAlignment(periodActiveMedia);
+      const mediaSignals = analyzeRecapSalience({ logs: activeLogs, media: periodActiveMedia, settings });
+      const editorialCandidates = selectRecapEditorialCandidates(mediaSignals);
+      const personalSalienceBrief = recapSalienceBrief(mediaSignals);
       let rankingLimit = timeframe === 'week' ? 999 : (timeframe === 'month' ? 5 : 20);
       
       const mediaRanking = activeMedia.map(m => {
@@ -814,9 +819,12 @@ export function Recaps() {
       // metadata. Do not inject a future release or current status into the past.
       // Media identity enriches the Spotify-Wrapped commentary, but cannot
       // substitute for the user's activity, ratings, journal notes or choices.
-      const wrappedIds = activeMedia
-        .filter(m => mediaRanking.slice(0, 8).some(r => r.title === m.title && r.type === m.mediaType))
-        .map(m => m.id).slice(0, 8);
+      // Codex identity belongs to editorial candidates, not only MP leaders.
+      const wrappedIds = [...new Set([
+        ...editorialCandidates.slice(0, 6).map(candidate => candidate.mediaId),
+        ...periodActiveMedia.filter(m => mediaRanking.slice(0, 3)
+          .some(r => r.title === m.title && r.type === m.mediaType)).map(m => m.id),
+      ])].slice(0, 8);
       const wrappedKnowledge = await DatabaseService.getCodexPromptBlocks(wrappedIds, 'wrapped');
       const wrappedContext = Object.entries(wrappedKnowledge).map(([id, context]) => {
         const m = activeMedia.find(row => row.id === id);
@@ -871,6 +879,8 @@ EDITORIAL SOURCE EVIDENCE, ${timeframe.toUpperCase()} ${timeId}
 Exact time window: ${format(currentInterval.start, 'yyyy-MM-dd')} to ${format(currentInterval.end, 'yyyy-MM-dd')}.
 PERSONAL MEDIA HABIT BASELINE (READ BEFORE SELECTING ANGLES):
 ${focusCalibration}
+PERSONAL RESONANCE AND EDITORIAL SALIENCE (read BEFORE choosing protagonists; no duration multiplier):
+${personalSalienceBrief}
 ${monthlyEditorialEvidence}
 This is material for an OPINION COLUMN, not a checklist. Seek meaningful reviews, specific moments, actual personal judgments and objectively unusual changes of emphasis. Locations are user-recorded log labels, not proof of WHY the user went somewhere.
 
@@ -891,6 +901,12 @@ ${sampleAcross(activeLogs.filter(l => l.metricType !== 'statusChange' && (l.note
 
 SESSION ENJOYMENT (individual-session 1-5 scores, distinct from full-media rating):
 ${sampleAcross(activeLogs.filter(l => typeof l.sessionEnjoyment === 'number'), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${l.sessionEnjoyment}/5`).join('\n') || 'No session enjoyment ratings.'}
+
+SESSION IMPACT (personal significance, separate from enjoyment or raw time; missing means UNKNOWN):
+${sampleAcross(activeLogs.filter(l => typeof l.sessionImpact === 'number'), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: impact ${l.sessionImpact}/5${typeof l.sessionEnjoyment === 'number' ? ', enjoyment ' + l.sessionEnjoyment + '/5' : ''}`).join('\\n') || 'No session impact ratings.'}
+
+QUICK MOODLETS (explicit session tags, not the user's permanent attitude to a title):
+${sampleAcross(activeLogs.filter(l => readMoodlets(l.moodlets).length > 0), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${describeMoodlets(readMoodlets(l.moodlets))}`).join('\\n') || 'No Quick Moodlets recorded.'}
 ${periodActiveMedia.filter(m => (m.userReview || '').trim() || (m.dropReason || '').trim()).map(m => `- ${m.title}: ${m.userReview ? 'Review: ' + m.userReview : ''} ${m.dropReason ? 'Drop reason: ' + m.dropReason : ''}`).join('\n') || 'No reviews.'}
 
 CHRONOLOGICAL CLUES (analyze patterns, never retell this as a log):
@@ -932,7 +948,7 @@ ${franchiseInsights ? [
   franchiseInsights.deepest ? `Deepest run: ${franchiseInsights.deepest.name}, ${franchiseInsights.deepest.titles.length} separate titles.` : '',
 ].filter(Boolean).join('\n') : 'No franchised media logged this period — everything was a standalone.'}
 
-TOP RANKED MEDIA (By Engagement/Master Pages):
+TOP RANKED MEDIA (QUANTITATIVE EXPOSURE ONLY, NOT A RANKING OF WHAT MATTERED):
 ${mediaRanking.slice(0,5).map(m => `- ${m.title} (${Math.round(m.pages)} MP)`).join('\n')}
 
 CLAIMED ARTIFACTS (in-app equipment claimed at eligible media milestones; NOT real objects or necessarily enemy drops):
