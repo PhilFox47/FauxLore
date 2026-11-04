@@ -6,6 +6,12 @@ on:
     paths:
       - 'src/lib/personalMoments*'
       - 'src/lib/wrappedThesisGate*'
+      - 'src/lib/wrappedFinale*'
+      - 'src/lib/wrappedPacing*'
+      - 'src/components/EditorialStorySlide.tsx'
+      - 'src/components/WrappedClosingTableau.tsx'
+      - 'src/lib/wrappedSceneArt.ts'
+      - 'src/services/wrappedVisualDirector.ts'
       - 'src/lib/wrappedEvidence*'
       - 'src/lib/wrappedEditorial*'
       - 'src/services/wrappedAi.ts'
@@ -27,7 +33,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: September Endwalker, personal journal/Notes routing and thesis pruning
-        run: node --import tsx --test src/lib/personalMoments.test.ts src/lib/wrappedThesisGate.test.ts
+        run: node --import tsx --test src/lib/personalMoments.test.ts src/lib/wrappedThesisGate.test.ts src/lib/wrappedFinale.test.ts src/lib/wrappedPacing.test.ts
       - name: Existing Wrapped evidence, source coverage and editorial tests
         run: node --import tsx --test src/lib/wrappedEvidence.test.ts src/lib/wrappedEditorial.test.ts src/lib/recapSalience.test.ts server/routes/wrapped.test.ts
       - name: Real HTTP Notes-to-Journal editing and Wrapped evidence roundtrip
