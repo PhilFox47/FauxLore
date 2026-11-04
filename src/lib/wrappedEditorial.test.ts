@@ -102,7 +102,9 @@ test('a monthly that looks only at the last week fails coverage', () => {
 test('putting all monthly phases in one slide is not genuine story coverage', () => {
   assert.throws(() => normalizeWrappedStory(story(
     scene('insight', 'The entire month in a checklist', ['month-early', 'month-middle', 'month-late']),
-    scene('spotlight', 'A supporting work', ['media-1']),
+    // 'media-1' legitimately represents the independent middle-phase game, so
+    // use the non-phase overview to test the actual one-scene-only situation.
+    scene('spotlight', 'A generic supporting work', ['overview']),
   ), monthEvidence(), media), /independent phase-supported scenes/);
 });
 
