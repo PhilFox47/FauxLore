@@ -579,7 +579,7 @@ Return ONLY the final image prompt text, nothing else.`;
   }
 
   /** Private, portrait-format render; bytes never enter the public /uploads folder. */
-  async function generateArmoryPortraitImage(userId: string, prompt: string, references: string[]): Promise<string> {
+  async function generateArmoryPortraitImage(userId: string, prompt: string, references: string[], fallbackPrompt?: string): Promise<string> {
     const config = getAiConfig(db, userId);
     if (!config) throw new Error("AI image provider is not configured.");
     const selected = readImageConfig();
@@ -588,7 +588,7 @@ Return ONLY the final image prompt text, nothing else.`;
     const usable = selected.useCli && /^gpt-image-/i.test(selected.model) ? references : [];
     return internalGenerateImageWithNanoGpt(
       config.apiKey, prompt, "lettering, logos, extra people, broken equipment, multiple panels",
-      "portrait-2:3", usable.length ? usable : null, null, "armory-portrait", true,
+      "portrait-2:3", usable.length ? usable : null, fallbackPrompt || null, "armory-portrait", true,
     );
   }
 
