@@ -146,7 +146,7 @@ test("opening and closing can use an active planned beat without changing text l
       action: "Walk through the archway as the castle lights blink out behind" },
   } }, owner);
   assert.match(closing, /Walk through the archway/);
-  assert.match(closing, /action coming to a close/);
+  assert.match(closing, /visually distinctive ACTUAL LAST WORD/);
 });
 
 test("visual director asks for a concrete whole-issue action plan without exposing user appearance", () => {
