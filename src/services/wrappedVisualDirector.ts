@@ -2,7 +2,7 @@ import { apiFetch } from "./db";
 import { normalizeDynamicScene } from "../lib/dynamicScenes";
 import type { DynamicSceneComposition } from "../lib/dynamicScenes";
 import type { WrappedStory } from "./wrappedAi";
-import { selectIllustratedScenes } from "../lib/wrappedSceneArt";
+import { selectIllustratedScenes, selectWrappedSceneStyleMediaId, isWrappedInfographicScene } from "../lib/wrappedSceneArt";
 import { MAX_DATA_SLIDES, isDataLayout, isStrongSceneData, isStrongVerifiedAnalytic, editorialJobFromKind } from "../lib/wrappedEditorial";
 import type { StoryPeriod } from "../lib/storyDiscovery";
 
@@ -18,7 +18,10 @@ export function wrappedVisualDirectorBrief(
 ): string {
   const illustrated = new Set(selectIllustratedScenes(story.scenes));
   const wanted = onlySceneIds ? new Set(onlySceneIds) : null;
-  const scenes = story.scenes.filter(scene => !wanted || wanted.has(scene.id)).map(scene => ({
+  const scenes = story.scenes.filter(scene => !wanted || wanted.has(scene.id)).map(scene => {
+    const featuredWorkId = selectWrappedSceneStyleMediaId(scene);
+    const featuredWork = [scene.media, ...(scene.artworks || [])].find(m => m?.id === featuredWorkId)?.title || null;
+    return {
     sceneId: scene.id,
     kind: scene.kind,
     editorialJob: scene.editorialJob || editorialJobFromKind(scene.kind),
@@ -48,7 +51,10 @@ export function wrappedVisualDirectorBrief(
     canStageCinematic: scene.kind === "opening" || illustrated.has(scene.id),
     titleChars: scene.title.length,
     bodyChars: scene.body.length,
-  }));
+    featuredWork,
+    artDirectionAlreadyUsed: scene.composition?.visualPlan || null,
+  };
+  });
   return [
     "ISSUE: " + story.title + "\n" + story.dek,
     "VERIFIED, ALREADY WRITTEN SCENES (do not change their copy):\n" + JSON.stringify(scenes),
@@ -59,6 +65,10 @@ export function wrappedVisualDirectorBrief(
     "COMPOSE EVERY SCENE IN THE PROVIDED LIST. No skipping: exactly one composition for EACH sceneId listed, nothing else. Choose a distinctive but coherent cinematic-magazine treatment for each story beat, with a deliberate visual rhythm across the issue.",
     "NEW CINEMATIC EDITORIAL DIRECTION: Every composition MUST include direction:{presentation:'cinematic'|'data'|'typography'|'composed',textSide:'left'|'right'|'center',textPosition:'top'|'middle'|'bottom',imageFocus:'left'|'center'|'right',dataTreatment?:'shift'|'duel'|'arc'|'dominance'}. dataTreatment is ONLY valid when presentation:data and must match verifiedAnalytic.kind exactly. Use actual JSON double-quoted strings. This is a SAFE editorial plan, NOT arbitrary CSS or executable code.",
     "FULL-ART CONTRACT: EVERY NON-INFOGRAPHIC story scene gets its OWN original, full-bleed generated background. For canStageCinematic=true scenes choose presentation:cinematic, give one specific 10-180 character artConcept and stage typography over the quiet text side. The cover job supplies opening art and the chapter job supplies ALL narrative slides, INCLUDING THE CLOSING. There is NO three-picture quota. A generated scene is not an image inset, poster, official cover or wallpaper blur. The React renderer handles gradients, safety, readable text and mobile placement.",
+    "VISUAL NARRATIVE PLAN: For every non-data scene include visualPlan:{activityMode:'action'|'social'|'exploration'|'investigation'|'reflection'|'environmental',castMode:'self'|'in-world-self'|'canon-character'|'environment',camera:'wide'|'tracking'|'low-angle'|'over-shoulder'|'aerial'|'close-up'|'medium',action:'ONE short, specific visible verb phrase',interaction?:'specific companion, object or setting'}. Choose an ACTION with a visible verb and target, not just an emotion, expression or prop. The image maker receives this plan as its highest-priority physical scene instruction.",
+    "ENTER THE MEDIA WORLD: For a scene strongly centered on ONE named work (featuredWork), imagine a FICTIONAL, non-spoiler tableau INSIDE that work's visual world, rather than a real-world viewer remembering it. The subject may be the owner in everyday appearance, a costumed in-world counterpart, or an established canonical protagonist when stronger. If a game/series is about a battle, a journey, a quest, a celebration or companionship, render a convincing ACTIVITY and relevant characters/companions, not a lonely portrait. You must NOT assert that a specific quest, boss, conversation or victory happened in reality unless the source log says so. For cross-media abstract slides, do not mash franchises together: find one cohesive visual metaphor instead.",
+    "ISSUE-WIDE CAST AND CAMERA VARIETY: Plan the WHOLE sequence, not isolated promotional portraits. Prefer wider kinetic shots, active group interactions, tracking movement, low angles, over-shoulder participation, exploration and environmental storytelling when appropriate. No two adjacent illustrated scenes should default to the same camera plus same activity. Keep at most TWO solitary reflective human portraits for the entire issue, counting opening and closing. Do not force action into a genuinely reflective journal scene, and do not invent social experiences just to meet a quota. A deliberate quiet tableau still belongs when earned.",
+    "ANTI-CLICHE: Unless an evidence-backed reflective beat specifically calls for it, NEVER default to a man seated at a desk, notebook/book/pen in hand, chin resting on hand, gazing into the distance, looking up wistfully, idle half-body portrait, or standing motionless against a pretty skyline. Every remaining person must DO something clear: reach, dodge, climb, run, celebrate, confront, investigate, cooperate, manipulate or explore. Vary whether the human is even the main subject.",
     "IMAGE COMPOSITION IS JOINT ART DIRECTION: textSide describes where the overlaid typography will be; imageFocus describes where the primary image subject must be. Keep them mostly opposite (text LEFT, focal RIGHT, or vice versa), and reserve the text area as quiet, dark negative space. Center text is appropriate only for intentionally symmetrical imagery. textPosition determines the upper, middle or lower visual rhythm of the typography.",
     "For analytic-only data (verifiedAnalytic is present but verifiedBars is empty), do NOT add stat nodes: the safe renderer automatically draws the selected analytic kind. Provide exactly one title and body node and let the validated data treatment provide the visual. If verifiedBars exist, their indexed stat nodes are optional, not a requirement.",
     "DATA means a significant verified comparison is the HERO. Choose presentation:'data' and stat elements ONLY when canUseData=true AND the difference is editorially important. A 33% to 49% increase does not justify a whole chart! Do not recycle claims across scenes. Use cinematic full-bleed art for ALL non-data scenes, including a quietly reflective text-led beat. Old typography/composed values may exist for compatibility, but new narrative visuals MUST be cinematic. Do not add official covers or image insets.",
@@ -66,10 +76,59 @@ export function wrappedVisualDirectorBrief(
     "THE STORY'S MEANING COMES FIRST: A visual device must express a specific observation, surprising connection, significant contrast, or earned emotional payoff. A scene about a train/book crossover can be a cinematic train emerging from an open novel; a media-share comparison should let real percentages dominate. Decorative piles of the week's many media objects are not an idea.",
     "The old coordinate elements are still REQUIRED for backwards compatibility and reliable fallback, but in cinematic/data/typography modes the renderer prioritizes the new direction plan. Give exactly ONE title and ONE body element with readable boxes, include accurate verified stat/beat/media references only when they improve the point. Avoid crowding. Never overlap title/body boxes.",
     "Allowed elements: title, body, eyebrow, media (mediaId must be from imageMediaIds), title-art (opening only), scene-art (only when canGenerateOriginalSceneArt=true), quote (only when hasVerifiedQuote), stat (verifiedBars index), beat (verifiedBeats index), shape (orb|ring|line|panel|pill). Every element needs id (unique ASCII), type, box:{x,y,w,h} on 0-100 canvas, size:sm|md|lg|xl, tone:primary|secondary|accent, motion:none|fade|rise|slide|pop|float|pulse, delay:0..3. No URLs, CSS, HTML, JS or invented text. Max 11 elements.",
-    "For every illustrated interior scene with canGenerateOriginalSceneArt=true, include a precise artConcept for a ONE-motif full-bleed backdrop; a scene-art element is optional because React paints the background itself. No media-cover panels, book jackets or screenshot insets. For opening, add artConcept and use cinematic direction with generated title art. The CLOSING has a SPECIAL 'final tableau' generator: plan one visually elegant, restrained, meaningful epilogue symbol with the issue's earned conclusion. No souvenir strip or official cover cards; those are for Deep Dive.",
+    "For every illustrated interior scene with canGenerateOriginalSceneArt=true, include a precise artConcept and visualPlan for a unified ACTION-BEAT or purposeful environmental moment; one cohesive frame may contain interacting people and contextual supporting props, not a lonely mandatory hero.  a scene-art element is optional because React paints the background itself. No media-cover panels, book jackets or screenshot insets. For opening, add artConcept and use cinematic direction with generated title art. The CLOSING has a SPECIAL 'final tableau' generator: plan one visually elegant, restrained, meaningful epilogue symbol with the issue's earned conclusion. No souvenir strip or official cover cards; those are for Deep Dive.",
     "Text content, numerical facts, official reviews and quotes remain IMMUTABLE and are resolved from the already-written evidence-backed story. Layout may choose which facts to emphasize but must not invent any. Mobile automatically receives a legible layout, and reduced motion is supported.",
-    "Return ONLY a JSON object {compositions:[{sceneId,composition:{version:1,backdrop,direction,artConcept?,elements:[...]}}]}. The direction object must include all four required enum fields. Include every sceneId exactly once. Do not return explanatory prose.",
+    "Return ONLY a JSON object {compositions:[{sceneId,composition:{version:1,backdrop,direction,artConcept?,visualPlan?,elements:[...]}}]}. The direction object must include all four required enum fields. Include every sceneId exactly once. Do not return explanatory prose.",
   ].join("\n\n");
+}
+
+/**
+ * Keep art direction genuinely sequential: the renderer still owns text layout,
+ * and the editorial story remains untouched. A visual reroll may replace the
+ * action/camera plan, but cannot create personal facts or change prose.
+ */
+export function diversifyWrappedVisualPlans(story: WrappedStory): WrappedStory {
+  const scenes = story.scenes.map(scene => ({
+    ...scene,
+    composition: scene.composition ? { ...scene.composition } : undefined,
+  }));
+  const reflectiveIndices = scenes.map((scene, index) => ({ scene, index }))
+    .filter(({ scene }) => !isWrappedInfographicScene(scene) &&
+      scene.composition?.visualPlan?.activityMode === "reflection" &&
+      scene.composition.visualPlan.castMode !== "environment")
+    .map(({ index }) => index);
+  // A quiet epilogue and an introductory portrait can be intentional; let
+  // the chapter images do more than repeat them.
+  const keep = new Set(reflectiveIndices.sort((a, b) =>
+    Number(scenes[b].kind === "closing") - Number(scenes[a].kind === "closing") ||
+    Number(scenes[b].kind === "opening") - Number(scenes[a].kind === "opening") ||
+    a - b).slice(0, 2));
+  let previousCamera: string | undefined;
+  let closeUps = 0;
+  const alternates = ["wide", "tracking", "low-angle", "over-shoulder", "aerial"] as const;
+  return { ...story, scenes: scenes.map((scene, index) => {
+    const composition = scene.composition;
+    const plan = composition?.visualPlan;
+    if (!plan || isWrappedInfographicScene(scene)) return scene;
+    let updated = { ...plan };
+    if (updated.activityMode === "reflection" && updated.castMode !== "environment" &&
+        !keep.has(index)) {
+      updated = {
+        ...updated, activityMode: "exploration", camera: "tracking",
+        action: "Actively move through and interact with the chapter's distinctive setting",
+      };
+    }
+    if (updated.camera === previousCamera ||
+        ((updated.camera === "medium" || updated.camera === "close-up") && closeUps >= 2)) {
+      updated.camera = alternates[index % alternates.length];
+      if (updated.camera === previousCamera) {
+        updated.camera = alternates[(index + 1) % alternates.length];
+      }
+    }
+    previousCamera = updated.camera;
+    if (updated.camera === "medium" || updated.camera === "close-up") closeUps++;
+    return { ...scene, composition: { ...composition!, visualPlan: updated } };
+  }) };
 }
 
 export function applyWrappedVisualCompositions(
@@ -112,9 +171,9 @@ export function applyWrappedVisualCompositions(
       console.warn("[wrapped-visuals] Skipping invalid AI composition:", proposal.sceneId, error);
     }
   }
-  return { ...story, scenes: story.scenes.map(scene => ({
+  return diversifyWrappedVisualPlans({ ...story, scenes: story.scenes.map(scene => ({
     ...scene, composition: maps.get(scene.id) || scene.composition,
-  })) };
+  })) });
 }
 
 export async function generateWrappedVisualCompositions(args: {
