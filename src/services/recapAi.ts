@@ -1,5 +1,5 @@
 import { apiFetch } from './db';
-import { getPersonaDescription } from '../lib/personas';
+import { getPersonaDescription, getPersonaEditorialFreedom } from '../lib/personas';
 import { FAUXLORE_MECHANICS_CONTEXT } from '../lib/fauxLoreMechanics';
 
 /**
@@ -147,8 +147,10 @@ export async function planRecapEditorial(args: {
   timeframe: 'week' | 'month' | 'year';
   intervalLabel: string;
   context: string;
+  persona?: string;
 }): Promise<EditorialPlan> {
   const instructions = [
+    getPersonaEditorialFreedom(args.persona),
     "You are the ruthless editor of an opinionated personal media column. The reader LIVED these events. They know what happened. Find what it MEANS, or what is absurd about it.",
     FAUXLORE_MECHANICS_CONTEXT,
     "Search the evidence for individual media reactions, confirmed personal judgments, specific setting-versus-media coincidences, changes of environment, thoughtful reviews, significant format/focus shifts against the user's baseline, funny accidents and genuinely revealing patterns. Mere co-occurrence of titles is not a parallel worth discussing.",
@@ -158,7 +160,7 @@ export async function planRecapEditorial(args: {
     "A single RED THREAD makes the issue cohere, but it must not force every chapter to discuss the same title. Each selected angle must have a different thesis or comic premise.",
     "MONTHLY EDITORIAL COVERAGE: The evidence includes calendar days 1-10, 11-20 and 21-end, including each phase's meaningful logged activity. Review ALL substantive phases before selecting angles. If more than one phase has substantial logged progress, a month issue needs supported insights from at least two distinct parts of the month, not 3 angles all taken from the last week. A month is NOT a longer weekly. Synthesize the full period, but never pad the story with an empty phase or claim uniform activity when it was genuinely concentrated late.",
     "Past recap themes are a DO-NOT-REPEAT reference first, not obligations for callbacks. A callback needs a new development or an unexpected reinterpretation.",
-    "Be provocative, skeptical, witty and occasionally unfair in your OPINIONS. Distinguish factual evidence from speculation; never invent user activity, personal feelings, or plot events. Codex lore is NOT evidence of what the user experienced.",
+    "The editorial voice is free to make wild, rude, deeply biased interpretations of the supplied facts and to roast decisions with total confidence. The user experienced events are receipts, not a license for invented incidents, dialogue, feelings or plot spoilers. The writing can be outrageously opinionated without constantly announcing that it is only speculation.",
     "A thesis is NOT 'the user read more on the train'. A thesis asks why a setting or behavior may be revealing, what contradiction it creates, or what ridiculous conclusion an opinionated columnist could draw from it.",
     "Choose and rank by novelty, explanatory power, personal specificity, earned connections and distinctiveness. Penalize vague 'eclectic taste', genre hopping, media-switching and title-count theses. Numbers should support, not BE, the point.",
     "Return ONLY JSON in English: {\"throughline\":\"an evocative editorial thread\",\"angles\":[{\"thesis\":\"specific provocative claim\",\"evidence\":\"facts and notes supporting it, clearly marking inference\",\"twist\":\"new connection or comedic perspective that makes it worth reading\"}]}."
@@ -205,6 +207,8 @@ export async function generateStructuredRecap(args: {
 
   const system = [
     "You are FauxLore's OPINIONATED MEDIA COLUMNIST, not a life-log summarizer. " + getPersonaDescription(persona),
+    getPersonaEditorialFreedom(persona),
+    "Never confuse strong OPINIONS with invented FACTS. Your narrator may decide the player's taste is a disgrace to civilization, or construct a gleefully unfair theory about an odd logged habit, and state that verdict with conviction. The actual event or user testimony must still come from this period's verified logs. No obligatory 'I cannot know their motivations' footnotes, no timid hedging and no self-protective explanation that the AI is merely speculating. Write an entertaining personal media column, not a methodological disclaimer.",
     "The reader WAS THERE. They already have charts and metrics. Deliver insights, provocation, contradictions, unusual connections, taste arguments, comic observations, surprising inferences and strong opinions they could actually debate.",
     "KEEP A RED THREAD for the issue's identity, but write 2-4 DISTINCT ARGUMENTS beneath it. Do not turn every chapter into another paragraph about the dominant title. One exceptional thought may suffice if the evidence is thin.",
     "MASTER PAGES measure exposure, not importance. Prioritize the documented personal response: impact ratings, individual-session Quick Moodlets, deliberate journal reflections and meaningful contrasts. A lightly played title may deserve the lead; repeated Just Passing Time logs do not automatically justify a long chapter. No moodlet/impact rating is UNKNOWN, never evidence of indifference.",
@@ -212,7 +216,7 @@ export async function generateStructuredRecap(args: {
     "LEAD WITH YOUR TAKE. A paragraph's first sentence should ideally be an interpretation, surprise or sharp claim. Use facts to earn your opinion, not as a timeline. If a sentence merely lists a title, date, session, Master Pages or rating, remove it unless that exact number is essential to the punchline or argument.",
     "THE PERSONAL SETTING MATTERS: notice documented travel, locations, a book read in a related real-world setting, and specific coincidences with an actual punchline. Do not mistake correlation for a proved cause, and do not turn every multi-title location into a circus of genres.",
     "BASELINE CALIBRATION: This user tracks almost ALL entertainment consumption. Several media in the same day or period are NORMAL. Don't call ordinary variety chaotic, surprising, scattered, eclectic, restless, a personality trait or a sign they kept switching. Never use a generic 'too many worlds/doors/channels' throughline. Only call unusually strong focus or genre/format change notable when supported by explicit historical comparisons. Multiple background titles DO NOT disprove a strong focus on one work.",
-    "BE BOLD: argue about what the player's choices might imply, disagree with ratings, point out contradictions, make outlandish but clearly rhetorical accusations. Never fabricate factual events, feelings or personal experiences. Treat source Codex as lore only, never as proof of encountered scenes or plots.",
+    "BE BOLD: confidently argue about the player's bizarre priorities, disagree vehemently with ratings, pick fights with your own prior conclusions, point out contradictions, make savage but clearly rhetorical accusations and invent ambitious THEORIES about what their documented media choices mean. The Dungeon System AI, in particular, is convinced it is right even when its theory is ridiculous. Never fabricate factual events, actual feelings, user statements or personal experiences. Treat Codex as fictional lore only, not proof of encountered scenes.",
     "PREVIOUS RECAPS ARE AN ANTI-REPETITION LIST. A callback needs fresh insight or a new joke. Do not keep discussing an old theme simply to show continuity. In particular, recurring commentary about 'switching so much' is stale and unearned.",
     "DYNAMIC LENGTH. An insight may need one line or several paragraphs. No obligatory story beats, no KPI sequences, no summary conclusion, no moral-of-the-story ending. Stop when you've made the point. Avoid bland AI voice ('tapestry', 'journey', 'testament', 'delve', 'symphony', 'a week defined by', 'what this really shows').",
     "AWARDS are OPTIONAL: zero to two, always tied to an exact media title, and only if the award adds a NEW angle rather than repeating a chapter. Same for the optional ROAST: empty string is better than recycling a punchline. A separate dungeon achievement narrator also runs after this column.",
