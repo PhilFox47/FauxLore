@@ -159,6 +159,8 @@ export interface ProgressLog {
   thoughts?: string; // explicit journal reflection, NEVER inferred from note.
   thoughtPrompt?: string; // AI question that elicited thoughts.
   sessionEnjoyment?: number; // optional 1-5; null/absent means NOT rated.
+  sessionImpact?: number | null; // optional 1-5, personal significance rather than enjoyment.
+  moodlets?: import('../lib/quickMoodlets').MoodletId[]; // optional 0-4 explicit session annotations.
   location?: string;
   isHistoric?: boolean;
   bonusMultiplier?: number; // Artifact/Armory EXP bonus banked at log creation (only applies to this log)
