@@ -189,6 +189,37 @@ export const DatabaseService = {
     return res.json();
   },
 
+  /** Image bytes never pass through the public /uploads directory. */
+  async getVisualSelfReference(): Promise<Blob | null> {
+    const res = await apiFetch('/api/settings/visual-reference', {cache: 'no-store'});
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error('Could not load your face reference.');
+    return await res.blob();
+  },
+
+  async uploadVisualSelfReference(file: File): Promise<void> {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      throw new Error('Please use a JPEG, PNG or WebP photo.');
+    }
+    if (!file.size || file.size > 4 * 1024 * 1024) {
+      throw new Error('Reference photo must be smaller than 4 MB.');
+    }
+    const res = await apiFetch('/api/settings/visual-reference', {
+      method: 'PUT',
+      headers: {'Content-Type': file.type},
+      body: file,
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.error || 'Could not upload face reference.');
+    }
+  },
+
+  async deleteVisualSelfReference(): Promise<void> {
+    const res = await apiFetch('/api/settings/visual-reference', {method: 'DELETE'});
+    if (!res.ok) throw new Error('Could not delete face reference.');
+  },
+
   async getSettings(): Promise<any> {
     try {
       const authRes = await apiFetch('/api/auth/me');
