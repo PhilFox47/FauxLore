@@ -1,0 +1,30 @@
+name: Historical Recap & Wrapped integrity
+
+on:
+  push:
+    branches: [claude]
+    paths:
+      - 'src/lib/mediaOpinionHistory*'
+      - 'src/lib/wrappedEvidence*'
+      - 'src/services/wrappedAi.ts'
+      - 'src/pages/Recaps.tsx'
+      - 'src/services/db.ts'
+      - 'server/routes/media.ts'
+      - 'server/db/migrations.ts'
+      - 'package.json'
+      - '.github/workflows/recap-history.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run test:wrapped
