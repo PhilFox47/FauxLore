@@ -28,6 +28,8 @@ export function runMigrations(db: Db) {
   try { db.exec("ALTER TABLE logs ADD COLUMN thoughts TEXT"); } catch (e) {}
   try { db.exec("ALTER TABLE logs ADD COLUMN thoughtPrompt TEXT"); } catch (e) {}
   try { db.exec("ALTER TABLE logs ADD COLUMN sessionEnjoyment INTEGER"); } catch (e) {}
+  try { db.exec("ALTER TABLE logs ADD COLUMN sessionImpact INTEGER CHECK(sessionImpact IS NULL OR (sessionImpact BETWEEN 1 AND 5))"); } catch (e) {}
+  try { db.exec("ALTER TABLE logs ADD COLUMN moodlets TEXT"); } catch (e) {}
   try { db.exec("ALTER TABLE media ADD COLUMN totalDurationHours REAL"); } catch (e) {}
 
   // Automatic Migrations
