@@ -10,6 +10,8 @@ on:
       - 'src/services/wrappedAi.ts'
       - 'src/pages/Recaps.tsx'
       - 'src/services/db.ts'
+      - 'src/lib/runtimeBuild.ts'
+      - 'server/index.ts'
       - 'server/routes/media.ts'
       - 'server/routes/wrapped.ts'
       - 'server/routes/wrapped.manual.test.ts'
