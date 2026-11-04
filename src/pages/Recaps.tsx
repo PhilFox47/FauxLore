@@ -746,13 +746,8 @@ export function Recaps() {
       const prevLogs = validLogs.filter(log => isWithinInterval(subHours(parseISO(log.timestamp), 5), prevInterval) && log.metricType !== 'statusChange');
       const prevGenreDist = calculateGenres(prevLogs);
 
-      // Previous recaps for continuity
-      const previousRecaps = aiRecaps
-        .filter(r => r.timeframe === timeframe && r.timeId !== timeId && r.timeId < timeId)
-        .sort((a, b) => b.timeId.localeCompare(a.timeId))
-        .slice(0, 4)
-        .reverse();
-
+      // Do not quote saved earlier issues: old generated text can itself
+      // contain a later verdict and contaminate a historical rewrite.
       const isFirstRecap = aiRecaps.filter(r => r.timeframe === timeframe && r.timeId < timeId).length === 0;
 
       // Gap calculation
@@ -954,15 +949,8 @@ ${rankRace ? `The race: ${rankRace.series.map(r => r.title).join(' vs ')}${rankR
 PERSONAL RECORDS this ${timeframe}: ${records.filter(r => r.isRecord).map(r => `${r.label} — ${r.value} ${r.unit} (previous best ${r.previousBest})`).join(' | ') || 'None broken'}
 NEAR MISSES: ${records.filter(r => !r.isRecord && r.previousBest > 0 && r.value >= r.previousBest * 0.85).map(r => `${r.label} — ${r.value} vs best ${r.previousBest}`).join(' | ') || 'None close'}
 
-PREVIOUS ISSUES (A LIST OF USED THEMES TO AVOID, not obligations to mention again):
-${previousRecaps.length > 0 ? previousRecaps.map(r => {
-  const olderAngles = r.data?.editorialPlan?.angles;
-  const used = Array.isArray(olderAngles) && olderAngles.length
-    ? olderAngles.map((a: any) => a.thesis)
-    : (r.data?.structured?.chapters || []).map((c: any) => c.heading);
-  return `- ${r.timeId}: ${r.title}; prior hook: ${r.data?.structured?.dek || (r.summary || '').slice(0, 150)}; angles already covered: ${used.slice(0, 4).join(' / ')}`;
-}).join('\n') : 'No previous issues.'}
-No automatic callbacks. Only revisit a topic for a genuinely NEW development, new insight or a better joke.
+PREVIOUS ISSUES:
+Earlier generated prose is intentionally withheld. It cannot be trusted as dated personal evidence.
 
 MEDIA KNOWLEDGE (work identity only. NOT evidence of personally experienced plot, NO spoilers):
 ${wrappedContext || 'No background material.'}
