@@ -17,7 +17,7 @@ import { cn } from '../lib/utils';
 import { mediaOpinionsAsOf } from '../lib/mediaOpinionHistory';
 import { analyzeRecapSalience, recapSalienceBrief, selectRecapEditorialCandidates } from '../lib/recapSalience';
 import { readMoodlets, describeMoodlets } from '../lib/quickMoodlets';
-import { selectPersonalMoments } from '../lib/personalMoments';
+import { selectPersonalMoments, selectSessionContextNotes } from '../lib/personalMoments';
 import { generateMissingRecapParts, getMissingRecapParts } from '../lib/recapGeneration';
 import { FAUXLORE_RUNTIME_BUILD } from '../lib/runtimeBuild';
 import { summariseGroups, UNGROUPED } from '../lib/locationGroups';
@@ -728,8 +728,16 @@ export function Recaps() {
       const personalSalienceBrief = recapSalienceBrief(mediaSignals);
       const personalMoments = selectPersonalMoments(activeLogs, {
         journalLimit: timeframe === 'year' ? 70 : 50,
-        noteLimit: timeframe === 'year' ? 90 : 65,
         perMedia: timeframe === 'year' ? 12 : 6,
+      });
+      const contextNotes = selectSessionContextNotes(activeLogs,{
+        limit: timeframe === 'year' ? 14 : 8,
+        perMedia:2,
+        relevantMediaIds:[
+          ...personalMoments.map(moment=>moment.log.mediaId),
+          ...mediaSignals.filter(signal=>signal.maxImpact !== null && signal.maxImpact>=4)
+            .map(signal=>signal.mediaId),
+        ],
       });
       let rankingLimit = timeframe === 'week' ? 999 : (timeframe === 'month' ? 5 : 20);
       
@@ -914,8 +922,8 @@ PRIORITIZED PERSONAL JOURNAL REFLECTIONS (user-authored; interpret the actual ev
 ${personalMoments.filter(moment => moment.source === 'journal').map(({log:l,text}) => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}${l.location ? ' @ ' + l.location : ''}${l.thoughtPrompt ? ' [Question: '+l.thoughtPrompt+']' : ''}${typeof l.sessionImpact === 'number' ? ' [Impact '+l.sessionImpact+'/5]' : ''}: ${text}`).join('\n') || 'No personal thoughts recorded.'}
 STATUS TRANSITIONS (structured system events, NOT journal reactions):
 ${sampleAcross(activeLogs.filter(l => l.metricType === 'statusChange' && (l.note || '').trim()), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${l.note}`).join('\n') || 'No status transitions recorded.'}
-PRIORITIZED USER-AUTHORED SESSION NOTES (not Journal Thoughts, but MAY contain first-person reactions or specific memories):
-${personalMoments.filter(moment => moment.source === 'note').map(({log:l,text}) => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}${typeof l.sessionImpact === 'number' ? ' [Impact '+l.sessionImpact+'/5]' : ''}: ${text}`).join('\n') || 'No session reference notes.'}
+ORGANIZATIONAL SESSION NOTES (LIMITED BACKGROUND ONLY: chapter/issue numbers, plot landmarks or companions; NOT personal reviews or importance signals; do not base a standalone paragraph, angle or judgment on these):
+${contextNotes.map(({log:l,text}) => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${text}`).join('\n') || 'No session context notes.'}
 
 SESSION ENJOYMENT (individual-session 1-5 scores, distinct from full-media rating):
 ${sampleAcross(activeLogs.filter(l => typeof l.sessionEnjoyment === 'number'), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${l.sessionEnjoyment}/5`).join('\n') || 'No session enjoyment ratings.'}
