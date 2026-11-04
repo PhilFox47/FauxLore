@@ -440,4 +440,16 @@ export function initSchema(db: Db) {
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
       ON push_subscriptions(userId);
   `);
+  // A portrait is private, belongs to one account, is backed up with SQLite,
+  // and is NEVER exposed via /uploads or the normal settings JSON.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS visual_self_references (
+      userId TEXT PRIMARY KEY,
+      image BLOB NOT NULL,
+      mime TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
 }
