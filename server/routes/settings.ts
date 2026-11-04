@@ -14,7 +14,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
       const userId = getAuthUser(req, res);
       if (!userId) return;
       const row: any = db.prepare('SELECT * FROM settings WHERE userId = ?').get(userId);
-      if (!row) return res.json({ userId });
+      if (!row) return res.json({ userId, hasVisualSelfReference: !!db.prepare("SELECT 1 FROM visual_self_references WHERE userId=?").get(userId) });
       res.json({
         ...row,
         visualSelfInsertMode: normalizeVisualSelfMode(row.visualSelfInsertMode),
