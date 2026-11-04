@@ -76,8 +76,8 @@ test("cover prompt reflects the actual saved issue, reserves text overlay space 
   assert.match(prompt, /Strange Days in a Familiar Universe/);
   assert.match(prompt, /Mass Effect/);
   assert.match(prompt, /journey continues/);
-  assert.match(prompt, /ONE clear hero motif/);
-  assert.match(prompt, /Only ONE focal subject/);
+  assert.match(prompt, /ONE memorable visual action/);
+  assert.match(prompt, /Only ONE focal action or interaction/);
   assert.doesNotMatch(prompt, /connecting the MOST meaningful two or three themes/);
   assert.match(prompt, /cobalt/);
   assert.match(prompt, /LEFT 55% darker/);
@@ -94,9 +94,9 @@ test("one editorial image must not become an all-media lineup even when several 
   ]);
   assert.match(prompt, /Mass Effect/);
   assert.doesNotMatch(prompt, /Dungeon Crawler Carl|Final Fantasy XIV/);
-  assert.match(prompt, /Do not illustrate each logged title/);
+  assert.match(prompt, /never turn it into a lineup of characters/);
   assert.match(prompt, /not a required subject/);
-  assert.match(prompt, /No lineup of characters/);
+  assert.match(prompt, /One coherent situation can involve a SMALL GROUP/);
   assert.doesNotMatch(prompt, /These works were actually logged/);
 });
 
@@ -127,7 +127,7 @@ test("abstract period thesis may generate key art with no named franchise", () =
   assert.match(prompt, /The Long Way Home/);
   assert.match(prompt, /no single media title is the dominant visual anchor/i);
   assert.doesNotMatch(prompt, /Mass Effect|Another Book/);
-  assert.match(prompt, /ONE memorable visual metaphor/);
+  assert.match(prompt, /ONE memorable visual action/);
 });
 
 test("one cover per saved Wrapped; media subjects are restricted to user-owned progress logs", async () => {
@@ -580,7 +580,7 @@ test("single-media cover may inherit the correct style without making it a media
     await settle();
     assert.match(prompts[0], /ONE-WORK CODEX VISUAL STYLE/);
     assert.match(prompts[0], /midnight blue and icy silver/);
-    assert.match(prompts[0], /Only ONE focal subject/);
+    assert.match(prompts[0], /Only ONE focal action or interaction/);
     assert.doesNotMatch(prompts[0], /Unlogged Title|A Very Busy Side Quest/);
   } finally { db.close(); }
 });
