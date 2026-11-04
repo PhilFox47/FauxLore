@@ -1,6 +1,8 @@
 import { apiFetch } from './db';
 import { generateWrappedVisualCompositions } from './wrappedVisualDirector';
-import { getPersonaDescription } from '../lib/personas';
+import { getPersonaDescription, getPersonaEditorialFreedom } from '../lib/personas';
+import { wrappedEditorialMemoryBrief, recycledWrappedThesis } from '../lib/wrappedEditorialMemory';
+import type { WrappedEditorialMemoryItem } from '../lib/wrappedEditorialMemory';
 import { curateWrappedTheses } from '../lib/wrappedThesisGate';
 import { enforceWrappedFinale, finaleModes } from '../lib/wrappedFinale';
 import { wrappedPacingBudget } from '../lib/wrappedPacing';
@@ -224,12 +226,16 @@ export function normalizeWrappedStory(raw: any, evidence: WrappedEvidence, media
 export async function generateAiWrapped(args: {
   apiKey: string; model: string; persona?: string; evidence: WrappedEvidence;
   media: MediaItem[]; previous?: WrappedStory | null;
+  editorialMemory?: WrappedEditorialMemoryItem[];
 }): Promise<WrappedStory> {
   const { apiKey, model, persona, evidence, media } = args;
+  const editorialMemory = args.editorialMemory || [];
   const pacing = wrappedPacingBudget(evidence);
   const system = [
     "You are the AI STORY DIRECTOR for FauxLore Wrapped. Create an entirely NEW, standalone, deeply personalized, cinematic story from the user's media history. " + getPersonaDescription(persona),
     "This is NOT a recap reformat. You do NOT have the recap text, recap chapters or recap awards. Invent an independent editorial perspective from the raw evidence. A reader who has ALREADY READ their recap should discover NEW thoughts here.",
+    getPersonaEditorialFreedom(persona),
+    "ARCHIVAL REDACTION: Old Wrapped opinions are MEMORY OF WHAT YOU ALREADY SAID, NOT EVIDENCE OF WHAT THE PLAYER ACTUALLY DID. You may mock your past bad judgment, develop a real NEW twist or strongly disagree with your former verdict, but don't repackage an earlier insight under a new title. Only the current verified Evidence Cards establish historical actions or user statements.",
     "The cards are VERIFIED RAW MATERIAL, not a mandatory outline. Find the most distinctive period-specific experiences, user opinions, significant deviations from personal norms and meaningful coincidences. A specific review, real-world setting or surprising change of emphasis can be much stronger than a list of different media.",
     "PERSONAL MOMENTS FIRST: Evidence cards named 'Personal journal' or 'User-authored session note' carry the user's actual descriptions of what happened. Journal quotes are their own words, Notes are firsthand accounts but are not mislabeled as journal quotes. Read those specific events FIRST; HIGH IMPACT + Moving/Social is a strong clue to LOOK FOR the logged event, not license to merely describe scoring. A single completed story chapter with a beloved group can matter more than 30 unremarkable sessions. Historical opinions and notes after the period are not evidence for an earlier period.",
     "RESONANCE OVER EXPOSURE: Master Pages measure logged consumption, NOT personal significance. Consider the separate EDITORIAL SALIENCE section before choosing protagonists. A title with one 5/5-impact session may deserve more story than the top Master Page title with repeated passing-time/1-impact sessions. Also do not treat all high-impact scenes as obligatory: earn a specific angle. Important minority titles should be considered even if absent from the progress top three. Never equate a high enjoyment score with high impact, nor assume unscored sessions were unimportant.",
@@ -274,6 +280,8 @@ export async function generateAiWrapped(args: {
     'TIMEFRAME ' + evidence.timeframe + ' ' + evidence.timeId + ': ' + evidence.bounds.start + ' to ' + evidence.bounds.end,
     'EDITORIAL BASELINE CALIBRATION (these rules override any temptation to call ordinary switching unusual):\n' + evidence.editorialCalibration,
     'EDITORIAL SALIENCE (independent of progress volume; give low-volume strong-impact candidates real consideration):\n' + evidence.editorialSalience,
+    'PRIOR WRAPPED EDITORIAL MEMORY (opinions already explored in STRICTLY EARLIER non-overlapping periods, plus optional same-period old rerun; DO NOT treat them as factual evidence or insert events from another time):\n' +
+      wrappedEditorialMemoryBrief(editorialMemory),
     evidence.monthlyCoverage ?
       'MONTH COVERAGE CONTRACT AND VERIFIED SUBPHASE CLUSTERS (substantive scenes need evidenceIds and concrete insights, not artificial phase symmetry):\n' +
       JSON.stringify(evidence.monthlyCoverage) : '',
@@ -304,6 +312,8 @@ export async function generateAiWrapped(args: {
       // Delete weak or duplicated scenes rather than spending costly image
       // generation on filler. Existing saved stories remain backwards-compatible.
       const curated = curateWrappedTheses(parseJson(answer), evidence);
+      const repeated = recycledWrappedThesis(curated.draft.scenes, editorialMemory);
+      if (repeated) throw new Error('Recycled an earlier Wrapped argument instead of finding a new interpretation: '+repeated);
       const withFinale = enforceWrappedFinale(curated.draft, evidence);
       const story = normalizeWrappedStory(withFinale, evidence, media);
       // A second, independent creative call composes only selected visual
