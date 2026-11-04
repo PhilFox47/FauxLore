@@ -140,6 +140,9 @@ export function buildWrappedCoverPrompt(
       scene.artworks?.some(art => art.id === primary.id)),
   );
   const opening = story.scenes[0];
+  const cast = opening?.composition?.visualPlan?.castMode;
+  const subjectProfile = visualSelf && cast && cast !== "self" && cast !== "in-world-self"
+    ? { ...visualSelf, visualSelfInsertMode: "never" as const } : visualSelf;
   const palette = palettes[opening?.design?.palette || ""] || palettes.violet;
   const visualIdea = compact(opening?.composition?.artConcept, 230);
   const mediaInfluence = primary
@@ -162,7 +165,7 @@ export function buildWrappedCoverPrompt(
       "Use the work's genuine visual medium and stylistic technique as a secondary influence, without forcing recognizable characters into an abstract issue. An animated work must not become generic photorealism; a live-action work must not become a random cartoon. The single editorial thesis and text-safe composition still take priority.",
     ].join("\n") : "",
     visualIdea ? "EDITORIAL DIRECTOR'S SPECIFIC IMAGE CONCEPT (priority over generic ideas): " + visualIdea : "",
-    wrappedActionImageGuidance(opening?.composition?.visualPlan, visualSelf,
+    wrappedActionImageGuidance(opening?.composition?.visualPlan, subjectProfile,
       opening?.composition?.visualPlan?.castMode === "in-world-self" ? primary?.title : undefined),
     visualContinuity ? "WHOLE-ISSUE IMAGE CONTINUITY (binding composition constraints):\n" +
       visualContinuity : "",
@@ -174,7 +177,7 @@ export function buildWrappedCoverPrompt(
     "Horizontal landscape 3:2 composition, cinematic full-frame editorial illustration. " +
       imageFramingGuidance(opening?.composition?.direction),
     "This is illustration ONLY: NO text, titles, labels, logos, watermarks, statistics, UI overlays or borders. FauxLore renders all real copy separately.",
-    visualSelfImageClause(visualSelf),
+    visualSelfImageClause(subjectProfile),
   ].filter(Boolean).join("\n\n");
 }
 
