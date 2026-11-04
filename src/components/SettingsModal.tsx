@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Sparkles, RefreshCw, UserCircle, Settings as SettingsIcon, Shield, Database, Users, Target, Image as ImageIcon, Bell, Activity } from 'lucide-react';
 import { DatabaseService } from '../services/db';
+import { VisualSelfReferencePicker } from './VisualSelfReferencePicker';
 import { IntegrationsService } from '../services/integrations';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -825,7 +826,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                           <p className="text-[11px] text-zinc-500 leading-relaxed">
                             Write only what you want the image model to know. The description is
                             stored per account and included only in Wrapped image requests when
-                            Auto or Prefer is enabled. No photos are uploaded.
+                            Auto or Prefer is enabled. The optional face photo below is stored separately and only transmitted for intentional self-portrayals.
                           </p>
                           <span className="text-[10px] text-zinc-500 tabular-nums shrink-0">
                             {formData.visualSelfDescription.length}/700
@@ -833,10 +834,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         </div>
                         {formData.visualSelfInsertMode !== 'never' && !formData.visualSelfDescription.trim() && (
                           <p className="text-[11px] text-amber-300 mt-2">
-                            Add a description to enable visual likeness. Until then, generation behaves as before.
+                            Add a text description to improve consistency across image styles. A reference photo can be uploaded independently.
                           </p>
                         )}
                       </div>
+                      <VisualSelfReferencePicker enabled={formData.visualSelfInsertMode !== 'never'}
+                        provider={formData.aiProvider} imageModel={formData.cliProxyImageModel} />
                     </div>
 
                     <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-4 space-y-3">
