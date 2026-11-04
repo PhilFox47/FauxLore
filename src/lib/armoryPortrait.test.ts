@@ -28,7 +28,7 @@ test("the prompt places all equipped images in the right slot, not as a collage"
   assert.match(prompt,/REFERENCE IMAGE #2 IS THE EXACT ITEM FOR SLOT Body/);
   assert.match(prompt,/REFERENCE IMAGE #3 IS THE EXACT ITEM FOR SLOT Secondary/);
   assert.match(prompt,/HEAD/);
-  assert.match(prompt,/PRIMARY/);
+  assert.match(prompt,/Primary/);
   assert.match(prompt,/Do not invent additional iconic equipment/);
   assert.doesNotMatch(prompt,/Reference image #4/);
   assert.equal(equippedPortraitItems([item("a","Body"),item("b","Body")]).length,1);
