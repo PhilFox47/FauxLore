@@ -5,6 +5,7 @@ on:
     branches: [claude]
     paths:
       - 'src/lib/mediaOpinionHistory*'
+      - 'src/lib/recapGeneration*'
       - 'src/lib/wrappedEvidence*'
       - 'src/services/wrappedAi.ts'
       - 'src/pages/Recaps.tsx'
@@ -28,5 +29,7 @@ jobs:
       - run: npm ci
       - name: Verify dated opinion snapshots, period isolation and edit history
         run: node --import tsx --test src/lib/mediaOpinionHistory.test.ts server/db/mediaOpinionHistory.test.ts
+      - name: Verify manual missing-only recap generation
+        run: node --import tsx --test src/lib/recapGeneration.test.ts
       - name: Build production client and server
         run: npm run build
