@@ -6,6 +6,7 @@ import type { StoryScene } from "../../src/lib/storyDiscovery";
 import { imageFramingGuidance, type EditorialDirection, type WrappedVisualPlan } from "../../src/lib/dynamicScenes";
 import { wrappedActionImageGuidance } from "../../src/lib/wrappedVisualAction";
 import { visualSelfImageClause, type VisualSelfProfile } from "../../src/lib/visualSelf";
+import { shouldAttachFaceReference } from "../lib/visualSelfReference";
 
 export type WrappedTimeframe = "week" | "month" | "year";
 export type WrappedCoverSubject = { id: string; title: string; type: string; genres?: string[] };
@@ -172,9 +173,9 @@ export function buildWrappedCoverPrompt(
 
 export function createWrappedCoverService({ db, generateImage, generateSceneImage, getCodexStyle, canSpendTokens }: {
   db: Db;
-  generateImage: (userId: string, prompt: string) => Promise<string>;
+  generateImage: (userId: string, prompt: string, options?: { useFaceReference?: boolean }) => Promise<string>;
   /** Uses the same configured image provider, with scene-specific art direction. */
-  generateSceneImage?: (userId: string, prompt: string) => Promise<string>;
+  generateSceneImage?: (userId: string, prompt: string, options?: { useFaceReference?: boolean }) => Promise<string>;
   /** Existing completed Codex only; must never launch AI research. */
   getCodexStyle?: (userId: string, mediaId: string) => WrappedCodexStyle | null;
   canSpendTokens: (userId: string) => boolean;
@@ -200,8 +201,10 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
     // appearance; never transmit this private profile to the Story Director.
     try {
       return (db.prepare(
-        "SELECT visualSelfInsertMode, visualSelfDescription FROM settings WHERE userId=?",
-      ).get(userId) as VisualSelfProfile | undefined) || {};
+        "SELECT visualSelfInsertMode, visualSelfDescription, " +
+        "EXISTS(SELECT 1 FROM visual_self_references WHERE userId=?) AS visualSelfReferenceAvailable " +
+        "FROM settings WHERE userId=?",
+      ).get(userId, userId) as VisualSelfProfile | undefined) || {};
     } catch {
       return {};
     }
@@ -268,10 +271,14 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
       // valid, abstract issue can intentionally have no named visual anchor.
       if (!hasVerifiedActivity) throw new Error("No verified progress logs for this Wrapped period.");
       const codexStyle = subjects[0] ? optionalCodexStyle(userId, subjects[0].id) : null;
+      const profile = visualSelfFor(userId);
+      const openingPlan = story.scenes.find(scene => scene.kind === "opening")?.composition?.visualPlan;
       const prompt = buildWrappedCoverPrompt(
-        story, timeframe, timeId, subjects, visualSelfFor(userId), codexStyle,
+        story, timeframe, timeId, subjects, profile, codexStyle,
       );
-      const url = await generateImage(userId, prompt);
+      const url = await generateImage(userId, prompt, {
+        useFaceReference: shouldAttachFaceReference(profile.visualSelfInsertMode, openingPlan),
+      });
       db.prepare(
         "UPDATE wrapped_stories SET coverArtUrl=?, coverArtStatus='done', coverArtRequestId=NULL " +
         "WHERE userId=? AND timeframe=? AND timeId=? AND coverArtRequestId=?",
@@ -389,19 +396,28 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
         const batch = needed.slice(i, i + 2);
         const produced = await Promise.allSettled(batch.map(async id => {
           const scene = story.scenes.find(s => s.id === id);
+          const profile = visualSelfFor(userId);
+          const faceReference = id !== "achievement-finale" &&
+            shouldAttachFaceReference(profile.visualSelfInsertMode, scene?.composition?.visualPlan);
+          // Never inject personal likeness guidance into a scene explicitly
+          // casting a canon character or choosing only the environment.
+          const subjectProfile: VisualSelfProfile = scene?.composition?.visualPlan &&
+            !faceReference && scene.composition.visualPlan.castMode !== "self" &&
+            scene.composition.visualPlan.castMode !== "in-world-self"
+            ? { ...profile, visualSelfInsertMode: "never" } : profile;
           const prompt = id === "achievement-finale"
             ? buildWrappedAchievementFinalePrompt(story)
             : scene?.kind === "closing"
-              ? buildWrappedClosingTableauPrompt(story, scene, visualSelfFor(userId))
+              ? buildWrappedClosingTableauPrompt(story, scene, subjectProfile)
               : scene ? buildWrappedSceneArtPrompt(
-                story, scene, visualSelfFor(userId),
+                story, scene, subjectProfile,
                 (() => {
                   const featuredMediaId = selectWrappedSceneStyleMediaId(scene);
                   return featuredMediaId ? optionalCodexStyle(userId, featuredMediaId) : null;
                 })(),
               ) : null;
           if (!prompt) throw new Error("Unknown artwork scene " + id);
-          return { id, imageUrl: await generateSceneImage(userId, prompt) };
+          return { id, imageUrl: await generateSceneImage(userId, prompt, { useFaceReference: faceReference }) };
         }));
         for (const result of produced) {
           if (result.status === "fulfilled") images[result.value.id] = result.value.imageUrl;
