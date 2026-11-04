@@ -271,7 +271,7 @@ test("original interior chapter artworks are generated once and stored independe
     assert.deepEqual(Object.keys(artwork), ["wrapped-1", "wrapped-2", "wrapped-3", "achievement-finale"]);
     assert.equal(imageCalls.length, 4);
     assert.match(imageCalls[2], /FULL-BLEED CLOSING SCENE/);
-    assert.match(imageCalls[2], /visual EPILOGUE/);
+    assert.match(imageCalls[2], /EDITORIAL MODE/);
     assert.match(imageCalls[3], /Dungeon System Verdict/);
     assert.match(imageCalls[0], /A train on a train/);
     assert.match(imageCalls[1], /Eight titles at one hotel/);
