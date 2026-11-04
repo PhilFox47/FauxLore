@@ -25,7 +25,7 @@ export function wrappedActionImageGuidance(
   featuredWork?: string | null,
 ): string {
   const hasOptedIn = normalizeVisualSelfMode(profile?.visualSelfInsertMode) !== "never" &&
-    !!normalizeVisualSelfDescription(profile?.visualSelfDescription);
+    (!!normalizeVisualSelfDescription(profile?.visualSelfDescription) || !!profile?.visualSelfReferenceAvailable);
   const world = featuredWork?.trim();
   const shared = [
     "ACTIVE STORYTELLING: Avoid the recurring stock portrait of a solitary thoughtful man, seated with book, pen or notebook, chin on hand, staring wistfully into the distance. Do not default to a static chest-up pose. If a person appears, give them a purposeful, readable physical action or meaningful interaction unless this exact beat calls for reflection.",
