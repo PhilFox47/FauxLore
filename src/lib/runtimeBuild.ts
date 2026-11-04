@@ -3,4 +3,4 @@
  * Both bundles embed this exact value at build time. It deliberately is not
  * read from .git: Docker ignores .git and may serve an older container.
  */
-export const FAUXLORE_RUNTIME_BUILD = 'manual-wrapped-observable-v4-20261104';
+export const FAUXLORE_RUNTIME_BUILD = 'moodlets-resonance-v5-20261104';
