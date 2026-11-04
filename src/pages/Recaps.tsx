@@ -14,7 +14,7 @@ import { calculateScaledDelta } from '../lib/scaling';
 import { calculateRPGState } from '../lib/rpgSystem';
 import { MediaItem, MEDIA_COLORS, ProgressLog, RARITY_COLORS } from '../types/schema';
 import { cn } from '../lib/utils';
-import { hasNewContent, isWaitingOnRelease, newContentReason } from '../lib/onHold';
+import { mediaOpinionsAsOf } from '../lib/mediaOpinionHistory';
 import { summariseGroups, UNGROUPED } from '../lib/locationGroups';
 import { WALLPAPER_SPECS, WallpaperFormat, downloadWallpaper, renderWallpaper } from '../services/wallpaper';
 import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map as MapIcon, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon, Skull, Download, Image as ImageIcon } from 'lucide-react';
@@ -198,7 +198,6 @@ export function Recaps() {
   }, [activeLogs, media]);
   const droppedMediaIds = useMemo(() => new Set(droppedMedia.map(m => m.id)), [droppedMedia]);
 
-  const inProgressMedia = useMemo(() => activeMedia.filter(m => !completedMediaIds.has(m.id) && !droppedMediaIds.has(m.id)), [activeMedia, completedMediaIds, droppedMediaIds]);
 
   const gatheredLoot = useMemo(() => {
     let intervalArtifacts = artifacts.filter(a => isWithinInterval(subHours(parseISO(a.earnedAt), 5), currentInterval));
@@ -548,14 +547,16 @@ export function Recaps() {
     try {
       // The token is issued before the expensive call. Another tab or a reroll
       // can supersede this work without rewriting a newer story.
-      const evidence = buildWrappedEvidence({ timeframe, timeId, logs: activeLogs, history: validLogs, media, settings });
+      const opinionHistory = await DatabaseService.getMediaOpinionHistory(activeMedia.map(m => m.id));
+      const periodMedia = mediaOpinionsAsOf(media, opinionHistory, currentInterval.end);
+      const evidence = buildWrappedEvidence({ timeframe, timeId, logs: activeLogs, history: validLogs, media: periodMedia, settings });
       if (evidence.facts.length < 2) throw new Error('Not enough recorded activity to compose a personal story yet.');
       const requestId = await DatabaseService.startWrappedGeneration(timeframe, timeId);
       const generated = await generateAiWrapped({
         apiKey: settings.nanoGptApiKey || '',
         model: creativeModel(settings),
         persona: settings.aiPersona,
-        evidence, media, previous: wrapped,
+        evidence, media: periodMedia, previous: wrapped,
       });
       const saved = await DatabaseService.saveWrappedStory(timeframe, timeId, requestId, generated);
       setWrappedStories(prev => ({ ...prev, [key]: saved }));
@@ -617,9 +618,12 @@ export function Recaps() {
     }
     const existing = readRecap(currentRecap);
     if (!existing) return;
+    try {
+    const opinionHistory = await DatabaseService.getMediaOpinionHistory(activeMedia.map(m => m.id));
+    const periodMedia = mediaOpinionsAsOf(activeMedia, opinionHistory, currentInterval.end);
     const evidence = [
       'Period: ' + timeframe + ' ' + timeId,
-      'Media touched: ' + JSON.stringify(activeMedia.map(m => ({
+      'Media touched: ' + JSON.stringify(periodMedia.map(m => ({
         title: m.title, mediaType: m.mediaType, genres: m.genres, userRating: m.userRating,
         reviewScore: m.reviewScore, userReview: m.userReview, dropReason: m.dropReason
       }))),
@@ -630,7 +634,6 @@ export function Recaps() {
         metric: l.metricType, progress: l.delta, notes: l.note, thoughts: l.thoughts, prompt: l.thoughtPrompt, enjoyment: l.sessionEnjoyment, location: l.location
       }))),
     ].join('\n');
-    try {
       await forgeAchievements(existing, evidence, currentRecap.data?.generationId || null);
     } catch (e: any) {
       toast.error('Achievement generation failed: ' + (e?.message || String(e)));
@@ -688,6 +691,15 @@ export function Recaps() {
     
     setIsGenerating(true);
     try {
+      const opinionHistory = await DatabaseService.getMediaOpinionHistory(activeMedia.map(m => m.id));
+      const periodMedia = mediaOpinionsAsOf(media, opinionHistory, currentInterval.end);
+      const periodById = new Map(periodMedia.map(m => [m.id, m]));
+      const periodActiveMedia = activeMedia.map(m => periodById.get(m.id)!).filter(Boolean);
+      const periodCompletedMedia = completedMedia.map(m => periodById.get(m.id)!).filter(Boolean);
+      const periodDroppedMedia = droppedMedia.map(m => periodById.get(m.id)!).filter(Boolean);
+      const periodInProgressMedia = periodActiveMedia.filter(m =>
+        !completedMediaIds.has(m.id) && !droppedMediaIds.has(m.id));
+      const periodTaste = buildTasteAlignment(periodActiveMedia);
       let rankingLimit = timeframe === 'week' ? 999 : (timeframe === 'month' ? 5 : 20);
       
       const mediaRanking = activeMedia.map(m => {
@@ -784,7 +796,7 @@ export function Recaps() {
       );
 
       // Add analytics for specific new modules
-      const recapDataConfig = { timeScale: timeframe, logs: activeProgressLogs, media: activeMedia, allMedia: media, settings };
+      const recapDataConfig = { timeScale: timeframe, logs: activeProgressLogs, media: periodActiveMedia, allMedia: periodMedia, settings };
       const contrarianMedia = analyzeContrarian(recapDataConfig);
       const backlogVelocity = analyzeBacklog(recapDataConfig);
       const habitsDetails = analyzeHabits(recapDataConfig);
@@ -795,18 +807,8 @@ export function Recaps() {
         lootDist[a.rarity] = (lootDist[a.rarity] || 0) + 1;
       });
 
-      // On Hold and Caught Up represent deliberately parked entries, usually
-      // awaiting external releases. On Hold can also be a voluntary return-later
-      // pause, such as stopping a subscription temporarily. Do not guess why.
-      const parkedMedia = media.filter(isWaitingOnRelease);
-      const unblockedMedia = media.filter(m => (m.status === 'On Hold' || m.status === 'Caught Up') && hasNewContent(m));
-      const holdNote = (m: MediaItem) =>
-        (m.status !== 'On Hold' && m.status !== 'Caught Up') ? ''
-          : hasNewContent(m) ? ` [${m.status === 'Caught Up' ? 'CAUGHT UP' : 'ON HOLD'}, but new content has shipped]`
-          : m.status === 'Caught Up'
-            ? ' [CAUGHT UP — they finished everything released so far and are waiting on the next update]'
-            : ' [ON HOLD, deliberately parked; usually awaiting a release or access, sometimes taking a planned break; reason unconfirmed]';
-
+      // Release waiting/unblocking cannot be reconstructed from today's live
+      // metadata. Do not inject a future release or current status into the past.
       // Media identity enriches the Spotify-Wrapped commentary, but cannot
       // substitute for the user's activity, ratings, journal notes or choices.
       const wrappedIds = activeMedia
@@ -832,12 +834,12 @@ export function Recaps() {
         periodStart: currentInterval.start,
         logs: activeProgressLogs,
         history: validLogs,
-        media,
+        media: periodMedia,
         settings,
       }));
       const monthlyEditorialEvidence = timeframe === 'month' ? (() => {
         const evidence = buildWrappedEvidence({
-          timeframe, timeId, logs: activeLogs, history: validLogs, media, settings,
+          timeframe, timeId, logs: activeLogs, history: validLogs, media: periodMedia, settings,
         });
         const contract = evidence.monthlyCoverage;
         return [
@@ -886,7 +888,7 @@ ${sampleAcross(activeLogs.filter(l => l.metricType !== 'statusChange' && (l.note
 
 SESSION ENJOYMENT (individual-session 1-5 scores, distinct from full-media rating):
 ${sampleAcross(activeLogs.filter(l => typeof l.sessionEnjoyment === 'number'), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${l.sessionEnjoyment}/5`).join('\n') || 'No session enjoyment ratings.'}
-${activeMedia.filter(m => (m.userReview || '').trim() || (m.dropReason || '').trim()).map(m => `- ${m.title}: ${m.userReview ? 'Review: ' + m.userReview : ''} ${m.dropReason ? 'Drop reason: ' + m.dropReason : ''}`).join('\n') || 'No reviews.'}
+${periodActiveMedia.filter(m => (m.userReview || '').trim() || (m.dropReason || '').trim()).map(m => `- ${m.title}: ${m.userReview ? 'Review: ' + m.userReview : ''} ${m.dropReason ? 'Drop reason: ' + m.dropReason : ''}`).join('\n') || 'No reviews.'}
 
 CHRONOLOGICAL CLUES (analyze patterns, never retell this as a log):
 ${sampleAcross(activeLogs, timeframe === 'year' ? 90 : 120).map(l => `- ${l.timestamp.split('T')[0]}: ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}, ${l.metricType} ${l.delta}${l.location ? ' @ ' + l.location : ''}`).join('\n') || 'No log clues.'}
@@ -907,20 +909,18 @@ ${defeatedBosses.length > 0 ? defeatedBosses.map(b => `- ${b.name} (LV ${b.level
 Total Master Pages (EXP): ${Math.floor(totalMasterPages)} ${isNewPR ? '(personal record; mention only if editorially relevant)' : ''}
 Total Logs: ${activeLogs.length}
 
-MEDIA IN PROGRESS:
-${inProgressMedia.map(m => `- ${m.title} (${m.mediaType})${holdNote(m)}: [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres (ordered by importance): ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags (ordered by importance): ' + m.tags.join(', ') : ''}`).join('\n') || 'None'}
+MEDIA WITH PROGRESS BUT NO RECORDED COMPLETION/DROP IN THIS PERIOD (current status is not historical evidence):
+${periodInProgressMedia.map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres (ordered by importance): ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags (ordered by importance): ' + m.tags.join(', ') : ''}`).join('\n') || 'None'}
 
-PARKED MEDIA (Caught Up = all available installments consumed; On Hold = paused, usually for new releases/updates, occasionally for a planned personal break such as a suspended subscription. Reasons are NOT known unless separately recorded. Do not call these neglected, abandoned, or overdue; do not nag the user to resume them simply because of inactivity):
-${parkedMedia.length > 0 ? parkedMedia.map(m => `- ${m.title} (${m.mediaType})`).join('\n') : 'None'}
-
-UNBLOCKED (was parked, and new content has since shipped — these ARE fair to point at):
-${unblockedMedia.length > 0 ? unblockedMedia.map(m => `- ${m.title} (${m.mediaType}): ${newContentReason(m)}`).join('\n') : 'None'}
+RELEASE WAITING / UNBLOCKED MEDIA:
+Not reconstructed: current release availability and parked status are not historical snapshots.
+Only use explicitly dated status-change logs above as evidence of a past transition.
 
 MEDIA MOVED TO DROPPED (may be manual or automatic after 50 days inactivity; FauxLore does not reliably record the cause; no drop reason means motive UNKNOWN, not rejection or dislike):
-${droppedMedia.length > 0 ? droppedMedia.map(m => `- ${m.title} (${m.mediaType}): ${m.dropReason ? `[Drop Reason: ${m.dropReason}]` : '[No reason specified]'}`).join('\n') : 'None'}
+${periodDroppedMedia.length > 0 ? periodDroppedMedia.map(m => `- ${m.title} (${m.mediaType}): ${m.dropReason ? `[Drop Reason: ${m.dropReason}]` : '[No reason specified]'}`).join('\n') : 'None'}
 
 MEDIA COMPLETED:
-${completedMedia.length > 0 ? completedMedia.map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.userReview ? `[User Review: "${m.userReview}"] ` : ''}${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres (ordered by importance): ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags (ordered by importance): ' + m.tags.join(', ') : ''}`).join('\n') : 'None'}
+${periodCompletedMedia.length > 0 ? periodCompletedMedia.map(m => `- ${m.title} (${m.mediaType}): [Critic Rating: ${m.reviewScore || 'N/A'}/5, User Rating: ${m.userRating || 'N/A'}/5]${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).length > 0 ? ` [Consumed at: ${Array.from(new Set(activeLogs.filter(l => l.mediaId === m.id && l.location && l.location.trim().length > 0).map(l => l.location))).join(', ')}]` : ''} ${m.userReview ? `[User Review: "${m.userReview}"] ` : ''}${m.description ? m.description.substring(0, 150) + '...' : 'No description.'} ${m.genres?.length ? 'Genres (ordered by importance): ' + m.genres.join(', ') : ''} ${m.tags?.length ? 'Tags (ordered by importance): ' + m.tags.join(', ') : ''}`).join('\n') : 'None'}
 
 UNIVERSES / FRANCHISES (the groupings the user maintains by hand — a run at one universe, or a first visit to one, is a deliberate choice worth reading):
 ${franchiseInsights ? [
@@ -949,7 +949,7 @@ Sessions: ${currentMetrics.sessions}, averaging ${Math.round(currentMetrics.avgS
 ${currentMetrics.bestDay ? `Biggest day: ${Math.round(currentMetrics.bestDay.pages)} MP on ${currentMetrics.bestDay.key}` : ''}
 ${clock ? `When they consume: peak window ${clock.peakWindow.start}:00-${clock.peakWindow.end}:00 (${Math.round(clock.peakWindow.share * 100)}% of everything), mostly a ${clock.dominant.name.toLowerCase()} person — ${clock.dominant.range} — at ${Math.round(clock.dominant.share * 100)}% of their master pages` : ''}
 Outcomes: ${pipeline.stages.map(st => `${st.label} ${st.count}`).join(', ')}; ${pipeline.stillOpen} carried forward; ${Math.round(pipeline.closureRate * 100)}% closed out
-${taste ? `Taste vs critics: ${taste.stance} overall (average gap ${taste.avgGap.toFixed(1)})${taste.biggestChampion ? `; championed "${taste.biggestChampion.title}" (+${taste.biggestChampion.gap.toFixed(1)})` : ''}${taste.biggestSkeptic ? `; resisted "${taste.biggestSkeptic.title}" (${taste.biggestSkeptic.gap.toFixed(1)})` : ''}` : ''}
+${periodTaste ? `Taste vs critics: ${periodTaste.stance} overall (average gap ${periodTaste.avgGap.toFixed(1)})${periodTaste.biggestChampion ? `; championed "${periodTaste.biggestChampion.title}" (+${periodTaste.biggestChampion.gap.toFixed(1)})` : ''}${periodTaste.biggestSkeptic ? `; resisted "${periodTaste.biggestSkeptic.title}" (${periodTaste.biggestSkeptic.gap.toFixed(1)})` : ''}` : ''}
 ${rankRace ? `The race: ${rankRace.series.map(r => r.title).join(' vs ')}${rankRace.leadChanges > 0 ? `, lead changed hands ${rankRace.leadChanges} time(s)` : ', one title led throughout'}` : ''}
 PERSONAL RECORDS this ${timeframe}: ${records.filter(r => r.isRecord).map(r => `${r.label} — ${r.value} ${r.unit} (previous best ${r.previousBest})`).join(' | ') || 'None broken'}
 NEAR MISSES: ${records.filter(r => !r.isRecord && r.previousBest > 0 && r.value >= r.previousBest * 0.85).map(r => `${r.label} — ${r.value} vs best ${r.previousBest}`).join(' | ') || 'None close'}
