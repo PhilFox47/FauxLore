@@ -24,12 +24,18 @@ export function evaluateWrappedThesis(item: any, facts: Map<string, WrappedFact>
   if (activityOnly.test(claim) && !interpretive.test(claim)) {
     return {acceptable:false,reason:'Just naming what was consumed is not an argument'};
   }
+  // Chapter/issue indexing and recap of a minor in-fiction fight do not become
+  // editorial takes merely because a real Notes field recorded them.
+  const storyInventory = /\b(?:issues?\s*(?:#?\d|numbers?\s*\d)|chapters?\s*\d+\s*(?:[-–,\/]\s*\d+)?|episodes?\s*\d+\s*[-–,]\s*\d+|fought\s+(?:against\s+)?[A-Z][a-z]+)\b/i;
+  const storyInterpretation = /\b(?:reveals?|suggests?|demonstrates?|exposes?|contradicts?|matters?|says about|reflects?|means?|illustrates?|the player|your\s+(?:taste|attitude|relationship|opinion|reaction|priorit))\b/i;
+  if (storyInventory.test(claim) && !storyInterpretation.test(claim)) {
+    return {acceptable:false,reason:'Organizational issue/chapter or in-fiction plot inventory, not a personal editorial interpretation'};
+  }
   const ids: string[] = Array.isArray(item.evidenceIds) ? [...new Set(item.evidenceIds)] : [];
   const known = ids.map(id => facts.get(id)).filter((f): f is WrappedFact => !!f);
   if (!known.length) return {acceptable:false,reason:'No verified source supports the proposed argument'};
   const significant = known.some(f =>
     f.kind === 'journal' ||
-    f.id.startsWith('reference-') ||
     f.id.startsWith('session-resonance-') ||
     f.id.startsWith('taste-') ||
     f.id.startsWith('focus-') ||
