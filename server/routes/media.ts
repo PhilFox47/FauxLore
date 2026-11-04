@@ -114,6 +114,25 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // Read append-only personal opinion snapshots for historical recap generation.
+  // Never expose another user's reviews, even if their media IDs are known.
+  app.get("/api/media/opinion-history", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const ids = typeof req.query.ids === 'string' ? req.query.ids.split(',').filter(Boolean) : [];
+      if (!ids.length || ids.length > 100 || ids.some(id => id.length > 128))
+        return res.status(400).json({ error: 'Provide 1-100 media IDs.' });
+      const placeholders = ids.map(() => '?').join(',');
+      const rows = db.prepare(
+        `SELECT mediaId, recordedAt, userRating, userReview, dropReason
+         FROM media_opinion_history WHERE userId = ? AND mediaId IN (${placeholders})
+         ORDER BY recordedAt ASC, id ASC`,
+      ).all(userId, ...ids);
+      res.json(rows);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   app.get("/api/media/:id", (req, res) => {
     try {
       const userId = getAuthUser(req, res);
@@ -202,7 +221,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
 
       // Whether this is a brand-new entry decides if tagging gets queued below;
       // it has to be read before the upsert makes the row exist either way.
-      const existing = db.prepare('SELECT id FROM media WHERE id = ? AND userId = ?').get(item.id, userId) as any;
+      const existing = db.prepare('SELECT id, userRating, userReview, dropReason FROM media WHERE id = ? AND userId = ?').get(item.id, userId) as any;
       const isNewEntry = !existing;
 
       // Handle Taxonomy Usage Counts
@@ -282,6 +301,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
           bookFormat=COALESCE(excluded.bookFormat, media.bookFormat)
       `);
 
+      db.transaction(() => {
       stmt.run({
         id: item.id,
         userId: userId,
@@ -357,6 +377,23 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
         createdAt: item.createdAt,
         updatedAt: item.updatedAt
       });
+
+      const current = db.prepare(
+        'SELECT userRating, userReview, dropReason FROM media WHERE id = ? AND userId = ?',
+      ).get(item.id, userId) as { userRating: number | null; userReview: string | null; dropReason: string | null };
+      const changed = !existing || ['userRating', 'userReview', 'dropReason'].some(
+        field => (existing[field] ?? null) !== (current as any)[field],
+      );
+      const hasOpinion = current.userRating != null || !!current.userReview?.trim() || !!current.dropReason?.trim();
+      const witnessed = db.prepare(
+        'SELECT 1 FROM media_opinion_history WHERE userId = ? AND mediaId = ? LIMIT 1',
+      ).get(userId, item.id);
+      if (changed || (hasOpinion && !witnessed)) {
+        db.prepare(
+          'INSERT INTO media_opinion_history (userId, mediaId, recordedAt, userRating, userReview, dropReason) VALUES (?, ?, ?, ?, ?, ?)',
+        ).run(userId, item.id, new Date().toISOString(), current.userRating, current.userReview, current.dropReason);
+      }
+      })();
 
       if (item.status === 'Completed') {
         try {
@@ -462,6 +499,7 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
         console.error("Failed to decrement taxonomy counts", e);
       }
 
+      db.prepare('DELETE FROM media_opinion_history WHERE mediaId = ? AND userId = ?').run(req.params.id, userId);
       db.prepare('DELETE FROM media WHERE id = ? AND userId = ?').run(req.params.id, userId);
       // SQLite CASCADE will handle deleting the logs attached to this mediaId,
       // but just incase PRAGMA is off, we manually delete:
