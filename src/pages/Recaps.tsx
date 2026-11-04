@@ -549,7 +549,7 @@ export function Recaps() {
     }
   };
 
-  const generateWrapped = async () => {
+  const generateWrapped = async (manualIntentId: string) => {
     const key = timeframe + ':' + timeId;
     if (wrappedGenerationRef.current || !settings || !canUseAi || !activeLogs.length || activity?.frozen) return;
     wrappedGenerationRef.current = key;
@@ -562,7 +562,7 @@ export function Recaps() {
       const periodMedia = mediaOpinionsAsOf(media, opinionHistory, currentInterval.end);
       const evidence = buildWrappedEvidence({ timeframe, timeId, logs: activeLogs, history: validLogs, media: periodMedia, settings });
       if (evidence.facts.length < 2) throw new Error('Not enough recorded activity to compose a personal story yet.');
-      const requestId = await DatabaseService.startWrappedGeneration(timeframe, timeId);
+      const requestId = await DatabaseService.startWrappedGeneration(timeframe, timeId, manualIntentId);
       const generated = await generateAiWrapped({
         apiKey: settings.nanoGptApiKey || '',
         model: creativeModel(settings),
@@ -578,6 +578,18 @@ export function Recaps() {
     } finally {
       wrappedGenerationRef.current = null;
       setWrappedGeneratingKey(null);
+    }
+  };
+
+  // Explicit user-action boundary: the artwork/AI pipeline cannot acquire an
+  // intent on page mount, period change or a read-only fetch.
+  const requestManualWrapped = async () => {
+    if (wrappedGenerationRef.current || !activeLogs.length || !canUseAi || activity?.frozen) return;
+    try {
+      const manualIntentId = await DatabaseService.requestWrappedManualIntent(timeframe, timeId);
+      await generateWrapped(manualIntentId);
+    } catch (error: any) {
+      toast.error('Could not authorize Wrapped generation: ' + (error?.message || String(error)));
     }
   };
 
@@ -1025,7 +1037,7 @@ ${wrappedContext || 'No background material.'}
     try {
       await generateMissingRecapParts(missing, {
         deepDive: handleGenerateAI,
-        wrapped: generateWrapped,
+        wrapped: requestManualWrapped,
       });
     } finally {
       manualGenerationRef.current = null;
@@ -2693,7 +2705,7 @@ ${wrappedContext || 'No background material.'}
                            )}
                            <div className="flex flex-col items-center gap-3">
                              <div className="flex flex-wrap justify-center items-center gap-3">
-                               <button onClick={() => void generateWrapped()}
+                               <button onClick={() => void requestManualWrapped()}
                                  disabled={!!wrappedGeneratingKey || !canUseAi || !!activity?.frozen}
                                  className="px-5 py-3 flex items-center gap-2 rounded-xl border border-violet-400/20 text-violet-200 bg-violet-400/10 hover:bg-violet-400/20 disabled:opacity-40 text-sm font-bold">
                                  <RefreshCw className={'w-4 h-4 ' + (wrappedGeneratingKey === wrappedKey ? 'animate-spin' : '')} />
