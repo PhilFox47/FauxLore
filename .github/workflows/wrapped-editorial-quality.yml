@@ -1,0 +1,32 @@
+name: Wrapped Personal Evidence and Thesis Quality
+
+on:
+  push:
+    branches: [claude]
+    paths:
+      - 'src/lib/personalMoments*'
+      - 'src/lib/wrappedThesisGate*'
+      - 'src/lib/wrappedEvidence*'
+      - 'src/lib/wrappedEditorial*'
+      - 'src/services/wrappedAi.ts'
+      - 'src/lib/storyDiscovery.ts'
+      - 'server/routes/wrapped.ts'
+      - '.github/workflows/wrapped-editorial-quality.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: September Endwalker, personal journal/Notes routing and thesis pruning
+        run: node --import tsx --test src/lib/personalMoments.test.ts src/lib/wrappedThesisGate.test.ts
+      - name: Existing Wrapped evidence, source coverage and editorial tests
+        run: node --import tsx --test src/lib/wrappedEvidence.test.ts src/lib/wrappedEditorial.test.ts src/lib/recapSalience.test.ts server/routes/wrapped.test.ts
+      - name: Production build
+        run: npm run build
