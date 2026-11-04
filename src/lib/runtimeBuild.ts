@@ -3,4 +3,4 @@
  * Both bundles embed this exact value at build time. It deliberately is not
  * read from .git: Docker ignores .git and may serve an older container.
  */
-export const FAUXLORE_RUNTIME_BUILD = 'wrapped-finale-pacing-v10-20261104';
+export const FAUXLORE_RUNTIME_BUILD = 'wrapped-editorial-memory-v11-20261104';
