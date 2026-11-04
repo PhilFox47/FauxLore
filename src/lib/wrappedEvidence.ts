@@ -190,7 +190,7 @@ export function buildWrappedEvidence(args: {
         (total > 0 ? Math.round(pages / total * 100) : 0) + '% of this period); ' +
         progress.filter(l => l.mediaId === id).length + ' progress entries. ' +
         (m.genres?.length ? 'Genres: ' + m.genres.slice(0, 4).join(', ') + '. ' : '') +
-        (m.userReview ? 'Current stored review: ' + m.userReview.slice(0, 450) + '.' : ''),
+        (m.userReview ? 'Review recorded by period end: ' + m.userReview.slice(0, 450) + '.' : ''),
     });
   });
   // Explicit opinions and diary moments, not automatic statusChange strings.
@@ -243,8 +243,8 @@ export function buildWrappedEvidence(args: {
         title: (largeGap ? 'Meaningful critic disagreement: ' : 'Personal take: ') + m.title,
         mediaId: m.id,
         recentOnly: scopeFor(progress.filter(l => l.mediaId === m.id && value(l) > 0)),
-        evidence: 'Currently saved rating for ' + m.title + ': user ' + m.userRating + '/5, critics ' + m.reviewScore +
-          '/5. Ratings are current library values; the app does NOT have a historical rating snapshot for this period.' +
+        evidence: 'Rating recorded by period end for ' + m.title + ': user ' + m.userRating + '/5, currently listed critics ' + m.reviewScore +
+          '/5. The user rating is reconstructed from a dated personal opinion snapshot; the critic score is source metadata.' +
           (largeGap ? ' This gap is large enough to consider a visual comparison, but only if the story gains something from it.' :
             ' This small gap is NOT an infographic-worthy disagreement; a specific written review may still be worth discussing.') +
           (m.userReview ? ' Review: ' + m.userReview.slice(0, 500) : ''),
