@@ -2,7 +2,7 @@ import { format, isWithinInterval, parseISO, startOfISOWeek, startOfMonth, start
 import { calculateScaledDelta } from './scaling';
 import { analyzeMediaFocus, focusEditorialCalibration } from './periodFocus';
 import { analyzeRecapSalience, recapSalienceBrief, selectRecapEditorialCandidates } from './recapSalience';
-import { selectPersonalMoments, phaseJournalHighlights } from './personalMoments';
+import { selectPersonalMoments, selectSessionContextNotes, phaseJournalHighlights } from './personalMoments';
 import { isSignificantFormatShift, isSignificantTasteGap, monthPhase, monthPhaseLabel, requiredMonthlyPhases } from './wrappedEditorial';
 import type { MonthPhase, MonthlyCoverage, VerifiedAnalytic } from './wrappedEditorial';
 import type { MediaItem, ProgressLog, Settings } from '../types/schema';
@@ -35,6 +35,8 @@ export interface WrappedEvidence {
   editorialCalibration: string;
   /** Independent qualitative signals, not a time-weighted popularity ranking. */
   editorialSalience: string;
+  /** Organizational lookup only. Never evidence IDs or standalone story premises. */
+  backgroundNotes?: {mediaId:string;title:string;date:string;context:string}[];
   /** Month phases with material logged activity; absent for week and year. */
   monthlyCoverage?: MonthlyCoverage;
 }
@@ -101,42 +103,45 @@ export function buildWrappedEvidence(args: {
     const phases = [...new Set(items.map(item => monthPhase(dayOf(item))))];
     return phases.length === 1 ? phases[0] : undefined;
   };
-  // Personal narrative is scarce and precious. Extract BEFORE MP leaderboards,
-  // phase clusters and routine statistics can occupy the bounded evidence
-  // budget. A Note remains a Note; it can still contain firsthand details.
+  // Journal Thoughts are first-person REACTIONS, not chapter bookkeeping.
+  // Keep them ahead of all aggregate evidence. Ordinary Notes are never
+  // added as 'insight' cards or cited to justify a narrative scene.
   const personalMoments = selectPersonalMoments(progress, {
-    journalLimit: timeframe === 'year' ? 22 : 14,
-    noteLimit: timeframe === 'year' ? 24 : 20,
+    journalLimit: timeframe === 'year' ? 24 : 16,
     perMedia: timeframe === 'year' ? 5 : 3,
   }).filter(moment => byId.has(moment.log.mediaId));
   for (const moment of personalMoments) {
     const l = moment.log, m = byId.get(l.mediaId)!;
+    const quote = moment.text.slice(0, 2000);
     const significance = [
       typeof l.sessionImpact === 'number' ? 'Impact ' + l.sessionImpact + '/5.' : '',
-      // Moodlets and dates must remain user-authored and unambiguous.
-      (l.moodlets || []).length ? 'User-selected Moodlets: ' +
-        (Array.isArray(l.moodlets) ? l.moodlets.join(', ') : '') + '.' : '',
+      Array.isArray(l.moodlets) && l.moodlets.length
+        ? 'User-selected Moodlets: ' + l.moodlets.join(', ') + '.' : '',
     ].filter(Boolean).join(' ');
-    if (moment.source === 'journal') {
-      const quote = moment.text.slice(0, 2000);
-      add({ id: 'journal-' + l.id, kind: 'journal', title: 'Personal journal: ' + m.title,
-        mediaId: m.id, phase: phaseFor([l]), recentOnly: scopeFor([l]),
-        evidence: 'On ' + stamp(l) + (l.location ? ' at ' + l.location : '') +
-          ', the user WROTE in their journal about ' + m.title +
-          (l.thoughtPrompt ? ' in answer to ' + l.thoughtPrompt.slice(0, 160) : '') +
-          ': ' + quote + '. ' + significance +
-          ' This personal memory is the primary source, not the session count.',
-        quote });
-    } else {
-      add({ id: 'reference-' + l.id, kind: 'insight', title: 'User-authored session note: ' + m.title,
-        mediaId: m.id, phase: phaseFor([l]), recentOnly: scopeFor([l]),
-        evidence: 'On ' + stamp(l) + ', the user wrote in Notes for ' + m.title +
-          (l.location ? ' at ' + l.location : '') + ': ' + moment.text.slice(0, 950) +
-          '. ' + significance +
-          ' Treat this as their actual written session account. It is NOT a journal-field quote. ' +
-          'It may contain specific personal opinions or memories, not just organizational metadata.' });
-    }
+    add({id:'journal-'+l.id,kind:'journal',title:'Personal journal: '+m.title,
+      mediaId:m.id,phase:phaseFor([l]),recentOnly:scopeFor([l]),
+      evidence:'On '+stamp(l)+(l.location?' at '+l.location:'')+
+        ', the user personally reflected on '+m.title+
+        (l.thoughtPrompt?' in answer to '+l.thoughtPrompt.slice(0,160):'')+
+        ': '+quote+'. '+significance+
+        ' This is the actual user reflection; treat it as qualitative evidence.',
+      quote});
   }
+  const contextIds = new Set([
+    ...personalMoments.map(moment => moment.log.mediaId),
+    ...salience.filter(signal => signal.maxImpact !== null && signal.maxImpact >= 4)
+      .map(signal => signal.mediaId),
+    ...salience.filter(signal => signal.journalOrReview).map(signal => signal.mediaId),
+  ]);
+  // A few session labels can clarify a journal's surrounding context. Their
+  // content is NOT an opinion, never confers significance or earns a slide.
+  const backgroundNotes = selectSessionContextNotes(progress, {
+    limit: timeframe === 'year' ? 14 : 8,
+    perMedia: 2,relevantMediaIds:[...contextIds],
+  }).filter(note => byId.has(note.log.mediaId)).map(({log,text}) => ({
+    mediaId:log.mediaId,title:byId.get(log.mediaId)!.title,
+    date:stamp(log),context:text,
+  }));
   let monthlyCoverage: MonthlyCoverage | undefined;
   if (timeframe === 'month') {
     const names: MonthPhase[] = ['early', 'middle', 'late'];
@@ -428,7 +433,7 @@ export function buildWrappedEvidence(args: {
       beats: beats.slice(0, 16) });
   }
   return {
-    timeframe, timeId, facts,
+    timeframe, timeId, facts, backgroundNotes,
     ...(monthlyCoverage ? { monthlyCoverage } : {}),
     editorialCalibration: focusEditorialCalibration(focus),
     editorialSalience: salienceSummary,
