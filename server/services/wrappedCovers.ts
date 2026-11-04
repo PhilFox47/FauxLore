@@ -277,7 +277,8 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
         story, timeframe, timeId, subjects, profile, codexStyle,
       );
       const url = await generateImage(userId, prompt, {
-        useFaceReference: shouldAttachFaceReference(profile.visualSelfInsertMode, openingPlan),
+        useFaceReference: !!profile.visualSelfReferenceAvailable &&
+          shouldAttachFaceReference(profile.visualSelfInsertMode, openingPlan),
       });
       db.prepare(
         "UPDATE wrapped_stories SET coverArtUrl=?, coverArtStatus='done', coverArtRequestId=NULL " +
@@ -397,7 +398,7 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
         const produced = await Promise.allSettled(batch.map(async id => {
           const scene = story.scenes.find(s => s.id === id);
           const profile = visualSelfFor(userId);
-          const faceReference = id !== "achievement-finale" &&
+          const faceReference = id !== "achievement-finale" && !!profile.visualSelfReferenceAvailable &&
             shouldAttachFaceReference(profile.visualSelfInsertMode, scene?.composition?.visualPlan);
           // Never inject personal likeness guidance into a scene explicitly
           // casting a canon character or choosing only the environment.
