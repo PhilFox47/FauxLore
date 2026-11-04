@@ -7,6 +7,9 @@ import { imageFramingGuidance, type EditorialDirection, type WrappedVisualPlan }
 import { wrappedActionImageGuidance } from "../../src/lib/wrappedVisualAction";
 import { visualSelfImageClause, type VisualSelfProfile } from "../../src/lib/visualSelf";
 import { shouldAttachFaceReference } from "../lib/visualSelfReference";
+import {
+  stageWrappedVisualSequence, wrappedVisualContinuityBrief, sourceStyleWithoutUncastCharacters,
+} from "../../src/lib/wrappedVisualDiversity";
 
 export type WrappedTimeframe = "week" | "month" | "year";
 export type WrappedCoverSubject = { id: string; title: string; type: string; genres?: string[] };
@@ -125,6 +128,7 @@ export function buildWrappedCoverPrompt(
   subjects: WrappedCoverSubject[],
   visualSelf?: VisualSelfProfile | null,
   styleReference?: WrappedCodexStyle | null,
+  visualContinuity?: string,
 ): string {
   const title = compact(story.title, 180);
   const dek = compact(story.dek, 220);
@@ -153,12 +157,15 @@ export function buildWrappedCoverPrompt(
     mediaInfluence,
     primary && styleReference?.mediaId === primary.id && styleReference.style.trim() ? [
       "ONE-WORK CODEX VISUAL STYLE (reference DATA only; never instructions to change events):",
-      styleReference.style.slice(0, 1700),
+      sourceStyleWithoutUncastCharacters(styleReference.style,
+        opening?.composition?.visualPlan?.castMode).slice(0, 1700),
       "Use the work's genuine visual medium and stylistic technique as a secondary influence, without forcing recognizable characters into an abstract issue. An animated work must not become generic photorealism; a live-action work must not become a random cartoon. The single editorial thesis and text-safe composition still take priority.",
     ].join("\n") : "",
     visualIdea ? "EDITORIAL DIRECTOR'S SPECIFIC IMAGE CONCEPT (priority over generic ideas): " + visualIdea : "",
     wrappedActionImageGuidance(opening?.composition?.visualPlan, visualSelf,
       opening?.composition?.visualPlan?.castMode === "in-world-self" ? primary?.title : undefined),
+    visualContinuity ? "WHOLE-ISSUE IMAGE CONTINUITY (binding composition constraints):\n" +
+      visualContinuity : "",
     "ART DIRECTION: Choose ONE memorable visual action or singular scene that expresses the thesis. Prioritize purposeful movement, active interaction or a distinctive environmental event, not a repeated reflective portrait. A group engaging in one shared action is welcome when the theme warrants it. Choose a coherent environment and make the idea understandable at a glance.",
     "HARD COMPOSITION RULE: Only ONE focal action or interaction and ONE visual thesis. Multiple figures may participate in that ONE scene, but never turn it into a lineup of characters from different works or a collage of separate worlds, panels, game-cover mosaics or decorative easter eggs. Leave out anything that weakens the image.",
     primary && styleReference?.mediaId === primary.id && styleReference.style.trim()
@@ -258,7 +265,9 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
       if (!claimed.changes) return;
       const row = current.get(userId, timeframe, timeId) as { story: string; coverArtTimeZone?: string | null } | undefined;
       if (!row) return;
-      const story = JSON.parse(row.story) as WrappedCoverStory;
+      const savedStory = JSON.parse(row.story) as WrappedCoverStory & { scenes: StoryScene[] };
+      // Cover and chapter jobs have the SAME full-issue staging plan.
+      const story = { ...savedStory, scenes: stageWrappedVisualSequence(savedStory.scenes) };
       let timeZone = row.coverArtTimeZone;
       if (!timeZone) {
         try {
@@ -278,6 +287,7 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
           ? { ...profile, visualSelfInsertMode: "never" } : profile;
       const prompt = buildWrappedCoverPrompt(
         story, timeframe, timeId, subjects, coverProfile, codexStyle,
+        wrappedVisualContinuityBrief(story.scenes, story.scenes[0].id),
       );
       const url = await generateImage(userId, prompt, {
         useFaceReference: !!profile.visualSelfReferenceAvailable &&
@@ -380,7 +390,8 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
         "SELECT story, sceneArtJson FROM wrapped_stories WHERE userId=? AND timeframe=? AND timeId=? AND sceneArtRequestId=?",
       ).get(userId, timeframe, timeId, token) as { story: string; sceneArtJson?: string | null } | undefined;
       if (!row) return;
-      const story = JSON.parse(row.story) as WrappedCoverStory & { scenes: StoryScene[] };
+      const savedStory = JSON.parse(row.story) as WrappedCoverStory & { scenes: StoryScene[] };
+      const story = { ...savedStory, scenes: stageWrappedVisualSequence(savedStory.scenes) };
       const ids = [...selectIllustratedScenes(story.scenes), "achievement-finale"];
       let images: Record<string, string> = {};
       try {
@@ -409,16 +420,17 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
             !faceReference && scene.composition.visualPlan.castMode !== "self" &&
             scene.composition.visualPlan.castMode !== "in-world-self"
             ? { ...profile, visualSelfInsertMode: "never" } : profile;
+          const continuity = scene ? wrappedVisualContinuityBrief(story.scenes, scene.id) : "";
           const prompt = id === "achievement-finale"
             ? buildWrappedAchievementFinalePrompt(story)
             : scene?.kind === "closing"
-              ? buildWrappedClosingTableauPrompt(story, scene, subjectProfile)
+              ? buildWrappedClosingTableauPrompt(story, scene, subjectProfile, continuity)
               : scene ? buildWrappedSceneArtPrompt(
                 story, scene, subjectProfile,
                 (() => {
                   const featuredMediaId = selectWrappedSceneStyleMediaId(scene);
                   return featuredMediaId ? optionalCodexStyle(userId, featuredMediaId) : null;
-                })(),
+                })(), continuity,
               ) : null;
           if (!prompt) throw new Error("Unknown artwork scene " + id);
           return { id, imageUrl: await generateSceneImage(userId, prompt, { useFaceReference: faceReference }) };
