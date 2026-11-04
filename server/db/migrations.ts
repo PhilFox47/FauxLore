@@ -27,6 +27,10 @@ export function runMigrations(db: Db) {
     )
   `);
 
+  // In-flight image requests cannot survive a process restart. Keep the last
+  // successful portrait while making the manual Retry button available.
+  try { db.prepare("UPDATE armory_portraits SET status='failed',requestId=NULL,error='Render interrupted by server restart.' WHERE status='generating'").run(); } catch {}
+
   // A portrait is private, belongs to one account, is backed up with SQLite,
   // and is NEVER exposed via /uploads or the normal settings JSON.
   db.exec(`
