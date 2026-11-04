@@ -42,6 +42,8 @@ export interface StoryScene {
   artworks?: StoryMedia[];
   /** The story-level editorial purpose, retained through Visual Director and persistence. */
   editorialJob?: EditorialJob;
+  /** Authored point of the scene, kept for subsequent editorial audits. */
+  editorialThesis?: string;
   /** Immutable, app-verified analytic subject. Never generated as arbitrary numbers by the AI. */
   analytic?: VerifiedAnalytic;
   /** Optional AI-composed visual stage; absent/invalid = safe legacy layout. */
