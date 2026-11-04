@@ -5,6 +5,7 @@ import type { WrappedStory } from "./wrappedAi";
 import { selectIllustratedScenes, selectWrappedSceneStyleMediaId, isWrappedInfographicScene } from "../lib/wrappedSceneArt";
 import { MAX_DATA_SLIDES, isDataLayout, isStrongSceneData, isStrongVerifiedAnalytic, editorialJobFromKind } from "../lib/wrappedEditorial";
 import type { StoryPeriod } from "../lib/storyDiscovery";
+import { stageWrappedVisualSequence } from "../lib/wrappedVisualDiversity";
 
 type DirectorReply = { compositions?: Array<{ sceneId: string; composition: unknown }> };
 
@@ -65,7 +66,10 @@ export function wrappedVisualDirectorBrief(
     "COMPOSE EVERY SCENE IN THE PROVIDED LIST. No skipping: exactly one composition for EACH sceneId listed, nothing else. Choose a distinctive but coherent cinematic-magazine treatment for each story beat, with a deliberate visual rhythm across the issue.",
     "NEW CINEMATIC EDITORIAL DIRECTION: Every composition MUST include direction:{presentation:'cinematic'|'data'|'typography'|'composed',textSide:'left'|'right'|'center',textPosition:'top'|'middle'|'bottom',imageFocus:'left'|'center'|'right',dataTreatment?:'shift'|'duel'|'arc'|'dominance'}. dataTreatment is ONLY valid when presentation:data and must match verifiedAnalytic.kind exactly. Use actual JSON double-quoted strings. This is a SAFE editorial plan, NOT arbitrary CSS or executable code.",
     "FULL-ART CONTRACT: EVERY NON-INFOGRAPHIC story scene gets its OWN original, full-bleed generated background. For canStageCinematic=true scenes choose presentation:cinematic, give one specific 10-180 character artConcept and stage typography over the quiet text side. The cover job supplies opening art and the chapter job supplies ALL narrative slides, INCLUDING THE CLOSING. There is NO three-picture quota. A generated scene is not an image inset, poster, official cover or wallpaper blur. The React renderer handles gradients, safety, readable text and mobile placement.",
-    "VISUAL NARRATIVE PLAN: For every non-data scene include visualPlan:{activityMode:'action'|'social'|'exploration'|'investigation'|'reflection'|'environmental',castMode:'self'|'in-world-self'|'canon-character'|'environment',camera:'wide'|'tracking'|'low-angle'|'over-shoulder'|'aerial'|'close-up'|'medium',action:'ONE short, specific visible verb phrase',interaction?:'specific companion, object or setting'}. Choose an ACTION with a visible verb and target, not just an emotion, expression or prop. The image maker receives this plan as its highest-priority physical scene instruction.",
+    "BACKDROP IS NOT A PALETTE: composition.backdrop MUST be 'cinematic'|'spotlight'|'grid'|'minimal'|'halftone'. The scene already has a separate palette field. NEVER use palette names like cobalt, amber, rose, emerald or violet for backdrop; choosing a color as backdrop can discard your entire creative plan.",
+    "SERIAL VISUAL NARRATIVE PLAN: For every non-data scene include visualPlan:{activityMode:'action'|'social'|'exploration'|'investigation'|'reflection'|'environmental',castMode:'self'|'in-world-self'|'canon-character'|'environment',camera:'wide'|'tracking'|'low-angle'|'over-shoulder'|'aerial'|'close-up'|'medium',action:'ONE short, specific visible verb phrase',interaction?:'specific companion, object or setting',visualArchetype?:'environmental-stillness'|'stage-spectacle'|'active-task-comedy'|'travel-observation'|'investigative-noir'|'symbolic-object-tableau'|'ensemble-interaction'|'kinetic-action'|'quiet-aftermath'|'source-world-moment',settingFamily?:'stage'|'hotel'|'train'|'corridor'|'exterior'|'media-world'|'domestic'|'abstract'|'other',propStrategy?:'none'|'environment'|'single-symbol'|'held-object'|'tabletop'|'group-interaction',bannedMotifs?:[up to 4 CONCRETE motifs to exclude]}. Every scene gets its own distinct visual archetype, location, prop strategy, action and camera. In one issue, reserve tabletop construction or balancing objects for at MOST ONE scene. Include ACTUAL verbs and physical subjects, not feelings.",
+    "SERIAL ANTI-DUPLICATION: Treat the scene list like a film storyboard. Map ALL 7-14 planned images on one page before answering. No two scenes may consist of the same man in a patterned shirt leaning over a miniature tower, even if the scene titles differ. Never use the same warm interior, seated viewer, light source and right-side camera framing on multiple slides. A train beat MUST show recognizable train space and motion, rather than a person doing another studio task. A hotel beat must look different from a studio task. For an opening, consider a bold environment-only thesis rather than another portrait. Cinematic includes empty environments, source-world action and groups, not just faces.",
+    "RESPECT CAST MODE: castMode=environment means the environment is the subject. There is NO account owner in that image. castMode=canon-character means do not depict the account owner. 'Prefer' for owner visuals never overrides this direct scene casting decision. Do not default to the clothing or hairstyle of a real contestant merely because a source show's visual Codex mentioned it.",
     "ENTER THE MEDIA WORLD: For a scene strongly centered on ONE named work (featuredWork), imagine a FICTIONAL, non-spoiler tableau INSIDE that work's visual world, rather than a real-world viewer remembering it. The subject may be the owner in everyday appearance, a costumed in-world counterpart, or an established canonical protagonist when stronger. If a game/series is about a battle, a journey, a quest, a celebration or companionship, render a convincing ACTIVITY and relevant characters/companions, not a lonely portrait. You must NOT assert that a specific quest, boss, conversation or victory happened in reality unless the source log says so. For cross-media abstract slides, do not mash franchises together: find one cohesive visual metaphor instead.",
     "ISSUE-WIDE CAST AND CAMERA VARIETY: Plan the WHOLE sequence, not isolated promotional portraits. Prefer wider kinetic shots, active group interactions, tracking movement, low angles, over-shoulder participation, exploration and environmental storytelling when appropriate. No two adjacent illustrated scenes should default to the same camera plus same activity. Keep at most TWO solitary reflective human portraits for the entire issue, counting opening and closing. Do not force action into a genuinely reflective journal scene, and do not invent social experiences just to meet a quota. A deliberate quiet tableau still belongs when earned.",
     "ANTI-CLICHE: Unless an evidence-backed reflective beat specifically calls for it, NEVER default to a man seated at a desk, notebook/book/pen in hand, chin resting on hand, gazing into the distance, looking up wistfully, idle half-body portrait, or standing motionless against a pretty skyline. Every remaining person must DO something clear: reach, dodge, climb, run, celebrate, confront, investigate, cooperate, manipulate or explore. Vary whether the human is even the main subject.",
@@ -88,47 +92,7 @@ export function wrappedVisualDirectorBrief(
  * action/camera plan, but cannot create personal facts or change prose.
  */
 export function diversifyWrappedVisualPlans(story: WrappedStory): WrappedStory {
-  const scenes = story.scenes.map(scene => ({
-    ...scene,
-    composition: scene.composition ? { ...scene.composition } : undefined,
-  }));
-  const reflectiveIndices = scenes.map((scene, index) => ({ scene, index }))
-    .filter(({ scene }) => !isWrappedInfographicScene(scene) &&
-      scene.composition?.visualPlan?.activityMode === "reflection" &&
-      scene.composition.visualPlan.castMode !== "environment")
-    .map(({ index }) => index);
-  // A quiet epilogue and an introductory portrait can be intentional; let
-  // the chapter images do more than repeat them.
-  const keep = new Set(reflectiveIndices.sort((a, b) =>
-    Number(scenes[b].kind === "closing") - Number(scenes[a].kind === "closing") ||
-    Number(scenes[b].kind === "opening") - Number(scenes[a].kind === "opening") ||
-    a - b).slice(0, 2));
-  let previousCamera: string | undefined;
-  let closeUps = 0;
-  const alternates = ["wide", "tracking", "low-angle", "over-shoulder", "aerial"] as const;
-  return { ...story, scenes: scenes.map((scene, index) => {
-    const composition = scene.composition;
-    const plan = composition?.visualPlan;
-    if (!plan || isWrappedInfographicScene(scene)) return scene;
-    let updated = { ...plan };
-    if (updated.activityMode === "reflection" && updated.castMode !== "environment" &&
-        !keep.has(index)) {
-      updated = {
-        ...updated, activityMode: "exploration", camera: "tracking",
-        action: "Actively move through and interact with the chapter's distinctive setting",
-      };
-    }
-    if (updated.camera === previousCamera ||
-        ((updated.camera === "medium" || updated.camera === "close-up") && closeUps >= 2)) {
-      updated.camera = alternates[index % alternates.length];
-      if (updated.camera === previousCamera) {
-        updated.camera = alternates[(index + 1) % alternates.length];
-      }
-    }
-    previousCamera = updated.camera;
-    if (updated.camera === "medium" || updated.camera === "close-up") closeUps++;
-    return { ...scene, composition: { ...composition!, visualPlan: updated } };
-  }) };
+  return { ...story, scenes: stageWrappedVisualSequence(story.scenes) };
 }
 
 export function applyWrappedVisualCompositions(
