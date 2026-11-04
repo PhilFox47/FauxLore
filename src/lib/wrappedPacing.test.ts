@@ -69,3 +69,24 @@ test('prose length is content-responsive, not forced to one uniform word count',
   assert.equal(wrappedProseTier(Array.from({length:60},()=> 'specific').join(' ')),'standard');
   assert.equal(wrappedProseTier(Array.from({length:135},()=> 'specific').join(' ')),'substantial');
 });
+
+
+test('one extraordinary late personal memory survives a month of routine early/middle progress without manufactured filler',()=>{
+  const data:WrappedEvidence={...base([
+    {id:'month-early',kind:'insight',phase:'early',title:'Early progress',evidence:'Early 40% of routine pages'},
+    {id:'month-middle',kind:'insight',phase:'middle',title:'Middle progress',evidence:'Middle 35% of routine pages'},
+    {id:'journal-finale',kind:'journal',phase:'late',title:'Endwalker finale with Free Company',
+      mediaId:'ffxiv',quote:'Finished the MSQ in Discord with my whole Free Company; a core memory.',
+      evidence:'On September 27: Finished Endwalker with the entire FC; a core memory.'},
+  ]),monthlyCoverage:{
+    requiredPhases:['early','middle','late'],lastWeekShare:0.25,minPhaseScenes:2,
+  }};
+  const title='A night that mattered more than three weeks of routine progress';
+  const middle={kind:'insight',editorialJob:'verdict',title,
+    body:'September had many routine progress entries, but its lasting moment was the shared Endwalker MSQ ending with the Free Company, explicitly called a core memory.',
+    evidenceIds:['journal-finale'],design};
+  const wrapped=normalizeWrappedStory({title:'One remarkable night',dek:'A month worth one proper argument',
+    scenes:[starter,middle,{...finisher,evidenceIds:['journal-finale']}]},data,[]);
+  assert.equal(wrapped.scenes.length,3);
+  assert.deepEqual(wrapped.scenes[1].evidenceIds,['journal-finale']);
+});
