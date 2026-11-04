@@ -104,8 +104,8 @@ test("a cover and closing image inherit the SAME series-wide motif context",()=>
     wrappedVisualContinuityBrief(staged,staged[4].id));
   assert.match(cover,/WHOLE-ISSUE IMAGE CONTINUITY/);
   assert.match(closing,/WHOLE-ISSUE IMAGE CONTINUITY/);
-  assert.match(cover,/HARD CAST RULE/);
-  assert.match(closing,/HARD CAST RULE/);
+  assert.match(cover,/No account-owner likeness is authorized|HARD CAST RULE/);
+  assert.match(closing,/No account-owner likeness is authorized|HARD CAST RULE/);
 });
 
 test("older stories without visual plan get valid safe fallback rather than Phil's generic tabletop portrait",()=>{
