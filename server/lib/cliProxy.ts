@@ -32,16 +32,15 @@ export function cliProxyImagePrompt(prompt: string, negative: string): string {
  * as an inline data URL in JSON images[]. Never log this payload: it embeds the
  * actual reference image bytes.
  */
-export function cliProxyImageEditBody(model: string, prompt: string, size: string, dataUrl: string) {
-  if (!/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) {
-    throw new Error("A valid locally encoded PNG/JPEG/WebP reference is required for image edits.");
+export function cliProxyImageEditBody(model: string, prompt: string, size: string, references: string | string[]) {
+  const images = Array.isArray(references) ? references : [references];
+  if (!images.length || images.length > 7 || images.some(dataUrl =>
+    !/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl))) {
+    throw new Error("Provide 1–7 locally encoded PNG/JPEG/WebP references for image editing.");
   }
   return {
-    model,
-    prompt,
-    size,
-    response_format: "b64_json",
-    images: [{ image_url: dataUrl }],
+    model, prompt, size, response_format: "b64_json",
+    images: images.map(image_url => ({image_url})),
   };
 }
 
