@@ -68,6 +68,24 @@ export interface DynamicSceneElement {
   shape?: DynamicSceneShape;
 }
 
+/**
+ * This is a fictional image brief, NEVER a factual claim about what the user
+ * played or which characters they met. The server persists only safe enums
+ * and short descriptive strings.
+ */
+export type WrappedActivityMode = "action" | "social" | "exploration" | "investigation" | "reflection" | "environmental";
+export type WrappedCastMode = "self" | "in-world-self" | "canon-character" | "environment";
+export type WrappedCamera = "wide" | "tracking" | "low-angle" | "over-shoulder" | "aerial" | "close-up" | "medium";
+export interface WrappedVisualPlan {
+  activityMode: WrappedActivityMode;
+  castMode: WrappedCastMode;
+  camera: WrappedCamera;
+  /** A concrete, visual verb phrase instead of a generic emotional adjective. */
+  action: string;
+  /** Optional interaction partner or prop; not a factual log of a meeting. */
+  interaction?: string;
+}
+
 export interface DynamicSceneComposition {
   version: 1;
   backdrop: DynamicSceneBackdrop;
@@ -75,6 +93,8 @@ export interface DynamicSceneComposition {
   direction?: EditorialDirection;
   /** A single descriptive visual metaphor used only for rendered scene artwork. */
   artConcept?: string;
+  /** Original action/interaction and shot plan; absent in historical stories. */
+  visualPlan?: WrappedVisualPlan;
   elements: DynamicSceneElement[];
 }
 
@@ -86,6 +106,31 @@ const presentations = new Set<EditorialPresentation>(["cinematic","data","typogr
 const textSides = new Set<EditorialTextSide>(["left","right","center"]);
 const textPositions = new Set<EditorialTextPosition>(["top","middle","bottom"]);
 const imageFoci = new Set<EditorialImageFocus>(["left","center","right"]);
+const activityModes = new Set<WrappedActivityMode>(["action", "social", "exploration", "investigation", "reflection", "environmental"]);
+const castModes = new Set<WrappedCastMode>(["self", "in-world-self", "canon-character", "environment"]);
+const cameras = new Set<WrappedCamera>(["wide", "tracking", "low-angle", "over-shoulder", "aerial", "close-up", "medium"]);
+
+/** Strip invalid model-authored art directions without invalidating the story. */
+export function normalizeWrappedVisualPlan(value: unknown): WrappedVisualPlan | undefined {
+  if (!obj(value) || !activityModes.has(value.activityMode as WrappedActivityMode) ||
+      !castModes.has(value.castMode as WrappedCastMode) ||
+      !cameras.has(value.camera as WrappedCamera) ||
+      typeof value.action !== "string") return undefined;
+  const action = value.action.replace(/\\s+/g, " ").trim();
+  if (action.length < 12 || action.length > 180 ||
+      /[<>\\u0000-\\u001f]|https?:\\/\\//i.test(action)) return undefined;
+  const interaction = typeof value.interaction === "string"
+    ? value.interaction.replace(/\\s+/g, " ").trim() : "";
+  return {
+    activityMode: value.activityMode as WrappedActivityMode,
+    castMode: value.castMode as WrappedCastMode,
+    camera: value.camera as WrappedCamera,
+    action,
+    ...(interaction.length >= 2 && interaction.length <= 100 &&
+        !/[<>\\u0000-\\u001f]|https?:\\/\\//i.test(interaction)
+      ? { interaction } : {}),
+  };
+}
 const sizes = new Set<DynamicSceneSize>(["sm","md","lg","xl"]);
 const tones = new Set<DynamicSceneTone>(["primary","secondary","accent"]);
 const motions = new Set<DynamicSceneMotion>(["none","fade","rise","slide","pop","float","pulse"]);
@@ -230,6 +275,9 @@ export function normalizeDynamicScene(
       value.artConcept.length <= 240 && !/[<>]/.test(value.artConcept)
         ? { artConcept: value.artConcept.trim().replace(/\s+/g, " ") }
         : {}),
+    ...(direction?.presentation === "data" ? {} :
+      (normalizeWrappedVisualPlan(value.visualPlan)
+        ? { visualPlan: normalizeWrappedVisualPlan(value.visualPlan) } : {})),
     elements,
   };
 }
