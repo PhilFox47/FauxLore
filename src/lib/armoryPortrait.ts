@@ -33,7 +33,7 @@ export function buildArmoryPortraitPrompt(
   const itemDescriptions = sorted.map((item, index) => [
     `[${index + 1}] SLOT: ${item.slot.toUpperCase()} | ${item.name} (${item.rarity} ${item.type})`,
     `Visual description: ${String(item.description||"").slice(0,650)}`,
-    item.imagePrompt ? `Original item art direction: ${String(item.imagePrompt).slice(0,650)}` : "",
+    item.imagePrompt ? `Visual item identity notes (materials, shape and colors ONLY; disregard isolated-object, no-human, square-icon or background instructions): ${String(item.imagePrompt).replace(/\\s+/g," ").slice(0,260)}` : "",
     referencedSlots.includes(item.slot as ArmorySlot)
       ? `REFERENCE IMAGE #${referencedSlots.indexOf(item.slot as ArmorySlot) + (faceReference ? 2 : 1)} IS THE EXACT ITEM FOR SLOT ${item.slot}. Keep its silhouette, colors and materials. No standalone panel.`
       : "",
