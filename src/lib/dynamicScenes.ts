@@ -76,6 +76,14 @@ export interface DynamicSceneElement {
 export type WrappedActivityMode = "action" | "social" | "exploration" | "investigation" | "reflection" | "environmental";
 export type WrappedCastMode = "self" | "in-world-self" | "canon-character" | "environment";
 export type WrappedCamera = "wide" | "tracking" | "low-angle" | "over-shoulder" | "aerial" | "close-up" | "medium";
+export type WrappedVisualArchetype =
+  "environmental-stillness" | "stage-spectacle" | "active-task-comedy" |
+  "travel-observation" | "investigative-noir" | "symbolic-object-tableau" |
+  "ensemble-interaction" | "kinetic-action" | "quiet-aftermath" | "source-world-moment";
+export type WrappedSettingFamily =
+  "stage" | "hotel" | "train" | "corridor" | "exterior" | "media-world" |
+  "domestic" | "abstract" | "other";
+export type WrappedPropStrategy = "none" | "environment" | "single-symbol" | "held-object" | "tabletop" | "group-interaction";
 export interface WrappedVisualPlan {
   activityMode: WrappedActivityMode;
   castMode: WrappedCastMode;
@@ -84,6 +92,12 @@ export interface WrappedVisualPlan {
   action: string;
   /** Optional interaction partner or prop; not a factual log of a meeting. */
   interaction?: string;
+  /** Issue-wide composition families, independent of the verified story text. */
+  visualArchetype?: WrappedVisualArchetype;
+  settingFamily?: WrappedSettingFamily;
+  propStrategy?: WrappedPropStrategy;
+  /** Validated visual exclusions only; not instructions about real events. */
+  bannedMotifs?: string[];
 }
 
 export interface DynamicSceneComposition {
@@ -102,6 +116,12 @@ const elementTypes = new Set<DynamicSceneElementType>([
   "title", "body", "eyebrow", "quote", "media", "scene-art", "stat", "beat", "shape", "title-art",
 ]);
 const backdrops = new Set<DynamicSceneBackdrop>(["cinematic","spotlight","grid","minimal","halftone"]);
+/** Old directors sometimes returned the issue PALETTE in the backdrop field.
+ * Normalize only known palette names rather than dropping the entire scene
+ * (and losing its carefully planned visual action and camera). */
+const paletteBackdrops = new Set([
+  "violet", "cobalt", "amber", "rose", "emerald", "cyan", "monochrome",
+]);
 const presentations = new Set<EditorialPresentation>(["cinematic","data","typography","composed"]);
 const textSides = new Set<EditorialTextSide>(["left","right","center"]);
 const textPositions = new Set<EditorialTextPosition>(["top","middle","bottom"]);
@@ -109,6 +129,20 @@ const imageFoci = new Set<EditorialImageFocus>(["left","center","right"]);
 const activityModes = new Set<WrappedActivityMode>(["action", "social", "exploration", "investigation", "reflection", "environmental"]);
 const castModes = new Set<WrappedCastMode>(["self", "in-world-self", "canon-character", "environment"]);
 const cameras = new Set<WrappedCamera>(["wide", "tracking", "low-angle", "over-shoulder", "aerial", "close-up", "medium"]);
+const archetypes = new Set<WrappedVisualArchetype>([
+  "environmental-stillness", "stage-spectacle", "active-task-comedy",
+  "travel-observation", "investigative-noir", "symbolic-object-tableau",
+  "ensemble-interaction", "kinetic-action", "quiet-aftermath", "source-world-moment",
+]);
+const settings = new Set<WrappedSettingFamily>([
+  "stage", "hotel", "train", "corridor", "exterior", "media-world", "domestic", "abstract", "other",
+]);
+const propStrategies = new Set<WrappedPropStrategy>([
+  "none", "environment", "single-symbol", "held-object", "tabletop", "group-interaction",
+]);
+const sanitizedMotif = (value: unknown): value is string =>
+  typeof value === "string" && value.length >= 6 && value.length <= 120 &&
+  !/[<>\u0000-\u001f]|https?:\/\//i.test(value);
 
 /** Strip invalid model-authored art directions without invalidating the story. */
 export function normalizeWrappedVisualPlan(value: unknown): WrappedVisualPlan | undefined {
@@ -129,6 +163,15 @@ export function normalizeWrappedVisualPlan(value: unknown): WrappedVisualPlan | 
     ...(interaction.length >= 2 && interaction.length <= 100 &&
         !/[<>\u0000-\u001f]|https?:\/\//i.test(interaction)
       ? { interaction } : {}),
+    ...(archetypes.has(value.visualArchetype as WrappedVisualArchetype)
+      ? { visualArchetype: value.visualArchetype as WrappedVisualArchetype } : {}),
+    ...(settings.has(value.settingFamily as WrappedSettingFamily)
+      ? { settingFamily: value.settingFamily as WrappedSettingFamily } : {}),
+    ...(propStrategies.has(value.propStrategy as WrappedPropStrategy)
+      ? { propStrategy: value.propStrategy as WrappedPropStrategy } : {}),
+    ...(Array.isArray(value.bannedMotifs)
+      ? { bannedMotifs: [...new Set(value.bannedMotifs.filter(sanitizedMotif))]
+          .slice(0, 8).map(m => m.replace(/\s+/g, " ").trim()) } : {}),
   };
 }
 const sizes = new Set<DynamicSceneSize>(["sm","md","lg","xl"]);
@@ -167,7 +210,8 @@ export function normalizeDynamicScene(
   value: unknown,
   scene: Pick<StoryScene, "kind" | "title" | "body" | "quote" | "bars" | "beats" | "media" | "artworks" | "analytic">,
 ): DynamicSceneComposition {
-  if (!obj(value) || value.version !== 1 || !backdrops.has(value.backdrop as DynamicSceneBackdrop) ||
+  if (!obj(value) || value.version !== 1 ||
+    (!backdrops.has(value.backdrop as DynamicSceneBackdrop) && !paletteBackdrops.has(value.backdrop as string)) ||
     !Array.isArray(value.elements) || value.elements.length < 2 || value.elements.length > 11) {
     throw new Error("Invalid dynamic scene composition");
   }
@@ -267,7 +311,8 @@ export function normalizeDynamicScene(
   }
   return {
     version: 1,
-    backdrop: value.backdrop as DynamicSceneBackdrop,
+    backdrop: backdrops.has(value.backdrop as DynamicSceneBackdrop)
+      ? value.backdrop as DynamicSceneBackdrop : "cinematic",
     ...(direction ? { direction } : {}),
     ...((direction?.presentation !== "data") &&
       typeof value.artConcept === "string" && value.artConcept.trim().length >= 6 &&
