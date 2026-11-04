@@ -11,6 +11,7 @@ import { imagePromptCraft, resolveImagePromptProfile, gptImage25DeliveryPrompt }
 import { buildBossStateImagePrompt, bossVisualState, basePortraitForTransition, localImageReferenceDataUrl } from "../lib/bossStateImages";
 import { imageFrameSize, imageFrameMatches, withImageFrame, type ImageFrame } from "../../src/lib/imageFraming";
 import { redactVisualSelfForDiagnostics } from "../../src/lib/visualSelf";
+import { readUserFaceReference } from "../lib/visualSelfReference";
 import { AUTHENTICITY, SHARPNESS, enemyTier, rarityArt } from "../lib/artDirection";
 import { codexArtStyleBlock, type CodexService } from "./codex";
 import { codexTaskContext } from "./codexV3Context";
@@ -182,9 +183,13 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
       async function requestCliImage(edit: boolean, attempt: 1 | 2, overriddenPrompt?: string): Promise<string> {
         const route = edit ? "/images/edits" : "/images/generations";
         const effectivePrompt = overriddenPrompt || finalPrompt;
+        const faceReference = edit && (intent === "wrapped" || intent === "wrapped-scene");
+        const renderPrompt = faceReference
+          ? effectivePrompt + "\\n\\nFACE REFERENCE INPUT: The attached photo is a private face identity reference ONLY. If the scene depicts the account owner, preserve recognizable facial structure, eye region, hair and other features. Reimagine their pose, expression, costume, environment and source-media art style from the story brief. Do NOT simply reprint or crop the reference selfie, copy its background, or add a second portrait panel."
+          : effectivePrompt;
         const body: Record<string, unknown> = edit
-          ? cliProxyImageEditBody(cfg.model, effectivePrompt, size, referenceDataUrl || "")
-          : { model: cfg.model, prompt: effectivePrompt, size, n: 1, response_format: "b64_json" };
+          ? cliProxyImageEditBody(cfg.model, renderPrompt, size, referenceDataUrl || "")
+          : { model: cfg.model, prompt: renderPrompt, size, n: 1, response_format: "b64_json" };
         const callId = nextCallId();
         const shape = { callId, model: cfg.model, scope: "images", attempt, promptChars: effectivePrompt.length };
         const startedAt = Date.now();
@@ -230,7 +235,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
         }
       }
 
-      if (referenceDataUrl && cfg.gptImage25) {
+      if (referenceDataUrl && /^gpt-image-/i.test(cfg.model)) {
         try {
           return await requestCliImage(true, 1);
         } catch (e: any) {
@@ -238,7 +243,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
           // for a second render after timeouts, rate limits or server failures.
           const status = Number(e?.httpStatus || 0);
           if (!imageEditSupportsTextFallback(status)) throw e;
-          console.warn(`[images] CLIProxyAPI edit unavailable (HTTP ${status}); using text-only enrage fallback.`);
+          console.warn(`[images] CLIProxyAPI reference edit unavailable (HTTP ${status}); reverting to text-only image generation.`);
           // An unsupported edit must NOT leave "the supplied image" in the
           // generation-only prompt: there is no reference on that request.
           const textOnly = fallbackPrompt
@@ -552,22 +557,22 @@ Return ONLY the final image prompt text, nothing else.`;
   }
 
   /** One standalone 3:2 title illustration for an entire Wrapped story. */
-  async function generateWrappedCoverImage(userId: string, prompt: string): Promise<string> {
+  async function generateWrappedCoverImage(userId: string, prompt: string, options?: {useFaceReference?: boolean}): Promise<string> {
     const config = getAiConfig(db, userId);
     if (!config) throw new Error("AI image provider is not configured.");
     return internalGenerateImageWithNanoGpt(
       config.apiKey, prompt, "unreadable text, fake logos, watermarks, collage grids",
-      "landscape-3:2", null, null, "wrapped",
+      "landscape-3:2", options?.useFaceReference ? readUserFaceReference(db, userId) : null, null, "wrapped",
     );
   }
 
   /** Render a separate, original cinematic illustration for one Wrapped chapter. */
-  async function generateWrappedSceneImage(userId: string, prompt: string): Promise<string> {
+  async function generateWrappedSceneImage(userId: string, prompt: string, options?: {useFaceReference?: boolean}): Promise<string> {
     const config = getAiConfig(db, userId);
     if (!config) throw new Error("AI image provider is not configured.");
     return internalGenerateImageWithNanoGpt(
       config.apiKey, prompt, "collages, grids, franchise logos, letterforms, captions",
-      "landscape-3:2", null, null, "wrapped-scene",
+      "landscape-3:2", options?.useFaceReference ? readUserFaceReference(db, userId) : null, null, "wrapped-scene",
     );
   }
 
