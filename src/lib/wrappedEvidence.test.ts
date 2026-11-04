@@ -68,7 +68,9 @@ test('AI director authors its own original story and selects verified visuals', 
   assert.equal(story.scenes[1].design?.palette, 'amber');
   assert.equal(story.scenes[1].design?.visual, 'rings');
   assert.equal(story.scenes[1].media?.id, 'book');
-  assert.ok(story.scenes[0].artworks?.some(m => m.id === 'book'));
+  // Wrapped Story Mode uses generated full-bleed illustration rather than
+  // inserting official book covers into the opening slide.
+  assert.ok(!story.scenes[0].artworks?.some(m => m.id === 'book'));
   assert.equal(story.scenes[0].body, 'A strange hypothesis emerges from your habits.');
 });
 
