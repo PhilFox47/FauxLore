@@ -17,6 +17,7 @@ import { cn } from '../lib/utils';
 import { mediaOpinionsAsOf } from '../lib/mediaOpinionHistory';
 import { analyzeRecapSalience, recapSalienceBrief, selectRecapEditorialCandidates } from '../lib/recapSalience';
 import { readMoodlets, describeMoodlets } from '../lib/quickMoodlets';
+import { selectPersonalMoments } from '../lib/personalMoments';
 import { generateMissingRecapParts, getMissingRecapParts } from '../lib/recapGeneration';
 import { FAUXLORE_RUNTIME_BUILD } from '../lib/runtimeBuild';
 import { summariseGroups, UNGROUPED } from '../lib/locationGroups';
@@ -713,6 +714,11 @@ export function Recaps() {
       const mediaSignals = analyzeRecapSalience({ logs: activeLogs, media: periodActiveMedia, settings });
       const editorialCandidates = selectRecapEditorialCandidates(mediaSignals);
       const personalSalienceBrief = recapSalienceBrief(mediaSignals);
+      const personalMoments = selectPersonalMoments(activeLogs, {
+        journalLimit: timeframe === 'year' ? 70 : 50,
+        noteLimit: timeframe === 'year' ? 90 : 65,
+        perMedia: timeframe === 'year' ? 12 : 6,
+      });
       let rankingLimit = timeframe === 'week' ? 999 : (timeframe === 'month' ? 5 : 20);
       
       const mediaRanking = activeMedia.map(m => {
@@ -892,12 +898,12 @@ ${Array.from(new Set(activeLogs.map(l => (l.location || '').trim()).filter(Boole
   return `- ${location}: ${here.length} logs on ${dates.length} day(s), ${dates[0]} to ${dates[dates.length-1]}; media: ${titles.slice(0, 12).join(', ')}`;
 }).join('\n') || 'No locations recorded.'}
 
-PERSONAL JOURNAL REFLECTIONS (the user's actual thoughts; prioritize these):
-${sampleAcross(activeLogs.filter(l => (l.thoughts || '').trim()), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}${l.location ? ' @ ' + l.location : ''}${l.thoughtPrompt ? ' [Question: '+l.thoughtPrompt+']' : ''}: ${l.thoughts}`).join('\n') || 'No personal thoughts recorded.'}
+PRIORITIZED PERSONAL JOURNAL REFLECTIONS (user-authored; interpret the actual events, not merely their ratings):
+${personalMoments.filter(moment => moment.source === 'journal').map(({log:l,text}) => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}${l.location ? ' @ ' + l.location : ''}${l.thoughtPrompt ? ' [Question: '+l.thoughtPrompt+']' : ''}${typeof l.sessionImpact === 'number' ? ' [Impact '+l.sessionImpact+'/5]' : ''}: ${text}`).join('\n') || 'No personal thoughts recorded.'}
 STATUS TRANSITIONS (structured system events, NOT journal reactions):
 ${sampleAcross(activeLogs.filter(l => l.metricType === 'statusChange' && (l.note || '').trim()), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${l.note}`).join('\n') || 'No status transitions recorded.'}
-SESSION NOTES (factual or organizational labels, NOT user opinions or journal entries):
-${sampleAcross(activeLogs.filter(l => l.metricType !== 'statusChange' && (l.note || '').trim()), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${l.note}`).join('\n') || 'No session reference notes.'}
+PRIORITIZED USER-AUTHORED SESSION NOTES (not Journal Thoughts, but MAY contain first-person reactions or specific memories):
+${personalMoments.filter(moment => moment.source === 'note').map(({log:l,text}) => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}${typeof l.sessionImpact === 'number' ? ' [Impact '+l.sessionImpact+'/5]' : ''}: ${text}`).join('\n') || 'No session reference notes.'}
 
 SESSION ENJOYMENT (individual-session 1-5 scores, distinct from full-media rating):
 ${sampleAcross(activeLogs.filter(l => typeof l.sessionEnjoyment === 'number'), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${l.sessionEnjoyment}/5`).join('\n') || 'No session enjoyment ratings.'}
