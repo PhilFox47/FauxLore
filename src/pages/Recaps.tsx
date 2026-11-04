@@ -15,6 +15,7 @@ import { calculateRPGState } from '../lib/rpgSystem';
 import { MediaItem, MEDIA_COLORS, ProgressLog, RARITY_COLORS } from '../types/schema';
 import { cn } from '../lib/utils';
 import { mediaOpinionsAsOf } from '../lib/mediaOpinionHistory';
+import { generateMissingRecapParts, getMissingRecapParts } from '../lib/recapGeneration';
 import { summariseGroups, UNGROUPED } from '../lib/locationGroups';
 import { WALLPAPER_SPECS, WallpaperFormat, downloadWallpaper, renderWallpaper } from '../services/wallpaper';
 import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map as MapIcon, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon, Skull, Download, Image as ImageIcon } from 'lucide-react';
@@ -110,11 +111,13 @@ export function Recaps() {
   const [wrappedStories, setWrappedStories] = useState<Record<string, WrappedStory | null>>({});
   const [wrappedLoaded, setWrappedLoaded] = useState<Set<string>>(new Set());
   const [wrappedErrors, setWrappedErrors] = useState<Record<string, string>>({});
+  const [wrappedLoadFailures, setWrappedLoadFailures] = useState<Set<string>>(new Set());
+  const [manualGeneratingKey, setManualGeneratingKey] = useState<string | null>(null);
+  const manualGenerationRef = useRef<string | null>(null);
   const [wrappedGeneratingKey, setWrappedGeneratingKey] = useState<string | null>(null);
   const [visualDirectingKey, setVisualDirectingKey] = useState<string | null>(null);
   const visualDirectingRef = useRef<string | null>(null);
   const wrappedFetchingRef = useRef<Set<string>>(new Set());
-  const wrappedAutoAttemptedRef = useRef<Set<string>>(new Set());
   const wrappedGenerationRef = useRef<string | null>(null);
   const recapScrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -124,7 +127,6 @@ export function Recaps() {
   const [isForgingAchievement, setIsForgingAchievement] = useState(false);
   const [freshlyUnlocked, setFreshlyUnlocked] = useState<string | null>(null);
   const [revealedAchievements, setRevealedAchievements] = useState<AchievementDraft[]>([]);
-  const attemptedGenRef = useRef<Set<string>>(new Set());
 
   const validLogs = useMemo(() => logs.filter(log => !log.isHistoric && !log.timestamp.startsWith('1970-01-01')), [logs]);
 
@@ -439,6 +441,9 @@ export function Recaps() {
   const wrapped = wrappedStories[wrappedKey] || null;
   const initialArtworkPending = shouldHoldWrappedForArtwork(wrapped);
   const wrappedHasLoaded = wrappedLoaded.has(wrappedKey);
+  // A failed load is UNKNOWN, never evidence that there is no saved Wrapped.
+  const missingRecapParts = getMissingRecapParts(currentRecap, wrapped,
+    wrappedHasLoaded && !wrappedLoadFailures.has(wrappedKey));
   const canUseAi = settings?.aiProvider === 'cliProxy' || !!settings?.nanoGptApiKey;
 
   // Wrapped has its OWN persisted story and lifecycle. Never look in aiRecaps.
@@ -451,10 +456,16 @@ export function Recaps() {
     DatabaseService.getWrappedStory(timeframe, timeId)
       .then(found => {
         setWrappedStories(prev => ({ ...prev, [key]: found }));
+        setWrappedLoadFailures(prev => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
         setWrappedLoaded(prev => new Set(prev).add(key));
       })
       .catch((e: any) => {
         setWrappedErrors(prev => ({ ...prev, [key]: e?.message || 'Could not load Wrapped.' }));
+        setWrappedLoadFailures(prev => new Set(prev).add(key));
         setWrappedLoaded(prev => new Set(prev).add(key));
       })
       .finally(() => wrappedFetchingRef.current.delete(key));
@@ -570,17 +581,6 @@ export function Recaps() {
     }
   };
 
-  // Generate once on first visit; never use a deterministic replay of recap
-  // prose as a substitute when AI generation fails.
-  useEffect(() => {
-    if (isLoading || viewMode !== 'story' || !wrappedHasLoaded || wrapped || !activeLogs.length ||
-      !canUseAi || activity?.frozen || wrappedErrors[wrappedKey] || wrappedGeneratingKey || wrappedGenerationRef.current ||
-      wrappedAutoAttemptedRef.current.has(wrappedKey)) return;
-    wrappedAutoAttemptedRef.current.add(wrappedKey);
-    void generateWrapped();
-  }, [isLoading, viewMode, wrappedHasLoaded, wrapped, activeLogs.length, canUseAi,
-    activity?.frozen, wrappedGeneratingKey, wrappedKey, wrappedErrors]);
-
   const periodAchievements = useMemo(
     () => achievements.filter(a => a.timeframe === timeframe && a.timeId === timeId)
       .sort((a, b) => a.position - b.position),
@@ -658,26 +658,6 @@ export function Recaps() {
 
   const handlePrevious = () => setOffsetOffset(p => p + 1);
   const handleNext = () => setOffsetOffset(p => Math.max(1, p - 1));
-
-  useEffect(() => {
-    // Only trigger if:
-    // 1. Not loading
-    // 2. No recap exists (returned null, not undefined)
-    // 3. There is activity
-    // 4. We have API keys
-    // 5. Not already generating
-    // 6. We are looking at a RECENT period (e.g. within the last 2 periods) to prevent mass historical generation
-    const isRecent = offsetOffset <= 2;
-
-    // A paused account never auto-generates: the server would refuse it, and
-    // the point of the freeze is not asking in the first place.
-    if (!isLoading && currentRecap === null && activeLogs.length > 0 && (settings?.aiProvider === 'cliProxy' || settings?.nanoGptApiKey) && !isGenerating && isRecent && !activity?.frozen) {
-      if (!attemptedGenRef.current.has(timeId)) {
-        attemptedGenRef.current.add(timeId);
-        setTimeout(() => handleGenerateAI(), 100);
-      }
-    }
-  }, [currentRecap, activeLogs.length, settings?.nanoGptApiKey, settings?.aiProvider, isGenerating, timeId, isLoading, offsetOffset, activity?.frozen]);
 
   const handleGenerateAI = async () => {
     if (activity?.frozen) {
@@ -1029,6 +1009,27 @@ ${wrappedContext || 'No background material.'}
       toast.error("Failed to generate AI Recap: " + e.message);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // The ONLY entry point for creating missing recap content. Navigating weeks,
+  // months, years or switching tabs must never spend AI tokens.
+  const generateMissingRecap = async () => {
+    const missing = getMissingRecapParts(currentRecap, wrapped,
+      wrappedHasLoaded && !wrappedLoadFailures.has(wrappedKey));
+    if (!activeLogs.length || !missing.length || !canUseAi || activity?.frozen ||
+      manualGenerationRef.current || isGenerating || wrappedGeneratingKey ||
+      wrappedGenerationRef.current) return;
+    manualGenerationRef.current = wrappedKey;
+    setManualGeneratingKey(wrappedKey);
+    try {
+      await generateMissingRecapParts(missing, {
+        deepDive: handleGenerateAI,
+        wrapped: generateWrapped,
+      });
+    } finally {
+      manualGenerationRef.current = null;
+      setManualGeneratingKey(null);
     }
   };
 
@@ -2612,9 +2613,28 @@ ${wrappedContext || 'No background material.'}
             <LayoutGrid className="w-4 h-4" /> Deep Dive
           </button>
         </div>
-        <p className="text-xs text-zinc-500 hidden md:block">
-          {viewMode === 'story' ? 'An independent, AI-directed Wrapped experience.' : 'Your complete recap and all analytics.'}
-        </p>
+        {activeLogs.length > 0 && missingRecapParts.length > 0 ? (
+          <div className="flex items-center flex-wrap gap-3">
+            <span className="text-xs text-zinc-400">
+              Missing: {missingRecapParts.map(part => part === 'deep-dive' ? 'Deep Dive' : 'Wrapped').join(' + ')}
+            </span>
+            <button onClick={() => void generateMissingRecap()}
+              disabled={!canUseAi || !!activity?.frozen || isGenerating ||
+                !!wrappedGeneratingKey || !!manualGeneratingKey || !!visualDirectingKey}
+              title="Generate only the missing parts for this period; keep any existing Recap or Wrapped unchanged."
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-violet-400/30 bg-violet-500/20 text-violet-100 hover:bg-violet-500/30 text-xs sm:text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed">
+              {manualGeneratingKey === wrappedKey
+                ? <RefreshCw className="w-4 h-4 animate-spin" />
+                : <Sparkles className="w-4 h-4" />}
+              {manualGeneratingKey === wrappedKey ? 'Generating Recap...' : 'Generate Recap'}
+            </button>
+            {!canUseAi && <span className="text-xs text-zinc-500">Configure an AI provider in Settings.</span>}
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-500 hidden md:block">
+            {viewMode === 'story' ? 'An independent, AI-directed Wrapped experience.' : 'Your complete recap and all analytics.'}
+          </p>
+        )}
       </div>
 
       <div ref={recapScrollRef} className="flex-1 overflow-y-auto no-scrollbar relative p-4 md:p-8">
@@ -2741,13 +2761,11 @@ ${wrappedContext || 'No background material.'}
                            </p>
                            {wrappedErrors[wrappedKey] && <p role="alert" className="text-rose-300 text-sm max-w-lg">{wrappedErrors[wrappedKey]}</p>}
                            {!wrappedHasLoaded && <p className="text-zinc-500 text-sm">Checking for a saved Wrapped story...</p>}
-                           <button onClick={() => void generateWrapped()}
-                             disabled={!wrappedHasLoaded || !!wrappedGeneratingKey || !canUseAi || !!activity?.frozen}
-                             className="flex items-center gap-2 bg-violet-500/20 hover:bg-violet-500/30 border border-violet-400/30 rounded-xl px-6 py-3 font-bold text-violet-100 disabled:opacity-40">
-                             <Sparkles className={'w-4 h-4 ' + (wrappedGeneratingKey === wrappedKey ? 'animate-pulse' : '')} />
-                             {wrappedGeneratingKey === wrappedKey ? 'Generating...' : 'Generate independent Wrapped'}
-                           </button>
-                           {!canUseAi && <p className="text-xs text-zinc-500">Configure your AI provider in Settings to create the story.</p>}
+                           {wrappedLoadFailures.has(wrappedKey)
+                             ? <p role="alert" className="text-sm text-rose-300">Could not verify whether this period has a saved Wrapped. Reload the page before generating.</p>
+                             : !wrappedHasLoaded
+                               ? null
+                               : <p className="text-sm text-zinc-400">Use <strong className="text-violet-200">Generate Recap</strong> above whenever you want to create this missing story.</p>}
                          </div>
                        )}
                      </div>
@@ -2767,14 +2785,16 @@ ${wrappedContext || 'No background material.'}
                              {renderPRBadge()}
                            </h2>
                          </div>
-                         <button 
-                           onClick={handleGenerateAI}
-                           disabled={isGenerating}
-                           className="bg-white text-black hover:bg-zinc-200 px-8 py-4 rounded-2xl text-sm font-black transition-all flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 shadow-2xl shadow-white/5 whitespace-nowrap"
-                         >
-                           <RefreshCw className={`w-5 h-5 ${isGenerating ? 'animate-spin' : ''}`} /> 
-                           {currentRecap ? 'Rewrite Recap' : 'Write Recap'}
-                         </button>
+                         {currentRecap && (
+                           <button
+                             onClick={() => void handleGenerateAI()}
+                             disabled={isGenerating || !!manualGeneratingKey || !!activity?.frozen}
+                             className="bg-white text-black hover:bg-zinc-200 px-8 py-4 rounded-2xl text-sm font-black transition-all flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 shadow-2xl shadow-white/5 whitespace-nowrap"
+                           >
+                             <RefreshCw className={`w-5 h-5 ${isGenerating ? 'animate-spin' : ''}`} />
+                             Rewrite Recap
+                           </button>
+                         )}
                       </div>
 
                       {story?.dek && (
@@ -2800,7 +2820,7 @@ ${wrappedContext || 'No background material.'}
                                   <RefreshCw className={`w-16 h-16 mb-6 ${isGenerating ? theme.text : 'text-zinc-800'}`} />
                                </motion.div>
                                <h3 className="text-2xl font-black text-white mb-2">{isGenerating ? "Writing your recap..." : "No recap yet"}</h3>
-                               <p className="text-zinc-500 max-w-md">Write the recap to get a narrative of your {timeframe}, with awards and a read on every chart below.</p>
+                               <p className="text-zinc-500 max-w-md">Use <strong className="text-zinc-300">Generate Recap</strong> above when you want a narrative of this {timeframe}, with awards and an interpretation of your charts.</p>
                             </div>
                          )}
                       </div>
