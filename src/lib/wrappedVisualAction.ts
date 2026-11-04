@@ -36,7 +36,7 @@ export function wrappedActionImageGuidance(
 
   const subject =
     plan.castMode === "environment"
-      ? "Environment is the protagonist. Show a distinctive physical event or spatial interaction, not a token human portrait."
+      ? "HARD CAST RULE: Environment is the ONLY protagonist. NO visible account owner, no studio contestant, no person in a bright floral shirt, no visible person manipulating props. Show the actual planned physical setting, light and motion, NOT a token human portrait."
       : plan.castMode === "canon-character"
         ? "A canon protagonist or source character may lead this fictional composition when the chosen work supports one; do not invent a named character or specific plot scene. Do not force an account-owner likeness."
         : !hasOptedIn
@@ -61,6 +61,11 @@ export function wrappedActionImageGuidance(
     "Activity mode: " + plan.activityMode + ". " + mode,
     "Casting: " + plan.castMode + ". " + subject,
     "Camera: " + plan.camera + ". " + cameraInstructions[plan.camera],
+    plan.visualArchetype ? "VISUAL ARCHETYPE (unique within this issue): " + plan.visualArchetype + "." : "",
+    plan.settingFamily ? "APPROVED SETTING FAMILY: " + plan.settingFamily + "." : "",
+    plan.propStrategy ? "PROP STRATEGY: " + plan.propStrategy +
+      ". Do not introduce a tabletop prop tower when the approved prop strategy is not tabletop." : "",
+    ...(plan.bannedMotifs || []).map(motif => "ABSOLUTELY AVOID THIS VISUAL MOTIF: " + motif + "."),
     world ? 'Single featured source world: "' + world + '". Translate its artistic language and setting into this imagined scene; avoid unsupported plot specifics.' : "",
     ...shared,
   ].filter(Boolean).join("\n");
