@@ -1,0 +1,34 @@
+name: Wrapped Editorial Memory and Dungeon Voice
+
+on:
+  push:
+    branches: [claude]
+    paths:
+      - 'src/lib/wrappedEditorialMemory*'
+      - 'server/routes/wrapped.editorialMemory.test.ts'
+      - 'src/services/editorialFreedom.test.ts'
+      - 'src/services/wrappedAi.ts'
+      - 'src/services/recapAi.ts'
+      - 'src/lib/personas.ts'
+      - 'src/services/db.ts'
+      - 'src/pages/Recaps.tsx'
+      - 'server/routes/wrapped.ts'
+      - '.github/workflows/wrapped-editorial-memory.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Editorial history, user isolation, real AI payload and confident Dungeon tone
+        run: node --import tsx --test src/lib/wrappedEditorialMemory.test.ts server/routes/wrapped.editorialMemory.test.ts src/services/editorialFreedom.test.ts
+      - name: Existing wrapped editorial, manual intent and recap regression
+        run: node --import tsx --test src/lib/wrappedThesisGate.test.ts src/lib/wrappedFinale.test.ts src/services/recapAi.test.ts server/routes/wrapped.manual.test.ts
+      - name: Production build
+        run: npm run build
