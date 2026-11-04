@@ -77,6 +77,11 @@ export function buildWrappedSceneArtPrompt(
   visualContinuity?: string,
 ): string {
   const idea = (scene.composition?.artConcept || "").trim();
+  const cast = scene.composition?.visualPlan?.castMode;
+  // Second privacy boundary: direct prompt callers cannot accidentally
+  // attach appearance text to a canon/environment-only scene.
+  const subjectProfile = visualSelf && cast && cast !== "self" && cast !== "in-world-self"
+    ? { ...visualSelf, visualSelfInsertMode: "never" as const } : visualSelf;
   const influence = scene.media?.title
     ? "One possible tonal influence is " + scene.media.title.slice(0, 120) +
       ". It is optional, not an object or trademark that must appear."
@@ -96,7 +101,7 @@ export function buildWrappedSceneArtPrompt(
     "The Wrapped issue is about: " + issue.title.slice(0, 180) + ". " + issue.dek.slice(0, 260),
     "Chapter: " + scene.title.slice(0, 160) + ". Its actual editorial premise: " + scene.body.slice(0, 700),
     idea ? "MAIN VISUAL CONCEPT (interpret boldly, but stay true to the chapter): " + idea : "",
-    wrappedActionImageGuidance(scene.composition?.visualPlan, visualSelf, featuredWorld),
+    wrappedActionImageGuidance(scene.composition?.visualPlan, subjectProfile, featuredWorld),
     visualContinuity ? "WHOLE-ISSUE IMAGE CONTINUITY (binding composition constraints):\n" +
       visualContinuity : "",
     mediumStyle,
@@ -106,7 +111,7 @@ export function buildWrappedSceneArtPrompt(
     "Horizontal landscape 3:2. This is a TRUE FULL-BLEED cinematic background behind the chapter's typography, not a small inset image, a framed photograph or a rectangular card. " +
       imageFramingGuidance(scene.composition?.direction),
     "NO text, logos, printed lettering, statistics, charts, mosaics, screenshots, user-interface elements, split panels, poster walls or watermarks.",
-    visualSelfImageClause(visualSelf),
+    visualSelfImageClause(subjectProfile),
   ].filter(Boolean).join("\n\n");
 }
 
@@ -126,6 +131,9 @@ export function buildWrappedClosingTableauPrompt(
     storyBeats[0], storyBeats[Math.floor((storyBeats.length - 1) / 2)], storyBeats[storyBeats.length - 1],
   ];
   const idea = scene.composition?.artConcept?.trim() || "";
+  const cast = scene.composition?.visualPlan?.castMode;
+  const subjectProfile = visualSelf && cast && cast !== "self" && cast !== "in-world-self"
+    ? { ...visualSelf, visualSelfInsertMode: "never" as const } : visualSelf;
   return [
     "Create the ORIGINAL FULL-BLEED FINAL TABLEAU for a personal Wrapped story. This is a visual EPILOGUE: the last, quietly unforgettable image before the curtain falls. Not an album cover, not a cover wall, not a media inventory.",
     "WHOLE ISSUE: " + issue.title.slice(0, 180) + ". The emotional premise: " + issue.dek.slice(0, 260),
@@ -133,7 +141,7 @@ export function buildWrappedClosingTableauPrompt(
     selected.length ? "Earlier story beats for thematic understanding ONLY, not separate things to draw: " +
       selected.map(s => s.title.slice(0, 110)).join("; ") + "." : "",
     idea ? "EDITORIAL DIRECTOR'S ENDING CONCEPT: " + idea.slice(0, 350) : "",
-    wrappedActionImageGuidance(scene.composition?.visualPlan, visualSelf),
+    wrappedActionImageGuidance(scene.composition?.visualPlan, subjectProfile),
     visualContinuity ? "WHOLE-ISSUE IMAGE CONTINUITY (binding composition constraints):\n" +
       visualContinuity : "",
     "ONE coherent cinematic or illustrative ending, ONE visual metaphor, ONE clear emotional resolution. It may show an action coming to a close, a meaningful exchange between people, a moving figure, or an environmental event. Choose the strongest subject for THIS specific ending; an empty railway platform, thoughtful desk portrait, sunset or distant horizon is NOT the default.",
@@ -142,7 +150,7 @@ export function buildWrappedClosingTableauPrompt(
       imageFramingGuidance(scene.composition?.direction),
     "The UI overlays ALL lettering and the Deep Dive action. Render NO text, written logos, lettering, labels, buttons, statistics, panels, screenshots, borders or watermarks.",
     "Do not invent the user's real experiences, achievements, plot events, quotes or spoilers. One evocative fictional metaphor is allowed.",
-    visualSelfImageClause(visualSelf),
+    visualSelfImageClause(subjectProfile),
   ].filter(Boolean).join("\n\n");
 }
 
