@@ -440,6 +440,23 @@ export function initSchema(db: Db) {
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
       ON push_subscriptions(userId);
   `);
+
+  // Only manually generated. The full-body likeness artwork is a PRIVATE BLOB
+  // and can be viewed only by its owner through authenticated binary routes.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS armory_portraits (
+      userId TEXT PRIMARY KEY,
+      image BLOB,
+      mime TEXT,
+      snapshotHash TEXT,
+      status TEXT NOT NULL DEFAULT 'idle',
+      requestId TEXT,
+      error TEXT,
+      updatedAt TEXT,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
   // A portrait is private, belongs to one account, is backed up with SQLite,
   // and is NEVER exposed via /uploads or the normal settings JSON.
   db.exec(`
