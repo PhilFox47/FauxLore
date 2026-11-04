@@ -116,18 +116,18 @@ export function normalizeWrappedVisualPlan(value: unknown): WrappedVisualPlan | 
       !castModes.has(value.castMode as WrappedCastMode) ||
       !cameras.has(value.camera as WrappedCamera) ||
       typeof value.action !== "string") return undefined;
-  const action = value.action.replace(/\\s+/g, " ").trim();
+  const action = value.action.replace(/\s+/g, " ").trim();
   if (action.length < 12 || action.length > 180 ||
-      /[<>\\u0000-\\u001f]|https?:\\/\\//i.test(action)) return undefined;
+      /[<>\u0000-\u001f]|https?:\/\//i.test(action)) return undefined;
   const interaction = typeof value.interaction === "string"
-    ? value.interaction.replace(/\\s+/g, " ").trim() : "";
+    ? value.interaction.replace(/\s+/g, " ").trim() : "";
   return {
     activityMode: value.activityMode as WrappedActivityMode,
     castMode: value.castMode as WrappedCastMode,
     camera: value.camera as WrappedCamera,
     action,
     ...(interaction.length >= 2 && interaction.length <= 100 &&
-        !/[<>\\u0000-\\u001f]|https?:\\/\\//i.test(interaction)
+        !/[<>\u0000-\u001f]|https?:\/\//i.test(interaction)
       ? { interaction } : {}),
   };
 }
