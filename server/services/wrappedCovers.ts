@@ -3,7 +3,8 @@ import type { Db } from "../context";
 import { selectIllustratedScenes, selectWrappedSceneStyleMediaId, buildWrappedSceneArtPrompt, buildWrappedClosingTableauPrompt, buildWrappedAchievementFinalePrompt } from "../../src/lib/wrappedSceneArt";
 import type { WrappedCodexStyle } from "../lib/wrappedCodexStyle";
 import type { StoryScene } from "../../src/lib/storyDiscovery";
-import { imageFramingGuidance, type EditorialDirection } from "../../src/lib/dynamicScenes";
+import { imageFramingGuidance, type EditorialDirection, type WrappedVisualPlan } from "../../src/lib/dynamicScenes";
+import { wrappedActionImageGuidance } from "../../src/lib/wrappedVisualAction";
 import { visualSelfImageClause, type VisualSelfProfile } from "../../src/lib/visualSelf";
 
 export type WrappedTimeframe = "week" | "month" | "year";
@@ -16,7 +17,7 @@ export type WrappedCoverStory = {
     title: string;
     evidenceIds?: string[];
     design?: { palette?: string };
-    composition?: { artConcept?: string; direction?: EditorialDirection };
+    composition?: { artConcept?: string; direction?: EditorialDirection; visualPlan?: WrappedVisualPlan };
     media?: { id?: string };
     artworks?: Array<{ id?: string }>;
   }>;
@@ -155,8 +156,10 @@ export function buildWrappedCoverPrompt(
       "Use the work's genuine visual medium and stylistic technique as a secondary influence, without forcing recognizable characters into an abstract issue. An animated work must not become generic photorealism; a live-action work must not become a random cartoon. The single editorial thesis and text-safe composition still take priority.",
     ].join("\n") : "",
     visualIdea ? "EDITORIAL DIRECTOR'S SPECIFIC IMAGE CONCEPT (priority over generic ideas): " + visualIdea : "",
-    "ART DIRECTION: Choose ONE memorable visual metaphor or singular scene that expresses the thesis. Depict ONE clear hero motif (a person, object, creature, or location), ONE purposeful action or situation, and ONE coherent environment. Make a confident choice; simplify rather than accumulate. The idea should be understandable at a glance, evocative and specific to this period.",
-    "HARD COMPOSITION RULE: Only ONE focal subject and ONE visual thesis. Do not illustrate each logged title. No lineup of characters from different works, competing subjects, separate worlds, panels, split screens, book-cover grids, game-cover mosaics or decorative easter eggs. Leave out anything that weakens the main image.",
+    wrappedActionImageGuidance(opening?.composition?.visualPlan, visualSelf,
+      opening?.composition?.visualPlan?.castMode === "in-world-self" ? primary?.title : undefined),
+    "ART DIRECTION: Choose ONE memorable visual action or singular scene that expresses the thesis. Prioritize purposeful movement, active interaction or a distinctive environmental event, not a repeated reflective portrait. A group engaging in one shared action is welcome when the theme warrants it. Choose a coherent environment and make the idea understandable at a glance.",
+    "HARD COMPOSITION RULE: Only ONE focal action or interaction and ONE visual thesis. Multiple figures may participate in that ONE scene, but never turn it into a lineup of characters from different works or a collage of separate worlds, panels, game-cover mosaics or decorative easter eggs. Leave out anything that weakens the image.",
     primary && styleReference?.mediaId === primary.id && styleReference.style.trim()
       ? "Apply the referenced Codex's true medium, palette, drawing/rendering language and lighting. Keep typography legible and the cover editorial, rather than repainting it as generic cinematic photography. Never invent personal achievements, events or spoilers."
       : "Use cinematic " + palette + " art direction, atmospheric lighting, meaningful negative space and convincing depth. Interpret the emotional truth of the supplied thesis, but never fabricate personal achievements, events or spoilers.",
