@@ -1,76 +1,99 @@
 import type { ProgressLog } from '../types/schema';
 import { readMoodlets } from './quickMoodlets';
 
+/**
+ * "Journal Thoughts" is the user's deliberate reflective writing.
+ * "Notes" is organizational context (chapters, issues, companions, plot beats).
+ * Do not infer emotional importance from what a Note happens to mention.
+ */
 export type PersonalMoment = {
   log: ProgressLog;
-  /** The user entered this in the journal field, not as a session label. */
-  source: 'journal' | 'note';
+  source: 'journal';
   text: string;
   score: number;
 };
 
-const meaningSignals = /\b(core memory|never forget|unforgettable|meant so much|amazing experience|finished|finally finished|completed|ending|finale|with (the )?(whole|entire)|guild|free company|discord|together|people i (have )?met|in real life|cried|tears|changed my mind|heartbreaking|loved it|back online|missed (it|this))\b/i;
+export type SessionContextNote = {
+  log: ProgressLog;
+  source: 'note';
+  text: string;
+};
 
-/**
- * Rank user-WRITTEN moments ahead of mere progress totals. 'Notes' can contain
- * meaningful firsthand context even though they are NOT journal entries.
- *
- * No keyword is used as invented evidence: the exact stored text is sent to
- * the writer. These signals only determine which authored records get airtime.
- */
+/** Sort personal reflections by subjective salience, independent of Master Pages. */
 export function selectPersonalMoments(
   logs: ProgressLog[],
   options: { journalLimit?: number; noteLimit?: number; perMedia?: number } = {},
 ): PersonalMoment[] {
   const journalLimit = options.journalLimit ?? 18;
-  const noteLimit = options.noteLimit ?? 18;
   const perMedia = options.perMedia ?? 4;
   const scored: PersonalMoment[] = [];
   for (const log of logs) {
     if (log.metricType === 'statusChange') continue;
-    const impact = log.sessionImpact ?? null;
-    const ratedImpact = typeof impact === 'number' && impact >= 1 && impact <= 5 ? impact : null;
-    const tags = readMoodlets(log.moodlets);
-    const highImpact = ratedImpact !== null && ratedImpact >= 4;
-    const strongMood = tags.includes('moving') || tags.includes('thought-provoking') ||
-      tags.includes('social') || tags.includes('immersed');
-    for (const source of ['journal', 'note'] as const) {
-      const text = (source === 'journal' ? log.thoughts : log.note)?.trim();
-      if (!text) continue;
-      // A short 'Episode 7' is useful metadata, but should never displace the
-      // person's 400-character final-MSQ-with-friends memory.
-      const important = meaningSignals.test(text);
-      const score = (source === 'journal' ? 12 : 0) +
-        (ratedImpact !== null ? ratedImpact * 3 : 0) +
-        (strongMood ? 6 : 0) + (important ? 9 : 0) +
-        Math.min(7, Math.floor(text.length / 70)) +
-        (text.length >= 80 ? 3 : 0);
-      scored.push({log, source, text, score});
-    }
+    const text = log.thoughts?.trim();
+    if (!text) continue;
+    const impact = typeof log.sessionImpact === 'number' &&
+      log.sessionImpact >= 1 && log.sessionImpact <= 5 ? log.sessionImpact : null;
+    const moods = readMoodlets(log.moodlets);
+    const resonance = moods.includes('moving') || moods.includes('thought-provoking') ||
+      moods.includes('social') || moods.includes('immersed');
+    const score = 20 + (impact ?? 0) * 3 + (resonance ? 6 : 0) +
+      Math.min(8, Math.floor(text.length / 100));
+    scored.push({ log, source: 'journal', text, score });
   }
-  // Explicit importance dominates chronological position and raw Master Pages.
-  scored.sort((a,b) => b.score - a.score ||
-    b.text.length - a.text.length || b.log.timestamp.localeCompare(a.log.timestamp) ||
-    a.log.id.localeCompare(b.log.id));
+  scored.sort((a,b) => b.score - a.score || b.text.length - a.text.length ||
+    b.log.timestamp.localeCompare(a.log.timestamp) || a.log.id.localeCompare(b.log.id));
   const selected: PersonalMoment[] = [];
-  const counts = {journal: 0, note: 0};
-  const byMedia = new Map<string, number>();
-  const seenText = new Set<string>();
+  const byMedia = new Map<string,number>();
+  const seen = new Set<string>();
   for (const moment of scored) {
-    if (counts[moment.source] >= (moment.source === 'journal' ? journalLimit : noteLimit)) continue;
+    if (selected.length >= journalLimit) break;
     if ((byMedia.get(moment.log.mediaId) || 0) >= perMedia) continue;
-    const signature = moment.log.mediaId + ':' + moment.text.toLowerCase().replace(/\s+/g, ' ');
-    if (seenText.has(signature)) continue;
+    const signature = moment.log.mediaId + ':' + moment.text.toLowerCase().replace(/\s+/g,' ');
+    if (seen.has(signature)) continue;
     selected.push(moment);
-    seenText.add(signature);
-    counts[moment.source]++;
-    byMedia.set(moment.log.mediaId, (byMedia.get(moment.log.mediaId) || 0) + 1);
+    seen.add(signature);
+    byMedia.set(moment.log.mediaId,(byMedia.get(moment.log.mediaId) || 0)+1);
   }
   return selected;
 }
 
-/** Carry an explicit month-phase sample, rather than only the first two logs. */
-export function phaseJournalHighlights(logs: ProgressLog[], limit = 2): PersonalMoment[] {
-  return selectPersonalMoments(logs, {journalLimit: limit, noteLimit: 0, perMedia: limit})
-    .filter(moment => moment.source === 'journal').slice(0, limit);
+/**
+ * Notes are capped background lookups, never independent editorial moments.
+ * Prefer context accompanying a written Journal or explicit Impact/Moodlets,
+ * but do not reward plot words ('battle', 'finished') or long issue lists.
+ */
+export function selectSessionContextNotes(
+  logs: ProgressLog[],
+  options: { limit?: number; perMedia?: number; relevantMediaIds?: readonly string[] } = {},
+): SessionContextNote[] {
+  const limit = options.limit ?? 10;
+  const perMedia = options.perMedia ?? 2;
+  const relevant = new Set(options.relevantMediaIds ?? []);
+  const all = logs.filter(log => log.metricType !== 'statusChange' && !!log.note?.trim());
+  const scored = all.map(log => {
+    const moods = readMoodlets(log.moodlets);
+    const hasImpact = typeof log.sessionImpact === 'number' && log.sessionImpact >= 4;
+    const score = (log.thoughts?.trim() ? 100 : 0) +
+      (relevant.has(log.mediaId) ? 30 : 0) +
+      (hasImpact ? 12 : 0) +
+      (moods.includes('moving') || moods.includes('social') ? 5 : 0);
+    return {log,source:'note' as const,text:log.note!.trim(),score};
+  }).sort((a,b)=>b.score-a.score || b.log.timestamp.localeCompare(a.log.timestamp));
+  const result:SessionContextNote[]=[];
+  const per=new Map<string,number>();
+  const seen=new Set<string>();
+  for (const note of scored) {
+    if(result.length >= limit) break;
+    if((per.get(note.log.mediaId)||0)>=perMedia)continue;
+    const sig=note.log.mediaId+':'+note.text.toLowerCase().replace(/\s+/g,' ');
+    if(seen.has(sig))continue;
+    seen.add(sig);
+    per.set(note.log.mediaId,(per.get(note.log.mediaId)||0)+1);
+    result.push({log:note.log,source:'note',text:note.text.slice(0,260)});
+  }
+  return result;
+}
+
+export function phaseJournalHighlights(logs: ProgressLog[],limit=2):PersonalMoment[] {
+  return selectPersonalMoments(logs,{journalLimit:limit,perMedia:limit}).slice(0,limit);
 }
