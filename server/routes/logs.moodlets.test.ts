@@ -6,6 +6,8 @@ import Database from 'better-sqlite3';
 import { initSchema } from '../db/schema';
 import { runMigrations } from '../db/migrations';
 import { registerLogRoutes } from './logs';
+import { buildWrappedEvidence } from '../../src/lib/wrappedEvidence';
+import type { MediaItem, ProgressLog } from '../../src/types/schema';
 
 test('optional impact and Moodlets persist, can be revised/cleared and reject unknown values', async () => {
   const db = new Database(':memory:');
@@ -46,6 +48,33 @@ test('optional impact and Moodlets persist, can be revised/cleared and reject un
     result = await put({ note: 'A chapter' });
     assert.equal(result.status, 200);
     assert.deepEqual((await result.json()).moodlets,['moving','thought-provoking']);
+
+    // User first writes a personally meaningful event in Notes and later moves
+    // it to the dedicated Journal Thoughts field on the existing log.
+    const memory = 'Finished the MSQ with my entire Free Company on Discord. A true core memory.';
+    result = await put({ note: memory });
+    assert.equal(result.status,200);
+    result = await put({
+      note: '', thoughts: memory, sessionImpact: 5, moodlets: ['moving','social'],
+    });
+    assert.equal(result.status,200);
+    assert.equal((await result.json()).thoughts,memory);
+    const afterEdit = await fetch(base + '/api/logs');
+    const updatedLogs = await afterEdit.json() as ProgressLog[];
+    const persistedLog = updatedLogs.find(l=>l.id==='session')!;
+    assert.equal(persistedLog.thoughts,memory);
+    assert.equal(persistedLog.note,'');
+    assert.deepEqual(persistedLog.moodlets,['moving','social']);
+    const monthMedia:MediaItem[] = [{
+      id:'moon',title:'To the Moon',mediaType:'Game',status:'Completed',
+      genres:[],tags:[],tropes:[],createdAt:'2026-01-01',updatedAt:'2026-11-01',
+    }];
+    const evidence = buildWrappedEvidence({
+      timeframe:'month',timeId:'2026-10',logs:updatedLogs,history:updatedLogs,media:monthMedia,
+    });
+    assert.match(evidence.facts.find(f=>f.id==='journal-session')?.quote||'',/core memory/);
+    assert.match(evidence.facts.find(f=>f.id==='session-resonance-moon')?.evidence||'',/Moving/);
+
     for (const patch of [
       { sessionImpact: 0 },
       { sessionImpact: 6 },
