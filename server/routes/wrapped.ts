@@ -5,6 +5,7 @@ import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { normalizeDynamicScene } from "../../src/lib/dynamicScenes";
 import { finaleModes } from "../../src/lib/wrappedFinale";
+import { selectWrappedEditorialMemory } from "../../src/lib/wrappedEditorialMemory";
 import { MAX_DATA_SLIDES, isDataLayout, isStrongSceneData, isStrongVerifiedAnalytic, normalizeEditorialJob, normalizeVerifiedAnalytic } from "../../src/lib/wrappedEditorial";
 import type { StoryPeriod } from "../../src/lib/storyDiscovery";
 
@@ -184,6 +185,34 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
       sceneArt, sceneArtStatus: row.sceneArtStatus,
     };
   }
+
+  /** Previous issues are read-only editorial MEMORY, never new user activity.
+   * Scope to the authenticated account and strictly earlier non-overlapping
+   * calendar periods. Reruns may see their own earlier editorial version.
+   * This endpoint never schedules a Wrapped or an image.
+   */
+  const findEditorialHistory = db.prepare(
+    "SELECT timeframe,timeId,story FROM wrapped_stories " +
+    "WHERE userId=? ORDER BY generatedAt DESC LIMIT 500",
+  );
+  app.get("/api/wrapped/:timeframe/:timeId/editorial-memory", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const { timeframe, timeId } = req.params;
+      if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
+      const ids = typeof req.query.ids === "string" ? req.query.ids.split(",")
+        .filter(id => /^[a-zA-Z0-9_-]{1,120}$/.test(id)).slice(0,120) : [];
+      const rows = findEditorialHistory.all(userId) as Array<{
+        timeframe:string;timeId:string;story:string;
+      }>;
+      const memory = selectWrappedEditorialMemory(rows,{timeframe,timeId},ids,10);
+      res.setHeader("Cache-Control","private, no-store");
+      res.json({ memory });
+    } catch (error) {
+      res.status(500).json({ error: "Could not load editorial memory" });
+    }
+  });
 
   app.get("/api/wrapped/:timeframe/:timeId", (req, res) => {
     try {
