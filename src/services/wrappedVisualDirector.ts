@@ -33,6 +33,9 @@ export function wrappedVisualDirectorBrief(
     palette: scene.design?.palette || "violet",
     imageMediaIds: [...new Set([scene.media, ...(scene.artworks || [])]
       .filter(m => m?.cover).map(m => m!.id))].slice(0, 6),
+    referencedMediaTitles: [...new Set([scene.media, ...(scene.artworks || [])]
+      .filter((m): m is NonNullable<typeof m> => !!m?.title)
+      .map(m => m.title))].slice(0, 5),
     canUseData: (isDataLayout(scene.kind, scene.design?.layout, scene.design?.visual) ||
       scene.editorialJob === "data-reveal") &&
       (isStrongSceneData(scene.kind, scene.bars) || isStrongVerifiedAnalytic(scene.analytic)),
@@ -76,6 +79,7 @@ export function wrappedVisualDirectorBrief(
     "IMAGE COMPOSITION IS JOINT ART DIRECTION: textSide describes where the overlaid typography will be; imageFocus describes where the primary image subject must be. Keep them mostly opposite (text LEFT, focal RIGHT, or vice versa), and reserve the text area as quiet, dark negative space. Center text is appropriate only for intentionally symmetrical imagery. textPosition determines the upper, middle or lower visual rhythm of the typography.",
     "For analytic-only data (verifiedAnalytic is present but verifiedBars is empty), do NOT add stat nodes: the safe renderer automatically draws the selected analytic kind. Provide exactly one title and body node and let the validated data treatment provide the visual. If verifiedBars exist, their indexed stat nodes are optional, not a requirement.",
     "DATA means a significant verified comparison is the HERO. Choose presentation:'data' and stat elements ONLY when canUseData=true AND the difference is editorially important. A 33% to 49% increase does not justify a whole chart! Do not recycle claims across scenes. Use cinematic full-bleed art for ALL non-data scenes, including a quietly reflective text-led beat. Old typography/composed values may exist for compatibility, but new narrative visuals MUST be cinematic. Do not add official covers or image insets.",
+    "TYPOGRAPHY is a deliberately quiet editorial treatment, but when it is narrative rather than a verified infographic it STILL needs its own original full-bleed atmospheric background. Typography is never a reason to omit an image for a non-data beat.",
     "Only verified INFOGRAPHIC data scenes get intentional graphical/typographic breathing room WITHOUT generated background art. A narrative quote, location, verdict, insight, timeline, reflection, spotlight or return remains image-led even if the text is quiet. Avoid stacked coloured cards, floating media covers, ornamental circles, poster walls and title/body text disconnected by empty gaps.",
     "THE STORY'S MEANING COMES FIRST: A visual device must express a specific observation, surprising connection, significant contrast, or earned emotional payoff. A scene about a train/book crossover can be a cinematic train emerging from an open novel; a media-share comparison should let real percentages dominate. Decorative piles of the week's many media objects are not an idea.",
     "The old coordinate elements are still REQUIRED for backwards compatibility and reliable fallback, but in cinematic/data/typography modes the renderer prioritizes the new direction plan. Give exactly ONE title and ONE body element with readable boxes, include accurate verified stat/beat/media references only when they improve the point. Avoid crowding. Never overlap title/body boxes.",
