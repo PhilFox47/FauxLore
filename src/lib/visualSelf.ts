@@ -1,14 +1,16 @@
 /**
  * Per-account, opt-in visual likeness guidance for personal Wrapped artwork.
  * These values are plain descriptive text, never executable prompts or image
- * references. Future photo references can use the same mode and identity
- * decision, without altering the saved public story.
+ * references. The private binary face reference is stored and fetched only by
+ * the server; this type carries a boolean marker, never image bytes.
  */
 export type VisualSelfInsertMode = "never" | "auto" | "prefer";
 
 export interface VisualSelfProfile {
   visualSelfInsertMode?: VisualSelfInsertMode | null;
   visualSelfDescription?: string | null;
+  /** True only for a user-owned private reference (no photo bytes here). */
+  visualSelfReferenceAvailable?: boolean;
 }
 
 export const VISUAL_SELF_DESCRIPTION_LIMIT = 700;
