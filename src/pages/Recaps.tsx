@@ -903,10 +903,10 @@ SESSION ENJOYMENT (individual-session 1-5 scores, distinct from full-media ratin
 ${sampleAcross(activeLogs.filter(l => typeof l.sessionEnjoyment === 'number'), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${l.sessionEnjoyment}/5`).join('\n') || 'No session enjoyment ratings.'}
 
 SESSION IMPACT (personal significance, separate from enjoyment or raw time; missing means UNKNOWN):
-${sampleAcross(activeLogs.filter(l => typeof l.sessionImpact === 'number'), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: impact ${l.sessionImpact}/5${typeof l.sessionEnjoyment === 'number' ? ', enjoyment ' + l.sessionEnjoyment + '/5' : ''}`).join('\\n') || 'No session impact ratings.'}
+${sampleAcross(activeLogs.filter(l => typeof l.sessionImpact === 'number'), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: impact ${l.sessionImpact}/5${typeof l.sessionEnjoyment === 'number' ? ', enjoyment ' + l.sessionEnjoyment + '/5' : ''}`).join('\n') || 'No session impact ratings.'}
 
 QUICK MOODLETS (explicit session tags, not the user's permanent attitude to a title):
-${sampleAcross(activeLogs.filter(l => readMoodlets(l.moodlets).length > 0), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${describeMoodlets(readMoodlets(l.moodlets))}`).join('\\n') || 'No Quick Moodlets recorded.'}
+${sampleAcross(activeLogs.filter(l => readMoodlets(l.moodlets).length > 0), timeframe === 'year' ? 100 : 140).map(l => `- ${l.timestamp.split('T')[0]} ${media.find(m => m.id === l.mediaId)?.title || 'Unknown'}: ${describeMoodlets(readMoodlets(l.moodlets))}`).join('\n') || 'No Quick Moodlets recorded.'}
 ${periodActiveMedia.filter(m => (m.userReview || '').trim() || (m.dropReason || '').trim()).map(m => `- ${m.title}: ${m.userReview ? 'Review: ' + m.userReview : ''} ${m.dropReason ? 'Drop reason: ' + m.dropReason : ''}`).join('\n') || 'No reviews.'}
 
 CHRONOLOGICAL CLUES (analyze patterns, never retell this as a log):
