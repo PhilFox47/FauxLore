@@ -198,7 +198,7 @@ export async function generateAiWrapped(args: {
   apiKey: string; model: string; persona?: string; evidence: WrappedEvidence;
   media: MediaItem[]; previous?: WrappedStory | null;
 }): Promise<WrappedStory> {
-  const { apiKey, model, persona, evidence, media, previous } = args;
+  const { apiKey, model, persona, evidence, media } = args;
   const targets = { week: '4-6', month: '6-9', year: '9-14' };
   const system = [
     "You are the AI STORY DIRECTOR for FauxLore Wrapped. Create an entirely NEW, standalone, deeply personalized, cinematic story from the user's media history. " + getPersonaDescription(persona),
@@ -246,7 +246,8 @@ export async function generateAiWrapped(args: {
       mediaIds: [...(f.mediaId ? [f.mediaId] : []), ...(f.mediaIds || [])], hasBars: !!f.bars?.length, hasTimeline: !!f.beats?.length, hasQuote: !!f.quote,
     }))),
     'MEDIA REFERENCE (personal ratings/reviews are present only when recorded by the period end):\n' + JSON.stringify(evidence.media),
-    previous ? 'PREVIOUS WRAPPED VERSION: Avoid recycling its ideas or punchlines:\n' + previous.scenes.map(s => s.title + ' / ' + s.body.slice(0, 200)).join('\n') : '',
+    // Older persisted stories may themselves contain opinions written in later weeks.
+    // Never reintroduce them as reference material during a historical reroll.
   ].filter(Boolean).join('\n\n');
   let lastFailure = '';
   for (let attempt = 0; attempt < 2; attempt++) {
