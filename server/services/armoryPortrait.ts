@@ -23,7 +23,7 @@ export type ArmoryPortraitStatus = {
 type PortraitDeps = {
   db: Db;
   aiImagesDir: string;
-  generateImage: (userId: string, prompt: string, referenceDataUrls: string[]) => Promise<string>;
+  generateImage: (userId: string, prompt: string, referenceDataUrls: string[], fallbackPrompt?: string) => Promise<string>;
 };
 
 function localEquipmentReference(aiImagesDir: string, imageUrl?: string | null): string | null {
@@ -118,7 +118,8 @@ export function createArmoryPortraitService({ db, aiImagesDir, generateImage }: 
         if (ref) {references.push(ref);referencedSlots.push(item.slot as ArmorySlot);}
       }
       const prompt = buildArmoryPortraitPrompt(chosen.gear,chosen.appearance,!!face,referencedSlots,chosen.allowOwner);
-      const dataUrl = await generateImage(userId,prompt,references);
+      const fallbackPrompt = buildArmoryPortraitPrompt(chosen.gear,chosen.appearance,false,[],chosen.allowOwner);
+      const dataUrl = await generateImage(userId,prompt,references,fallbackPrompt);
       const match = dataUrl.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/);
       if (!match) throw new Error("Image provider did not return a private image.");
       const bytes = Buffer.from(match[2],"base64");
