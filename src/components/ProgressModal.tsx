@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { MediaItem, ProgressLog, MetricType, Status } from '../types/schema';
 import { getMetricForType, MEDIA_COLORS } from '../types/schema';
-import { X, Plus, Minus, History, Check, Clock, MapPin, ArrowRight, Sparkles, Star, Loader2 } from 'lucide-react';
+import { X, Plus, Minus, History, Check, Clock, MapPin, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
+import { SessionReflectionSignals } from './SessionReflectionSignals';
+import type { MoodletId } from '../lib/quickMoodlets';
 import { format } from 'date-fns';
 import { useMediaContext } from '../contexts/MediaContext';
 import { logSpan, formatDuration } from '../lib/logDuration';
@@ -31,6 +33,8 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
   const [logTime, setLogTime] = useState('');
   const [isHistorical, setIsHistorical] = useState(false);
   const [enjoyment, setEnjoyment] = useState<number | null>(null);
+  const [impact, setImpact] = useState<number | null>(null);
+  const [moodlets, setMoodlets] = useState<MoodletId[]>([]);
   const [note, setNote] = useState('');
   const [thoughts, setThoughts] = useState('');
   const [question, setQuestion] = useState('');
@@ -69,6 +73,8 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
     setLogTime(format(new Date(), 'HH:mm'));
     setIsHistorical(false);
     setEnjoyment(null);
+    setImpact(null);
+    setMoodlets([]);
     setNote(''); setThoughts(''); setQuestion(''); setAsking(false);
     setUserRating(item.userRating ?? '');
     setUserReview(item.userReview || '');
@@ -118,7 +124,6 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
       const saved = await onLog(item.id, metricType, delta, undefined, stamp, location, isHistorical, {
         status: selectedStatus,
         ...(item.mediaType === 'Movie' && delta > 0 ? { watched: true } : {}),
-        sessionEnjoyment: enjoyment,
       });
       if (location) localStorage.setItem('fauxlore_last_location', location);
       setSavedLog(saved);
@@ -155,6 +160,9 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
     if (!savedLog || saving) return;
     const changes: Partial<ProgressLog> & { userRating?: number; userReview?: string } = {};
     if (note.trim()) changes.note = note.trim();
+    if (enjoyment !== null) changes.sessionEnjoyment = enjoyment;
+    if (impact !== null) changes.sessionImpact = impact;
+    if (moodlets.length) changes.moodlets = moodlets;
     if (thoughts.trim()) {
       changes.thoughts = thoughts.trim();
       if (question) changes.thoughtPrompt = question;
@@ -267,21 +275,6 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
               </div>
             </section>
 
-            <section className="rounded-2xl border border-white/10 bg-white/[.035] p-4 space-y-3">
-              <div className="flex justify-between gap-3 items-baseline">
-                <h3 className="font-bold text-white text-sm">Session enjoyment</h3><span className="text-xs text-zinc-500">Optional · not the full-work rating</span>
-              </div>
-              <div className="grid grid-cols-5 gap-2" role="group" aria-label="Rate this session 1 to 5">
-                {[1,2,3,4,5].map(n => <button type="button" key={n}
-                  aria-pressed={enjoyment === n} onClick={()=>setEnjoyment(enjoyment===n?null:n)}
-                  className={'rounded-xl py-3 border flex flex-col items-center gap-1 ' + (enjoyment === n ? 'border-amber-400/70 bg-amber-400/15' : 'border-white/10 bg-black/30 hover:bg-white/10')}>
-                  <Star size={20} className={enjoyment !== null && enjoyment >= n ? 'fill-amber-400 text-amber-400' : 'text-zinc-500'}/>
-                  <span className="text-xs text-zinc-300">{n}</span>
-                </button>)}
-              </div>
-              <p className="text-xs text-zinc-500 text-center">{enjoyment === null ? 'Leave blank if you would rather not rate' : ['','Bad','Not great','Okay','Really good','Amazing'][enjoyment]}</p>
-            </section>
-
             <section className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="font-bold text-white text-sm">Status</h3>
@@ -300,6 +293,11 @@ export function ProgressModal({ isOpen, item, onClose, onLog }: ProgressModalPro
                 <p className="text-xs text-zinc-400">Your session is safe. Everything on this page is optional.</p>
               </div>
             </section>
+            <SessionReflectionSignals
+              enjoyment={enjoyment} onEnjoymentChange={setEnjoyment}
+              impact={impact} onImpactChange={setImpact}
+              moodlets={moodlets} onMoodletsChange={setMoodlets}
+            />
             <section className="space-y-2">
               <h3 className="text-white font-bold text-sm">Notes <span className="font-normal text-zinc-500">· factual / organizational</span></h3>
               <textarea rows={2} className={inputStyle + ' resize-y'} placeholder="Episode number, Grand Prix, comic issue, chapter..."
