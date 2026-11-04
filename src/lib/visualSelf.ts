@@ -65,5 +65,8 @@ export function redactVisualSelfForDiagnostics(value: string): string {
   return value.replace(
     /OPTIONAL USER LIKENESS \(private account settings; not a claim that any image is a real photograph\):[\s\S]*?END OPTIONAL USER LIKENESS\./g,
     "[Private account appearance guidance redacted]",
+  ).replace(
+    /OWNER APPEARANCE \\(private text description, appearance facts only\\): [^\\r\\n"]+/g,
+    "[Private account appearance guidance redacted]",
   );
 }
