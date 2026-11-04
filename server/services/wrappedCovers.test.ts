@@ -426,6 +426,16 @@ test("Wrapped imagery respects ONLY its account's opt-in appearance and covers n
   const db = fixture();
   const prompts: string[] = [];
   try {
+    // A deliberate self-cast is necessary. Merely selecting Prefer must NOT
+    // override the environment-only directive of an unrelated chapter.
+    db.prepare("UPDATE wrapped_stories SET story=? WHERE userId='user'").run(JSON.stringify({
+      ...story, scenes: [
+        { ...story.scenes[0], composition: { visualPlan: {
+          activityMode: "action", castMode: "self", camera: "wide",
+          action: "Climb a fictional bridge above a vast cinematic landscape",
+        } } }, ...story.scenes.slice(1),
+      ],
+    }));
     db.prepare("INSERT INTO settings(userId,visualSelfInsertMode,visualSelfDescription) VALUES(?,?,?)")
       .run("user", "never", "short ginger hair, very distinctive nose");
     db.prepare("INSERT INTO settings(userId,visualSelfInsertMode,visualSelfDescription) VALUES(?,?,?)")
@@ -466,7 +476,11 @@ test("chapter illustrations receive the same account-scoped optional likeness in
       scenes: [
         { id: "wrapped-0", kind: "opening", title: "A journey", body: "Intro." },
         { id: "wrapped-1", kind: "location", title: "A train on a train",
-          body: "Some travel memories from a train." },
+          body: "Some travel memories from a train.",
+          composition: { visualPlan: {
+            activityMode: "exploration", castMode: "self", camera: "wide",
+            action: "Walk through the train carriage toward the bright passing window",
+          } } },
         { id: "wrapped-2", kind: "closing", title: "Home", body: "Ending." },
       ],
     };
