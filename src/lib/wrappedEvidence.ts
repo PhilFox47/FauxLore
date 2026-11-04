@@ -2,6 +2,7 @@ import { format, isWithinInterval, parseISO, startOfISOWeek, startOfMonth, start
 import { calculateScaledDelta } from './scaling';
 import { analyzeMediaFocus, focusEditorialCalibration } from './periodFocus';
 import { analyzeRecapSalience, recapSalienceBrief, selectRecapEditorialCandidates } from './recapSalience';
+import { selectPersonalMoments, phaseJournalHighlights } from './personalMoments';
 import { isSignificantFormatShift, isSignificantTasteGap, monthPhase, monthPhaseLabel, requiredMonthlyPhases } from './wrappedEditorial';
 import type { MonthPhase, MonthlyCoverage, VerifiedAnalytic } from './wrappedEditorial';
 import type { MediaItem, ProgressLog, Settings } from '../types/schema';
@@ -100,6 +101,42 @@ export function buildWrappedEvidence(args: {
     const phases = [...new Set(items.map(item => monthPhase(dayOf(item))))];
     return phases.length === 1 ? phases[0] : undefined;
   };
+  // Personal narrative is scarce and precious. Extract BEFORE MP leaderboards,
+  // phase clusters and routine statistics can occupy the bounded evidence
+  // budget. A Note remains a Note; it can still contain firsthand details.
+  const personalMoments = selectPersonalMoments(progress, {
+    journalLimit: timeframe === 'year' ? 22 : 14,
+    noteLimit: timeframe === 'year' ? 24 : 20,
+    perMedia: timeframe === 'year' ? 5 : 3,
+  }).filter(moment => byId.has(moment.log.mediaId));
+  for (const moment of personalMoments) {
+    const l = moment.log, m = byId.get(l.mediaId)!;
+    const significance = [
+      typeof l.sessionImpact === 'number' ? 'Impact ' + l.sessionImpact + '/5.' : '',
+      // Moodlets and dates must remain user-authored and unambiguous.
+      (l.moodlets || []).length ? 'User-selected Moodlets: ' +
+        (Array.isArray(l.moodlets) ? l.moodlets.join(', ') : '') + '.' : '',
+    ].filter(Boolean).join(' ');
+    if (moment.source === 'journal') {
+      const quote = moment.text.slice(0, 2000);
+      add({ id: 'journal-' + l.id, kind: 'journal', title: 'Personal journal: ' + m.title,
+        mediaId: m.id, phase: phaseFor([l]), recentOnly: scopeFor([l]),
+        evidence: 'On ' + stamp(l) + (l.location ? ' at ' + l.location : '') +
+          ', the user WROTE in their journal about ' + m.title +
+          (l.thoughtPrompt ? ' in answer to ' + l.thoughtPrompt.slice(0, 160) : '') +
+          ': ' + quote + '. ' + significance +
+          ' This personal memory is the primary source, not the session count.',
+        quote });
+    } else {
+      add({ id: 'reference-' + l.id, kind: 'insight', title: 'User-authored session note: ' + m.title,
+        mediaId: m.id, phase: phaseFor([l]), recentOnly: scopeFor([l]),
+        evidence: 'On ' + stamp(l) + ', the user wrote in Notes for ' + m.title +
+          (l.location ? ' at ' + l.location : '') + ': ' + moment.text.slice(0, 950) +
+          '. ' + significance +
+          ' Treat this as their actual written session account. It is NOT a journal-field quote. ' +
+          'It may contain specific personal opinions or memories, not just organizational metadata.' });
+    }
+  }
   let monthlyCoverage: MonthlyCoverage | undefined;
   if (timeframe === 'month') {
     const names: MonthPhase[] = ['early', 'middle', 'late'];
@@ -134,10 +171,9 @@ export function buildWrappedEvidence(args: {
               id, title: byId.get(id)?.title || 'Unknown',
               share: round(totals.get(phase)! > 0 ? weight / totals.get(phase)! * 100 : 0),
             })),
-          journalHighlights: entries.filter(entry => !!entry.thoughts?.trim())
-            .slice(0, 2).map(entry => ({
-              mediaId: entry.mediaId, quote: entry.thoughts!.trim().slice(0, 240),
-            })),
+          journalHighlights: phaseJournalHighlights(entries, 2).map(moment => ({
+            mediaId: moment.log.mediaId, quote: moment.text.slice(0, 240),
+          })),
           places: [...new Set(entries.map(entry => entry.location?.trim() || '').filter(Boolean))]
             .slice(0, 3),
         };
@@ -230,29 +266,8 @@ export function buildWrappedEvidence(args: {
             : 'Do not equate time spent with personal significance.'),
     });
   }
-  // Explicit opinions and diary moments, not automatic statusChange strings.
-  const notes = progress.filter(l => !!l.thoughts?.trim() && byId.has(l.mediaId))
-    .sort((a, b) => Math.min(b.thoughts!.length, 350) - Math.min(a.thoughts!.length, 350));
-  const usedNoteMedia = new Set<string>();
-  notes.forEach(l => {
-    if (facts.filter(f => f.kind === 'journal').length >= (timeframe === 'year' ? 20 : 12)) return;
-    if (usedNoteMedia.has(l.mediaId) && notes.length > 8 && facts.filter(f => f.kind === 'journal' && f.mediaId === l.mediaId).length >= 2) return;
-    usedNoteMedia.add(l.mediaId);
-    const m = byId.get(l.mediaId)!;
-    const quote = l.thoughts!.trim().slice(0, 2000);
-    add({ id: 'journal-' + l.id, kind: 'journal', title: 'Journal: ' + m.title, mediaId: m.id,
-      phase: phaseFor([l]), recentOnly: scopeFor([l]),
-      evidence: 'On ' + stamp(l) + (l.location ? ' at ' + l.location : '') + ', reflected on ' + m.title + (l.thoughtPrompt ? ' in reply to '+l.thoughtPrompt.slice(0,160) : '') + ': ' + quote,
-      quote });
-  });
-  // Factual notes are context, not quotes from the user's journal.
-  progress.filter(l => !!l.note?.trim() && byId.has(l.mediaId)).slice(0, 20).forEach(l => {
-    const m = byId.get(l.mediaId)!;
-    add({ id: 'reference-' + l.id, kind: 'insight', title: 'Session reference: ' + m.title, mediaId: m.id,
-      phase: phaseFor([l]), recentOnly: scopeFor([l]),
-      evidence: 'On ' + stamp(l) + ', organizational note for ' + m.title + ': ' + l.note!.trim().slice(0, 450) +
-        '. This is contextual metadata, NOT a personal opinion.' });
-  });
+  // Qualitative moments were already prioritized above. Never re-add them
+  // after spotlight/statistics cards or truncate to the first 20 by date.
   const ratings = new Map<string, { score: number; date: string }[]>();
   for (const l of progress) if (typeof l.sessionEnjoyment === 'number' &&
     l.sessionEnjoyment >= 1 && l.sessionEnjoyment <= 5) {
