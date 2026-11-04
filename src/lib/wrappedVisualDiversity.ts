@@ -139,7 +139,6 @@ function fallbackPlan(scene: ArtScene): WrappedVisualPlan {
 /** With an invalid/missing AI plan, do NOT fall back to a generic self portrait. */
 export function stageWrappedVisualSequence<T extends ArtScene>(scenes: T[]): T[] {
   const usedArchetypes = new Map<WrappedVisualArchetype, number>();
-  const usedFamilies = new Map<WrappedSettingFamily, number>();
   const priorAction = new Set<string>();
   const priorCameras: WrappedCamera[] = [];
   let ownerLeadCount = 0;
@@ -226,7 +225,6 @@ export function stageWrappedVisualSequence<T extends ArtScene>(scenes: T[]): T[]
     }
     plan.bannedMotifs = [...new Set(bannedMotifs)].slice(0, 8);
     usedArchetypes.set(archetype, (usedArchetypes.get(archetype) || 0) + 1);
-    usedFamilies.set(setting, (usedFamilies.get(setting) || 0) + 1);
     priorAction.add(normaliseAction(plan.action));
     priorCameras.push(plan.camera);
     previousSignature = kindSignature(plan);
@@ -241,7 +239,14 @@ export function stageWrappedVisualSequence<T extends ArtScene>(scenes: T[]): T[]
       ...comp,
       version: 1 as const,
       backdrop: comp?.backdrop || "cinematic" as const,
-      elements: comp?.elements || [],
+      elements: comp?.elements || [
+        { id:"title",type:"title",box:{x:7,y:16,w:44,h:24},size:"xl",tone:"primary",motion:"fade",delay:0 },
+        { id:"body",type:"body",box:{x:7,y:52,w:44,h:28},size:"md",tone:"secondary",motion:"fade",delay:0 },
+      ],
+      ...(comp?.direction ? {} : { direction: {
+        presentation: "cinematic" as const, textSide: "left" as const,
+        textPosition: "middle" as const, imageFocus: "right" as const,
+      } }),
       artConcept: compatibleConcept ? artConcept
         : "An original " + setting.replace("-", " ") + " tableau: " + plan.action,
       visualPlan: plan,
@@ -300,4 +305,17 @@ export function wrappedVisualContinuityBrief(scenes: ArtScene[], sceneId: string
       : "",
     "Focus on the CURRENT scene's precise physical image. The other scenes are NEGATIVE CONTEXT ONLY: do not literally paint their subjects, combine them, or make a montage.",
   ].filter(Boolean).join("\n");
+}
+
+/**
+ * A source Codex may describe the wardrobe of REAL game-show contestants.
+ * It supplies stylistic information, never permission to inject a contestant
+ * or their outfit into an unrelated private owner's appearance.
+ */
+export function sourceStyleWithoutUncastCharacters(
+  style: string, castMode?: WrappedVisualPlan["castMode"] | null,
+): string {
+  if (castMode === "canon-character") return style;
+  return style.split(/\r?\n/).filter(line => !/^\s*(How (its|the) people and creatures look|How characters look|Character (appearance|wardrobe)|Costume(s)?|Specific cast members|Signature outfits)\s*:/i.test(line))
+    .join("\n");
 }
