@@ -10,6 +10,18 @@ import { bossTarget, bossUnit } from "../lib/bossTargets";
  * production databases: every step is wrapped in try/catch and only adds.
  */
 export function runMigrations(db: Db) {
+  // A portrait is private, belongs to one account, is backed up with SQLite,
+  // and is NEVER exposed via /uploads or the normal settings JSON.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS visual_self_references (
+      userId TEXT PRIMARY KEY,
+      image BLOB NOT NULL,
+      mime TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(userId) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
   // Private, per-user Wrapped visual likeness profile. No automatic profile
   // inference or migration from account photos: users opt in explicitly.
   try { db.prepare("ALTER TABLE settings ADD COLUMN visualSelfInsertMode TEXT NOT NULL DEFAULT 'never'").run(); } catch {}
