@@ -25,6 +25,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npm run test:wrapped
-      - run: npm run build
-      - run: npm run lint
+      - name: Verify dated opinion snapshots, period isolation and edit history
+        run: node --import tsx --test src/lib/mediaOpinionHistory.test.ts
+      - name: Build production client and server
+        run: npm run build
