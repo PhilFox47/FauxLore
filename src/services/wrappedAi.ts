@@ -245,7 +245,7 @@ export async function generateAiWrapped(args: {
       analyticKind: f.analytic?.kind || null,
       mediaIds: [...(f.mediaId ? [f.mediaId] : []), ...(f.mediaIds || [])], hasBars: !!f.bars?.length, hasTimeline: !!f.beats?.length, hasQuote: !!f.quote,
     }))),
-    'MEDIA REFERENCE:\n' + JSON.stringify(evidence.media),
+    'MEDIA REFERENCE (personal ratings/reviews are present only when recorded by the period end):\n' + JSON.stringify(evidence.media),
     previous ? 'PREVIOUS WRAPPED VERSION: Avoid recycling its ideas or punchlines:\n' + previous.scenes.map(s => s.title + ' / ' + s.body.slice(0, 200)).join('\n') : '',
   ].filter(Boolean).join('\n\n');
   let lastFailure = '';
