@@ -1,4 +1,6 @@
 import { createManualWrappedIntentGate } from '../lib/manualWrappedIntent';
+import { diag } from '../lib/diagnostics';
+import { FAUXLORE_RUNTIME_BUILD } from '../../src/lib/runtimeBuild';
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { normalizeDynamicScene } from "../../src/lib/dynamicScenes";
@@ -180,6 +182,11 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
       if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
       // Navigation must be read-only. No story, cover or chapter artwork jobs
       // may be scheduled by merely viewing an earlier week/month/year.
+      const clientBuild = req.get("X-FauxLore-Client-Build") || "missing";
+      if (clientBuild !== FAUXLORE_RUNTIME_BUILD) {
+        diag.warn("wrapped-generation", "Read from a mismatched or outdated client bundle",
+          { timeframe, timeId, clientBuild, serverBuild: FAUXLORE_RUNTIME_BUILD });
+      }
       res.json(savedStory(userId, timeframe, timeId));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -296,6 +303,9 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
       if (!activity.requireActive(userId, res)) return;
       const { timeframe, timeId } = req.params;
       if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
+      diag.info("wrapped-generation", "Manual Wrapped intent requested",
+        { timeframe, timeId, clientBuild: req.get("X-FauxLore-Client-Build") || "missing",
+          serverBuild: FAUXLORE_RUNTIME_BUILD });
       res.json({ intentId: manualIntent.issue({ userId, timeframe, timeId }) });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -308,7 +318,15 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
       if (!validPeriod(timeframe, timeId)) return res.status(400).json({ error: "Invalid period" });
       if (!activity.requireActive(userId, res)) return;
       const requestId = manualIntent.begin({ userId, timeframe, timeId }, req.body?.intentId);
-      if (!requestId) return res.status(428).json({ error: "Wrapped generation requires an explicit Generate Recap click." });
+      if (!requestId) {
+        diag.warn("wrapped-generation", "Rejected Wrapped start without manual intent",
+          { timeframe, timeId, clientBuild: req.get("X-FauxLore-Client-Build") || "missing",
+            serverBuild: FAUXLORE_RUNTIME_BUILD });
+        return res.status(428).json({ error: "Wrapped generation requires an explicit Generate Recap click." });
+      }
+      diag.info("wrapped-generation", "Accepted manually authorized Wrapped start",
+        { timeframe, timeId, clientBuild: req.get("X-FauxLore-Client-Build") || "missing",
+          serverBuild: FAUXLORE_RUNTIME_BUILD });
       db.prepare("INSERT INTO wrapped_requests(userId,timeframe,timeId,requestId) VALUES(?,?,?,?) " +
         "ON CONFLICT(userId,timeframe,timeId) DO UPDATE SET requestId=excluded.requestId")
         .run(userId, timeframe, timeId, requestId);
@@ -358,6 +376,8 @@ export function registerWrappedRoutes(app: Express, ctx: ServerContext) {
       })();
       if (!saved) return res.status(409).json({ error: "A newer Wrapped generation superseded this one." });
       manualIntent.complete(requestId);
+      diag.info("wrapped-generation", "Manually authorized Wrapped saved",
+        { timeframe, timeId, serverBuild: FAUXLORE_RUNTIME_BUILD });
       queueWrappedCoverArt(userId, timeframe, timeId);
       queueWrappedSceneArtwork(userId, timeframe, timeId);
       res.json(savedStory(userId, timeframe, timeId));
