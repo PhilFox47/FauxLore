@@ -560,4 +560,33 @@ export function runMigrations(db: Db) {
     try { db.prepare("ALTER TABLE media ADD COLUMN " + column + " TEXT").run(); } catch (e) {}
   }
 
+
+  // A personal opinion is first observable when this version sees it. Never
+  // backdate legacy reviews using media.updatedAt: unrelated edits change it.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS media_opinion_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId TEXT NOT NULL,
+      mediaId TEXT NOT NULL,
+      recordedAt TEXT NOT NULL,
+      userRating REAL,
+      userReview TEXT,
+      dropReason TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_media_opinion_history_period
+      ON media_opinion_history(userId, mediaId, recordedAt, id);
+  `);
+  // Existing installations have no timestamps for their old reviews. Record
+  // today's observed state once, never fabricate a historical creation date.
+  db.prepare(`
+    INSERT INTO media_opinion_history (userId, mediaId, recordedAt, userRating, userReview, dropReason)
+    SELECT m.userId, m.id, ?, m.userRating, m.userReview, m.dropReason
+    FROM media m
+    WHERE (m.userRating IS NOT NULL OR NULLIF(TRIM(m.userReview), '') IS NOT NULL
+      OR NULLIF(TRIM(m.dropReason), '') IS NOT NULL)
+      AND NOT EXISTS (
+        SELECT 1 FROM media_opinion_history h WHERE h.userId = m.userId AND h.mediaId = m.id
+      )
+  `).run(new Date().toISOString());
+
 }
