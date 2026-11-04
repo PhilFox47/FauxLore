@@ -1,4 +1,5 @@
 import { suggestLogStatus } from '../../src/lib/logStatus';
+import { readMoodlets, validateMoodlets } from '../../src/lib/quickMoodlets';
 import type { Express } from "express";
 import type { ServerContext } from "../context";
 import { pickMangaCoverUrl, type MangaCoverIndex } from "../integrations/mangadexCovers";
@@ -39,7 +40,8 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
       const rows = db.prepare('SELECT * FROM logs WHERE userId = ? ORDER BY timestamp DESC').all(userId);
       res.json(rows.map((r: any) => ({
         ...r,
-        isHistoric: r.isHistoric === 1
+        isHistoric: r.isHistoric === 1,
+        moodlets: readMoodlets(r.moodlets),
       })));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -98,11 +100,19 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
       if (validEnjoyment !== null && (!Number.isInteger(validEnjoyment) || validEnjoyment < 1 || validEnjoyment > 5)) {
         return res.status(400).json({ error: 'Session enjoyment must be a whole number between 1 and 5.' });
       }
+      const validImpact = log.sessionImpact == null ? null : Number(log.sessionImpact);
+      if (validImpact !== null && (!Number.isInteger(validImpact) || validImpact < 1 || validImpact > 5)) {
+        return res.status(400).json({ error: 'Session impact must be a whole number between 1 and 5.' });
+      }
+      const validMoodlets = log.moodlets == null ? [] : validateMoodlets(log.moodlets);
+      if (validMoodlets === null) {
+        return res.status(400).json({ error: 'Moodlets must be 0-4 distinct known choices.' });
+      }
       const safeText = (value: unknown, max: number) =>
         typeof value === 'string' ? value.slice(0, max) : null;
       db.prepare(`
-        INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note, thoughts, thoughtPrompt, sessionEnjoyment, location, isHistoric, createdAt)
-        VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note, @thoughts, @thoughtPrompt, @sessionEnjoyment, @location, @isHistoric, @createdAt)
+        INSERT INTO logs (id, userId, mediaId, timestamp, metricType, delta, note, thoughts, thoughtPrompt, sessionEnjoyment, sessionImpact, moodlets, location, isHistoric, createdAt)
+        VALUES (@id, @userId, @mediaId, @timestamp, @metricType, @delta, @note, @thoughts, @thoughtPrompt, @sessionEnjoyment, @sessionImpact, @moodlets, @location, @isHistoric, @createdAt)
       `).run({
         id: log.id,
         userId: userId,
@@ -114,6 +124,8 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
         thoughts: safeText(log.thoughts, 6000),
         thoughtPrompt: safeText(log.thoughtPrompt, 1000),
         sessionEnjoyment: validEnjoyment,
+        sessionImpact: validImpact,
+        moodlets: log.moodlets == null ? null : JSON.stringify(validMoodlets),
         location: log.location || null,
         isHistoric: log.isHistoric ? 1 : 0,
         // When the entry was written, as opposed to the moment it records.
@@ -323,7 +335,8 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
         } catch(e) { console.error("Durability/Boss update failed", e); }
       }
 
-      res.json(db.prepare('SELECT * FROM logs WHERE id = ?').get(log.id));
+      const saved = db.prepare('SELECT * FROM logs WHERE id = ?').get(log.id) as any;
+      res.json({ ...saved, moodlets: readMoodlets(saved.moodlets) });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -342,6 +355,17 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
       const newThoughts = updates.thoughts !== undefined ? updates.thoughts : existingLog.thoughts;
       const newThoughtPrompt = updates.thoughtPrompt !== undefined ? updates.thoughtPrompt : existingLog.thoughtPrompt;
       const newEnjoyment = updates.sessionEnjoyment !== undefined ? updates.sessionEnjoyment : existingLog.sessionEnjoyment;
+      const newImpact = updates.sessionImpact !== undefined ? updates.sessionImpact : existingLog.sessionImpact;
+      if (newImpact != null && (!Number.isInteger(newImpact) || newImpact < 1 || newImpact > 5)) {
+        return res.status(400).json({ error: 'Session impact must be a whole number between 1 and 5.' });
+      }
+      const validMoodlets = updates.moodlets === undefined ? readMoodlets(existingLog.moodlets)
+        : updates.moodlets === null ? [] : validateMoodlets(updates.moodlets);
+      if (validMoodlets === null) {
+        return res.status(400).json({ error: 'Moodlets must be 0-4 distinct known choices.' });
+      }
+      const newMoodlets = updates.moodlets === undefined ? existingLog.moodlets
+        : updates.moodlets === null ? null : JSON.stringify(validMoodlets);
       if (newEnjoyment != null && (!Number.isInteger(Number(newEnjoyment)) || Number(newEnjoyment) < 1 || Number(newEnjoyment) > 5)) {
         return res.status(400).json({ error: 'Session enjoyment must be between 1 and 5.' });
       }
@@ -373,9 +397,9 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
       }
       db.transaction(() => {
         db.prepare(`
-          UPDATE logs SET timestamp = ?, delta = ?, note = ?, thoughts = ?, thoughtPrompt = ?, sessionEnjoyment = ?, location = ?
+          UPDATE logs SET timestamp = ?, delta = ?, note = ?, thoughts = ?, thoughtPrompt = ?, sessionEnjoyment = ?, sessionImpact = ?, moodlets = ?, location = ?
           WHERE id = ? AND userId = ?
-        `).run(newTimestamp, newDelta, newNote, newThoughts, newThoughtPrompt, newEnjoyment, newLocation, logId, userId);
+        `).run(newTimestamp, newDelta, newNote, newThoughts, newThoughtPrompt, newEnjoyment, newImpact, newMoodlets, newLocation, logId, userId);
         if (hasReview) {
           db.prepare('UPDATE media SET userRating = COALESCE(?, userRating), userReview = COALESCE(?, userReview), updatedAt = ? WHERE id = ? AND userId = ?')
             .run(updates.userRating ?? null, updates.userReview ?? null, new Date().toISOString(), existingLog.mediaId, userId);
@@ -397,7 +421,8 @@ export function registerLogRoutes(app: Express, ctx: ServerContext) {
         }
       }
 
-      res.json(db.prepare('SELECT * FROM logs WHERE id = ?').get(logId));
+      const updated = db.prepare('SELECT * FROM logs WHERE id = ?').get(logId) as any;
+      res.json({ ...updated, moodlets: readMoodlets(updated.moodlets) });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
