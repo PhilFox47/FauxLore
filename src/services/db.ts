@@ -528,6 +528,32 @@ export const DatabaseService = {
     }
   },
 
+  /** Reading a saved portrait is side-effect free and never generates anything. */
+  async getArmoryPortraitStatus(): Promise<{
+    status: 'idle' | 'generating' | 'done' | 'failed';
+    hasImage: boolean; stale: boolean; updatedAt: string | null;
+    error: string | null; equippedCount: number; hasFaceReference: boolean; referenceCount: number;
+  }> {
+    const res = await apiFetch('/api/armory/portrait', {cache:'no-store'});
+    if (!res.ok) throw new Error('Could not load Armory portrait status.');
+    return res.json();
+  },
+
+  async getArmoryPortraitImage(): Promise<Blob | null> {
+    const res = await apiFetch('/api/armory/portrait/image', {cache:'no-store'});
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error('Could not load Armory portrait image.');
+    return res.blob();
+  },
+
+  async generateArmoryPortrait(): Promise<void> {
+    const res = await apiFetch('/api/armory/portrait/generate',{method:'POST'});
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.message || error.error || 'Could not start character portrait.');
+    }
+  },
+
   async getArtifacts(): Promise<Artifact[]> {
     try {
       const res = await apiFetch('/api/artifacts');
