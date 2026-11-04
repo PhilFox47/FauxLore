@@ -11,6 +11,8 @@ on:
       - 'src/services/wrappedAi.ts'
       - 'src/lib/storyDiscovery.ts'
       - 'server/routes/wrapped.ts'
+      - 'server/routes/logs.moodlets.test.ts'
+      - 'src/pages/Recaps.tsx'
       - '.github/workflows/wrapped-editorial-quality.yml'
   workflow_dispatch:
 
@@ -28,5 +30,7 @@ jobs:
         run: node --import tsx --test src/lib/personalMoments.test.ts src/lib/wrappedThesisGate.test.ts
       - name: Existing Wrapped evidence, source coverage and editorial tests
         run: node --import tsx --test src/lib/wrappedEvidence.test.ts src/lib/wrappedEditorial.test.ts src/lib/recapSalience.test.ts server/routes/wrapped.test.ts
+      - name: Real HTTP Notes-to-Journal editing and Wrapped evidence roundtrip
+        run: node --import tsx --test server/routes/logs.moodlets.test.ts
       - name: Production build
         run: npm run build
