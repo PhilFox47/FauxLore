@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { MediaItem, ProgressLog } from '../types/schema';
+import { SessionReflectionSignals } from './SessionReflectionSignals';
+import { readMoodlets, QUICK_MOODLETS, type MoodletId } from '../lib/quickMoodlets';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useToast } from '../contexts/ToastContext';
 import { X, Plus, Edit2, ExternalLink, GitBranch, Clock, Calendar, BookOpen, Star, StarHalf, Hash, Gamepad2, Tv, Film, Save, Trash2, Gem, Loader2, RotateCcw, MapPin, Crown, Shirt, Footprints, Sword, Shield, Flame, Ghost, Target, Anchor, Library, BrainCircuit, History } from 'lucide-react';
@@ -51,10 +53,12 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
     note: string;
     thoughts: string;
     sessionEnjoyment: number | null;
+    sessionImpact: number | null;
+    moodlets: MoodletId[];
     location: string;
     logDate: string;
     logTime: string;
-  }>({ delta: 0, note: '', thoughts: '', sessionEnjoyment: null, location: '', logDate: '', logTime: '' });
+  }>({ delta: 0, note: '', thoughts: '', sessionEnjoyment: null, sessionImpact: null, moodlets: [], location: '', logDate: '', logTime: '' });
 
   const { currentMediaStreak, maxMediaStreak, activeDays, startDate, chartData, dailyData } = React.useMemo(() => {
     const historicalLogs = logs.filter(l => !l.timestamp.startsWith('1970-01-01'));
@@ -424,6 +428,8 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
       note: log.note || '',
       thoughts: log.thoughts || '',
       sessionEnjoyment: log.sessionEnjoyment ?? null,
+      sessionImpact: log.sessionImpact ?? null,
+      moodlets: readMoodlets(log.moodlets),
       location: log.location || '',
       logDate: format(d, 'yyyy-MM-dd'),
       logTime: format(d, 'HH:mm'),
@@ -446,6 +452,8 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
       note: editLogData.note,
       thoughts: editLogData.thoughts,
       sessionEnjoyment: editLogData.sessionEnjoyment,
+      sessionImpact: editLogData.sessionImpact,
+      moodlets: editLogData.moodlets,
       location: editLogData.location,
       timestamp: finalTimestamp
     });
@@ -1247,13 +1255,16 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
                               onChange={e => setEditLogData({ ...editLogData, thoughts: e.target.value })}
                               className="w-full bg-[#18181b] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-400 resize-none min-h-[70px]"
                             />
-                            <label className="block text-xs font-bold text-zinc-500 mb-1 mt-3 uppercase tracking-wider">Session enjoyment</label>
-                            <select value={editLogData.sessionEnjoyment ?? ''}
-                              onChange={e => setEditLogData({ ...editLogData, sessionEnjoyment: e.target.value ? Number(e.target.value) : null })}
-                              className="w-full bg-[#18181b] border border-white/10 rounded-lg px-3 py-2 text-white">
-                              <option value="">Not rated</option>
-                              {[1,2,3,4,5].map(n => <option value={n} key={n}>{n}/5</option>)}
-                            </select>
+                            <div className="mt-3">
+                              <SessionReflectionSignals
+                                enjoyment={editLogData.sessionEnjoyment}
+                                onEnjoymentChange={value => setEditLogData(prev => ({ ...prev, sessionEnjoyment: value }))}
+                                impact={editLogData.sessionImpact}
+                                onImpactChange={value => setEditLogData(prev => ({ ...prev, sessionImpact: value }))}
+                                moodlets={editLogData.moodlets}
+                                onMoodletsChange={value => setEditLogData(prev => ({ ...prev, moodlets: value }))}
+                              />
+                            </div>
                           </div>
                           <div className="flex-1 relative">
                             <label className="block text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wider pl-1">Location</label>
@@ -1373,7 +1384,7 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
                             <Edit2 className="w-3 h-3" />
                           </button>
                         </div>
-                        {(log.note || log.thoughts || log.location || log.sessionEnjoyment != null) && (
+                        {(log.note || log.thoughts || log.location || log.sessionEnjoyment != null || log.sessionImpact != null || readMoodlets(log.moodlets).length > 0) && (
                           <div className="pl-4 relative z-10 mt-3 flex flex-col gap-1">
                             {log.note && (
                               <p className={cn(
@@ -1386,6 +1397,14 @@ export function MediaDetailModal({ isOpen, onClose, item, logs, onEdit, onLogPro
                             {log.thoughts && <p className="text-sm italic text-violet-200">Journal: “{log.thoughts}”</p>}
                             {log.thoughtPrompt && log.thoughts && <p className="text-xs text-zinc-500">Prompt: {log.thoughtPrompt}</p>}
                             {log.sessionEnjoyment != null && <p className="text-xs text-amber-300">Session enjoyment: {log.sessionEnjoyment}/5</p>}
+                            {log.sessionImpact != null && <p className="text-xs text-violet-300">Session impact: {log.sessionImpact}/5</p>}
+                            {readMoodlets(log.moodlets).length > 0 &&
+                              <div className="flex flex-wrap gap-1.5">
+                                {readMoodlets(log.moodlets).map(id => {
+                                  const info = QUICK_MOODLETS.find(m => m.id === id);
+                                  return info && <span key={id} className="rounded-full border border-violet-400/20 bg-violet-500/10 px-2 py-1 text-[11px] text-violet-200">{info.emoji} {info.label}</span>;
+                                })}
+                              </div>}
                             {log.location && <p className="text-xs text-zinc-500 flex items-center gap-1"><MapPin className="w-3 h-3" /> {log.location}</p>}
                           </div>
                         )}
