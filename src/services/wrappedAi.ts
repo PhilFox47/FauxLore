@@ -140,7 +140,12 @@ export function normalizeWrappedStory(raw: any, evidence: WrappedEvidence, media
     scenes.slice(1, -1).some(s => s.kind === 'opening' || s.kind === 'closing'))
     throw new Error('Story must have its own opening and ending');
   const refs = scenes.flatMap(s => s.evidenceIds);
-  if (new Set(refs).size < 2) throw new Error('Story must find at least two different factual anchors');
+  // One exceptionally meaningful source can support a lean three-scene
+  // story (hook, one argument, final judgment). Require multiple independent
+  // sources only once the Director has chosen multiple interior chapters.
+  if (new Set(refs).size < (scenes.length === 3 ? 1 : 2)) {
+    throw new Error('Story needs independently verified factual anchors for its chosen scene count');
+  }
   if (scenes.length > 4 && new Set(scenes.slice(1, -1).map(s => s.evidenceIds.join('|'))).size < 2)
     throw new Error('Story repeats one discovery');
   const middleScenes = scenes.slice(1, -1);
@@ -178,7 +183,16 @@ export function normalizeWrappedStory(raw: any, evidence: WrappedEvidence, media
         if (phases.length) phaseSceneCount++;
         for (const phase of phases) seen.add(phase);
       }
-      const missing = coverage.requiredPhases.filter(phase => !seen.has(phase));
+      // In a deliberately short issue, other phases must not force filler
+      // merely because they contained a high *quantity* of low-signal logs.
+      // However, an actual journal, written memory or explicit resonance
+      // signal in another phase still deserves editorial acknowledgment.
+      const mandatoryPhases = middleScenes.length === 1
+        ? coverage.requiredPhases.filter(phase => evidence.facts.some(f =>
+          f.phase === phase && (f.kind === 'journal' ||
+            f.id.startsWith('reference-') || f.id.startsWith('session-resonance-'))))
+        : coverage.requiredPhases;
+      const missing = mandatoryPhases.filter(phase => !seen.has(phase));
       // A carefully argued ONE-scene cross-phase story is valid. Otherwise,
       // multiple genuinely distinct interior scenes must cover multiple
       // substantial phases; don't let several late-only scenes impersonate a
