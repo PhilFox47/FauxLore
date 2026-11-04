@@ -1,0 +1,29 @@
+name: Wrapped visual acting and casting
+
+on:
+  push:
+    branches: [claude]
+    paths:
+      - 'src/lib/dynamicScenes.ts'
+      - 'src/lib/visualSelf.ts'
+      - 'src/lib/wrappedVisualAction*'
+      - 'src/lib/wrappedSceneArt.ts'
+      - 'src/services/wrappedVisualDirector.ts'
+      - 'server/services/wrappedCovers.ts'
+      - '.github/workflows/wrapped-visual-acting.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Action, role, camera, legacy scene and privacy regression tests
+        run: node --import tsx --test src/lib/wrappedVisualAction.test.ts src/lib/dynamicScenes.test.ts src/lib/visualSelf.test.ts src/lib/wrappedSceneArt.test.ts server/services/wrappedCovers.test.ts
+      - name: Production build
+        run: npm run build
