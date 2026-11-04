@@ -32,7 +32,7 @@ export function wrappedPacingBudget(evidence:WrappedEvidence):WrappedPacingBudge
 }
 
 function classifyEvidence(f:WrappedFact): 'personal'|'contrast'|'spatial'|'change'|null {
-  if(f.kind==='journal'||f.id.startsWith('reference-')) return 'personal';
+  if(f.kind==='journal') return 'personal';
   if(f.id.startsWith('session-resonance-')||f.id.startsWith('taste-')||f.id.startsWith('focus-') ||
      f.id.startsWith('outlier-')||!!f.analytic) return 'contrast';
   if(f.kind==='location'&&f.mediaId) return 'spatial';
