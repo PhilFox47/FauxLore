@@ -27,7 +27,8 @@ test('Wrapped evidence is independent of recap content', () => {
   assert.equal(evidence.timeId, '2026-W43');
   assert.ok(evidence.facts.some(f => f.kind === 'journal' && f.quote?.includes('mystery')));
   assert.ok(evidence.facts.some(f => f.id === 'session-enjoyment-book' && f.evidence.includes('5/5')));
-  assert.ok(evidence.facts.some(f => f.id === 'reference-one' && f.evidence.includes('Chapter 12')));
+  assert.ok(!evidence.facts.some(f => f.id.startsWith('reference-')),'Session Notes are not editorial evidence');
+  assert.ok(evidence.backgroundNotes?.some(note => note.context.includes('Chapter 12')));
   assert.ok(!evidence.facts.some(f => f.kind === 'journal' && f.quote?.includes('Chapter 12')));
   assert.ok(evidence.facts.some(f => f.kind === 'location' && f.evidence.includes('Hotel')));
   assert.ok(evidence.facts.some(f => f.kind === 'taste' && f.bars?.length === 2));
@@ -130,5 +131,6 @@ test('Organizational notes and old legacy notes are not personal journal entries
     log('legacy','game','2026-10-22T12:00:00Z',2,'Mexico GP','Home'),
   ] });
   assert.equal(data.facts.filter(f => f.kind === 'journal').length, 0);
-  assert.ok(data.facts.some(f => f.id === 'reference-legacy' && f.evidence.includes('Mexico GP')));
+  assert.ok(!data.facts.some(f => f.id.startsWith('reference-')));
+  assert.ok(data.backgroundNotes?.some(note => note.context.includes('Mexico GP')));
 });
