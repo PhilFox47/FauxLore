@@ -581,12 +581,24 @@ export function Recaps() {
       const periodMedia = mediaOpinionsAsOf(media, opinionHistory, currentInterval.end);
       const evidence = buildWrappedEvidence({ timeframe, timeId, logs: activeLogs, history: validLogs, media: periodMedia, settings });
       if (evidence.facts.length < 2) throw new Error('Not enough recorded activity to compose a personal story yet.');
+      // Only after an explicit Generate/Reroll click, never on period navigation.
+      // Previous issues are private, period-bounded opinions, NOT additional
+      // factual evidence. A temporarily unavailable archive shouldn't prevent
+      // the user from generating a Wrapped.
+      const referencedMediaIds = [...new Set(evidence.facts.flatMap(f =>
+        [...(f.mediaId ? [f.mediaId] : []), ...(f.mediaIds || [])]))];
+      const editorialMemory = await DatabaseService.getWrappedEditorialMemory(
+        timeframe,timeId,referencedMediaIds,
+      ).catch(error => {
+        console.warn('[wrapped-editorial-memory] Prior take lookup unavailable:',error);
+        return [];
+      });
       const requestId = await DatabaseService.startWrappedGeneration(timeframe, timeId, manualIntentId);
       const generated = await generateAiWrapped({
         apiKey: settings.nanoGptApiKey || '',
         model: creativeModel(settings),
         persona: settings.aiPersona,
-        evidence, media: periodMedia, previous: wrapped,
+        evidence, media: periodMedia, previous: wrapped, editorialMemory,
       });
       const saved = await DatabaseService.saveWrappedStory(timeframe, timeId, requestId, generated);
       setWrappedStories(prev => ({ ...prev, [key]: saved }));
