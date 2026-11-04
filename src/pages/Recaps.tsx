@@ -16,6 +16,7 @@ import { MediaItem, MEDIA_COLORS, ProgressLog, RARITY_COLORS } from '../types/sc
 import { cn } from '../lib/utils';
 import { mediaOpinionsAsOf } from '../lib/mediaOpinionHistory';
 import { generateMissingRecapParts, getMissingRecapParts } from '../lib/recapGeneration';
+import { FAUXLORE_RUNTIME_BUILD } from '../lib/runtimeBuild';
 import { summariseGroups, UNGROUPED } from '../lib/locationGroups';
 import { WALLPAPER_SPECS, WallpaperFormat, downloadWallpaper, renderWallpaper } from '../services/wallpaper';
 import { ChevronLeft, ChevronRight, Trophy, Sparkles, RefreshCw, Presentation, Clock, CalendarDays, Target, Star, BrainCircuit, BarChart3, Medal, Library, Flame, Zap, Compass, Info, Map as MapIcon, LayoutGrid, Calendar, Activity, ZapOff, Hash, Ghost, History, Moon, Skull, Download, Image as ImageIcon } from 'lucide-react';
@@ -123,6 +124,21 @@ export function Recaps() {
   useEffect(() => {
     if (recapScrollRef.current) recapScrollRef.current.scrollTop = 0;
   }, [viewMode, timeframe, offsetOffset]); 
+  const [serverBuild, setServerBuild] = useState<string>('checking');
+  // An unambiguous fingerprint distinguishes what the browser actually loaded
+  // from the code in GitHub and the live Docker backend answering its requests.
+  useEffect(() => {
+    let active = true;
+    fetch('/api/runtime-build', { cache: 'no-store' })
+      .then(async response => {
+        if (!response.ok) throw new Error('unavailable');
+        const data = await response.json();
+        if (typeof data?.build !== 'string') throw new Error('unavailable');
+        if (active) setServerBuild(data.build);
+      })
+      .catch(() => { if (active) setServerBuild('unavailable'); });
+    return () => { active = false; };
+  }, []);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isForgingAchievement, setIsForgingAchievement] = useState(false);
   const [freshlyUnlocked, setFreshlyUnlocked] = useState<string | null>(null);
@@ -2646,6 +2662,15 @@ ${wrappedContext || 'No background material.'}
           <p className="text-xs text-zinc-500 hidden md:block">
             {viewMode === 'story' ? 'An independent, AI-directed Wrapped experience.' : 'Your complete recap and all analytics.'}
           </p>
+        )}
+      </div>
+
+      <div className="px-4 md:px-8 py-1.5 bg-zinc-950/70 border-b border-white/5 flex flex-wrap gap-2 items-center justify-between">
+        <span className="text-[10px] text-zinc-500 font-mono">Recap client: {FAUXLORE_RUNTIME_BUILD} · Server: {serverBuild}</span>
+        {serverBuild !== 'checking' && serverBuild !== FAUXLORE_RUNTIME_BUILD && (
+          <span role="alert" className="text-xs font-bold text-amber-300">
+            Client/server build mismatch. This installation is not running matching current code.
+          </span>
         )}
       </div>
 
