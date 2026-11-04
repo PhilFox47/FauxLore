@@ -1,6 +1,7 @@
 import { format, isWithinInterval, parseISO, startOfISOWeek, startOfMonth, startOfYear, endOfISOWeek, endOfMonth, endOfYear, getDaysInMonth, subHours, subWeeks, subMonths, subYears } from 'date-fns';
 import { calculateScaledDelta } from './scaling';
 import { analyzeMediaFocus, focusEditorialCalibration } from './periodFocus';
+import { analyzeRecapSalience, recapSalienceBrief, selectRecapEditorialCandidates } from './recapSalience';
 import { isSignificantFormatShift, isSignificantTasteGap, monthPhase, monthPhaseLabel, requiredMonthlyPhases } from './wrappedEditorial';
 import type { MonthPhase, MonthlyCoverage, VerifiedAnalytic } from './wrappedEditorial';
 import type { MediaItem, ProgressLog, Settings } from '../types/schema';
@@ -31,6 +32,8 @@ export interface WrappedEvidence {
   bounds: { start: string; end: string };
   /** Norm-relative editorial warning; not a required factual story beat. */
   editorialCalibration: string;
+  /** Independent qualitative signals, not a time-weighted popularity ranking. */
+  editorialSalience: string;
   /** Month phases with material logged activity; absent for week and year. */
   monthlyCoverage?: MonthlyCoverage;
 }
@@ -58,6 +61,9 @@ export function buildWrappedEvidence(args: {
 }): WrappedEvidence {
   const { timeframe, timeId, logs, history, media, settings } = args;
   const byId = new Map(media.map(m => [m.id, m]));
+  const salience = analyzeRecapSalience({ logs, media, settings });
+  const editorialCandidates = selectRecapEditorialCandidates(salience);
+  const salienceSummary = recapSalienceBrief(salience);
   const progress = logs.filter(l => l.metricType !== 'statusChange').sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   const value = (l: ProgressLog) => {
     const item = byId.get(l.mediaId);
@@ -181,7 +187,14 @@ export function buildWrappedEvidence(args: {
         focus.baselinePeriods + ' earlier comparable active ' + timeframe +
         ' periods. This is unusual concentration even if other works were logged. These are weighted progress units, NOT hours.' });
   }
-  ranking.slice(0, 10).forEach(([id, pages], i) => {
+  // Preserve a few genuine volume leaders for numeric coverage, but let
+  // strongly felt minority titles compete for spotlight fact cards as well.
+  const spotlightIds = [...new Set([
+    ...ranking.slice(0, 4).map(([id]) => id),
+    ...editorialCandidates.map(candidate => candidate.mediaId),
+  ])].slice(0, timeframe === 'year' ? 20 : 14);
+  spotlightIds.forEach((id, i) => {
+    const pages = byMedia.get(id) || 0;
     const m = byId.get(id)!;
     add({ id: 'media-' + i, kind: 'spotlight', title: m.title, mediaId: id,
       phase: phaseFor(progress.filter(l => l.mediaId === id && value(l) > 0)),
@@ -193,6 +206,30 @@ export function buildWrappedEvidence(args: {
         (m.userReview ? 'Review recorded by period end: ' + m.userReview.slice(0, 450) + '.' : ''),
     });
   });
+  // Session resonance is evidence independent of how many Master Pages a title
+  // accumulated. Missing ratings are NEVER interpreted as low impact.
+  for (const signal of salience) {
+    if (!signal.impactCount && !signal.moodlets.length) continue;
+    const sessionLogs = progress.filter(l => l.mediaId === signal.mediaId);
+    const impact = signal.impactCount
+      ? signal.impactCount + ' explicitly rated impact session(s): average ' +
+        signal.averageImpact + '/5, peak ' + signal.maxImpact + '/5.'
+      : 'No session impact ratings recorded (unknown).';
+    const tags = signal.moodlets.length
+      ? ' User-selected Quick Moodlets: ' + signal.moodlets.map(m =>
+          m.label + ' (' + m.count + ' session(s))').join(', ') + '.'
+      : '';
+    add({ id: 'session-resonance-' + signal.mediaId, kind: 'insight',
+      title: 'Session resonance: ' + signal.title,
+      mediaId: signal.mediaId, phase: phaseFor(sessionLogs), recentOnly: scopeFor(sessionLogs),
+      evidence: signal.title + ': ' + impact + tags + ' Only session annotations, not a final work rating. ' +
+        (signal.contrast === 'quiet-standout'
+          ? 'Verified contrast: less than 15% of period Master Pages but at least one reported 4+/5 impact session.'
+          : signal.contrast === 'high-volume-low-impact'
+            ? 'Verified contrast: at least 25% of Master Pages, with 1–2/5 average reported impact.'
+            : 'Do not equate time spent with personal significance.'),
+    });
+  }
   // Explicit opinions and diary moments, not automatic statusChange strings.
   const notes = progress.filter(l => !!l.thoughts?.trim() && byId.has(l.mediaId))
     .sort((a, b) => Math.min(b.thoughts!.length, 350) - Math.min(a.thoughts!.length, 350));
@@ -379,8 +416,13 @@ export function buildWrappedEvidence(args: {
     timeframe, timeId, facts,
     ...(monthlyCoverage ? { monthlyCoverage } : {}),
     editorialCalibration: focusEditorialCalibration(focus),
+    editorialSalience: salienceSummary,
     bounds: { start: format(period(start, timeframe).start, 'yyyy-MM-dd'), end: format(period(start, timeframe).end, 'yyyy-MM-dd') },
-    media: touched.map(m => ({ id: m.id, title: m.title, type: m.mediaType, year: m.year, genres: (m.genres || []).slice(0, 6),
+    media: [...touched].sort((a, b) => {
+      const ai = editorialCandidates.findIndex(s => s.mediaId === a.id);
+      const bi = editorialCandidates.findIndex(s => s.mediaId === b.id);
+      return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+    }).map(m => ({ id: m.id, title: m.title, type: m.mediaType, year: m.year, genres: (m.genres || []).slice(0, 6),
       rating: m.userRating, review: m.userReview?.slice(0, 450) })).slice(0, 45),
   };
 }
