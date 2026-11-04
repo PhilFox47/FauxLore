@@ -71,3 +71,18 @@ test('editorial gate fails rather than fabricating a stronger slide when no sour
   ]};
   assert.throws(()=>curateWrappedTheses(raw,evidence),/No distinct, evidence-backed interior slide/);
 });
+
+
+test('plot bookmarks and issue indexes are not an editorial thesis even when phrased dramatically',()=>{
+  const idx=new Map(evidence.facts.map(f=>[f.id,f]));
+  const inventory=rawScene('The great Porcupine confrontation',
+    'The player fought against Porcupine in issue #12 and continued through issues 13–15.',
+    ['media-0'],
+    'A fight against Porcupine occurred in the comic. The player reached issue 15 and there are more issues to go.');
+  assert.equal(evaluateWrappedThesis(inventory,idx).acceptable,false);
+  const real=rawScene('The ridiculous social consequences of finishing Endwalker',
+    'What matters is that a fictional final boss became an excuse for friends to spend a real evening together.',
+    ['journal-msq','session-resonance-ffxiv'],
+    'The Journal Thoughts describe an MSQ finale shared with the entire Free Company and call it a core memory. My judgment is that the multiplayer ritual mattered more than the fiction's actual ending.');
+  assert.equal(evaluateWrappedThesis(real,idx).acceptable,true);
+});
