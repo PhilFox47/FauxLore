@@ -104,7 +104,6 @@ const kindSignature = (plan: WrappedVisualPlan): string =>
 
 const stopMotifs = [
   "person in a colorful floral shirt leaning into the same right-hand side medium shot",
-  "person seated at a table or desk carefully balancing or stacking a tower of small props",
   "the same warm lamplit interior, improvised tabletop contraption and concentrated face",
 ];
 
@@ -155,7 +154,7 @@ export function stageWrappedVisualSequence<T extends ArtScene>(
     Number(scenes[b].kind === "closing") - Number(scenes[a].kind === "closing") ||
     Number(scenes[b].kind === "opening") - Number(scenes[a].kind === "opening") ||
     a-b).slice(0,2));
-  const allowedOwnerLeads = Math.max(2, Math.floor(totalIllustrated * 0.4));
+  const allowedOwnerLeads = Math.max(3, Math.floor(totalIllustrated * 0.4));
 
   const output = scenes.map((scene, sceneIndex) => {
     if (infographic(scene)) return scene;
@@ -178,11 +177,13 @@ export function stageWrappedVisualSequence<T extends ArtScene>(
     // One tabletop construction can be an excellent Taskmaster image. Three
     // of them make a repeated visual gag. A physically distinct alternative
     // keeps the same chapter fact while changing the visual approach.
-    if (plan.propStrategy === "tabletop" && tabletopCount >= 1) {
+    if (plan.propStrategy === "tabletop" &&
+        (tabletopCount >= 1 || !["stage", "domestic"].includes(setting))) {
       plan.propStrategy = "environment";
       plan.activityMode = "environmental";
       plan.castMode = "environment";
       plan.action = familyAction[setting];
+      plan.interaction = undefined;
       archetype = candidates.find(candidate =>
         candidate !== "active-task-comedy" && !usedArchetypes.has(candidate)) || candidates[0];
     }
@@ -193,6 +194,7 @@ export function stageWrappedVisualSequence<T extends ArtScene>(
       plan.activityMode = "exploration";
       plan.castMode = "environment";
       plan.action = familyAction[setting];
+      plan.interaction = undefined;
     }
 
     // Owner likeness is opt-in at render time; this cap only discourages
@@ -227,15 +229,22 @@ export function stageWrappedVisualSequence<T extends ArtScene>(
     const actionKey = normaliseAction(plan.action);
     if ((signature === previousSignature || priorAction.has(actionKey)) &&
         plan.activityMode !== "reflection") {
-      plan.activityMode = "environmental";
-      plan.castMode = "environment";
+      // Alter a repeated generic action without wiping a deliberate owner
+      // or in-world casting choice that is otherwise visually distinct.
       plan.action = familyAction[setting];
-      plan.propStrategy = "environment";
+      if (plan.castMode === "environment") plan.activityMode = "environmental";
+      if (plan.propStrategy !== "tabletop") {
+        plan.propStrategy = "environment";
+        plan.interaction = undefined;
+      }
     }
     // Strong, direct negative examples are stronger than the generic "be
     // creative". Every art-generating path receives the SAME persisted list.
     const bannedMotifs = [
       ...stopMotifs,
+      ...(plan.propStrategy !== "tabletop" ? [
+        "person seated at a table or desk carefully balancing or stacking a tower of small props",
+      ] : []),
       ...themeSpecificAvoidance(setting),
       ...(plan.bannedMotifs || []),
     ];
@@ -251,9 +260,11 @@ export function stageWrappedVisualSequence<T extends ArtScene>(
     const artConcept = comp?.artConcept;
     // A missing plan also needs a concept. Existing creator-approved text is
     // preserved if valid and compatible with the approved scene plan.
-    const compatibleConcept = artConcept && !(plan.castMode === "environment" &&
-      /\b(man|woman|person|portrait|selfie)\b/i.test(artConcept) &&
-      !/\b(empty|no people|no person)\b/i.test(artConcept));
+    const compatibleConcept = artConcept &&
+      !(plan.propStrategy !== "tabletop" && strongTabletop.test(artConcept)) &&
+      !(plan.castMode === "environment" &&
+        /\b(man|woman|person|portrait|selfie)\b/i.test(artConcept) &&
+        !/\b(empty|no people|no person)\b/i.test(artConcept));
     const nextComposition = {
       ...comp,
       version: 1 as const,
