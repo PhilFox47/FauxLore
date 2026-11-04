@@ -137,3 +137,31 @@ test("source style can preserve live-action aesthetics without leaking Taskmaste
   assert.doesNotMatch(clean,/Hawaiian shirt|Phil's/);
   assert.match(sourceStyleWithoutUncastCharacters(style,"canon-character"),/Phil's/);
 });
+
+
+test("April visual plans survive client Director, server validation and the actual image prompt",async()=>{
+  const { applyWrappedVisualCompositions } = await import("../services/wrappedVisualDirector");
+  const { validateStory } = await import("../../server/routes/wrapped");
+  const story={
+    version:2 as const,title:"The Month With a Long Shadow",dek:"April in review",
+    scenes:april.map(({composition,...scene})=>scene),
+  };
+  const reply={compositions:april.map(scene=>({
+    sceneId:scene.id,
+    composition:{ ...scene.composition, backdrop:"rose" },
+  }))};
+  const proposed=applyWrappedVisualCompositions(story,reply,story.scenes.length,"month");
+  assert.ok(proposed.scenes.every(scene=>scene.composition?.visualPlan));
+  assert.ok(proposed.scenes.every(scene=>scene.composition?.backdrop==="cinematic"));
+  const persisted=validateStory(proposed,"month");
+  assert.ok(persisted.scenes.every((scene:any)=>scene.composition?.visualPlan?.action));
+  const cinema=stageWrappedVisualSequence(persisted.scenes);
+  const train=cinema.find((scene:StoryScene)=>scene.id==="wrapped-5")!;
+  const scenePrompt=buildWrappedSceneArtPrompt({title:persisted.title,dek:persisted.dek},
+    train,{visualSelfInsertMode:"prefer",visualSelfDescription:"a private appearance description"},
+    null,wrappedVisualContinuityBrief(cinema,train.id));
+  assert.match(scenePrompt,/TRAIN MUST LOOK LIKE A TRAIN/);
+  assert.match(scenePrompt,/APPROVED VISUAL BEAT/);
+  assert.match(scenePrompt,/train window|moving landscape/i);
+  assert.doesNotMatch(scenePrompt,/private appearance description/);
+});
