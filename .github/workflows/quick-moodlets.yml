@@ -15,6 +15,8 @@ on:
       - 'src/services/wrappedAi.ts'
       - 'src/services/recapAi.ts'
       - 'server/routes/logs.ts'
+      - 'server/routes/logs.moodlets.test.ts'
+      - 'docs/logging-v2.md'
       - 'server/db/schema.ts'
       - 'server/db/migrations.ts'
       - '.github/workflows/quick-moodlets.yml'
@@ -32,5 +34,7 @@ jobs:
       - run: npm ci
       - name: Moodlet validation, salience and existing Wrapped evidence tests
         run: node --import tsx --test src/lib/quickMoodlets.test.ts src/lib/recapSalience.test.ts src/lib/wrappedEvidence.test.ts
+      - name: SQLite session signals migration and real HTTP edit flow
+        run: node --import tsx --test server/routes/logs.moodlets.test.ts
       - name: Production build
         run: npm run build
