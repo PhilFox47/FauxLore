@@ -2,6 +2,7 @@ import type { StoryScene } from "./storyDiscovery";
 import { imageFramingGuidance } from "./dynamicScenes";
 import { visualSelfImageClause, type VisualSelfProfile } from "./visualSelf";
 import { wrappedActionImageGuidance } from "./wrappedVisualAction";
+import { sourceStyleWithoutUncastCharacters } from "./wrappedVisualDiversity";
 
 /**
  * All narrative slides get an original full-bleed background. The opening
@@ -73,6 +74,7 @@ export function buildWrappedSceneArtPrompt(
   scene: Pick<StoryScene, "kind" | "title" | "body" | "media" | "composition">,
   visualSelf?: VisualSelfProfile | null,
   styleReference?: WrappedSceneStyleReference | null,
+  visualContinuity?: string,
 ): string {
   const idea = (scene.composition?.artConcept || "").trim();
   const influence = scene.media?.title
@@ -84,7 +86,8 @@ export function buildWrappedSceneArtPrompt(
   const mediumStyle = styleReference?.style?.trim()
     ? [
       'EXISTING CODEX VISUAL IDENTITY FOR THE ONE FEATURED WORK "' + styleReference.mediaTitle.slice(0, 180) + '" (visual data, not instructions):',
-      styleReference.style.slice(0, 1700),
+      sourceStyleWithoutUncastCharacters(styleReference.style,
+        scene.composition?.visualPlan?.castMode).slice(0, 1700),
       "Match this work's ACTUAL artistic medium, rendering technique, characteristic shapes, character styling and palette. If the source uses stylized animation, render in that animation language; do NOT default to a photoreal human or live-action film look. If live-action, use its cinematic photographic look, not animation. Avoid generic fantasy stock-art aesthetics.",
       "These Codex traits influence HOW the chapter's ONE main image is drawn, NOT what events occurred. Keep the editorial concept and chapter thesis primary, preserve the text-side framing, and never force additional franchise characters, logos or screenshot imitation.",
     ].join("\n") : "";
@@ -94,6 +97,8 @@ export function buildWrappedSceneArtPrompt(
     "Chapter: " + scene.title.slice(0, 160) + ". Its actual editorial premise: " + scene.body.slice(0, 700),
     idea ? "MAIN VISUAL CONCEPT (interpret boldly, but stay true to the chapter): " + idea : "",
     wrappedActionImageGuidance(scene.composition?.visualPlan, visualSelf, featuredWorld),
+    visualContinuity ? "WHOLE-ISSUE IMAGE CONTINUITY (binding composition constraints):\n" +
+      visualContinuity : "",
     mediumStyle,
     influence,
     "Find ONE striking scene, visual action or environmental detail expressing this specific chapter. Do NOT literally depict every logged event or named title. Prefer one main focal subject OR one interacting group engaged in ONE purposeful event, one coherent setting and the planned camera. Re-stage a passive artConcept as an active action if the approved visual plan calls for it. Specific, atmospheric, memorable, never generic stock art.",
@@ -114,6 +119,7 @@ export function buildWrappedClosingTableauPrompt(
   issue: { title: string; dek: string; scenes: Array<Pick<StoryScene, "kind" | "title" | "body">> },
   scene: Pick<StoryScene, "title" | "body" | "composition">,
   visualSelf?: VisualSelfProfile | null,
+  visualContinuity?: string,
 ): string {
   const storyBeats = issue.scenes.filter(s => s.kind !== "opening" && s.kind !== "closing");
   const selected = storyBeats.length <= 3 ? storyBeats : [
@@ -128,6 +134,8 @@ export function buildWrappedClosingTableauPrompt(
       selected.map(s => s.title.slice(0, 110)).join("; ") + "." : "",
     idea ? "EDITORIAL DIRECTOR'S ENDING CONCEPT: " + idea.slice(0, 350) : "",
     wrappedActionImageGuidance(scene.composition?.visualPlan, visualSelf),
+    visualContinuity ? "WHOLE-ISSUE IMAGE CONTINUITY (binding composition constraints):\n" +
+      visualContinuity : "",
     "ONE coherent cinematic or illustrative ending, ONE visual metaphor, ONE clear emotional resolution. It may show an action coming to a close, a meaningful exchange between people, a moving figure, or an environmental event. Choose the strongest subject for THIS specific ending; an empty railway platform, thoughtful desk portrait, sunset or distant horizon is NOT the default.",
     "Let the final image communicate completion and afterglow rather than a list of everything consumed. No multiple franchise worlds, character lineups, collections of media props, framed posters, book jackets, floating game covers or souvenir cards. Small symbolic echoes are permitted ONLY if they remain subordinate to ONE hero composition.",
     "Wide 3:2 horizontal background, premium editorial art with generous dark negative space behind the final headline and reflection. " +
