@@ -109,6 +109,7 @@ export function validateStory(raw: any, timeframe?: StoryPeriod): any {
     const saved: any = {
       id, kind: scene.kind, eyebrow, title, body, evidenceIds: scene.evidenceIds,
       editorialJob,
+      ...(string(scene.editorialThesis, 330) ? { editorialThesis: scene.editorialThesis.trim() } : {}),
       ...(analytic ? { analytic } : {}),
       ...(string(scene.detail, 1200) ? { detail: scene.detail.trim() } : {}),
       ...(string(scene.quote, 3000) ? { quote: scene.quote.trim() } : {}),
