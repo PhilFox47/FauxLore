@@ -1,4 +1,6 @@
 import type { Express } from "express";
+import express from "express";
+import { validateFacePhoto, MAX_VISUAL_SELF_REFERENCE_BYTES } from "../lib/visualSelfReference";
 import type { ServerContext } from "../context";
 import { AI_PERSONAS } from "../../src/lib/personas";
 import { bossTarget } from "../lib/bossTargets";
@@ -17,6 +19,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
         ...row,
         visualSelfInsertMode: normalizeVisualSelfMode(row.visualSelfInsertMode),
         visualSelfDescription: normalizeVisualSelfDescription(row.visualSelfDescription),
+        hasVisualSelfReference: !!db.prepare("SELECT 1 FROM visual_self_references WHERE userId=?").get(userId),
         masterPageConfig: row.masterPageConfig ? JSON.parse(row.masterPageConfig) : undefined,
         yearlyGoals: row.yearlyGoals ? JSON.parse(row.yearlyGoals) : undefined,
         mediaDifficulty: row.mediaDifficulty ? JSON.parse(row.mediaDifficulty) : undefined,
@@ -30,6 +33,55 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext) {
         bookMetadataProviders: row.bookMetadataProviders ? JSON.parse(row.bookMetadataProviders) : ["hardcover", "googleBooks"],
       });
     } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Reference photos are binary and explicitly managed apart from the JSON
+  // settings form. They are never accessible via /uploads or other accounts.
+  app.get("/api/settings/visual-reference", (req, res) => {
+    const userId = getAuthUser(req, res);
+    if (!userId) return;
+    try {
+      const row = db.prepare("SELECT image,mime FROM visual_self_references WHERE userId=?")
+        .get(userId) as {image: Buffer; mime: string} | undefined;
+      if (!row) return res.status(404).json({error: "No face reference uploaded."});
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.type(row.mime).send(row.image);
+    } catch {
+      return res.status(500).json({error: "Could not read face reference."});
+    }
+  });
+
+  app.put("/api/settings/visual-reference",
+    express.raw({type: ["image/jpeg", "image/png", "image/webp"], limit: MAX_VISUAL_SELF_REFERENCE_BYTES}),
+    (req, res) => {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      try {
+        if (!Buffer.isBuffer(req.body)) return res.status(415).json({error: "Upload a JPEG, PNG or WebP image."});
+        const {mime, width, height} = validateFacePhoto(req.body, req.get("Content-Type") || "");
+        // Do not log photo bytes, include them in diagnostics, or let other users
+        // fetch them. The database backup includes this intentionally private blob.
+        db.prepare(`INSERT INTO visual_self_references(userId,image,mime,updatedAt) VALUES (?,?,?,?)
+          ON CONFLICT(userId) DO UPDATE SET image=excluded.image,mime=excluded.mime,updatedAt=excluded.updatedAt`)
+          .run(userId, req.body, mime, new Date().toISOString());
+        res.setHeader("Cache-Control", "no-store");
+        res.json({ok: true, width, height});
+      } catch (e: any) {
+        res.status(400).json({error: e?.message || "Invalid reference image."});
+      }
+    });
+
+  app.delete("/api/settings/visual-reference", (req, res) => {
+    const userId = getAuthUser(req, res);
+    if (!userId) return;
+    try {
+      db.prepare("DELETE FROM visual_self_references WHERE userId=?").run(userId);
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ok: true});
+    } catch {
+      res.status(500).json({error: "Could not delete face reference."});
+    }
   });
 
   app.post("/api/settings", (req, res) => {
