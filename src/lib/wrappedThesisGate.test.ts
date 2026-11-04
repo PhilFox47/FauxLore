@@ -83,6 +83,6 @@ test('plot bookmarks and issue indexes are not an editorial thesis even when phr
   const real=rawScene('The ridiculous social consequences of finishing Endwalker',
     'What matters is that a fictional final boss became an excuse for friends to spend a real evening together.',
     ['journal-msq','session-resonance-ffxiv'],
-    'The Journal Thoughts describe an MSQ finale shared with the entire Free Company and call it a core memory. My judgment is that the multiplayer ritual mattered more than the fiction's actual ending.');
+    'The Journal Thoughts describe an MSQ finale shared with the entire Free Company and call it a core memory. My judgment is that the multiplayer ritual mattered more than the fiction itself ending.');
   assert.equal(evaluateWrappedThesis(real,idx).acceptable,true);
 });
