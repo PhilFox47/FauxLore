@@ -2,6 +2,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { ArrowRight } from "lucide-react";
 import type { StoryScene } from "../lib/storyDiscovery";
 import type { EditorialDirection } from "../lib/dynamicScenes";
+import { wrappedProseTier } from "../lib/wrappedPacing";
 import { WrappedAnalyticStage } from "./WrappedAnalyticStage";
 
 /**
@@ -39,8 +40,15 @@ export function EditorialStorySlide({ scene, direction, imageUrl, number, total,
   const visual = direction.presentation === "cinematic" && !!imageUrl;
   const hasMetrics = direction.presentation === "data" &&
     (!!scene.bars?.length || !!scene.analytic);
-  const heroTitle = scene.title.length > 65 ? "text-4xl sm:text-5xl lg:text-6xl"
+  const proseTier = wrappedProseTier(scene.body);
+  const substantial = proseTier === "substantial";
+  const heroTitle = substantial
+    ? "text-4xl sm:text-5xl lg:text-6xl"
+    : scene.title.length > 65 ? "text-4xl sm:text-5xl lg:text-6xl"
     : "text-5xl sm:text-6xl lg:text-[clamp(4rem,6vw,6.4rem)]";
+  const proseStyle = substantial
+    ? "text-base sm:text-lg leading-[1.58]"
+    : "text-base sm:text-lg lg:text-xl leading-[1.62]";
   const side = positioning[direction.textSide];
   const vert = vertical[direction.textPosition];
   const enter = (delay: number) => ({
@@ -111,7 +119,8 @@ export function EditorialStorySlide({ scene, direction, imageUrl, number, total,
           </div>}
         </div>
       ) : (
-        <div className={"flex flex-1 flex-col py-14 md:py-20 " + vert + " " + side}>
+        <div className={"flex flex-1 flex-col " +
+          (substantial ? "py-10 md:py-12 " : "py-14 md:py-20 ") + vert + " " + side}>
           <div className={"w-full " + (direction.textSide === "center" ? "max-w-[930px]" : "max-w-[750px]")}>
             <motion.h2 {...enter(.07)}
               className={"font-black leading-[1.06] tracking-[-.055em] text-balance " +
@@ -119,7 +128,7 @@ export function EditorialStorySlide({ scene, direction, imageUrl, number, total,
               {scene.title}
             </motion.h2>
             <motion.p {...enter(.25)}
-              className="mt-7 sm:mt-9 text-base sm:text-lg lg:text-xl leading-[1.62] font-medium text-white/90 drop-shadow-[0_2px_10px_rgba(0,0,0,.85)] whitespace-pre-line">
+              className={"mt-7 sm:mt-9 font-medium text-white/90 drop-shadow-[0_2px_10px_rgba(0,0,0,.85)] whitespace-pre-line " + proseStyle}>
               {scene.body}
             </motion.p>
             {scene.quote && <motion.blockquote {...enter(.4)}
