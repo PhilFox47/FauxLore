@@ -11,6 +11,8 @@ on:
       - 'src/pages/Recaps.tsx'
       - 'src/services/db.ts'
       - 'server/routes/media.ts'
+      - 'server/routes/wrapped.ts'
+      - 'server/lib/manualWrappedIntent*'
       - 'server/db/migrations.ts'
       - 'server/db/mediaOpinionHistory.test.ts'
       - 'package.json'
@@ -31,5 +33,7 @@ jobs:
         run: node --import tsx --test src/lib/mediaOpinionHistory.test.ts server/db/mediaOpinionHistory.test.ts
       - name: Verify manual missing-only recap generation
         run: node --import tsx --test src/lib/recapGeneration.test.ts
+      - name: Verify explicit Wrapped consent and stale-client protection
+        run: node --import tsx --test server/lib/manualWrappedIntent.test.ts
       - name: Build production client and server
         run: npm run build
