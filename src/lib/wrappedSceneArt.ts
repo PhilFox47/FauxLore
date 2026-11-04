@@ -122,7 +122,8 @@ export function buildWrappedSceneArtPrompt(
  */
 export function buildWrappedClosingTableauPrompt(
   issue: { title: string; dek: string; scenes: Array<Pick<StoryScene, "kind" | "title" | "body">> },
-  scene: Pick<StoryScene, "title" | "body" | "composition">,
+  scene: Pick<StoryScene, "title" | "body" | "composition"> &
+    Partial<Pick<StoryScene, "finaleMode" | "finalePayoff">>,
   visualSelf?: VisualSelfProfile | null,
   visualContinuity?: string,
 ): string {
@@ -131,21 +132,34 @@ export function buildWrappedClosingTableauPrompt(
     storyBeats[0], storyBeats[Math.floor((storyBeats.length - 1) / 2)], storyBeats[storyBeats.length - 1],
   ];
   const idea = scene.composition?.artConcept?.trim() || "";
+  const mode = scene.finaleMode;
+  const finaleVisualLanguage: Record<NonNullable<StoryScene["finaleMode"]>, string> = {
+    "dungeon-verdict": "A dominant, theatrical visual judgment. A tribunal, an absurd award of shame, or the AI's merciless ruling rendered as ONE striking scene. Not a somber ending.",
+    "sharp-reversal": "A clearly legible reversal in motion or spatial relation. Turn the earlier expectation visually upside down. Not a fade to black.",
+    "ruthless-roast": "Deliberately funny and confrontational imagery. A strong comedic payoff, sly visual accusation or spectacularly ridiculous predicament, always fictional.",
+    "earned-sincerity": "An unusually honest, intimate visual without compulsory sentimentality. Respect the specific recorded memory; restraint is earned, not automatic.",
+    "absurd-callback": "Visually weaponize ONE specific previous image idea or documented detail for a surprising absurd punchline, not a collage.",
+    "unsettling-question": "A crisp, strange, concrete unanswered tension, not a generic open door or mysterious empty hallway.",
+    "unexpected-connection": "One inventive shared visual logic that binds documented moments into a NEW observation, not a montage of their covers.",
+    "defiant-last-word": "Confident, audacious, possibly bombastic counterpoint. The AI has reached its verdict and absolutely refuses to apologize.",
+  };
   const cast = scene.composition?.visualPlan?.castMode;
   const subjectProfile = visualSelf && cast && cast !== "self" && cast !== "in-world-self"
     ? { ...visualSelf, visualSelfInsertMode: "never" as const } : visualSelf;
   return [
-    "Create the ORIGINAL FULL-BLEED FINAL TABLEAU for a personal Wrapped story. This is a visual EPILOGUE: the last, quietly unforgettable image before the curtain falls. Not an album cover, not a cover wall, not a media inventory.",
+    "Create ONE ORIGINAL FULL-BLEED CLOSING SCENE for a personal Wrapped. The ending may be funny, furious, quiet, surprising, irreverent or strange according to its EDITORIAL MODE. Never impose a uniformly wistful epilogue. Not an album cover, poster wall or media inventory.",
     "WHOLE ISSUE: " + issue.title.slice(0, 180) + ". The emotional premise: " + issue.dek.slice(0, 260),
-    "FINAL EDITORIAL VERDICT: " + scene.title.slice(0, 160) + ". " + scene.body.slice(0, 700),
+    "FINAL EDITORIAL VERDICT: " + scene.title.slice(0, 160) + ". " + scene.body.slice(0, 950),
+    mode ? "CHOSEN FINALE MODE: " + mode + ". Visual intent: " + finaleVisualLanguage[mode] : "",
+    scene.finalePayoff ? "THE NEW FINAL TURN TO EXPRESS, NOT A RECAP: " + scene.finalePayoff.slice(0, 450) : "",
     selected.length ? "Earlier story beats for thematic understanding ONLY, not separate things to draw: " +
       selected.map(s => s.title.slice(0, 110)).join("; ") + "." : "",
     idea ? "EDITORIAL DIRECTOR'S ENDING CONCEPT: " + idea.slice(0, 350) : "",
     wrappedActionImageGuidance(scene.composition?.visualPlan, subjectProfile),
     visualContinuity ? "WHOLE-ISSUE IMAGE CONTINUITY (binding composition constraints):\n" +
       visualContinuity : "",
-    "ONE coherent cinematic or illustrative ending, ONE visual metaphor, ONE clear emotional resolution. It may show an action coming to a close, a meaningful exchange between people, a moving figure, or an environmental event. Choose the strongest subject for THIS specific ending; an empty railway platform, thoughtful desk portrait, sunset or distant horizon is NOT the default.",
-    "Let the final image communicate completion and afterglow rather than a list of everything consumed. No multiple franchise worlds, character lineups, collections of media props, framed posters, book jackets, floating game covers or souvenir cards. Small symbolic echoes are permitted ONLY if they remain subordinate to ONE hero composition.",
+    "ONE coherent cinematic or illustrative scene, a visually distinctive ACTUAL LAST WORD. An emotional resolution is optional, NOT required. The image may show a sharply staged reversal, confrontation, absurd escalation, victorious spectacle, honest human connection, or a scene-specific environmental transformation. Match the actual mode and payoff, not the AI image model's stock idea of an epilogue. Avoid the ubiquitous dim lamp, empty hallway, poetic train platform, sunset, distant horizon, contemplative desk portrait and open doorway unless the documented ending genuinely needs it.",
+    "Give the ending a surprising SPECIFIC image, not a recap of everything consumed. No multiple franchise worlds, character lineups, collections of media props, framed posters, book jackets, floating game covers or souvenir cards. Small factual callbacks can appear only when subordinate to ONE hero composition.",
     "Wide 3:2 horizontal background, premium editorial art with generous dark negative space behind the final headline and reflection. " +
       imageFramingGuidance(scene.composition?.direction),
     "The UI overlays ALL lettering and the Deep Dive action. Render NO text, written logos, lettering, labels, buttons, statistics, panels, screenshots, borders or watermarks.",
