@@ -203,7 +203,7 @@ export const DatabaseService = {
     return res.json();
   },
 
-  async saveImportantPerson(person: Omit<import('../lib/importantPeople').ImportantPerson, 'hasImage'>): Promise<void> {
+  async saveImportantPerson(person: Omit<import('../lib/importantPeople').ImportantPerson, 'hasImage'>): Promise<string> {
     const isExisting = !!person.id;
     const res = await apiFetch('/api/important-people' + (isExisting ? '/' + encodeURIComponent(person.id) : ''), {
       method: isExisting ? 'PUT' : 'POST',
@@ -214,6 +214,8 @@ export const DatabaseService = {
       const message = await res.json().catch(()=>({}));
       throw new Error(message.error || 'Could not save person.');
     }
+    const saved = await res.json();
+    return isExisting ? person.id : String(saved.id || '');
   },
 
   async removeImportantPerson(id:string):Promise<void> {
