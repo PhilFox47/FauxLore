@@ -688,3 +688,57 @@ test("only planned owner and in-world owner images receive a private face refere
     assert.deepEqual(sceneCalls.slice(4).map(c=>c.useFaceReference),[false,false,false,false]);
   } finally {db.close();}
 });
+
+
+test("only an explicitly named, opted-in friend is supplied to their Wrapped artwork", async()=>{
+  const db=fixture();
+  const coverCalls:Array<{prompt:string;ids:string[]}>=[];
+  const sceneCalls:Array<{prompt:string;ids:string[]}>=[];
+  try {
+    db.exec("CREATE TABLE important_people (id TEXT,userId TEXT,name TEXT,aliases TEXT,relationship TEXT,notes TEXT,appearance TEXT,allowImages INTEGER,image BLOB,mime TEXT);");
+    db.prepare("INSERT INTO important_people(id,userId,name,aliases,relationship,notes,appearance,allowImages,image,mime) VALUES(?,?,?,?,?,?,?,?,?,?)")
+      .run("leo","user","Leonie",'["Leo"]',"partner","Plays FFXIV together","brown hair and a warm smile",1,Buffer.alloc(80),"image/png");
+    db.prepare("INSERT INTO important_people(id,userId,name,aliases,relationship,notes,appearance,allowImages,image,mime) VALUES(?,?,?,?,?,?,?,?,?,?)")
+      .run("secret","another-user","Alex",'[]',"friend","","distinctive hidden face",1,Buffer.alloc(80),"image/png");
+    const human={activityMode:"social",castMode:"self",camera:"wide",action:"Share a cooperative game session",interaction:"Leo"};
+    const canon={...human,castMode:"canon-character"};
+    const issue={
+      title:"The Week With Leo",dek:"A shared fictional adventure.",
+      scenes:[
+        {id:"wrapped-0",kind:"opening",title:"Leo was there",body:"A genuinely shared session with Leo.",
+          composition:{visualPlan:human}},
+        {id:"wrapped-1",kind:"spotlight",title:"Playing with Leo",body:"Leo and the player shared the evening.",
+          composition:{visualPlan:human}},
+        {id:"wrapped-2",kind:"spotlight",title:"Leo is mentioned only as context",body:"A fictional hero instead.",
+          composition:{visualPlan:canon}},
+        {id:"wrapped-3",kind:"closing",title:"Quiet landscape",body:"No human protagonist.",
+          composition:{visualPlan:{...human,castMode:"environment"}}},
+      ],
+    };
+    db.prepare("UPDATE wrapped_stories SET story=? WHERE userId='user'").run(JSON.stringify(issue));
+    const service=createWrappedCoverService({
+      db: db as unknown as Db,canSpendTokens:()=>true,
+      generateImage:async(_,prompt,options)=>{
+        coverCalls.push({prompt,ids:options?.personReferenceIds||[]});return "/uploads/cover-people.png";
+      },
+      generateSceneImage:async(_,prompt,options)=>{
+        sceneCalls.push({prompt,ids:options?.personReferenceIds||[]});
+        return "/uploads/scene-people-"+sceneCalls.length+".png";
+      },
+    });
+    assert.equal(service.queue("user",TIMEFRAME,PERIOD),true);
+    assert.equal(service.queueScenes("user",TIMEFRAME,PERIOD),true);
+    for(let i=0;i<15&&sceneCalls.length<4;i++)await settle();
+    assert.deepEqual(coverCalls[0].ids,["leo"]);
+    assert.match(coverCalls[0].prompt,/brown hair and a warm smile/);
+    assert.ok(sceneCalls.some(c=>c.ids.includes("leo")));
+    assert.ok(sceneCalls.some(c=>c.ids.length===0));
+    assert.ok(sceneCalls.every(c=>!c.ids.includes("secret")));
+    assert.ok(sceneCalls.every(c=>!c.prompt.includes("distinctive hidden face")));
+    db.prepare("UPDATE important_people SET allowImages=0 WHERE id='leo'").run();
+    assert.equal(service.queueScenes("user",TIMEFRAME,PERIOD,true),true);
+    for(let i=0;i<15&&sceneCalls.length<8;i++)await settle();
+    assert.ok(sceneCalls.slice(4).every(c=>c.ids.length===0));
+    assert.ok(sceneCalls.slice(4).every(c=>!c.prompt.includes("brown hair and a warm smile")));
+  }finally{db.close();}
+});
