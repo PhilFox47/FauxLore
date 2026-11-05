@@ -22,3 +22,15 @@ Both **Cancel** and changing a month, search, media filter, or selected log warn
 ## Verification
 
 `src/lib/lorebookEditing.test.ts` covers month navigation, independent Journal signals, precise reflection-only patches, deleting/clearing ratings, invalid metadata, the 6-hour multi-log session and server-side rendering of the shared reflection form. Existing log API tests verify Journal, Impact, Moodlets and user isolation. The Lorebook CI workflow includes a feature-scoped TypeScript compiler gate, existing tests and a production build.
+
+## Full-work Reviews in the Lorebook timeline
+
+The Lorebook now weaves personal **full-work reviews and rating changes** into the same dated chronology as progress sessions and status changes. These are **separate read-only opinion events**, not synthetic progress logs or editable session entries.
+
+- The authenticated GET /api/media/lorebook-opinions endpoint loads append-only media_opinion_history snapshots for the current account. Rows are scoped by userId and joined to owned media. They are ordered by recordedAt then database ID.
+- The client derives events only when the personal written review or full-work rating actually changes. Drop-reason-only changes, empty initial snapshots and identical updates are ignored. Review changes, rating-only revisions and removals are distinguished; reviews display their exact saved text and rating.
+- An event occurs at **the timestamp FauxLore recorded the opinion**, not an invented original writing date. Legacy reviews first witnessed during migration are **not retroactively backdated** to the media creation date.
+- Timeline filtering by month, media type and text search includes review events; month options include months with reviews but no progress logs. Needs Journal and Has Journal filters remain strictly about session reflections and exclude review/status events. Review-progress counters still count only progress logs.
+- When media changes and MediaContext refreshes, the Lorebook reloads its opinion timeline. If that API call fails, the session/status timeline remains visible with a warning.
+
+Tests: src/lib/lorebookReviewEvents.test.ts validates the chronology, edits, rating-only changes, removals and historical timestamps. server/routes/media.lorebookOpinions.test.ts checks account scoping and ordering.
