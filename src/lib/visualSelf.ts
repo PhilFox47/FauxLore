@@ -68,5 +68,11 @@ export function redactVisualSelfForDiagnostics(value: string): string {
   ).replace(
     /OWNER APPEARANCE \(private text description, appearance facts only\): [^\r\n"]+/g,
     "[Private account appearance guidance redacted]",
+  ).replace(
+    /OPTIONAL KNOWN PERSON APPEARANCE \(account-owner-entered data\):[\s\S]*?END KNOWN PERSON APPEARANCE\./g,
+    "[Private other-person appearance guidance redacted]",
+  ).replace(
+    /PRIVATE REFERENCE IMAGE ORDER \(identity cues only; images are not evidence of an event\):[\s\S]*?END PRIVATE REFERENCE IMAGE ORDER\./g,
+    "[Private reference image mapping redacted]",
   );
 }
