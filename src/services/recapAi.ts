@@ -1,5 +1,6 @@
 import { apiFetch } from './db';
 import { getPersonaDescription, getPersonaEditorialFreedom } from '../lib/personas';
+import { reviewRecapEditorial } from './editorialAudit';
 import { FAUXLORE_MECHANICS_CONTEXT } from '../lib/fauxLoreMechanics';
 
 /**
@@ -269,13 +270,21 @@ export async function generateStructuredRecap(args: {
   try {
     parsed = parseJsonLoose(content);
   } catch (e) {
-    // Prose came back instead of JSON — still a recap, just an unstructured one.
-    const recap = normalizeRecap({}, content);
-    if (!recap.summary) throw e;
-    return recap;
+    // Prose can be salvaged as a source draft, but it still needs an actual
+    // second editorial review rather than bypassing the quality pass.
+    parsed = {};
   }
-
-  const recap = normalizeRecap(parsed, content);
-  if (!recap.summary) throw new Error('The AI failed to generate a narrative summary.');
+  const draft = normalizeRecap(parsed, content);
+  if (!draft.summary) throw new Error('The AI failed to generate a narrative summary.');
+  // Independent model pass: critique and REWRITE the interpretation,
+  // not another keyword filter or a second layer of raw fact recitation.
+  const reviewed = await reviewRecapEditorial({
+    apiKey, model, persona, timeframe, intervalLabel, context, draft,
+  });
+  const recap = normalizeRecap(reviewed);
+  if (!recap.summary) throw new Error('Editorial reviewer did not return readable chapters.');
+  // Pull quotes are purely presentation metadata; don't allow a stale quote
+  // from the first draft to be presented as something the final author said.
+  if (recap.pullQuote && !recap.summary.includes(recap.pullQuote)) recap.pullQuote = '';
   return recap;
 }
