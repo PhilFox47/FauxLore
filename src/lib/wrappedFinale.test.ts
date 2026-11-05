@@ -79,7 +79,7 @@ test('editorial originality is the AI editors judgment, not banned stock phrases
 test('closing cannot fabricate a factual anchor or pay off a deleted subplot',()=>{
   assert.equal(evaluateWrappedFinale(draft({...ending('dungeon-verdict'),evidenceIds:['fabricated']}).scenes,evidence).acceptable,false);
   assert.equal(evaluateWrappedFinale(draft({...ending('dungeon-verdict'),evidenceIds:['taste-1']}).scenes,evidence).acceptable,false);
-  assert.throws(()=>enforceWrappedFinale(draft({...ending('dungeon-verdict'),finalePayoff:'Meh'}),evidence),/Weak Wrapped finale/);
+  assert.throws(()=>enforceWrappedFinale(draft({...ending('dungeon-verdict'),finalePayoff:'Meh'}),evidence),/Invalid Wrapped finale/);
   // AI critic, not lexical token overlap, decides whether an ending repeats a thesis.
   assert.equal(evaluateWrappedFinale(draft({
     ...ending('dungeon-verdict'),finalePayoff:interior.thesis,
