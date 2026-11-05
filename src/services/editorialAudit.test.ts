@@ -53,6 +53,26 @@ test('Wrapped editorial review is model judged, includes source evidence and exp
   assert.match(req.system,/not.*courtroom|NOT a report|NOT an audit|not sworn testimony/i);
 });
 
+test('monthly reviewer sees significant late-media context without a rigid slide quota',()=>{
+  const monthly: WrappedEvidence = {...evidence,monthlyCoverage:{
+    requiredPhases:['early','middle','late'],minPhaseScenes:2,lastWeekShare:.22,
+    clusters:[
+      {phase:'early',progressShare:.44,activeDays:7,leadingWorks:[
+        {id:'a',title:'An early title',share:.44}],journalHighlights:[],places:[]},
+      {phase:'middle',progressShare:.20,activeDays:5,leadingWorks:[
+        {id:'b',title:'A middle title',share:.20}],journalHighlights:[],places:[]},
+      {phase:'late',progressShare:.36,activeDays:6,leadingWorks:[
+        {id:'c',title:'Der Nachtzug',share:.36}],journalHighlights:[],places:[]},
+    ],
+  }};
+  const req=buildWrappedEditorialAuditRequest({draft,evidence:monthly,persona:'dungeon-system'});
+  assert.match(req.user,/MONTHLY ACTIVITY FOR EDITORIAL JUDGMENT, NOT MANDATORY SLIDE QUOTAS/);
+  assert.match(req.user,/Der Nachtzug/);
+  assert.match(req.user,/0.36/);
+  assert.match(req.system,/MONTHLY SCOPE IS AN EDITORIAL RESPONSIBILITY, NOT A PHASE QUOTA/);
+  assert.match(req.system,/do not simply add a phase card/i);
+});
+
 test('Deep Dive editor considers the full original source and may replace the entire perspective',()=>{
   const req=buildRecapEditorialAuditRequest({
     draft:recap,context:'Journal Thought: I loved playing with Leo',
