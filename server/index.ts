@@ -55,6 +55,7 @@ import { createPushService } from "./services/push";
 import { registerTaxonomyRoutes } from "./routes/taxonomy";
 import { registerSearchRoutes } from "./routes/search";
 import { registerLocationRoutes } from "./routes/locations";
+import { installRequestBodyParsers } from "./lib/requestBodyParsers";
 
 dotenv.config();
 
@@ -63,8 +64,9 @@ async function startServer() {
   // AI Studio requires port 3000, but using process.env.PORT allows you to easily proxy or run locally on other ports!
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-  // Middleware to parse JSON bodies
-  app.use(express.json());
+  // Allow larger research/recap messages ONLY on the AI chat endpoint.
+  // Other JSON APIs keep Express\'s default 100 KiB limit.
+  installRequestBodyParsers(app);
 
   // Initialize SQLite Database
   const dataDir = process.env.DATA_DIR || process.cwd();
