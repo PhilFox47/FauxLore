@@ -291,6 +291,12 @@ export function Lorebook() {
                     let timeLabel: string;
                     let logCount = 1;
                     let notes: string[] = [];
+                    const sessionLogs = entry.kind === 'session' ? entry.session.logs : [];
+                    const openSession = sessionLogs.some(log=>log.id===editingLogId);
+                    const hasJournal = sessionLogs.some(isJournalWritten);
+                    const sessionMoods = [...new Set(sessionLogs.flatMap(log=>readMoodlets(log.moodlets)))];
+                    const impactValues = sessionLogs.map(log=>log.sessionImpact).filter((n):n is number=>typeof n==='number');
+                    const peakImpact = impactValues.length ? Math.max(...impactValues) : null;
 
                     if (entry.kind === 'status') {
                       const noteStr = entry.log.note || 'Updated Status';
@@ -310,7 +316,7 @@ export function Lorebook() {
                     }
 
                     return (
-                      <div key={entry.kind === 'session' ? entry.session.id : entry.log.id} className="bg-zinc-900/50 border border-white/5 p-4 rounded-2xl flex flex-col sm:flex-row gap-4 hover:border-white/10 transition-colors shadow-sm hover:shadow-md relative group overflow-hidden">
+                      <div key={entry.kind === 'session' ? entry.session.id : entry.log.id} className={cn("bg-zinc-900/50 border p-4 rounded-2xl flex flex-col sm:flex-row gap-4 hover:border-white/10 transition-colors shadow-sm hover:shadow-md relative group",openSession?'border-violet-400/30':'border-white/5')}>
                         {isHistoric && (
                           <div className="absolute top-0 right-0 bg-amber-500/10 text-amber-500/60 text-[8px] font-black uppercase px-2 py-1 tracking-widest border-b border-l border-amber-500/10 rounded-bl-lg font-mono">
                             Historical Record
@@ -377,15 +383,71 @@ export function Lorebook() {
                             )}
                           </div>
 
-                          {notes.length > 0 && (
-                            <div className="bg-black/40 border border-white/5 rounded-xl p-3 shadow-inner relative flex gap-3 text-sm italic text-zinc-400 font-serif leading-relaxed">
-                              <PencilLine className="w-4 h-4 text-zinc-600 shrink-0 mt-0.5" />
-                              <div className="space-y-1 min-w-0">
-                                {notes.map((note, i) => (
-                                  <p key={i}>"{note}"</p>
-                                ))}
+
+                          {entry.kind==='session' && (
+                            <>
+                              <div className="flex flex-wrap gap-2 items-center text-[11px]">
+                                {hasJournal && <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 border border-violet-400/25 text-violet-200 px-2 py-1"><CheckCircle2 size={12}/> Journal</span>}
+                                {!hasJournal && <span className="inline-flex items-center gap-1 rounded-full bg-white/5 border border-white/10 text-zinc-500 px-2 py-1">No Journal yet</span>}
+                                {peakImpact!==null && <span className="inline-flex gap-1 items-center rounded-full bg-violet-500/10 text-violet-200 border border-violet-400/20 px-2 py-1"><Heart size={12}/> Impact {peakImpact}/5{impactValues.length>1?' peak':''}</span>}
+                                {sessionMoods.map(id=>{
+                                  const mood=QUICK_MOODLETS.find(x=>x.id===id);
+                                  return mood?<span key={id} title={mood.description} className="rounded-full bg-white/5 border border-white/10 px-2 py-1 text-zinc-300">{mood.emoji} {mood.label}</span>:null;
+                                })}
                               </div>
-                            </div>
+                              {hasJournal && (
+                                <div className="rounded-xl bg-violet-500/[.06] border border-violet-400/15 p-3 space-y-2">
+                                  <div className="text-[10px] uppercase tracking-widest font-black text-violet-300 flex items-center gap-1"><PenLine size={12}/> Journal Thoughts</div>
+                                  {sessionLogs.filter(isJournalWritten).slice(0,2).map(log=>(
+                                    <p key={log.id} className="text-sm text-violet-100/85 whitespace-pre-wrap line-clamp-3">{log.thoughts}</p>
+                                  ))}
+                                  {sessionLogs.filter(isJournalWritten).length>2&&
+                                    <span className="text-xs text-violet-300/70">+{sessionLogs.filter(isJournalWritten).length-2} more reflections</span>}
+                                </div>
+                              )}
+                              {notes.length>0 && (
+                                <div className="text-xs text-zinc-500 flex items-start gap-2 rounded-lg bg-black/20 px-3 py-2">
+                                  <PencilLine size={13} className="shrink-0 mt-0.5"/>
+                                  <p className="line-clamp-2"><span className="font-semibold text-zinc-400">Notes · </span>{notes.slice(0,2).join(' · ')}{notes.length>2?' · …':''}</p>
+                                </div>
+                              )}
+                              <div className="flex justify-end">
+                                <button type="button" disabled={saving && !openSession}
+                                  onClick={()=>openSession?canLeaveEdit():beginEdit(sessionLogs[0])}
+                                  aria-expanded={openSession}
+                                  className="inline-flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-lg border border-violet-400/25 text-violet-200 bg-violet-500/[.08] hover:bg-violet-500/20 disabled:opacity-40">
+                                  <PenLine size={14}/>{openSession?'Close editor':logCount===1?'Reflect / Edit log':'Review / Edit '+logCount+' logs'}
+                                  <ChevronRight size={13} className={cn('transition-transform',openSession&&'rotate-90')}/>
+                                </button>
+                              </div>
+                              {openSession&&editingLog&&draft&&(
+                                <section aria-label="Session log editor" className="space-y-3">
+                                  {sessionLogs.length>1&&(
+                                    <div className="rounded-xl bg-black/30 border border-white/10 p-2 space-y-1">
+                                      <p className="text-xs text-zinc-400 px-2 py-1">This session contains {sessionLogs.length} separate logs. Edit each one individually.</p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {sessionLogs.map((log,index)=>(
+                                          <button key={log.id} type="button" onClick={()=>beginEdit(log)}
+                                            aria-pressed={editingLogId===log.id} disabled={saving}
+                                            className={cn('flex items-center gap-2 text-xs rounded-lg px-3 py-2 border transition-colors',
+                                              editingLogId===log.id?'border-violet-400/50 bg-violet-400/15 text-white':
+                                                'border-white/10 text-zinc-300 hover:bg-white/10')}>
+                                            {format(parseISO(log.timestamp),'HH:mm')} · Log {index+1}
+                                            {isJournalWritten(log)&&<CheckCircle2 size={13} className="text-violet-300"/>}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  <LorebookLogEditor log={editingLog} draft={draft} onChange={setDraft}
+                                    onSave={()=>void saveEdit()} onCancel={()=>{canLeaveEdit();}}
+                                    saving={saving} dirty={dirty} error={editError} locations={knownLocations}/>
+                                </section>
+                              )}
+                              {savedLogId && sessionLogs.some(log=>log.id===savedLogId) && (
+                                <p role="status" className="text-xs text-emerald-300 flex items-center gap-1"><CheckCircle2 size={13}/> Saved. Future Recaps and Wrappeds will use your updated log.</p>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
