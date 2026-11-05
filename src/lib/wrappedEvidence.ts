@@ -75,7 +75,7 @@ export function buildWrappedEvidence(args: {
     return Number.isFinite(n) && n > 0 ? n : 0;
   };
   const facts: WrappedFact[] = [];
-  const add = (fact: WrappedFact) => { if (fact.evidence && facts.length < 90) facts.push(fact); };
+  const add = (fact: WrappedFact) => { if (fact.evidence) facts.push(fact); };
   const total = progress.reduce((n, l) => n + value(l), 0);
   const byMedia = new Map<string, number>();
   const byType = new Map<string, number>();
@@ -107,8 +107,10 @@ export function buildWrappedEvidence(args: {
   // Keep them ahead of all aggregate evidence. Ordinary Notes are never
   // added as 'insight' cards or cited to justify a narrative scene.
   const personalMoments = selectPersonalMoments(progress, {
-    journalLimit: timeframe === 'year' ? 24 : 16,
-    perMedia: timeframe === 'year' ? 5 : 3,
+    // Keep every distinct authored reflection eligible for a verified scene.
+    // Research and storytelling now decide importance, not a per-media quota.
+    journalLimit: progress.length,
+    perMedia: progress.length,
   }).filter(moment => byId.has(moment.log.mediaId));
   for (const moment of personalMoments) {
     const l = moment.log, m = byId.get(l.mediaId)!;
@@ -443,6 +445,6 @@ export function buildWrappedEvidence(args: {
       const bi = editorialCandidates.findIndex(s => s.mediaId === b.id);
       return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
     }).map(m => ({ id: m.id, title: m.title, type: m.mediaType, year: m.year, genres: (m.genres || []).slice(0, 6),
-      rating: m.userRating, review: m.userReview?.slice(0, 450) })).slice(0, 45),
+      rating: m.userRating, review: m.userReview?.slice(0, 450) })),
   };
 }
