@@ -1,9 +1,10 @@
 import { apiFetch } from './db';
 import { generateWrappedVisualCompositions } from './wrappedVisualDirector';
 import { getPersonaDescription, getPersonaEditorialFreedom } from '../lib/personas';
-import { wrappedEditorialMemoryBrief, recycledWrappedThesis } from '../lib/wrappedEditorialMemory';
+import { wrappedEditorialMemoryBrief } from '../lib/wrappedEditorialMemory';
 import type { WrappedEditorialMemoryItem } from '../lib/wrappedEditorialMemory';
 import { curateWrappedTheses } from '../lib/wrappedThesisGate';
+import { reviewWrappedEditorial } from './editorialAudit';
 import { enforceWrappedFinale, finaleModes } from '../lib/wrappedFinale';
 import { wrappedPacingBudget } from '../lib/wrappedPacing';
 import { MAX_DATA_SLIDES, evidenceStoryFunctions, isDataLayout, isStrongVerifiedAnalytic, normalizeEditorialJob } from '../lib/wrappedEditorial';
@@ -379,12 +380,15 @@ export async function generateAiWrapped(args: {
     const answer = data.choices?.[0]?.message?.content;
     if (typeof answer !== 'string') throw new Error('Wrapped Director returned no story');
     try {
-      // Delete weak or duplicated scenes rather than spending costly image
-      // generation on filler. Existing saved stories remain backwards-compatible.
-      const curated = curateWrappedTheses(parseJson(answer), evidence);
-      const repeated = recycledWrappedThesis(curated.draft.scenes, editorialMemory);
-      if (repeated) throw new Error('Recycled an earlier Wrapped argument instead of finding a new interpretation: '+repeated);
-      const withFinale = enforceWrappedFinale(curated.draft, evidence);
+      // A genuinely independent AI editor judges transfer, originality and
+      // whether the prose merely narrates the user's ratings or metadata.
+      // Do not use lexical heuristics for writing quality; the remaining
+      // deterministic validation only checks source IDs and schema.
+      const revised = await reviewWrappedEditorial({
+        apiKey, model, persona, draft: parseJson(answer), evidence, editorialMemory,
+      });
+      const structurallyVerified = curateWrappedTheses(revised, evidence);
+      const withFinale = enforceWrappedFinale(structurallyVerified.draft, evidence);
       const story = normalizeWrappedStory(withFinale, evidence, media);
       // A second, independent creative call composes only selected visual
       // highlights. Any failure falls back to the already valid story layouts.
