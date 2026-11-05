@@ -9,6 +9,7 @@ import { wrappedPacingBudget } from '../lib/wrappedPacing';
 import { MAX_DATA_SLIDES, evidenceStoryFunctions, isDataLayout, isStrongVerifiedAnalytic, normalizeEditorialJob } from '../lib/wrappedEditorial';
 import type { MediaItem } from '../types/schema';
 import type { WrappedEvidence, WrappedFact } from '../lib/wrappedEvidence';
+import type { WrappedResearchContext } from '../lib/wrappedResearchContext';
 import type { StoryScene, StoryKind, StoryDesign, StoryLayout, StoryPalette, StoryVisual } from '../lib/storyDiscovery';
 
 export interface WrappedStory {
@@ -223,10 +224,66 @@ export function normalizeWrappedStory(raw: any, evidence: WrappedEvidence, media
     dek: clean(data.dek, 500) || scenes[0].body.slice(0, 350), scenes };
 }
 
+/**
+ * A deliberately separate research pass. The model, not a hard-coded MP rank,
+ * chooses which CURRENT-period titles warrant their complete lifetime history.
+ * Research makes no factual claims to the reader and can fail gracefully.
+ */
+export async function researchWrappedJourneys(args: {
+  apiKey: string; model: string;
+  evidence: WrappedEvidence;
+  context: WrappedResearchContext;
+  editorialMemory?: WrappedEditorialMemoryItem[];
+}): Promise<{ mediaIds: string[]; hypothesis: string }> {
+  const { context, evidence } = args;
+  const system = [
+    'You are an archival research editor, NOT the Wrapped story writer.',
+    'Investigate the full CURRENT period logs, unfiltered personal Journal Thoughts, all recent history, media/franchise directory and previous editorials.',
+    'Choose 1-6 media IDs FROM CURRENT PERIOD TITLES ONLY whose full lifetime logs could reveal meaningful personal development, a long-running habit, a comeback, a contradiction or an emotional change.',
+    'Do not blindly choose the most played titles. Strong Journal Thoughts, Impact and Moodlets can matter more than volume. If no work merits deep research, choose an empty list.',
+    'Earlier AI-written recaps and Wrappeds are fallible editorial opinions, NEVER proof of what the user experienced. Never infer future events, emotions, or plot spoilers.',
+    'Do not write the final story. Respond only JSON: {"mediaIds":["id"],"hypothesis":"one short explanation of what historical questions are worth researching"}.',
+  ].join('\n');
+  const user = [
+    'TARGET PERIOD: ' + evidence.timeframe + ' ' + evidence.timeId +
+      ' (' + evidence.bounds.start + ' to ' + evidence.bounds.end + ')',
+    'ELIGIBLE CURRENT PERIOD MEDIA IDs:\n' + JSON.stringify(context.activeMediaIds),
+    'ALL CURRENT PERIOD LOGS:\n' + context.currentLogs,
+    'PRECEDING FOUR MONTHS OF LOGS:\n' + context.recentLogs,
+    'MEDIA AND UNIVERSE DIRECTORY (only previously logged works):\n' + context.mediaDirectory,
+    'FIVE PRIOR DEEP DIVE EDITORIALS (past AI opinions, not factual evidence):\n' + context.previousRecaps,
+    'PREVIOUS WRAPPED EDITORIALS (past AI opinions):\n' +
+      JSON.stringify((args.editorialMemory || []).slice(0, 5)
+        .map(m => ({period: m.timeframe + ' ' + m.timeId, story: m.fullStory || m.takes}))),
+  ].join('\n\n');
+  const response = await apiFetch('/api/nano-gpt/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-nano-gpt-key': args.apiKey },
+    body: JSON.stringify({
+      model: args.model || 'gpt-4o-mini', temperature: 0.45,
+      messages: [{role:'system',content:system}, {role:'user',content:user}],
+      response_format: { type: 'json_object' },
+    }),
+  });
+  if (!response.ok) throw new Error('Wrapped archival research failed (' + response.status + ')');
+  const result = await response.json();
+  const raw = result.choices?.[0]?.message?.content;
+  if (typeof raw !== 'string') throw new Error('Wrapped research returned no JSON');
+  const parsed = parseJson(raw);
+  const eligible = new Set(context.activeMediaIds);
+  const mediaIds: string[] = Array.isArray(parsed?.mediaIds)
+    ? [...new Set<string>(parsed.mediaIds.filter((id: unknown): id is string =>
+      typeof id === 'string' && eligible.has(id)))].slice(0, 6)
+    : [];
+  return { mediaIds, hypothesis: clean(parsed?.hypothesis, 1200) };
+}
+
 export async function generateAiWrapped(args: {
   apiKey: string; model: string; persona?: string; evidence: WrappedEvidence;
   media: MediaItem[]; previous?: WrappedStory | null;
   editorialMemory?: WrappedEditorialMemoryItem[];
+  historicalContext?: string;
+  researchHypothesis?: string;
 }): Promise<WrappedStory> {
   const { apiKey, model, persona, evidence, media } = args;
   const editorialMemory = args.editorialMemory || [];
@@ -237,6 +294,7 @@ export async function generateAiWrapped(args: {
     getPersonaEditorialFreedom(persona),
     "ARCHIVAL REDACTION: Old Wrapped opinions are MEMORY OF WHAT YOU ALREADY SAID, NOT EVIDENCE OF WHAT THE PLAYER ACTUALLY DID. You may mock your past bad judgment, develop a real NEW twist or strongly disagree with your former verdict, but don't repackage an earlier insight under a new title. Only the current verified Evidence Cards establish historical actions or user statements.",
     "The cards are VERIFIED RAW MATERIAL, not a mandatory outline. Find the most distinctive period-specific experiences, user opinions, significant deviations from personal norms and meaningful coincidences. A specific review, real-world setting or surprising change of emphasis can be much stronger than a list of different media.",
+    "LONGITUDINAL RESEARCH: The additional raw current-period logs and historical journey records are primary authored data when dated. Read them BEFORE choosing story angles. You may discuss an older episode ONLY to interpret a documented current-period development. Do not confuse an earlier reflection with an October reaction. Prior generated Recaps and Wrappeds are fallible AI editorial, never primary evidence. The CURRENT verified evidenceIds remain mandatory anchors for every scene.",
     "SOURCE HIERARCHY: Journal Thoughts contain the player's considered emotional reactions, interpretations and reflections. These are PRIMARY narrative evidence. Impact ratings and Moodlets are personal-significance clues. Ratings/reviews and genuine contrasts also matter. Session Notes, by contrast, are ORGANIZATIONAL BOOKMARKS (issue numbers, chapters, minor plot beats, who accompanied the session). Notes are context, NOT judgments, NOT proof that a referenced plot fight mattered to the player, and NOT grounds for a dedicated slide. A comic note saying 'Porcupine fight' is a page-position reminder, not an emotional highlight. Read Journals FIRST; use Notes only if necessary to clarify a meaningful independently supported point.",
     "REFLECTION OVER RECEIPTS: The player already knows which issue, chapter, episode or opponent they encountered. A beat-by-beat plot recap or inventory of issue numbers is a FAILURE even if every detail is true. A 5/5 Moving/Social Journal about a Free Company finishing an important story is powerful because of the player's personal meaning, NOT because it includes a quantified session rating or a long list of activities.",
     "RESONANCE OVER EXPOSURE: Master Pages measure logged consumption, NOT personal significance. Consider the separate EDITORIAL SALIENCE section before choosing protagonists. A title with one 5/5-impact session may deserve more story than the top Master Page title with repeated passing-time/1-impact sessions. Also do not treat all high-impact scenes as obligatory: earn a specific angle. Important minority titles should be considered even if absent from the progress top three. Never equate a high enjoyment score with high impact, nor assume unscored sessions were unimportant.",
@@ -294,6 +352,14 @@ export async function generateAiWrapped(args: {
     'ORGANIZATIONAL SESSION NOTES, BACKGROUND ONLY (not personal reviews, not importance signals, NEVER standalone evidence IDs; use only to identify a chapter/person/plot event when an independent supported insight needs that context):\n' +
       JSON.stringify(evidence.backgroundNotes || []),
     'MEDIA REFERENCE (personal ratings/reviews are present only when recorded by the period end):\n' + JSON.stringify(evidence.media),
+    args.historicalContext
+      ? 'ADDITIONAL LONGITUDINAL SOURCE MATERIAL: Full current-period raw logs, four prior months, selected lifetime journeys and prior AI editorials. Historical data is for trajectory and interpretation, NOT separate current-period events. The AI-authored older editorials are NOT facts:\n' + args.historicalContext : '',
+    args.researchHypothesis
+      ? 'ARCHIVAL RESEARCH HYPOTHESIS (editor suggestion, not proof):\n' + args.researchHypothesis : '',
+    'RECENT PREVIOUS WRAPPED SCRIPTS (fallible prior AI editorials, not historical evidence):\n' +
+      JSON.stringify(editorialMemory.slice(0, 5).map(m => ({
+        period: m.timeframe + ' ' + m.timeId, title: m.title, text: m.fullStory || '',
+      }))),
     // Past editorial snapshots are supplied separately above, period-filtered
     // and marked as prior *opinions*, never factual source evidence.
     // The current period's verified cards remain the ONLY event receipts.
