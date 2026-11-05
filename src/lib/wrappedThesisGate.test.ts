@@ -5,84 +5,54 @@ import { normalizeWrappedStory } from '../services/wrappedAi';
 import type { WrappedEvidence } from './wrappedEvidence';
 import type { MediaItem } from '../types/schema';
 
-const media:MediaItem[]=[{
-  id:'ffxiv',title:'Final Fantasy XIV: Endwalker',mediaType:'Game',status:'Completed',
-  genres:[],tags:[],tropes:[],createdAt:'2026-01-01',updatedAt:'2026-11-01',
-}];
 const evidence:WrappedEvidence={
   timeframe:'week',timeId:'2026-W39',bounds:{start:'2026-09-21',end:'2026-09-27'},
   editorialCalibration:'',editorialSalience:'',media:[],
-  facts:[
-    {id:'overview',kind:'rhythm',title:'Count',evidence:'160 logs across a month'},
-    {id:'media-0',kind:'spotlight',title:'Endwalker',mediaId:'ffxiv',evidence:'7.7 hours logged'},
-    {id:'journal-msq',kind:'journal',title:'User journal',mediaId:'ffxiv',
-      evidence:'Finished the MSQ together with my entire FC, a core memory',
-      quote:'Finished the MSQ together with my entire FC, a core memory'},
-    {id:'session-resonance-ffxiv',kind:'insight',title:'Impact signals',mediaId:'ffxiv',
-      evidence:'Impact 5/5, Moving and Social'},
-  ],
+  facts:[{id:'overview',kind:'rhythm',title:'Overview',evidence:'160 logs'},
+    {id:'journal-msq',kind:'journal',title:'Endwalker reflection',mediaId:'ffxiv',
+      quote:'A core memory with the FC',evidence:'A core memory with the FC'}],
 };
+const media:MediaItem[]=[{
+  id:'ffxiv',title:'Final Fantasy XIV',mediaType:'Game',status:'Completed',
+  genres:[],tags:[],tropes:[],createdAt:'2026-01-01',updatedAt:'2026-11-01',
+}];
 const design={layout:'editorial',palette:'cobalt',visual:'auto',align:'left',mediaIds:[]};
-const rawScene=(title:string,thesis:string,evidenceIds:string[],body:string)=>({
-  kind:'insight',editorialJob:'verdict',title,thesis,body,evidenceIds,design,
-});
-const strong=rawScene('Not just a game, not just a finale',
-  'The Endwalker finale mattered because a group of friends turned a fictional ending into a shared real-life memory.',
-  ['journal-msq','session-resonance-ffxiv'],
-  'The final MSQ was completed in Discord with the whole Free Company, and was called a core memory. My verdict: a fantasy game somehow became the meeting room for real friendships, which is the best possible abuse of server infrastructure.');
-
-test('unsupported summaries and title-count filler fail; an audacious grounded thesis passes',()=>{
-  const idx=new Map(evidence.facts.map(f=>[f.id,f]));
-  assert.equal(evaluateWrappedThesis(rawScene('Lots of stuff','There were many media titles in September.',
-    ['overview'],'You logged a lot of different works in a busy month.'),idx).acceptable,false);
-  assert.equal(evaluateWrappedThesis(rawScene('Numbers','The player logged 7.7 hours of Endwalker.',
-    ['media-0'],'It was a session of this duration and a medium worth logging.'),idx).acceptable,false);
-  assert.equal(evaluateWrappedThesis({...strong,thesis:''},idx).acceptable,false);
-  assert.equal(evaluateWrappedThesis(strong,idx).acceptable,true);
-  assert.equal(evaluateWrappedThesis({...strong,evidenceIds:['invented']},idx).acceptable,false);
+const scene=(thesis:string,body:string,ids:string[]=['overview'])=>({
+  kind:'insight',editorialJob:'verdict',title:'An opinion',thesis,body,evidenceIds:ids,design,
 });
 
-test('cut filler and repeated theses before visual generation; preserve factual anchors and authored points',()=>{
-  const raw={title:'The Seven Hours That Mattered',dek:'Not all progress means the same thing.',
-    scenes:[
-      {kind:'opening',editorialJob:'hook',title:'First the statistics',body:'The counter said one thing. The memory said another.',evidenceIds:[],design},
-      rawScene('A big count','September was a mixed month of various media titles.', ['overview'],
-        'Several media titles appeared in the activity log during this particular month.'),
-      strong,
-      rawScene('An identical interpretation',
-        'The Endwalker finale mattered because a group of friends turned a fictional ending into a shared real-life memory.',
-        ['journal-msq'],'Yet another restatement of the importance of the guild moment, with nothing different to add.'),
-      {kind:'closing',editorialJob:'payoff',title:'Your week earned one memory',
-        body:'The weird thing about all those hours is how small the number becomes next to an actual memory.',evidenceIds:[],design},
-    ]};
-  const {draft,cut}=curateWrappedTheses(raw,evidence);
-  assert.equal(draft.scenes.length,3,'The shorter 3-slide story is better than padding to five');
-  assert.equal(cut.length,2);
-  const normalized=normalizeWrappedStory(draft,evidence,media);
-  assert.equal(normalized.scenes[1].editorialThesis,strong.thesis);
-  assert.deepEqual(normalized.scenes[1].evidenceIds,['journal-msq','session-resonance-ffxiv']);
+test('semantic value cannot be determined by lexical filter: both dull and daring theses remain structurally eligible',()=>{
+  const facts=new Map(evidence.facts.map(f=>[f.id,f]));
+  assert.equal(evaluateWrappedThesis(scene('There were various titles this month.',
+    'The player logged many works in September.'),facts).acceptable,true);
+  assert.equal(evaluateWrappedThesis(scene('The entire Free Company converted a fictional ending into a ritual of real friendship.',
+    'The real spectacle was the group of friends who gave a fictional story a collective ending.',
+    ['journal-msq']),facts).acceptable,true);
+  assert.equal(evaluateWrappedThesis(scene('','Missing thesis'),facts).acceptable,false);
+  assert.equal(evaluateWrappedThesis(scene('A theory','A thought',['invented']),facts).acceptable,false);
 });
 
-test('editorial gate fails rather than fabricating a stronger slide when no source-backed point exists',()=>{
-  const raw={title:'Nothing',dek:'Thin',scenes:[
-    {kind:'opening',title:'Start',body:'A month began',evidenceIds:[],design},
-    rawScene('Empty','There were many media titles this month.',['overview'],'A list of media was logged during the period.'),
-    {kind:'closing',title:'End',body:'The period ended',evidenceIds:[],design},
+test('a validated AI editorial draft is not rewritten, silently shortened or rejected based on vocabulary',()=>{
+  const original={title:'Provocations',dek:'Surprising interpretations',scenes:[
+    {kind:'opening',title:'Opening',body:'Welcome to the nonsense.',evidenceIds:[],design},
+    scene('Even this month was a mixed assortment of media.','Maybe this angle is trite.'),
+    scene('A real shared ending became something bigger than the game.','That is a genuine claim.',['journal-msq']),
+    {kind:'closing',title:'Final word',body:'Even a fictional world can force real people into an awkward shared triumph.',
+      evidenceIds:['journal-msq'],design,finaleMode:'dungeon-verdict',
+      finalePayoff:'My verdict is that the collective ritual made the game finale matter beyond what the plot itself could offer.'},
   ]};
-  assert.throws(()=>curateWrappedTheses(raw,evidence),/No distinct, evidence-backed interior slide/);
+  const result=curateWrappedTheses(original,evidence);
+  assert.deepEqual(result.draft,original);
+  assert.deepEqual(result.cut,[]);
+  const normalized=normalizeWrappedStory(result.draft,evidence,media);
+  assert.equal(normalized.scenes.length,4);
 });
 
-
-test('plot bookmarks and issue indexes are not an editorial thesis even when phrased dramatically',()=>{
-  const idx=new Map(evidence.facts.map(f=>[f.id,f]));
-  const inventory=rawScene('The great Porcupine confrontation',
-    'The player fought against Porcupine in issue #12 and continued through issues 13–15.',
-    ['media-0'],
-    'A fight against Porcupine occurred in the comic. The player reached issue 15 and there are more issues to go.');
-  assert.equal(evaluateWrappedThesis(inventory,idx).acceptable,false);
-  const real=rawScene('The ridiculous social consequences of finishing Endwalker',
-    'What matters is that a fictional final boss became an excuse for friends to spend a real evening together.',
-    ['journal-msq','session-resonance-ffxiv'],
-    'The Journal Thoughts describe an MSQ finale shared with the entire Free Company and call it a core memory. My judgment is that the multiplayer ritual mattered more than the fiction itself ending.');
-  assert.equal(evaluateWrappedThesis(real,idx).acceptable,true);
+test('invalid citations cannot pass even if the prose is brilliant',()=>{
+  const original={title:'Something',dek:'Something',scenes:[
+    {kind:'opening',title:'Opening',body:'Welcome.',evidenceIds:[],design},
+    scene('A clever and fearsome claim','An elaborate interpretation',['not-a-card']),
+    {kind:'closing',title:'End',body:'The end.',evidenceIds:[],design},
+  ]};
+  assert.throws(()=>curateWrappedTheses(original,evidence),/Invalid evidence or structure/);
 });
