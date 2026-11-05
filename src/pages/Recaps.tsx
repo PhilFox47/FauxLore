@@ -43,6 +43,7 @@ import { buildWrappedEvidence } from '../lib/wrappedEvidence';
 import { analyzeMediaFocus, focusEditorialCalibration } from '../lib/periodFocus';
 import { generateAiWrapped, researchWrappedJourneys } from '../services/wrappedAi';
 import { buildWrappedResearchContext, buildWrappedJourneyHistory } from '../lib/wrappedResearchContext';
+import { importantPeopleNarrativeBrief } from '../lib/importantPeople';
 import { generateWrappedVisualCompositions } from '../services/wrappedVisualDirector';
 import { shouldHoldWrappedForArtwork } from '../lib/wrappedSceneArt';
 import type { WrappedStory } from '../services/wrappedAi';
@@ -617,7 +618,11 @@ export function Recaps() {
       const focusIds = research?.mediaIds?.length
         ? research.mediaIds
         : evidence.media.slice(0, 6).map(m => m.id);
+      const peopleContext = await DatabaseService.getImportantPeople()
+        .then(people => importantPeopleNarrativeBrief(activeLogs, people))
+        .catch(error => { console.warn('[recap-people] Private people context unavailable', error); return ''; });
       const historicalContext = [
+        peopleContext,
         'ALL CURRENT PERIOD LOGS (unaltered written Thoughts/Notes):\n' + archive.currentLogs,
         'ALL LOGS OF THE PRECEDING FOUR MONTHS:\n' + archive.recentLogs,
         'PREVIOUSLY EXPERIENCED MEDIA AND UNIVERSE DIRECTORY:\n' + archive.mediaDirectory,
@@ -932,8 +937,12 @@ export function Recaps() {
           'Build the editorial thesis from multiple distinct parts of the month when they contain meaningful evidence. Do not invent equal activity, a narrative arc, or reasons for behavior.',
         ].join('\n');
       })() : '';
+      const peopleContext = await DatabaseService.getImportantPeople()
+        .then(people => importantPeopleNarrativeBrief(activeLogs, people))
+        .catch(error => { console.warn('[recap-people] Private people context unavailable', error); return ''; });
       const promptContext = `
 EDITORIAL SOURCE EVIDENCE, ${timeframe.toUpperCase()} ${timeId}
+${peopleContext}
 Exact time window: ${format(currentInterval.start, 'yyyy-MM-dd')} to ${format(currentInterval.end, 'yyyy-MM-dd')}.
 PERSONAL MEDIA HABIT BASELINE (READ BEFORE SELECTING ANGLES):
 ${focusCalibration}
