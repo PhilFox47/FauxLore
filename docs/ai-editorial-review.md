@@ -40,6 +40,14 @@ The **writer** now receives a dedicated `DUNGEON_SPEECH_DIRECTION` brief and the
 
 The Dungeon narrator keeps complete freedom to invent absurd childhood stories and unhinged personal motives without disclaimers; spoken naturalness should not mean caution. Structural source ID, actual metric and JSON validation are unchanged.
 
+## Monthly scope: editorial, not structural
+
+The 2026-10 run exposed a false-negative: a compelling story with real evidence IDs was rejected because no interior scene cited a source whose `phase` field was `late`. Media-wide facts can summarize October 21–31 without carrying a single phase. The independent reviewer sometimes removed precisely the source that would have satisfied the old validator.
+
+Month-phase ratios and clusters now go **to the AI editor** as actionable private context. It judges whether dropping a substantial later period is an important editorial omission, and if so can replace a weak angle or integrate an actually interesting late-month experience. No specific early/middle/late count, minimum number of separate scenes or last-week balance is a hard acceptance requirement. A 36% late-month share is an important reason for editorial scrutiny, not a command to add a filler scene.
+
+Technical source validity, infographic eligibility, verified numbers, scene schema and actual time period integrity remain checked. This prevents failed regenerations and expensive full-Director retries caused solely by a narrative selection that did not match an arbitrary phase quota.
+
 ## Tests and limits
 
 - `src/services/editorialAudit.test.ts` verifies editor instructions, evidence access and independent model-call behavior without spending live tokens.
