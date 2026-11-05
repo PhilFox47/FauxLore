@@ -15,6 +15,8 @@ const own = [
   '/src/components/LorebookLogEditor.tsx',
   '/src/lib/lorebookEditing.ts',
   '/src/lib/lorebookEditing.test.ts',
+  '/src/lib/lorebookReviewEvents.ts',
+  '/src/lib/lorebookReviewEvents.test.ts',
 ];
 const inScope = diagnostics.filter(d =>
   d.file && own.some(path => d.file.fileName.replaceAll('\\', '/').endsWith(path)));
