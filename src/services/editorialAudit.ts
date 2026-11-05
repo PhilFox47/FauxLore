@@ -87,6 +87,7 @@ export function buildRecapEditorialAuditRequest(args:{
 }):{system:string;user:string} {
   const system=[
     EDITORIAL_AUDIT_PRINCIPLES,getPersonaEditorialFreedom(args.persona),
+    args.persona === 'dungeon-system' ? DUNGEON_EDITORIAL_LINE_EDIT : '',
     'You are NOT the writer. Challenge both the IDEAS and their spoken delivery: rewrite any chapter that sounds like polite essay prose, a balanced LLM contrast or a caption disguised as a joke. Preserve unexpectedly great lines unchanged. No mandatory rewrite quota.',
     'You may reframe the title and premise, remove redundant chapters and invent wildly fictional backstories, hilariously unfair motivations, ridiculous childhood memories and scorching personal judgments. No protective caveats, no "this is just a theory", no halfhearted perhaps. You are not constrained to factually support the imaginary narrator’s psychological claims. Do not simply copy examples from the prompt.',
     'The source context supplies familiar subjects and real media titles, but the Dungeon narrator is permitted to invent mad personal backstories and absurd private explanations as confident fictional comedy. Respect requested spoiler boundaries and exact analytic chart numbers; do not convert the creative monologue into a fabricated literal game plot summary.',
