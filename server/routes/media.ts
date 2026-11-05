@@ -114,6 +114,24 @@ export function registerMediaRoutes(app: Express, ctx: ServerContext) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // Lorebook's unified chronology reads all review/rating snapshots for this
+  // authenticated user. No fake progress logs, no per-title request waterfall.
+  // The client derives meaningful text/rating changes, ignoring drop-only rows.
+  app.get("/api/media/lorebook-opinions", (req, res) => {
+    try {
+      const userId = getAuthUser(req, res);
+      if (!userId) return;
+      const rows = db.prepare(
+        `SELECT h.id, h.mediaId, h.recordedAt, h.userRating, h.userReview
+         FROM media_opinion_history h
+         JOIN media m ON m.id = h.mediaId AND m.userId = h.userId
+         WHERE h.userId = ?
+         ORDER BY h.recordedAt ASC, h.id ASC`,
+      ).all(userId);
+      res.json(rows);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   // Read append-only personal opinion snapshots for historical recap generation.
   // Never expose another user's reviews, even if their media IDs are known.
   app.get("/api/media/opinion-history", (req, res) => {
