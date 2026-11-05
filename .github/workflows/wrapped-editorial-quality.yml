@@ -39,5 +39,7 @@ jobs:
         run: node --import tsx --test src/lib/wrappedEvidence.test.ts src/lib/wrappedEditorial.test.ts src/lib/recapSalience.test.ts server/routes/wrapped.test.ts
       - name: Real HTTP Notes-to-Journal editing and Wrapped evidence roundtrip
         run: node --import tsx --test server/routes/logs.moodlets.test.ts
+      - name: Historical Wrapped research: full journeys, period cutoff and prior editorials
+        run: node --import tsx --test src/lib/wrappedResearchContext.test.ts
       - name: Production build
         run: npm run build
