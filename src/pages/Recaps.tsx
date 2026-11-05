@@ -41,7 +41,8 @@ import { AchievementReveal } from '../components/AchievementReveal';
 import { StoryMode } from '../components/StoryMode';
 import { buildWrappedEvidence } from '../lib/wrappedEvidence';
 import { analyzeMediaFocus, focusEditorialCalibration } from '../lib/periodFocus';
-import { generateAiWrapped } from '../services/wrappedAi';
+import { generateAiWrapped, researchWrappedJourneys } from '../services/wrappedAi';
+import { buildWrappedResearchContext, buildWrappedJourneyHistory } from '../lib/wrappedResearchContext';
 import { generateWrappedVisualCompositions } from '../services/wrappedVisualDirector';
 import { shouldHoldWrappedForArtwork } from '../lib/wrappedSceneArt';
 import type { WrappedStory } from '../services/wrappedAi';
@@ -594,11 +595,42 @@ export function Recaps() {
         return [];
       });
       const requestId = await DatabaseService.startWrappedGeneration(timeframe, timeId, manualIntentId);
+
+      // Research from actual dated records, not the small curated evidence deck.
+      // Cut ALL sources off at this period's end, including when rerolling old months.
+      const archive = buildWrappedResearchContext({
+        timeframe, timeId,
+        periodStart: currentInterval.start, periodEnd: currentInterval.end,
+        periodLogs: activeLogs, allLogs: validLogs, media: periodMedia, recaps: aiRecaps,
+      });
+      let research: { mediaIds: string[]; hypothesis: string } | null = null;
+      try {
+        research = await researchWrappedJourneys({
+          apiKey: settings.nanoGptApiKey || '',
+          model: creativeModel(settings),
+          evidence, context: archive, editorialMemory,
+        });
+      } catch (error) {
+        // The creative director should still work if the optional research pass fails.
+        console.warn('[wrapped-research] Historical research unavailable:', error);
+      }
+      const focusIds = research?.mediaIds?.length
+        ? research.mediaIds
+        : evidence.media.slice(0, 6).map(m => m.id);
+      const historicalContext = [
+        'ALL CURRENT PERIOD LOGS (unaltered written Thoughts/Notes):\n' + archive.currentLogs,
+        'ALL LOGS OF THE PRECEDING FOUR MONTHS:\n' + archive.recentLogs,
+        'PREVIOUSLY EXPERIENCED MEDIA AND UNIVERSE DIRECTORY:\n' + archive.mediaDirectory,
+        'FIVE PRIOR RECAP STORIES (AI editorial opinions, NOT factual testimony):\n' + archive.previousRecaps,
+        'COMPLETE DATED JOURNEYS OF RESEARCHED MEDIA, INCLUDING RELATED UNIVERSE REFLECTIONS:\n' +
+          buildWrappedJourneyHistory(archive, focusIds),
+      ].join('\n\n');
       const generated = await generateAiWrapped({
         apiKey: settings.nanoGptApiKey || '',
         model: creativeModel(settings),
         persona: settings.aiPersona,
         evidence, media: periodMedia, previous: wrapped, editorialMemory,
+        historicalContext, researchHypothesis: research?.hypothesis,
       });
       const saved = await DatabaseService.saveWrappedStory(timeframe, timeId, requestId, generated);
       setWrappedStories(prev => ({ ...prev, [key]: saved }));
