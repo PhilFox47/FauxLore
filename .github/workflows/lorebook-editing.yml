@@ -8,6 +8,10 @@ on:
       - 'src/components/LorebookLogEditor.tsx'
       - 'src/components/SessionReflectionSignals.tsx'
       - 'src/lib/lorebookEditing*'
+      - 'src/lib/lorebookReviewEvents*'
+      - 'src/services/db.ts'
+      - 'server/routes/media.ts'
+      - 'server/routes/media.lorebookOpinions.test.ts'
       - 'src/lib/sessions.ts'
       - 'server/routes/logs*'
       - 'src/lib/runtimeBuild.ts'
@@ -29,6 +33,8 @@ jobs:
         run: node --import tsx --test src/lib/lorebookEditing.test.ts src/lib/quickMoodlets.test.ts src/lib/personalMoments.test.ts
       - name: Existing log API and persistence roundtrip
         run: node --import tsx --test server/routes/logs.moodlets.test.ts
+      - name: Authenticated review timeline and review-event semantics
+        run: node --import tsx --test src/lib/lorebookReviewEvents.test.ts server/routes/media.lorebookOpinions.test.ts
       - name: Feature-scoped TypeScript check (other existing diagnostics reported)
         run: node scripts/check-lorebook-types.mjs
       - name: Production build
