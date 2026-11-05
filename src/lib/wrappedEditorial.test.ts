@@ -91,36 +91,35 @@ test('valid monthly stories cite real activity from the entire month', () => {
   assert.equal(result.scenes.length, 5);
 });
 
-test('a monthly that looks only at the last week fails coverage', () => {
-  assert.throws(() => normalizeWrappedStory(story(
+test('editorial omissions do not fail month-phase quota checks', () => {
+  const issue = normalizeWrappedStory(story(
     scene('insight', 'A late moment', ['month-late']),
     scene('spotlight', 'More about the ending', ['media-0']),
-    scene('insight', 'Another last-week comment', ['overview']),
-  ), monthEvidence(), media), /Monthly coverage missing/);
+    scene('insight', 'Another interpretation', ['overview']),
+  ), monthEvidence(), media);
+  assert.equal(issue.scenes.length, 5);
 });
 
-test('putting all monthly phases in one slide is not genuine story coverage', () => {
-  assert.throws(() => normalizeWrappedStory(story(
-    scene('insight', 'The entire month in a checklist', ['month-early', 'month-middle', 'month-late']),
-    // 'media-1' legitimately represents the independent middle-phase game, so
-    // use the non-phase overview to test the actual one-scene-only situation.
-    scene('spotlight', 'A generic supporting work', ['overview']),
-  ), monthEvidence(), media), /independent phase-supported scenes/);
+test('a scene can cover multiple phases when its editorial reading warrants it', () => {
+  const issue = normalizeWrappedStory(story(
+    scene('insight', 'One month-spanning argument', ['month-early', 'month-middle', 'month-late']),
+    scene('spotlight', 'A separate idea', ['overview']),
+  ), monthEvidence(), media);
+  assert.equal(issue.scenes.length, 4);
 });
 
-test('last-week-only scenes cannot dominate a month whose final week did not dominate', () => {
+test('late-heavy story selection is editorial, not a hard rejection', () => {
   const evidence = monthEvidence();
-  // These fact scopes represent verified source dates in the last seven days.
-  const extra = ['late-moment-1', 'late-moment-2', 'late-moment-3'];
+  const ids = ['late-moment-1', 'late-moment-2', 'late-moment-3'];
   const extended: WrappedEvidence = { ...evidence, facts: [...evidence.facts,
-    ...extra.map(id => ({ id, kind: 'insight' as const, title: id, evidence: id, recentOnly: true }))],
+    ...ids.map(id => ({ id, kind: 'insight' as const, title: id, evidence: id, recentOnly: true }))],
   };
-  assert.throws(() => normalizeWrappedStory(story(
+  const issue = normalizeWrappedStory(story(
     scene('insight', 'Beginning', ['month-early']),
     scene('insight', 'Middle', ['month-middle']),
-    ...extra.map((id, index) => scene('insight', id,
-      index === 0 ? [id, 'month-late'] : [id])),
-  ), extended, media), /overrepresents the final seven days/);
+    ...ids.map(id => scene('insight', id, [id])),
+  ), extended, media);
+  assert.equal(issue.scenes.length, 7);
 });
 
 test('multiple valid monthly data sources are structurally allowed; independent AI judges whether arguments repeat', () => {
