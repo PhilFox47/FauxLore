@@ -209,6 +209,50 @@ export function Lorebook() {
         </div>
       </header>
 
+
+      <section aria-label="Lorebook reflection review" className="rounded-2xl border border-white/10 bg-zinc-900/60 p-4 sm:p-5 mb-7 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <NotebookPen size={18} className="text-violet-300"/>
+            <div>
+              <h3 className="font-bold text-white text-sm">Revisit your sessions</h3>
+              <p className="text-xs text-zinc-500">Add your thoughts to older logs without changing their progress.</p>
+            </div>
+          </div>
+          <label className="text-xs text-zinc-400 flex items-center gap-2">
+            Month
+            <select aria-label="Lorebook month" value={monthFilter}
+              onChange={e=>changeView(()=>setMonthFilter(e.target.value))}
+              className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-violet-400 focus:outline-none">
+              <option value="all">All months</option>
+              {monthOptions.map(month=><option key={month} value={month}>{format(parseISO(month+'-01'),'MMMM yyyy')}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+          <p className="text-zinc-300">
+            <strong className="text-violet-200">{progress.journals}/{progress.total}</strong> logs with Journal Thoughts
+            <span className="text-zinc-500"> · {progress.impact} with Impact · {progress.moodlets} with Moodlets</span>
+          </p>
+          <div role="group" aria-label="Journal review filter" className="flex flex-wrap gap-1 bg-black/35 p-1 rounded-xl border border-white/10">
+            {([
+              {id:'all',label:'All entries'},
+              {id:'needs-journal',label:'Needs Journal'},
+              {id:'has-journal',label:'Has Journal'},
+            ] as const).map(item=>(
+              <button type="button" key={item.id}
+                aria-pressed={reviewFilter===item.id}
+                onClick={()=>changeView(()=>setReviewFilter(item.id))}
+                className={cn('px-3 py-2 rounded-lg font-semibold transition-colors',
+                  reviewFilter===item.id?'bg-violet-500/20 text-violet-100 border border-violet-400/35':
+                    'text-zinc-400 hover:text-white border border-transparent hover:bg-white/5')}>
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {!hasEntries ? (
         <div className="bg-zinc-900/40 border border-white/5 rounded-[2.5rem] p-6 sm:p-12 text-center text-zinc-500 mt-8 font-mono shadow-inner">
           No memory fragments found matching your search.
