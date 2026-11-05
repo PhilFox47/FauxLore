@@ -59,9 +59,9 @@ export function lorebookDraftChanges(log:ProgressLog,draft:LorebookLogDraft):Par
   const note=draft.notes.trim(), thoughts=draft.thoughts.trim(), location=draft.location.trim();
   if(note.length>4000) throw new Error('Notes must be 4,000 characters or fewer.');
   if(thoughts.length>6000) throw new Error('Journal Thoughts must be 6,000 characters or fewer.');
-  if(note!==(log.note||''))patch.note=note;
-  if(thoughts!==(log.thoughts||''))patch.thoughts=thoughts;
-  if(location!==(log.location||''))patch.location=location;
+  if(note!==(log.note||'').trim())patch.note=note;
+  if(thoughts!==(log.thoughts||'').trim())patch.thoughts=thoughts;
+  if(location!==(log.location||'').trim())patch.location=location;
   if(draft.enjoyment!==(log.sessionEnjoyment??null))patch.sessionEnjoyment=draft.enjoyment;
   if(draft.impact!==(log.sessionImpact??null))patch.sessionImpact=draft.impact;
   const previous=readMoodlets(log.moodlets);
@@ -69,7 +69,6 @@ export function lorebookDraftChanges(log:ProgressLog,draft:LorebookLogDraft):Par
   const delta=Number(draft.delta);
   if(!draft.delta.trim() || !Number.isFinite(delta))throw new Error('Progress must be a valid number.');
   if(delta!==log.delta)patch.delta=delta;
-  const oldDate=lorebookMonth(log.timestamp);
   if(draft.date.length!==10||!/^\d{4}-\d{2}-\d{2}$/.test(draft.date)||
      !/^([01]\d|2[0-3]):[0-5]\d$/.test(draft.time))throw new Error('Choose a valid date and time.');
   if(draft.date!==format(parseISO(log.timestamp),'yyyy-MM-dd')||
@@ -80,7 +79,6 @@ export function lorebookDraftChanges(log:ProgressLog,draft:LorebookLogDraft):Par
        format(parsed,'HH:mm')!==draft.time)throw new Error('Choose a valid date and time.');
     patch.timestamp=parsed.toISOString();
   }
-  void oldDate;
   return patch;
 }
 export function isLorebookDraftDirty(log:ProgressLog,draft:LorebookLogDraft):boolean {
