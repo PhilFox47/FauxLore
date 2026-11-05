@@ -99,17 +99,24 @@ export function Lorebook() {
     setEditError(null);
     setSavedLogId(null);
   };
-  const saveEdit = async () => {
+  const saveEdit = async (nextLogId?:string) => {
     if(!editingLog || !draft || saving)return;
     setEditError(null);
     try {
       const patch=lorebookDraftChanges(editingLog,draft);
-      if(!Object.keys(patch).length){setEditingLogId(null);setDraft(null);return;}
-      setSaving(true);
-      await updateLog(editingLog.id,patch);
-      setSavedLogId(editingLog.id);
-      setEditingLogId(null);
-      setDraft(null);
+      if(Object.keys(patch).length){
+        setSaving(true);
+        await updateLog(editingLog.id,patch);
+        setSavedLogId(editingLog.id);
+      }
+      const next = nextLogId ? logs.find(log=>log.id===nextLogId) : null;
+      if(next){
+        setEditingLogId(next.id);
+        setDraft(lorebookDraftFromLog(next));
+      } else {
+        setEditingLogId(null);
+        setDraft(null);
+      }
     } catch(error) {
       setEditError(error instanceof Error?error.message:'Could not save this log. Your changes are still here.');
     } finally {
@@ -440,7 +447,11 @@ export function Lorebook() {
                                     </div>
                                   )}
                                   <LorebookLogEditor log={editingLog} draft={draft} onChange={setDraft}
-                                    onSave={()=>void saveEdit()} onCancel={()=>{canLeaveEdit();}}
+                                    onSave={()=>void saveEdit()}
+                                    onSaveNext={sessionLogs.findIndex(log=>log.id===editingLogId)<sessionLogs.length-1
+                                      ?()=>void saveEdit(sessionLogs[sessionLogs.findIndex(log=>log.id===editingLogId)+1]?.id)
+                                      :undefined}
+                                    onCancel={()=>{canLeaveEdit();}}
                                     saving={saving} dirty={dirty} error={editError} locations={knownLocations}/>
                                 </section>
                               )}
