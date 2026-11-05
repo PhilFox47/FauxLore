@@ -1,11 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
-import { BookOpen, Search, MapPin, PencilLine, Activity } from 'lucide-react';
+import { BookOpen, Search, MapPin, PencilLine, Activity, PenLine, Heart, CheckCircle2, ChevronRight, NotebookPen } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { MEDIA_COLORS, ProgressLog } from '../types/schema';
 import { groupLogsIntoSessions, LogSession } from '../lib/sessions';
 import { cn } from '../lib/utils';
 import { buildGroupIndex, groupsFor } from '../lib/locationGroups';
+import { LorebookLogEditor } from '../components/LorebookLogEditor';
+import { QUICK_MOODLETS, readMoodlets } from '../lib/quickMoodlets';
+import {
+  lorebookMonths, lorebookMonth, lorebookReviewProgress,
+  matchesLorebookReflectionFilter, isJournalWritten,
+  lorebookDraftFromLog, lorebookDraftChanges, isLorebookDraftDirty,
+  type LorebookLogDraft, type LorebookReviewFilter,
+} from '../lib/lorebookEditing';
 
 // A single strand of the chronicle: either a merged progress session or a lone status change.
 type JournalEntry =
@@ -59,12 +67,67 @@ const getStatusColor = (status: string) => {
 };
 
 export function Lorebook() {
-  const { logs, media, locationGroups } = useMediaContext();
+  const { logs, media, locationGroups, updateLog } = useMediaContext();
   const groupIndex = useMemo(() => buildGroupIndex(locationGroups), [locationGroups]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('All');
+  const [monthFilter, setMonthFilter] = useState('all');
+  const [reviewFilter, setReviewFilter] = useState<LorebookReviewFilter>('all');
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<LorebookLogDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [savedLogId, setSavedLogId] = useState<string | null>(null);
+  const monthOptions = useMemo(() => lorebookMonths(logs), [logs]);
+  const knownLocations = useMemo(() => [...new Set(logs.map(l => l.location?.trim() || '')
+    .filter(Boolean))].sort(),[logs]);
+  const editingLog = useMemo(() => logs.find(l=>l.id===editingLogId),[logs,editingLogId]);
+  const dirty = !!editingLog && !!draft && isLorebookDraftDirty(editingLog,draft);
 
+  const canLeaveEdit = () => {
+    if(saving)return false;
+    if(dirty && !window.confirm('Discard your unsaved Lorebook changes?'))return false;
+    setEditingLogId(null);setDraft(null);setEditError(null);
+    return true;
+  };
+  const beginEdit = (log: ProgressLog) => {
+    if(log.metricType==='statusChange')return;
+    if(editingLogId!==log.id && !canLeaveEdit())return;
+    if(editingLogId===log.id)return;
+    setEditingLogId(log.id);
+    setDraft(lorebookDraftFromLog(log));
+    setEditError(null);
+    setSavedLogId(null);
+  };
+  const saveEdit = async () => {
+    if(!editingLog || !draft || saving)return;
+    setEditError(null);
+    try {
+      const patch=lorebookDraftChanges(editingLog,draft);
+      if(!Object.keys(patch).length){setEditingLogId(null);setDraft(null);return;}
+      setSaving(true);
+      await updateLog(editingLog.id,patch);
+      setSavedLogId(editingLog.id);
+      setEditingLogId(null);
+      setDraft(null);
+    } catch(error) {
+      setEditError(error instanceof Error?error.message:'Could not save this log. Your changes are still here.');
+    } finally {
+      setSaving(false);
+    }
+  };
+  const changeView = (action:()=>void) => {
+    if(!canLeaveEdit())return;
+    setSavedLogId(null);
+    action();
+  };
   const getMediaForItem = (mediaId: string) => media.find(m => m.id === mediaId);
+  const reviewScope = useMemo(() => logs.filter(l =>
+    l.metricType!=='statusChange' && !l.timestamp.startsWith('1970-01-01') &&
+    (monthFilter==='all'||lorebookMonth(l.timestamp)===monthFilter) &&
+    (filterType==='All'||media.find(m=>m.id===l.mediaId)?.mediaType===filterType)
+  ),[logs,media,monthFilter,filterType]);
+  const progress = useMemo(()=>lorebookReviewProgress(reviewScope),[reviewScope]);
 
   // Build the day-grouped journal: progress logs are merged into sessions, status changes stay
   // as their own entries, and everything is threaded back together in chronological order.
@@ -74,13 +137,16 @@ export function Lorebook() {
       const mediaItem = getMediaForItem(log.mediaId);
       if (!mediaItem) return false;
       if (filterType !== 'All' && mediaItem.mediaType !== filterType) return false;
+      if (monthFilter !== 'all' && lorebookMonth(log.timestamp) !== monthFilter) return false;
+      if (!matchesLorebookReflectionFilter(log,reviewFilter)) return false;
 
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const hasNoteMatch = log.note?.toLowerCase().includes(query);
+        const hasJournalMatch = log.thoughts?.toLowerCase().includes(query);
         const hasTitleMatch = mediaItem.title.toLowerCase().includes(query);
         const hasActionMatch = log.metricType.toLowerCase().includes(query);
-        if (!hasNoteMatch && !hasTitleMatch && !hasActionMatch) return false;
+        if (!hasNoteMatch && !hasJournalMatch && !hasTitleMatch && !hasActionMatch) return false;
       }
       return true;
     });
@@ -101,7 +167,7 @@ export function Lorebook() {
     const keys = Object.keys(grouped).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
     return { groupedEntries: grouped, groupedKeys: keys, hasEntries: entries.length > 0 };
-  }, [logs, media, filterType, searchQuery]);
+  }, [logs, media, filterType, monthFilter, reviewFilter, searchQuery]);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -111,13 +177,13 @@ export function Lorebook() {
             <BookOpen className="w-8 h-8 text-orange-400" />
             The Lorebook
           </h2>
-          <p className="text-zinc-400 mt-2">Every session and status change you've logged, newest first.</p>
+          <p className="text-zinc-400 mt-2">Your media history, now with space to revisit and reflect on each session.</p>
         </div>
 
         <div className="flex gap-3 w-full sm:w-auto">
           <select
             value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
+            onChange={(e) => changeView(()=>setFilterType(e.target.value))}
             className="bg-zinc-900 border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-orange-500 shadow-inner"
           >
             <option value="All">All Types</option>
@@ -134,9 +200,9 @@ export function Lorebook() {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
               type="text"
-              placeholder="Search thoughts, quests..."
+              placeholder="Find media, Notes or Journal..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => changeView(()=>setSearchQuery(e.target.value))}
               className="bg-zinc-900 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-white focus:outline-none focus:border-orange-500 w-full shadow-inner"
             />
           </div>
