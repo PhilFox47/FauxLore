@@ -43,6 +43,28 @@ export function runMigrations(db: Db) {
     )
   `);
 
+  // User-curated important people: relationships and private reference photos.
+  // Never store these photo bytes in public uploads or diagnostic payloads.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS important_people (
+      id TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      aliases TEXT NOT NULL DEFAULT '[]',
+      relationship TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      appearance TEXT NOT NULL DEFAULT '',
+      allowImages INTEGER NOT NULL DEFAULT 0,
+      image BLOB,
+      mime TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      PRIMARY KEY (userId, id),
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_important_people_user ON important_people(userId);
+  `);
+
   // Private, per-user Wrapped visual likeness profile. No automatic profile
   // inference or migration from account photos: users opt in explicitly.
   try { db.prepare("ALTER TABLE settings ADD COLUMN visualSelfInsertMode TEXT NOT NULL DEFAULT 'never'").run(); } catch {}
