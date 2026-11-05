@@ -7,7 +7,7 @@ import { curateWrappedTheses } from '../lib/wrappedThesisGate';
 import { reviewWrappedEditorial } from './editorialAudit';
 import { enforceWrappedFinale, finaleModes } from '../lib/wrappedFinale';
 import { wrappedPacingBudget } from '../lib/wrappedPacing';
-import { MAX_DATA_SLIDES, evidenceStoryFunctions, isDataLayout, isStrongVerifiedAnalytic, normalizeEditorialJob } from '../lib/wrappedEditorial';
+import { MAX_DATA_SLIDES, isDataLayout, isStrongVerifiedAnalytic, normalizeEditorialJob } from '../lib/wrappedEditorial';
 import type { MediaItem } from '../types/schema';
 import type { WrappedEvidence, WrappedFact } from '../lib/wrappedEvidence';
 import type { WrappedResearchContext } from '../lib/wrappedResearchContext';
@@ -161,20 +161,9 @@ export function normalizeWrappedStory(raw: any, evidence: WrappedEvidence, media
       MAX_DATA_SLIDES[evidence.timeframe] + ' strong data slide(s) for a ' +
       evidence.timeframe + '. Remove weak or redundant charts.');
   }
-  // Editorial jobs must actually differ: a second format-share chart with
-  // another type of media is still the SAME "our mix changed" story.
-  const usedFunctions = new Map<string, number>();
-  middleScenes.forEach((scene, index) => {
-    for (const functionKey of evidenceStoryFunctions(scene.evidenceIds)) {
-      const prior = usedFunctions.get(functionKey);
-      if (prior !== undefined) {
-        throw new Error('Scene ' + (index + 2) + ' repeats the editorial function "' +
-          functionKey + '" from scene ' + (prior + 2) +
-          '. Combine the evidence into one scene or tell a genuinely different story.');
-      }
-      usedFunctions.set(functionKey, index);
-    }
-  });
+  // Whether two scenes make the SAME editorial argument is semantic.
+  // The independent AI editor judges that; shared evidence can support two
+  // genuinely different interpretations and must not trigger a rigid filter.
   if (evidence.timeframe === 'month' && evidence.monthlyCoverage) {
     const coverage = evidence.monthlyCoverage;
     if (coverage.requiredPhases.length >= 2) {
