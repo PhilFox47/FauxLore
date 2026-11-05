@@ -1,0 +1,26 @@
+name: AI Chat Payload Size
+
+on:
+  push:
+    branches: [claude]
+    paths:
+      - 'server/lib/requestBodyParsers.ts'
+      - 'server/lib/requestBodyParsers.test.ts'
+      - 'server/index.ts'
+      - '.github/workflows/ai-chat-payload.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Route-scoped JSON body limit regression
+        run: node --import tsx --test server/lib/requestBodyParsers.test.ts
+      - name: Production build
+        run: npm run build
