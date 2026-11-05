@@ -40,6 +40,12 @@ export const DatabaseService = {
   },
 
 
+  async getLorebookOpinions(): Promise<import('../lib/lorebookReviewEvents').LorebookOpinionSnapshot[]> {
+    const res = await apiFetch('/api/media/lorebook-opinions');
+    if (!res.ok) throw new Error('Could not load Lorebook reviews (' + res.status + ')');
+    return res.json();
+  },
+
   async getMediaOpinionHistory(ids: string[]): Promise<import('../lib/mediaOpinionHistory').MediaOpinionSnapshot[]> {
     const uniqueIds = [...new Set(ids)];
     const history: import('../lib/mediaOpinionHistory').MediaOpinionSnapshot[] = [];
