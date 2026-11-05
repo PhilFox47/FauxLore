@@ -78,6 +78,9 @@ test('Wrapped Director receives the period-bounded memory AND the actual irrever
   assert.match(p.system,/DUNGEON SYSTEM AI EDITORIAL LICENSE/);
   assert.match(p.system,/not a historian/);
   assert.match(p.system,/FINAL FICTIONAL AUTHORITY/);
+  assert.match(p.system,/SPOKEN CHARACTER, NOT BEAUTIFUL PROSE/);
+  assert.match(p.system,/COMEDIC TIMING BEATS FORMAL COMPLETENESS/);
+  assert.match(p.system,/no word-count targets/i);
   assert.match(p.system,/cabbage/);
   assert.doesNotMatch(p.system,/Avoid fabricated user motivations/);
   assert.match(p.system,/old verdict|past bad judgment|PRIOR WRAPPED/i);
@@ -105,12 +108,15 @@ test('Deep Dive editorial planning and prose both receive the selected Dungeon l
   assert.match(writer.system,/DUNGEON SYSTEM AI EDITORIAL LICENSE/);
   assert.match(writer.system,/No obligatory/);
   assert.match(writer.system,/FINAL DUNGEON FICTION LICENSE/);
+  assert.match(writer.system,/SPOKEN CHARACTER, NOT BEAUTIFUL PROSE/);
+  assert.match(writer.system,/LOSE THE LLM SYMMETRY/);
   assert.match(writer.system,/fictional editorial comedy/i);
   const defaultVoice=await captureFailingRequest(()=>planRecapEditorial({
     apiKey:'test',model:'test-model',persona:'witty',
     timeframe:'month',intervalLabel:'September 2026',context:'A logged evening.',
   }));
   assert.doesNotMatch(defaultVoice.system,/OWNER of the courtroom/);
+  assert.doesNotMatch(defaultVoice.system,/COMEDIC TIMING BEATS FORMAL COMPLETENESS/);
 });
 
 
