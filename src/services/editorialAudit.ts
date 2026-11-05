@@ -4,6 +4,7 @@ import type { WrappedEditorialMemoryItem } from '../lib/wrappedEditorialMemory';
 import { wrappedEditorialMemoryBrief } from '../lib/wrappedEditorialMemory';
 import type { StructuredRecap } from './recapAi';
 import { getPersonaEditorialFreedom } from '../lib/personas';
+import { DUNGEON_EDITORIAL_LINE_EDIT } from '../lib/editorialSpeech';
 
 /** Independent AI editorial assessment. No lexical banlist or score threshold. */
 export const EDITORIAL_AUDIT_PRINCIPLES = [
@@ -49,7 +50,8 @@ export function buildWrappedEditorialAuditRequest(args:{
   const {draft,evidence}=args;
   const system=[
     EDITORIAL_AUDIT_PRINCIPLES,getPersonaEditorialFreedom(args.persona),
-    'You are NOT the original writer. Diagnose and REWRITE the story, rather than telling the user what to change.',
+    args.persona === 'dungeon-system' ? DUNGEON_EDITORIAL_LINE_EDIT : '',
+    'You are NOT the original writer. Diagnose and REWRITE weak ideas and weak DELIVERY rather than telling the user what to change. Be an actual performance editor; if a strong scene already sounds spontaneous, leave its text alone.',
     'Keep legal scene kinds, design fields and supported evidence IDs. You may change evidenceIds to other supplied real IDs. Do not invent evidence IDs, imported quotes, chart values or game-statistics. BUT freely INVENT hilarious personal origin stories, supposed social motives, irrational accusations and faux-biographical details as the narrator’s outrageous fictional reality. Infographic numbers remain grounded; theatrical prose is not limited to an evidentiary paraphrase.',
     'Every interior scene requires 1-5 real evidenceIds and an original editorial thesis. The opening needs no IDs. Closing needs 1-5 real IDs, a finaleMode and a finalePayoff supported by a surviving interior scene. At least one strong interior scene must survive. Never pad.',
     'Return JSON only: {"editorialAssessment":"brief candid critique","story":{"title":"...","dek":"...","scenes":[{"kind":"...","editorialJob":"...","eyebrow":"...","title":"...","body":"...","thesis":"... (interior)","evidenceIds":["known-id"],"design":{"layout":"...","palette":"...","visual":"...","align":"...","mediaIds":[]},"finaleMode":"... (closing)","finalePayoff":"... (closing)"}]}}. Return the COMPLETE story. Preserve original structural metadata where valid.',
@@ -85,7 +87,7 @@ export function buildRecapEditorialAuditRequest(args:{
 }):{system:string;user:string} {
   const system=[
     EDITORIAL_AUDIT_PRINCIPLES,getPersonaEditorialFreedom(args.persona),
-    'You are NOT the writer. Challenge each chapter and rewrite the recap so it delivers NEW editorial judgments, not inventories of reviews, scores, moods, names or log activity.',
+    'You are NOT the writer. Challenge both the IDEAS and their spoken delivery: rewrite any chapter that sounds like polite essay prose, a balanced LLM contrast or a caption disguised as a joke. Preserve unexpectedly great lines unchanged. No mandatory rewrite quota.',
     'You may reframe the title and premise, remove redundant chapters and invent wildly fictional backstories, hilariously unfair motivations, ridiculous childhood memories and scorching personal judgments. No protective caveats, no "this is just a theory", no halfhearted perhaps. You are not constrained to factually support the imaginary narrator’s psychological claims. Do not simply copy examples from the prompt.',
     'The source context supplies familiar subjects and real media titles, but the Dungeon narrator is permitted to invent mad personal backstories and absurd private explanations as confident fictional comedy. Respect requested spoiler boundaries and exact analytic chart numbers; do not convert the creative monologue into a fabricated literal game plot summary.',
     'Return JSON only: {"editorialAssessment":"brief candid critique","recap":{"title":"...","dek":"...","chapters":[{"heading":"...","body":"..."}],"pullQuote":"verbatim sentence from a surviving chapter","awards":[{"award":"...","title":"...","reason":"..."}],"captions":{},"lookAhead":{"watchFor":"","challenge":""},"theme":"...","mood":"...","roast":"..."}}. Return the COMPLETE revised recap, between 1 and 4 substantial chapters.',
