@@ -197,6 +197,54 @@ export const DatabaseService = {
   },
 
   /** Image bytes never pass through the public /uploads directory. */
+  async getImportantPeople(): Promise<import('../lib/importantPeople').ImportantPerson[]> {
+    const res = await apiFetch('/api/important-people', {cache:'no-store'});
+    if (!res.ok) throw new Error('Could not load important people.');
+    return res.json();
+  },
+
+  async saveImportantPerson(person: Omit<import('../lib/importantPeople').ImportantPerson, 'hasImage'>): Promise<void> {
+    const isExisting = !!person.id;
+    const res = await apiFetch('/api/important-people' + (isExisting ? '/' + encodeURIComponent(person.id) : ''), {
+      method: isExisting ? 'PUT' : 'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(person),
+    });
+    if (!res.ok) {
+      const message = await res.json().catch(()=>({}));
+      throw new Error(message.error || 'Could not save person.');
+    }
+  },
+
+  async removeImportantPerson(id:string):Promise<void> {
+    const res=await apiFetch('/api/important-people/'+encodeURIComponent(id),{method:'DELETE'});
+    if (!res.ok) throw new Error('Could not remove person.');
+  },
+
+  async getImportantPersonPhoto(id:string):Promise<Blob|null> {
+    const res=await apiFetch('/api/important-people/'+encodeURIComponent(id)+'/photo',{cache:'no-store'});
+    if(res.status===404)return null;
+    if(!res.ok)throw new Error('Could not load private photo.');
+    return res.blob();
+  },
+
+  async uploadImportantPersonPhoto(id:string,file:File):Promise<void> {
+    if(!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size<32 ||
+      file.size>4*1024*1024)throw new Error('Use a JPEG, PNG or WebP photo up to 4 MB.');
+    const res=await apiFetch('/api/important-people/'+encodeURIComponent(id)+'/photo',{
+      method:'PUT',headers:{'Content-Type':file.type},body:file,
+    });
+    if(!res.ok){
+      const message=await res.json().catch(()=>({}));
+      throw new Error(message.error||'Could not save private photo.');
+    }
+  },
+
+  async removeImportantPersonPhoto(id:string):Promise<void> {
+    const res=await apiFetch('/api/important-people/'+encodeURIComponent(id)+'/photo',{method:'DELETE'});
+    if(!res.ok)throw new Error('Could not remove private photo.');
+  },
+
   async getVisualSelfReference(): Promise<Blob | null> {
     const res = await apiFetch('/api/settings/visual-reference', {cache: 'no-store'});
     if (res.status === 404) return null;
