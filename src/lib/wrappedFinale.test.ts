@@ -66,23 +66,24 @@ test('finale accepts distinct tonal choices without imposing sentimental closure
   assert.doesNotMatch(image,/ONE clear emotional resolution|completion and afterglow/);
 });
 
-test('a generic light-on or continuing-story finale gets rejected before images',()=>{
+test('editorial originality is the AI editors judgment, not banned stock phrases',()=>{
   for(const title of ['Leave the light on','Until Next Time','The seam remains']){
-    assert.equal(evaluateWrappedFinale(draft(ending('earned-sincerity',title)).scenes,evidence).acceptable,false);
+    assert.equal(evaluateWrappedFinale(draft(ending('earned-sincerity',title)).scenes,evidence).acceptable,true);
   }
   assert.equal(evaluateWrappedFinale(draft({
     ...ending('sharp-reversal'),
     body:'The story is not over. The light stays on for another chapter.',
-  }).scenes,evidence).acceptable,false);
+  }).scenes,evidence).acceptable,true);
 });
 
 test('closing cannot fabricate a factual anchor or pay off a deleted subplot',()=>{
   assert.equal(evaluateWrappedFinale(draft({...ending('dungeon-verdict'),evidenceIds:['fabricated']}).scenes,evidence).acceptable,false);
   assert.equal(evaluateWrappedFinale(draft({...ending('dungeon-verdict'),evidenceIds:['taste-1']}).scenes,evidence).acceptable,false);
   assert.throws(()=>enforceWrappedFinale(draft({...ending('dungeon-verdict'),finalePayoff:'Meh'}),evidence),/Weak Wrapped finale/);
+  // AI critic, not lexical token overlap, decides whether an ending repeats a thesis.
   assert.equal(evaluateWrappedFinale(draft({
     ...ending('dungeon-verdict'),finalePayoff:interior.thesis,
-  }).scenes,evidence).acceptable,false);
+  }).scenes,evidence).acceptable,true);
 });
 
 test('legacy stored closings still load, restyle and retain existing text unchanged',()=>{
