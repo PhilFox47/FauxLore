@@ -14,6 +14,8 @@ export interface WrappedEditorialMemoryItem {
   periodEnd: string;
   /** Previously published editorial opinions, NOT evidence of actual events. */
   takes: EditorialMemoryTake[];
+  /** Entire old written script (text only), editorial memory rather than fact. */
+  fullStory?: string;
   finale?: { mode?: string; payoff: string };
   samePeriodRerun?: boolean;
 }
@@ -93,6 +95,16 @@ export function selectWrappedEditorialMemory(
       timeframe:row.timeframe as StoryPeriod,timeId:row.timeId,
       title:short(story.title,150),periodEnd:range.end,
       takes:takes.slice(0,5),
+      fullStory:JSON.stringify({
+        title:typeof story.title==='string'?story.title:'',
+        dek:typeof story.dek==='string'?story.dek:'',
+        scenes:story.scenes.filter((s:any)=>s&&typeof s==='object').map((s:any)=>({
+          kind:short(s.kind,50),title:typeof s.title==='string'?s.title:'',
+          editorialThesis:typeof s.editorialThesis==='string'?s.editorialThesis:'',
+          body:typeof s.body==='string'?s.body:'',
+          finalePayoff:typeof s.finalePayoff==='string'?s.finalePayoff:'',
+        })),
+      }),
       ...(payoff?{finale:{payoff,mode:short(finaleScene?.finaleMode,35)||undefined}}:{}),
       ...(same?{samePeriodRerun:true}:{}),
     },score: (shared?100:0)+(same?50:0)});
