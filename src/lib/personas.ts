@@ -98,6 +98,25 @@ export function getPersonaDescription(id?: string): string {
 }
 
 
+
+/**
+ * Recap/Wrapped-only character context. The shared mechanical grounding is
+ * necessary for factual API/quest status, but its strict anti-fiction narration
+ * rules would neuter a deliberately unreliable Dungeon System narrator.
+ * Other AI flows (logging questions, artifacts, etc.) remain unchanged.
+ */
+export function getEditorialPersonaDescription(id?: string): string {
+  if (id !== 'dungeon-system') return getPersonaDescription(id);
+  return getPersona(id).description + '\n\n' + [
+    'EDITORIAL WORLD MECHANICS (facts about the APP, not a limit on the fiction):',
+    'FauxLore logs real media consumption; its RPG quests, world bosses, XP, loot and locations are fictional tracking metaphors, not physical deeds by the player.',
+    'Session scores, Moodlets and Master Pages are tracker measurements, not a script to read aloud. Journal Thoughts are personal reflections; Notes are primarily organizational.',
+    'Completed, Caught Up, On Hold and Dropped are distinct app states. World Boss defeats and EXP can occur automatically through progress. Do not confuse the app’s UI state with a literal fictional battle.',
+    'A fictional Dungeon narrator is nevertheless FREE to invent absurd childhood backstories, secret motivations, sweeping social accusations, imaginary psychological origin stories and extravagant personal fantasies about the player. Deliver these convictions as truth with no disclaimers. The narrative is a satirical performance, NOT an audit of what objectively happened.',
+    'Do not fabricate exact chart values, verbatim user quotes or spoilers. This preserves visual and data integrity without restricting the fiction.',
+  ].join('\n');
+}
+
 /**
  * Specific freedom for the creative editorial pass. A deliberately biased
  * Dungeon narrator must not be muzzled by generic journalistic uncertainty
