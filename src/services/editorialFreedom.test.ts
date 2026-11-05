@@ -56,14 +56,17 @@ async function captureFailingRequest(run:()=>Promise<unknown>):Promise<{
   return {system:request.messages[0].content,user:request.messages[1].content};
 }
 
-test('Dungeon System AI openly owns bad takes but real events still require receipts',()=>{
+test('Dungeon System AI confidently invents satirical personal lore without disclaimers',()=>{
   const persona=getPersonaDescription('dungeon-system');
   const directive=getPersonaEditorialFreedom('dungeon-system');
   assert.match(persona,/opinions and your ridiculous THEORIES have no leash/);
   assert.match(directive,/wild, knowingly unfair THEORIES/);
   assert.match(directive,/No constant/);
-  assert.match(directive,/Never present a fictional or hypothetical EVENT/);
-  assert.match(directive,/not personal vulnerability/i);
+  assert.match(directive,/UNHINGED FICTIONAL AUTHORITY/);
+  assert.match(directive,/childhood/);
+  assert.match(directive,/never.*perhaps|No constant/i);
+  assert.doesNotMatch(directive,/Never present a fictional or hypothetical EVENT/);
+  assert.match(directive,/actual disclosed suffering|moving personal moment/i);
   assert.doesNotMatch(getPersonaEditorialFreedom('witty'),/OWNER of the courtroom/);
 });
 
@@ -73,7 +76,10 @@ test('Wrapped Director receives the period-bounded memory AND the actual irrever
     evidence,media:[],editorialMemory:history,
   }));
   assert.match(p.system,/DUNGEON SYSTEM AI EDITORIAL LICENSE/);
-  assert.match(p.system,/not a polite historian/);
+  assert.match(p.system,/not a historian/);
+  assert.match(p.system,/FINAL FICTIONAL AUTHORITY/);
+  assert.match(p.system,/cabbage/);
+  assert.doesNotMatch(p.system,/Avoid fabricated user motivations/);
   assert.match(p.system,/old verdict|past bad judgment|PRIOR WRAPPED/i);
   assert.match(p.user,/PRIOR WRAPPED EDITORIAL MEMORY/);
   assert.match(p.user,/An earlier verdict/);
@@ -90,6 +96,7 @@ test('Deep Dive editorial planning and prose both receive the selected Dungeon l
     context:'The player completed Endwalker with the FC.',
   }));
   assert.match(plan.system,/DUNGEON SYSTEM AI EDITORIAL LICENSE/);
+  assert.match(plan.system,/CREATIVE ANGLE SELECTION/);
   const writer=await captureFailingRequest(()=>generateStructuredRecap({
     apiKey:'test',model:'test-model',persona:'dungeon-system',
     timeframe:'month',intervalLabel:'September 2026',
@@ -97,6 +104,8 @@ test('Deep Dive editorial planning and prose both receive the selected Dungeon l
   }));
   assert.match(writer.system,/DUNGEON SYSTEM AI EDITORIAL LICENSE/);
   assert.match(writer.system,/No obligatory/);
+  assert.match(writer.system,/FINAL DUNGEON FICTION LICENSE/);
+  assert.match(writer.system,/fictional editorial comedy/i);
   const defaultVoice=await captureFailingRequest(()=>planRecapEditorial({
     apiKey:'test',model:'test-model',persona:'witty',
     timeframe:'month',intervalLabel:'September 2026',context:'A logged evening.',
