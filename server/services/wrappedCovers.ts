@@ -7,6 +7,7 @@ import { imageFramingGuidance, type EditorialDirection, type WrappedVisualPlan }
 import { wrappedActionImageGuidance } from "../../src/lib/wrappedVisualAction";
 import { visualSelfImageClause, type VisualSelfProfile } from "../../src/lib/visualSelf";
 import { shouldAttachFaceReference } from "../lib/visualSelfReference";
+import { importantPeopleImageBrief, type ImportantPerson } from "../../src/lib/importantPeople";
 import {
   stageWrappedVisualSequence, wrappedVisualContinuityBrief, sourceStyleWithoutUncastCharacters,
 } from "../../src/lib/wrappedVisualDiversity";
@@ -183,9 +184,9 @@ export function buildWrappedCoverPrompt(
 
 export function createWrappedCoverService({ db, generateImage, generateSceneImage, getCodexStyle, canSpendTokens }: {
   db: Db;
-  generateImage: (userId: string, prompt: string, options?: { useFaceReference?: boolean }) => Promise<string>;
+  generateImage: (userId: string, prompt: string, options?: { useFaceReference?: boolean; personReferenceIds?: string[] }) => Promise<string>;
   /** Uses the same configured image provider, with scene-specific art direction. */
-  generateSceneImage?: (userId: string, prompt: string, options?: { useFaceReference?: boolean }) => Promise<string>;
+  generateSceneImage?: (userId: string, prompt: string, options?: { useFaceReference?: boolean; personReferenceIds?: string[] }) => Promise<string>;
   /** Existing completed Codex only; must never launch AI research. */
   getCodexStyle?: (userId: string, mediaId: string) => WrappedCodexStyle | null;
   canSpendTokens: (userId: string) => boolean;
@@ -218,6 +219,31 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
     } catch {
       return {};
     }
+  }
+
+  function peopleForImage(userId:string, scene: WrappedCoverStory['scenes'][number] | undefined): {
+    prompt:string; ids:string[];
+  } {
+    if(!scene)return {prompt:'',ids:[]};
+    const visual=scene.composition?.visualPlan;
+    // Canon characters and landscape-only images must not inherit real-world faces.
+    if(visual?.castMode==='canon-character'||visual?.castMode==='environment')
+      return {prompt:'',ids:[]};
+    try{
+      const rows=db.prepare("SELECT id,name,aliases,relationship,notes,appearance,allowImages,"+
+        "(image IS NOT NULL) AS hasImage FROM important_people WHERE userId=?")
+        .all(userId) as any[];
+      const people:ImportantPerson[]=rows.map(row=>({
+        id:row.id,name:row.name,
+        aliases:(()=>{try{return JSON.parse(row.aliases||'[]');}catch{return [];}})(),
+        relationship:row.relationship,notes:row.notes,appearance:row.appearance,
+        allowImages:!!row.allowImages,hasImage:!!row.hasImage,
+      }));
+      const sceneText=[scene.title,(scene as any).body,scene.composition?.artConcept,
+        visual?.action,visual?.interaction].filter(Boolean).join('\n');
+      const guidance=importantPeopleImageBrief(sceneText,people);
+      return {prompt:guidance.text,ids:guidance.idsWithPhotos};
+    }catch{return {prompt:'',ids:[]};}
   }
 
   function subjectsFor(userId: string, timeframe: WrappedTimeframe, timeId: string, story: WrappedCoverStory, timeZone: string): {
@@ -292,9 +318,11 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
         story, timeframe, timeId, subjects, coverProfile, codexStyle,
         wrappedVisualContinuityBrief(story.scenes, story.scenes[0].id),
       );
-      const url = await generateImage(userId, prompt, {
+      const knownPeople = peopleForImage(userId, story.scenes[0]);
+      const url = await generateImage(userId, prompt + (knownPeople.prompt ? "\n\n" + knownPeople.prompt : ""), {
         useFaceReference: !!profile.visualSelfReferenceAvailable &&
           shouldAttachFaceReference(profile.visualSelfInsertMode, openingPlan),
+        personReferenceIds: knownPeople.ids,
       });
       db.prepare(
         "UPDATE wrapped_stories SET coverArtUrl=?, coverArtStatus='done', coverArtRequestId=NULL " +
@@ -436,7 +464,11 @@ export function createWrappedCoverService({ db, generateImage, generateSceneImag
                 })(), continuity,
               ) : null;
           if (!prompt) throw new Error("Unknown artwork scene " + id);
-          return { id, imageUrl: await generateSceneImage(userId, prompt, { useFaceReference: faceReference }) };
+          const knownPeople = id === "achievement-finale" ? {prompt:"",ids:[]} : peopleForImage(userId,scene);
+          return { id, imageUrl: await generateSceneImage(userId, prompt +
+            (knownPeople.prompt ? "\n\n" + knownPeople.prompt : ""), {
+            useFaceReference: faceReference, personReferenceIds: knownPeople.ids,
+          }) };
         }));
         for (const result of produced) {
           if (result.status === "fulfilled") images[result.value.id] = result.value.imageUrl;
