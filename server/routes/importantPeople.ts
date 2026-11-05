@@ -58,7 +58,9 @@ export function registerImportantPeopleRoutes(app: Express, ctx: ServerContext) 
       db.prepare("INSERT INTO important_people(id,userId,name,aliases,relationship,notes,appearance,allowImages,createdAt,updatedAt) " +
         "VALUES(@id,@userId,@name,@aliases,@relationship,@notes,@appearance,@allowImages,@now,@now)")
         .run({id,userId,...profile,now});
-      res.status(201).json({id,...req.body,name:profile.name,aliases:JSON.parse(profile.aliases),hasImage:false});
+      res.setHeader("Cache-Control", "private, no-store");
+      res.status(201).json({id,name:profile.name,aliases:JSON.parse(profile.aliases),relationship:profile.relationship,
+        notes:profile.notes,appearance:profile.appearance,allowImages:!!profile.allowImages,hasImage:false});
     } catch(e:any) { res.status(400).json({error:e.message || "Invalid person."}); }
   });
 
