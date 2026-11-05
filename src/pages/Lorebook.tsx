@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
 import { BookOpen, Search, MapPin, PencilLine, Activity, PenLine, Heart, Star, CheckCircle2, ChevronRight, NotebookPen } from 'lucide-react';
+import { DatabaseService } from '../services/db';
+import { buildLorebookReviewEvents, type LorebookOpinionSnapshot, type LorebookReviewEvent } from '../lib/lorebookReviewEvents';
 import { format, parseISO } from 'date-fns';
 import { MEDIA_COLORS, ProgressLog } from '../types/schema';
 import { groupLogsIntoSessions, LogSession } from '../lib/sessions';
@@ -18,7 +20,8 @@ import {
 // A single strand of the chronicle: either a merged progress session or a lone status change.
 type JournalEntry =
   | { kind: 'session'; ts: string; session: LogSession }
-  | { kind: 'status'; ts: string; log: ProgressLog };
+  | { kind: 'status'; ts: string; log: ProgressLog }
+  | { kind: 'review'; ts: string; review: LorebookReviewEvent };
 
 // Renders "Logged 4.5 hours of playtime" etc. from a (possibly summed) delta + metric.
 function describeProgress(delta: number, metricType: string) {
@@ -78,7 +81,21 @@ export function Lorebook() {
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [savedLogId, setSavedLogId] = useState<string | null>(null);
-  const monthOptions = useMemo(() => lorebookMonths(logs), [logs]);
+  const [opinionHistory, setOpinionHistory] = useState<LorebookOpinionSnapshot[]>([]);
+  const [opinionError, setOpinionError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    if (!media.length) { setOpinionHistory([]); setOpinionError(false); return; }
+    DatabaseService.getLorebookOpinions()
+      .then(rows => { if (active) { setOpinionHistory(rows); setOpinionError(false); } })
+      .catch(error => {
+        console.error('[lorebook] Could not load review history:', error);
+        if (active) setOpinionError(true);
+      });
+    return () => { active = false; };
+  }, [media]);
+  const reviewEvents = useMemo(() => buildLorebookReviewEvents(opinionHistory), [opinionHistory]);
+  const monthOptions = useMemo(() => lorebookMonths(logs, reviewEvents), [logs, reviewEvents]);
   const knownLocations = useMemo(() => [...new Set(logs.map(l => l.location?.trim() || '')
     .filter(Boolean))].sort(),[logs]);
   const editingLog = useMemo(() => logs.find(l=>l.id===editingLogId),[logs,editingLogId]);
@@ -161,9 +178,26 @@ export function Lorebook() {
     const statusLogs = filtered.filter(l => l.metricType === 'statusChange');
     const sessions = groupLogsIntoSessions(filtered);
 
+    // Reviews are full-work opinions, not sessions that need Journal Thoughts.
+    // Keep them independent of the 6-hour session grouping and Journal filters.
+    const visibleReviews = reviewFilter === 'all' ? reviewEvents.filter(review => {
+      const mediaItem = getMediaForItem(review.mediaId);
+      if (!mediaItem) return false;
+      if (filterType !== 'All' && mediaItem.mediaType !== filterType) return false;
+      if (monthFilter !== 'all' && lorebookMonth(review.ts) !== monthFilter) return false;
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        if (![mediaItem.title, review.review || '', review.previousReview || '',
+          review.kind, review.change, review.rating == null ? '' : String(review.rating)]
+          .some(part => part.toLowerCase().includes(query))) return false;
+      }
+      return true;
+    }) : [];
+
     const entries: JournalEntry[] = [
       ...sessions.map(s => ({ kind: 'session' as const, ts: s.endTimestamp, session: s })),
       ...statusLogs.map(l => ({ kind: 'status' as const, ts: l.timestamp, log: l })),
+      ...visibleReviews.map(review => ({ kind: 'review' as const, ts: review.ts, review })),
     ].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
 
     const grouped: Record<string, JournalEntry[]> = {};
@@ -174,7 +208,7 @@ export function Lorebook() {
     const keys = Object.keys(grouped).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
     return { groupedEntries: grouped, groupedKeys: keys, hasEntries: entries.length > 0 };
-  }, [logs, media, filterType, monthFilter, reviewFilter, searchQuery]);
+  }, [logs, media, reviewEvents, filterType, monthFilter, reviewFilter, searchQuery]);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -207,7 +241,7 @@ export function Lorebook() {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
               type="text"
-              placeholder="Find media, Notes or Journal..."
+              placeholder="Find media, Reviews, Notes or Journal..."
               value={searchQuery}
               onChange={(e) => changeView(()=>setSearchQuery(e.target.value))}
               className="bg-zinc-900 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-white focus:outline-none focus:border-orange-500 w-full shadow-inner"
@@ -236,6 +270,11 @@ export function Lorebook() {
             </select>
           </label>
         </div>
+        {opinionError && (
+          <p role="status" className="text-xs text-amber-300">
+            Review history could not be loaded. Progress logs and status changes are still available.
+          </p>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
           <p className="text-zinc-300">
             <strong className="text-violet-200">{progress.journals}/{progress.total}</strong> logs with Journal Thoughts
@@ -285,13 +324,13 @@ export function Lorebook() {
 
                 <div className="space-y-4 ml-12">
                   {dayEntries.map((entry) => {
-                    const mediaId = entry.kind === 'session' ? entry.session.mediaId : entry.log.mediaId;
+                    const mediaId = entry.kind === 'session' ? entry.session.mediaId : entry.kind === 'status' ? entry.log.mediaId : entry.review.mediaId;
                     const mediaItem = getMediaForItem(mediaId);
                     if (!mediaItem) return null;
                     const colors = MEDIA_COLORS[mediaItem.mediaType];
 
-                    const isHistoric = entry.kind === 'session' ? entry.session.isHistoric : entry.log.isHistoric;
-                    const location = entry.kind === 'session' ? entry.session.location : entry.log.location;
+                    const isHistoric = entry.kind === 'session' ? entry.session.isHistoric : entry.kind === 'status' ? entry.log.isHistoric : false;
+                    const location = entry.kind === 'session' ? entry.session.location : entry.kind === 'status' ? entry.log.location : undefined;
 
                     // Action node + time label differ between a session and a lone status change.
                     let actionNode: React.ReactNode;
@@ -311,6 +350,13 @@ export function Lorebook() {
                         ? <span>Status changed from <span className={getStatusColor(match[1])}>{match[1]}</span> to <span className={getStatusColor(match[2])}>{match[2]}</span></span>
                         : <span>{noteStr}</span>;
                       timeLabel = format(parseISO(entry.log.timestamp), 'HH:mm');
+                    } else if (entry.kind === 'review') {
+                      const {kind, change} = entry.review;
+                      const label = kind === 'review' ? 'Review' : 'Rating';
+                      actionNode = <span className="text-amber-200 font-semibold">
+                        {label} {change === 'recorded' ? 'recorded' : change === 'updated' ? 'updated' : 'removed'}
+                      </span>;
+                      timeLabel = format(parseISO(entry.ts), 'HH:mm');
                     } else {
                       const s = entry.session;
                       logCount = s.logs.length;
@@ -322,7 +368,7 @@ export function Lorebook() {
                     }
 
                     return (
-                      <div key={entry.kind === 'session' ? entry.session.id : entry.log.id} className={cn("bg-zinc-900/50 border p-4 rounded-2xl flex flex-col sm:flex-row gap-4 hover:border-white/10 transition-colors shadow-sm hover:shadow-md relative group",openSession?'border-violet-400/30':'border-white/5')}>
+                      <div key={entry.kind === 'session' ? entry.session.id : entry.kind === 'status' ? entry.log.id : entry.review.id} className={cn("bg-zinc-900/50 border p-4 rounded-2xl flex flex-col sm:flex-row gap-4 hover:border-white/10 transition-colors shadow-sm hover:shadow-md relative group",openSession?'border-violet-400/30':entry.kind==='review'?'border-amber-400/20':'border-white/5')}>
                         {isHistoric && (
                           <div className="absolute top-0 right-0 bg-amber-500/10 text-amber-500/60 text-[8px] font-black uppercase px-2 py-1 tracking-widest border-b border-l border-amber-500/10 rounded-bl-lg font-mono">
                             Historical Record
@@ -354,7 +400,9 @@ export function Lorebook() {
                         <div className="flex-1 flex flex-col justify-center min-w-0 py-1 space-y-2">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-zinc-300 font-medium text-sm flex items-center gap-1.5">
-                              <Activity className={cn("w-3.5 h-3.5", colors.text)} />
+                              {entry.kind === 'review'
+                                ? <Star className="w-3.5 h-3.5 text-amber-300" />
+                                : <Activity className={cn("w-3.5 h-3.5", colors.text)} />}
                               {actionNode}
                             </span>
 
@@ -390,6 +438,32 @@ export function Lorebook() {
                           </div>
 
 
+                          {entry.kind==='review' && (
+                            <section aria-label="Full-work review event"
+                              className="rounded-xl border border-amber-400/15 bg-amber-500/[.045] p-3 space-y-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] uppercase tracking-widest text-amber-300 font-bold">Full-work {entry.review.kind}</span>
+                                {entry.review.rating !== null && (
+                                  <span className="inline-flex items-center gap-1 text-xs rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-amber-200">
+                                    <Star size={12}/> {entry.review.rating}/5
+                                    {entry.review.previousRating !== null && entry.review.previousRating !== entry.review.rating
+                                      ? ' (was ' + entry.review.previousRating + '/5)' : ''}
+                                  </span>
+                                )}
+                              </div>
+                              {entry.review.review && (
+                                <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-zinc-200">{entry.review.review}</p>
+                              )}
+                              {entry.review.kind==='review' && entry.review.change==='removed' && (
+                                <p className="text-xs text-zinc-400">The written review was removed.</p>
+                              )}
+                              {entry.review.kind==='rating' && entry.review.change==='removed' && (
+                                <p className="text-xs text-zinc-400">The full-work rating was removed.</p>
+                              )}
+                              <p className="text-[10px] text-zinc-500">Recorded in FauxLore on {format(parseISO(entry.ts),'MMMM d, yyyy')} at {timeLabel}.
+                                The original writing date may be earlier for imported reviews.</p>
+                            </section>
+                          )}
                           {entry.kind==='session' && (
                             <>
                               <div className="flex flex-wrap gap-2 items-center text-[11px]">
