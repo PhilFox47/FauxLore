@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Sparkles, RefreshCw, UserCircle, Settings as SettingsIcon, Shield, Database, Users, Target, Image as ImageIcon, Bell, Activity } from 'lucide-react';
 import { DatabaseService } from '../services/db';
 import { VisualSelfReferencePicker } from './VisualSelfReferencePicker';
+import { ImportantPeopleEditor } from './ImportantPeopleEditor';
 import { IntegrationsService } from '../services/integrations';
 import { useMediaContext } from '../contexts/MediaContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -841,6 +842,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       <VisualSelfReferencePicker enabled={formData.visualSelfInsertMode !== 'never'}
                         provider={formData.aiProvider} imageModel={formData.cliProxyImageModel} />
                     </div>
+                    <ImportantPeopleEditor provider={formData.aiProvider} imageModel={formData.cliProxyImageModel}/>
+
 
                     <div className="rounded-xl border border-white/10 bg-zinc-900/40 p-4 space-y-3">
                       <h3 className="text-sm font-semibold text-zinc-200">Book Metadata Providers</h3>
