@@ -11,7 +11,7 @@ import { imagePromptCraft, resolveImagePromptProfile, gptImage25DeliveryPrompt }
 import { buildBossStateImagePrompt, bossVisualState, basePortraitForTransition, localImageReferenceDataUrl } from "../lib/bossStateImages";
 import { imageFrameSize, imageFrameMatches, withImageFrame, type ImageFrame } from "../../src/lib/imageFraming";
 import { redactVisualSelfForDiagnostics, normalizeVisualSelfMode } from "../../src/lib/visualSelf";
-import { readUserFaceReference } from "../lib/visualSelfReference";
+import { readUserFaceReference, validateFacePhoto } from "../lib/visualSelfReference";
 import { AUTHENTICITY, SHARPNESS, enemyTier, rarityArt } from "../lib/artDirection";
 import { codexArtStyleBlock, type CodexService } from "./codex";
 import { codexTaskContext } from "./codexV3Context";
@@ -185,7 +185,7 @@ export function createImageService({ db, aiImagesDir, codex, canSpendTokens = ()
         const effectivePrompt = overriddenPrompt || finalPrompt;
         const faceReference = edit && (intent === "wrapped" || intent === "wrapped-scene");
         const renderPrompt = faceReference
-          ? effectivePrompt + "\n\nFACE REFERENCE INPUT: The attached photo is a private face identity reference ONLY. If the scene depicts the account owner, preserve recognizable facial structure, eye region, hair and other features. Reimagine their pose, expression, costume, environment and source-media art style from the story brief. Do NOT simply reprint or crop the reference selfie, copy its background, or add a second portrait panel."
+          ? effectivePrompt + "\n\nFACE REFERENCE INPUT: The attached photo(s) are private visual identity references ONLY. Match each person ONLY to the explicitly labeled reference order in the scene brief. Preserve recognizable facial structures and distinguishing features for that specific person. Do NOT mix identities, duplicate the source photos, copy their backgrounds, or add a portrait inset. Reimagine poses, outfits and source-media art style from the actual scene."
           : effectivePrompt;
         const body: Record<string, unknown> = edit
           ? cliProxyImageEditBody(cfg.model, renderPrompt, size, referenceDataUrl || "")
@@ -592,23 +592,54 @@ Return ONLY the final image prompt text, nothing else.`;
     );
   }
 
+  function personalReferences(userId:string, options?:{useFaceReference?:boolean; personReferenceIds?:string[]}) {
+    const urls:string[] = [];
+    const labels:string[] = [];
+    const self = faceReferenceForRender(userId,!!options?.useFaceReference);
+    if(self){urls.push(self);labels.push("the account owner");}
+    const ids=[...new Set(options?.personReferenceIds || [])].slice(0,2);
+    for(const id of ids){
+      try {
+        const person=db.prepare("SELECT name,image,mime,allowImages FROM important_people WHERE userId=? AND id=?")
+          .get(userId,id) as {name:string;image:Buffer|null;mime:string|null;allowImages:number}|undefined;
+        if(!person || !person.allowImages || !person.image || !person.mime)continue;
+        validateFacePhoto(person.image,person.mime);
+        urls.push("data:"+person.mime+";base64,"+person.image.toString("base64"));
+        labels.push(person.name);
+      }catch{/* Missing/invalid/revoked private photo: keep text-only guidance. */}
+    }
+    return {
+      references:urls.length?urls:null,
+      suffix:urls.length?[
+        "PRIVATE REFERENCE IMAGE ORDER (identity cues only; images are not evidence of an event):",
+        ...labels.map((name,index)=>"Reference "+(index+1)+": "+JSON.stringify(name)),
+        "Do not fuse or swap identities. Do not insert an extra person merely because their photo is available.",
+        "END PRIVATE REFERENCE IMAGE ORDER.",
+      ].join("\n"):"",
+    };
+  }
+
   /** One standalone 3:2 title illustration for an entire Wrapped story. */
-  async function generateWrappedCoverImage(userId: string, prompt: string, options?: {useFaceReference?: boolean}): Promise<string> {
+  async function generateWrappedCoverImage(userId: string, prompt: string, options?: {useFaceReference?: boolean;personReferenceIds?:string[]}): Promise<string> {
     const config = getAiConfig(db, userId);
     if (!config) throw new Error("AI image provider is not configured.");
+    const ref=personalReferences(userId,options);
     return internalGenerateImageWithNanoGpt(
-      config.apiKey, prompt, "unreadable text, fake logos, watermarks, collage grids",
-      "landscape-3:2", faceReferenceForRender(userId, !!options?.useFaceReference), null, "wrapped",
+      config.apiKey, prompt+(ref.suffix?"\n\n"+ref.suffix:""),
+      "unreadable text, fake logos, watermarks, collage grids",
+      "landscape-3:2", ref.references, prompt, "wrapped",
     );
   }
 
   /** Render a separate, original cinematic illustration for one Wrapped chapter. */
-  async function generateWrappedSceneImage(userId: string, prompt: string, options?: {useFaceReference?: boolean}): Promise<string> {
+  async function generateWrappedSceneImage(userId: string, prompt: string, options?: {useFaceReference?: boolean;personReferenceIds?:string[]}): Promise<string> {
     const config = getAiConfig(db, userId);
     if (!config) throw new Error("AI image provider is not configured.");
+    const ref=personalReferences(userId,options);
     return internalGenerateImageWithNanoGpt(
-      config.apiKey, prompt, "collages, grids, franchise logos, letterforms, captions",
-      "landscape-3:2", faceReferenceForRender(userId, !!options?.useFaceReference), null, "wrapped-scene",
+      config.apiKey, prompt+(ref.suffix?"\n\n"+ref.suffix:""),
+      "collages, grids, franchise logos, letterforms, captions",
+      "landscape-3:2", ref.references, prompt, "wrapped-scene",
     );
   }
 
