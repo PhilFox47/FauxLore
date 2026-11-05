@@ -46,6 +46,9 @@ test('Wrapped editorial review is model judged, includes source evidence and exp
   assert.match(req.user,/Multiple works are ordinary baseline/);
   assert.match(req.user,/I can count your tags and ratings/);
   assert.match(EDITORIAL_AUDIT_PRINCIPLES,/No simple word banlists/);
+  assert.match(req.system,/imagined motives|imaginary motives/i);
+  assert.match(req.system,/childhood/i);
+  assert.match(req.system,/not.*courtroom|NOT a report|NOT an audit|not sworn testimony/i);
 });
 
 test('Deep Dive editor considers the full original source and may replace the entire perspective',()=>{
@@ -56,6 +59,8 @@ test('Deep Dive editor considers the full original source and may replace the en
   assert.match(req.system,/NOT the writer/);
   assert.match(req.user,/Journal Thought: I loved playing with Leo/);
   assert.match(req.user,/You marked the activity as Funny and Social/);
+  assert.match(req.system,/childhood memories|childhood histories|childhood episodes/i);
+  assert.match(req.system,/No protective caveats/);
 });
 
 test('a second API call returns the independent AI editorial rewrite for Wrapped and Deep Dive',async()=>{
