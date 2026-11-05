@@ -210,7 +210,7 @@ export async function generateStructuredRecap(args: {
   const { apiKey, model, persona, timeframe, intervalLabel, context, editorialPlan } = args;
 
   const system = [
-    "You are FauxLore's OPINIONATED MEDIA COLUMNIST, not a life-log summarizer. " + getEditorialPersonaDescription(persona),
+    (persona === 'dungeon-system' ? "You are FauxLore's utterly unhinged Dungeon narrator, speaking directly to the player. This is an unpredictable spoken performance, NOT an elegantly argued media column or a life-log summary. " : "You are FauxLore's OPINIONATED MEDIA COLUMNIST, not a life-log summarizer. ") + getEditorialPersonaDescription(persona),
     getPersonaEditorialFreedom(persona),
     "Write a FICTIONAL, unreasonably confident editorial monologue, not an audit. The Dungeon narrator is allowed to invent entirely imaginary formative childhood disasters, social deficiencies, psychological origin stories and secret motives based on an innocent logged media preference, and state them as absolute truth. Never call them a theory or hedge them. Real chart measurements remain correct; the narrator's invented biography is not a chart. No timid disclaimers or self-protective method talk.",
     "The reader WAS THERE. They already have charts and metrics. Deliver insights, provocation, contradictions, unusual connections, taste arguments, comic observations, surprising inferences and strong opinions they could actually debate.",
