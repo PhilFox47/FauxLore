@@ -106,7 +106,7 @@ test('Deep Dive editorial planning and prose both receive the selected Dungeon l
     context:'The player completed Endwalker with the FC.',
   }));
   assert.match(writer.system,/DUNGEON SYSTEM AI EDITORIAL LICENSE/);
-  assert.match(writer.system,/No obligatory/);
+  assert.match(writer.system,/SPOKEN RHYTHM: No default chapter shape/);
   assert.match(writer.system,/FINAL DUNGEON FICTION LICENSE/);
   assert.match(writer.system,/SPOKEN CHARACTER, NOT BEAUTIFUL PROSE/);
   assert.match(writer.system,/LOSE THE LLM SYMMETRY/);
