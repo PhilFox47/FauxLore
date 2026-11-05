@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useMediaContext } from '../contexts/MediaContext';
-import { BookOpen, Search, MapPin, PencilLine, Activity, PenLine, Heart, CheckCircle2, ChevronRight, NotebookPen } from 'lucide-react';
+import { BookOpen, Search, MapPin, PencilLine, Activity, PenLine, Heart, Star, CheckCircle2, ChevronRight, NotebookPen } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { MEDIA_COLORS, ProgressLog } from '../types/schema';
 import { groupLogsIntoSessions, LogSession } from '../lib/sessions';
@@ -9,7 +9,7 @@ import { buildGroupIndex, groupsFor } from '../lib/locationGroups';
 import { LorebookLogEditor } from '../components/LorebookLogEditor';
 import { QUICK_MOODLETS, readMoodlets } from '../lib/quickMoodlets';
 import {
-  lorebookMonths, lorebookMonth, lorebookReviewProgress,
+  lorebookMonths, lorebookMonth, lorebookReviewProgress, lorebookSessionRatings,
   matchesLorebookReflectionFilter, isJournalWritten,
   lorebookDraftFromLog, lorebookDraftChanges, isLorebookDraftDirty,
   type LorebookLogDraft, type LorebookReviewFilter,
@@ -239,7 +239,7 @@ export function Lorebook() {
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
           <p className="text-zinc-300">
             <strong className="text-violet-200">{progress.journals}/{progress.total}</strong> logs with Journal Thoughts
-            <span className="text-zinc-500"> · {progress.impact} with Impact · {progress.moodlets} with Moodlets</span>
+            <span className="text-zinc-500"> · {progress.enjoyment} with Enjoyment · {progress.impact} with Impact · {progress.moodlets} with Moodlets</span>
           </p>
           <div role="group" aria-label="Journal review filter" className="flex flex-wrap gap-1 bg-black/35 p-1 rounded-xl border border-white/10">
             {([
@@ -302,8 +302,7 @@ export function Lorebook() {
                     const openSession = sessionLogs.some(log=>log.id===editingLogId);
                     const hasJournal = sessionLogs.some(isJournalWritten);
                     const sessionMoods = [...new Set(sessionLogs.flatMap(log=>readMoodlets(log.moodlets)))];
-                    const impactValues = sessionLogs.map(log=>log.sessionImpact).filter((n):n is number=>typeof n==='number');
-                    const peakImpact = impactValues.length ? Math.max(...impactValues) : null;
+                    const {enjoyment,impact} = lorebookSessionRatings(sessionLogs);
 
                     if (entry.kind === 'status') {
                       const noteStr = entry.log.note || 'Updated Status';
@@ -396,7 +395,8 @@ export function Lorebook() {
                               <div className="flex flex-wrap gap-2 items-center text-[11px]">
                                 {hasJournal && <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 border border-violet-400/25 text-violet-200 px-2 py-1"><CheckCircle2 size={12}/> Journal</span>}
                                 {!hasJournal && <span className="inline-flex items-center gap-1 rounded-full bg-white/5 border border-white/10 text-zinc-500 px-2 py-1">No Journal yet</span>}
-                                {peakImpact!==null && <span className="inline-flex gap-1 items-center rounded-full bg-violet-500/10 text-violet-200 border border-violet-400/20 px-2 py-1"><Heart size={12}/> Impact {peakImpact}/5{impactValues.length>1?' peak':''}</span>}
+                                {enjoyment && <span className="inline-flex gap-1 items-center rounded-full bg-amber-500/10 text-amber-200 border border-amber-400/20 px-2 py-1"><Star size={12}/> Enjoyment {enjoyment.value}/5{sessionLogs.length>1?' peak':''}</span>}
+                                {impact && <span className="inline-flex gap-1 items-center rounded-full bg-violet-500/10 text-violet-200 border border-violet-400/20 px-2 py-1"><Heart size={12}/> Impact {impact.value}/5{sessionLogs.length>1?' peak':''}</span>}
                                 {sessionMoods.map(id=>{
                                   const mood=QUICK_MOODLETS.find(x=>x.id===id);
                                   return mood?<span key={id} title={mood.description} className="rounded-full bg-white/5 border border-white/10 px-2 py-1 text-zinc-300">{mood.emoji} {mood.label}</span>:null;
