@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { ProgressLog } from '../types/schema';
 import { groupLogsIntoSessions } from './sessions';
 import {
-  isJournalWritten, lorebookMonths, lorebookMonth, lorebookReviewProgress,
+  isJournalWritten, lorebookMonths, lorebookMonth, lorebookReviewProgress, lorebookSessionRatings,
   lorebookDraftChanges, lorebookDraftFromLog, isLorebookDraftDirty,
   matchesLorebookReflectionFilter,
 } from './lorebookEditing';
@@ -27,12 +27,12 @@ test('month jumping uses real calendar months and excludes unknown import placeh
 
 test('month review counts distinguish substantive Journal Thoughts from optional impact and Moodlets',()=>{
   const logs=[
-    make('a',{thoughts:'A deeply moving experience.',sessionImpact:5,moodlets:['moving','social']}),
+    make('a',{thoughts:'A deeply moving experience.',sessionEnjoyment:4,sessionImpact:5,moodlets:['moving','social']}),
     make('b',{thoughts:'',note:'Chapters 4 to 6',moodlets:['distracted']}),
     make('c',{metricType:'statusChange',delta:0,note:'Status changed from Active to Completed'}),
   ];
   assert.deepEqual(lorebookReviewProgress(logs),{
-    total:2,journals:1,impact:1,moodlets:2,
+    total:2,journals:1,enjoyment:1,impact:1,moodlets:2,
   });
   assert.equal(matchesLorebookReflectionFilter(logs[0],'needs-journal'),false);
   assert.equal(matchesLorebookReflectionFilter(logs[1],'needs-journal'),true);
@@ -104,4 +104,24 @@ test('inline editor visibly distinguishes Journals, Notes, session signals and o
   assert.match(markup,/Saving|Save log/);
   assert.match(markup,/disabled/);
   assert.match(markup,/PC Room/);
+});
+
+test('Lorebook cards display Enjoyment and Impact independently and never turn missing ratings into zero',()=>{
+  assert.deepEqual(lorebookSessionRatings([make('unrated')]),{enjoyment:null,impact:null});
+  assert.deepEqual(lorebookSessionRatings([make('a',{sessionEnjoyment:4,sessionImpact:2})]),{
+    enjoyment:{value:4,ratedLogs:1},
+    impact:{value:2,ratedLogs:1},
+  });
+  const grouped=[
+    make('first',{sessionEnjoyment:2,sessionImpact:null}),
+    make('second',{sessionEnjoyment:5,sessionImpact:4}),
+    make('third',{sessionEnjoyment:null,sessionImpact:1}),
+  ];
+  assert.deepEqual(lorebookSessionRatings(grouped),{
+    enjoyment:{value:5,ratedLogs:2},
+    impact:{value:4,ratedLogs:2},
+  });
+  assert.deepEqual(lorebookReviewProgress(grouped),{
+    total:3,journals:0,enjoyment:2,impact:2,moodlets:0,
+  });
 });
