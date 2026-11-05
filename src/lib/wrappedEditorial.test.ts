@@ -123,7 +123,7 @@ test('last-week-only scenes cannot dominate a month whose final week did not dom
   ), extended, media), /overrepresents the final seven days/);
 });
 
-test('format-share slides with different media labels still repeat ONE editorial job', () => {
+test('multiple valid monthly data sources are structurally allowed; independent AI judges whether arguments repeat', () => {
   assert.deepEqual(evidenceStoryFunctions(['outlier-Book', 'outlier-Game']), ['format-share-shift']);
   const chartFacts = ['outlier-Book', 'outlier-Game'].map(id => ({
     id, kind: 'outlier' as const, title: id, evidence: 'Substantial comparison for ' + id,
@@ -133,10 +133,11 @@ test('format-share slides with different media labels still repeat ONE editorial
     timeframe: 'month', timeId: '2026-10', bounds: { start: '2026-10-01', end: '2026-10-31' },
     editorialCalibration: '', media: [], facts: [...chartFacts],
   };
-  assert.throws(() => normalizeWrappedStory(story(
+  const draft = normalizeWrappedStory(story(
     scene('outlier', 'Books rose', ['outlier-Book'], 'infographic', 'bars'),
     scene('outlier', 'Games fell', ['outlier-Game'], 'infographic', 'bars'),
-  ), evidence, media), /repeats the editorial function/);
+  ), evidence, media);
+  assert.equal(draft.scenes.length, 4);
 });
 
 test('weekly stories reject two different infographic topics; monthly maximum is two', () => {
