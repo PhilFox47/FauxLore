@@ -5,6 +5,7 @@ on:
     branches: [claude]
     paths:
       - 'src/services/editorialAudit*'
+      - 'src/services/editorialFreedom.test.ts'
       - 'src/services/recapAi.ts'
       - 'src/services/wrappedAi.ts'
       - 'src/lib/personas.ts'
