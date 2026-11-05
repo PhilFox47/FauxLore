@@ -1,0 +1,31 @@
+name: Independent AI Editorial Review
+
+on:
+  push:
+    branches: [claude]
+    paths:
+      - 'src/services/editorialAudit*'
+      - 'src/services/recapAi.ts'
+      - 'src/services/wrappedAi.ts'
+      - 'src/lib/personas.ts'
+      - 'src/lib/wrappedThesisGate*'
+      - 'src/lib/wrappedFinale*'
+      - '.github/workflows/editorial-ai-review.yml'
+  workflow_dispatch:
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Independent model review and source-bound story editing
+        run: node --import tsx --test src/services/editorialAudit.test.ts src/services/editorialFreedom.test.ts src/services/recapAi.test.ts
+      - name: No lexical gates for Wrapped arguments or endings
+        run: node --import tsx --test src/lib/wrappedThesisGate.test.ts src/lib/wrappedFinale.test.ts src/lib/wrappedEditorialMemory.test.ts
+      - name: Production bundle
+        run: npm run build
