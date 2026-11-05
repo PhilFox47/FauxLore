@@ -1,0 +1,34 @@
+name: Lorebook Session Editing
+
+on:
+  push:
+    branches: [claude]
+    paths:
+      - 'src/pages/Lorebook.tsx'
+      - 'src/components/LorebookLogEditor.tsx'
+      - 'src/components/SessionReflectionSignals.tsx'
+      - 'src/lib/lorebookEditing*'
+      - 'src/lib/sessions.ts'
+      - 'server/routes/logs*'
+      - 'src/lib/runtimeBuild.ts'
+      - '.github/workflows/lorebook-editing.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Lorebook editing and source-preserving reflections
+        run: node --import tsx --test src/lib/lorebookEditing.test.ts src/lib/quickMoodlets.test.ts src/lib/personalMoments.test.ts
+      - name: Existing log API and persistence roundtrip
+        run: node --import tsx --test server/routes/logs.moodlets.test.ts
+      - name: TypeScript
+        run: npm run lint
+      - name: Production build
+        run: npm run build
