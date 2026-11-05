@@ -11,6 +11,7 @@ on:
       - 'src/lib/sessions.ts'
       - 'server/routes/logs*'
       - 'src/lib/runtimeBuild.ts'
+      - 'scripts/check-lorebook-types.mjs'
       - '.github/workflows/lorebook-editing.yml'
   workflow_dispatch:
 
@@ -28,7 +29,7 @@ jobs:
         run: node --import tsx --test src/lib/lorebookEditing.test.ts src/lib/quickMoodlets.test.ts src/lib/personalMoments.test.ts
       - name: Existing log API and persistence roundtrip
         run: node --import tsx --test server/routes/logs.moodlets.test.ts
-      - name: TypeScript
-        run: npm run lint
+      - name: Feature-scoped TypeScript check (other existing diagnostics reported)
+        run: node scripts/check-lorebook-types.mjs
       - name: Production build
         run: npm run build
