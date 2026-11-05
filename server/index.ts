@@ -40,6 +40,7 @@ import { registerMediaRoutes } from "./routes/media";
 import { registerLogRoutes } from "./routes/logs";
 import { registerDiagnosticsRoutes } from "./routes/diagnostics";
 import { registerSettingsRoutes } from "./routes/settings";
+import { registerImportantPeopleRoutes } from "./routes/importantPeople";
 import { registerRecapRoutes } from "./routes/recaps";
 import { registerWrappedRoutes } from "./routes/wrapped";
 import { registerAiRoutes } from "./routes/ai";
@@ -264,6 +265,7 @@ async function startServer() {
   registerLogRoutes(app, ctx);
   registerDiagnosticsRoutes(app, ctx);
   registerSettingsRoutes(app, ctx);
+  registerImportantPeopleRoutes(app, ctx);
   registerRecapRoutes(app, ctx);
   registerWrappedRoutes(app, ctx);
   registerAiRoutes(app, ctx);
