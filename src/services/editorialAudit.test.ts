@@ -47,6 +47,8 @@ test('Wrapped editorial review is model judged, includes source evidence and exp
   assert.match(req.user,/I can count your tags and ratings/);
   assert.match(EDITORIAL_AUDIT_PRINCIPLES,/No simple word banlists/);
   assert.match(req.system,/imagined motives|imaginary motives/i);
+  assert.match(req.system,/PERFORMANCE EDITOR, NOT A POLISHER/);
+  assert.match(req.system,/explanatory tails/);
   assert.match(req.system,/childhood/i);
   assert.match(req.system,/not.*courtroom|NOT a report|NOT an audit|not sworn testimony/i);
 });
@@ -61,6 +63,18 @@ test('Deep Dive editor considers the full original source and may replace the en
   assert.match(req.user,/You marked the activity as Funny and Social/);
   assert.match(req.system,/childhood memories|childhood histories|childhood episodes/i);
   assert.match(req.system,/No protective caveats/);
+  assert.match(req.system,/PERFORMANCE EDITOR, NOT A POLISHER/);
+  assert.match(req.system,/different genuine reactions/);
+});
+
+test('other editorial personas do not inherit the Dungeon-specific speech direction',()=>{
+  const wrapped=buildWrappedEditorialAuditRequest({draft,evidence,persona:'witty'});
+  const deep=buildRecapEditorialAuditRequest({
+    draft:recap,context:'The player played Jackbox',timeframe:'month',
+    intervalLabel:'October 2026',persona:'witty',
+  });
+  assert.doesNotMatch(wrapped.system,/PERFORMANCE EDITOR, NOT A POLISHER/);
+  assert.doesNotMatch(deep.system,/PERFORMANCE EDITOR, NOT A POLISHER/);
 });
 
 test('a second API call returns the independent AI editorial rewrite for Wrapped and Deep Dive',async()=>{
