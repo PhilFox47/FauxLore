@@ -1,0 +1,37 @@
+name: Important People Profiles and Private Image References
+
+on:
+  push:
+    branches: [claude]
+    paths:
+      - 'src/lib/importantPeople*'
+      - 'src/components/ImportantPeopleEditor.tsx'
+      - 'src/components/SettingsModal.tsx'
+      - 'src/pages/Recaps.tsx'
+      - 'src/lib/visualSelf.ts'
+      - 'src/services/db.ts'
+      - 'server/routes/importantPeople*'
+      - 'server/services/images.ts'
+      - 'server/services/wrappedCovers.ts'
+      - 'server/services/importantPeopleImage.test.ts'
+      - 'server/index.ts'
+      - 'server/db/migrations.ts'
+      - '.github/workflows/important-people.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Private people profiles, text evidence and image consent
+        run: node --import tsx --test src/lib/importantPeople.test.ts server/routes/importantPeople.test.ts server/services/importantPeopleImage.test.ts
+      - name: Existing self-reference and Wrapped image regressions
+        run: node --import tsx --test server/routes/settings.reference.test.ts server/services/wrappedFaceImage.test.ts server/services/wrappedCovers.test.ts
+      - name: Production build
+        run: npm run build
