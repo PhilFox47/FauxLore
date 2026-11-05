@@ -19,9 +19,11 @@ export function lorebookMonth(timestamp:string):string {
   const date=parseISO(timestamp);
   return Number.isNaN(date.getTime())?'':format(date,'yyyy-MM');
 }
-export function lorebookMonths(logs:ProgressLog[]):string[] {
-  return [...new Set(logs.filter(l=>!l.timestamp.startsWith('1970-01-01'))
-    .map(l=>lorebookMonth(l.timestamp)).filter(Boolean))].sort().reverse();
+export function lorebookMonths(logs:ProgressLog[], reviews:readonly {ts:string}[]=[]):string[] {
+  return [...new Set([
+    ...logs.filter(l=>!l.timestamp.startsWith('1970-01-01')).map(l=>lorebookMonth(l.timestamp)),
+    ...reviews.filter(r=>!r.ts.startsWith('1970-01-01')).map(r=>lorebookMonth(r.ts)),
+  ].filter(Boolean))].sort().reverse();
 }
 export function isJournalWritten(log:ProgressLog):boolean {
   return log.metricType!=='statusChange' && !!log.thoughts?.trim();
