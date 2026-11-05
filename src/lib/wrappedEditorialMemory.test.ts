@@ -90,6 +90,7 @@ test('a saved old story without thesis metadata is reference context but cannot 
   };
   const memory=selectWrappedEditorialMemory([old],{timeframe:'month',timeId:'2026-09'});
   assert.equal(memory[0].takes[0].explicit,false);
+  assert.match(memory[0].fullStory || '', /The serialized comic kept appearing beside the daily commute/);
   assert.equal(recycledWrappedThesis([{thesis:''},{
     thesis:'The serialized comic kept appearing beside the daily commute.',
   },{thesis:''}],memory),null);
