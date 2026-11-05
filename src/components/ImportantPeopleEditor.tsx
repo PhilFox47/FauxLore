@@ -73,16 +73,13 @@ export function ImportantPeopleEditor({provider,imageModel}:{
     setBusy(true);
     try{
       const aliases=[...new Set(draft.aliasesText.split(',').map(s=>s.trim()).filter(Boolean))].slice(0,12);
-      await DatabaseService.saveImportantPerson({
+      const savedId=await DatabaseService.saveImportantPerson({
         id:draft.id,name:draft.name.trim(),aliases,relationship:draft.relationship.trim(),
         notes:draft.notes.trim(),appearance:draft.appearance.trim(),allowImages:draft.allowImages,
       });
       const all=await load();
-      // New profile is returned by GET; select its stable ID for subsequent photo upload.
-      if(!draft.id){
-        const created=all.find(p=>p.name===draft.name.trim()&&p.relationship===draft.relationship.trim());
-        if(created)setDraft(fromPerson(created));
-      }
+      const saved=all.find(p=>p.id===savedId);
+      if(saved)setDraft(fromPerson(saved));
       setNotice('Saved. Future Recaps and new Wrapped images can use this profile.');
     }catch(e:any){setError(e.message||'Could not save person.');}
     finally{setBusy(false);}
@@ -122,7 +119,8 @@ export function ImportantPeopleEditor({provider,imageModel}:{
   };
 
   return (
-    <section aria-label="Other Important People" className="rounded-xl border border-violet-500/20 bg-zinc-900/40 p-4 space-y-4">
+    <section aria-label="Other Important People" className="rounded-xl border border-violet-500/20 bg-zinc-900/40 p-4 space-y-4"
+      onKeyDown={event=>{if(event.key==='Enter' && event.target instanceof HTMLInputElement)event.preventDefault();}}>
       <div className="flex gap-2 items-center"><Users size={18} className="text-violet-300"/>
         <h3 className="text-sm font-bold text-white">Other Important People</h3></div>
       <p className="text-xs text-zinc-400 leading-relaxed">
