@@ -165,52 +165,14 @@ export function normalizeWrappedStory(raw: any, evidence: WrappedEvidence, media
   // Whether two scenes make the SAME editorial argument is semantic.
   // The independent AI editor judges that; shared evidence can support two
   // genuinely different interpretations and must not trigger a rigid filter.
-  if (evidence.timeframe === 'month' && evidence.monthlyCoverage) {
-    const coverage = evidence.monthlyCoverage;
-    if (coverage.requiredPhases.length >= 2) {
-      const seen = new Set<string>();
-      let phaseSceneCount = 0;
-      for (const scene of middleScenes) {
-        const phases = scene.evidenceIds
-          .map(id => factIndex.get(id)?.phase)
-          .filter((phase): phase is NonNullable<typeof phase> => !!phase);
-        if (phases.length) phaseSceneCount++;
-        for (const phase of phases) seen.add(phase);
-      }
-      // In a deliberately short issue, other phases must not force filler
-      // merely because they contained a high *quantity* of low-signal logs.
-      // However, an actual journal, written memory or explicit resonance
-      // signal in another phase still deserves editorial acknowledgment.
-      const mandatoryPhases = middleScenes.length === 1
-        ? coverage.requiredPhases.filter(phase => evidence.facts.some(f =>
-          f.phase === phase && (f.kind === 'journal' ||
-            f.id.startsWith('reference-') || f.id.startsWith('session-resonance-'))))
-        : coverage.requiredPhases;
-      const missing = mandatoryPhases.filter(phase => !seen.has(phase));
-      // A carefully argued ONE-scene cross-phase story is valid. Otherwise,
-      // multiple genuinely distinct interior scenes must cover multiple
-      // substantial phases; don't let several late-only scenes impersonate a
-      // full-month story. This preserves coverage without a scene quota.
-      const requiredSceneCount = Math.min(coverage.minPhaseScenes, middleScenes.length);
-      if (missing.length || phaseSceneCount < requiredSceneCount) {
-        throw new Error('Monthly coverage missing ' + missing.join(', ') +
-          (missing.length ? ' phase(s)' : ' independent phase-supported scenes') +
-          '. A single substantial cross-phase argument may cover the month without invented filler.');
-      }
-    }
-    // Only cap LAST-WEEK-ONLY stories if that week itself did not dominate
-    // the measured month; never force artificial balance on a late-heavy month.
-    if (middleScenes.length >= 3 && coverage.lastWeekShare < .60) {
-      const lastWeekOnly = middleScenes.filter(scene =>
-        scene.evidenceIds.length > 0 &&
-        scene.evidenceIds.every(id => factIndex.get(id)?.recentOnly === true));
-      if (lastWeekOnly.length > Math.floor(middleScenes.length / 2)) {
-        throw new Error('Monthly story overrepresents the final seven days: ' +
-          lastWeekOnly.length + ' last-week-only scenes out of ' +
-          middleScenes.length + '. Cover earlier substantive activity.');
-      }
-    }
-  }
+  // The value of a month is an EDITORIAL question, not an arithmetic quota.
+  // Earlier versions rejected compelling stories unless at least one interior
+  // scene explicitly cited early/middle/late fact IDs. Media-level evidence
+  // spans several dates and carries no single "phase"; a genuine late-month
+  // chapter could therefore be rejected even though its subject was covered.
+  // The independent AI editor now reviews the actual per-phase activity and
+  // chooses whether a substantial missing chapter merits an angle. This
+  // normalizer only enforces objectively checkable sources and display format.
   return { version: 2, title: clean(data.title, 180) || scenes[0].title,
     dek: clean(data.dek, 500) || scenes[0].body.slice(0, 350), scenes };
 }
