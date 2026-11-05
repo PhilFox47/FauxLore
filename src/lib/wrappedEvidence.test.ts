@@ -22,6 +22,16 @@ const logs = [
 ];
 const args = { timeframe: 'week' as const, timeId: '2026-W43', logs, history: logs, media };
 
+test('every distinct monthly Journal Thought remains eligible for verified scenes', () => {
+  const many = Array.from({length: 30}, (_,index) => ({
+    ...log('thought-'+index,'book','2026-10-'+String(index%28+1).padStart(2,'0')+'T12:00:00Z', '', 'Home'),
+    thoughts:'A distinct personal reflection number '+index,
+    sessionImpact:5,
+  }));
+  const evidence=buildWrappedEvidence({timeframe:'month',timeId:'2026-10',logs:many,history:many,media});
+  assert.equal(evidence.facts.filter(f=>f.kind==='journal').length,30);
+});
+
 test('Wrapped evidence is independent of recap content', () => {
   const evidence = buildWrappedEvidence(args);
   assert.equal(evidence.timeId, '2026-W43');
