@@ -31,11 +31,28 @@ export function matchesLorebookReflectionFilter(log:ProgressLog,filter:LorebookR
   if(log.metricType==='statusChange')return false;
   return filter==='has-journal'?isJournalWritten(log):!isJournalWritten(log);
 }
-export function lorebookReviewProgress(logs:ProgressLog[]):{total:number;journals:number;impact:number;moodlets:number} {
+export function lorebookReviewProgress(logs:ProgressLog[]):{total:number;journals:number;enjoyment:number;impact:number;moodlets:number} {
   const entries=logs.filter(l=>l.metricType!=='statusChange');
   return {total:entries.length,journals:entries.filter(isJournalWritten).length,
+    enjoyment:entries.filter(l=>l.sessionEnjoyment!=null).length,
     impact:entries.filter(l=>l.sessionImpact!=null).length,
     moodlets:entries.filter(l=>readMoodlets(l.moodlets).length>0).length};
+}
+
+/**
+ * A Lorebook card can represent multiple saved logs. Show the highest explicit
+ * rating with a "peak" marker for merged sessions, never pretend that it was
+ * a shared rating or that an unrated log was rated 0.
+ */
+export function lorebookSessionRatings(logs:ProgressLog[]):{
+  enjoyment:{value:number;ratedLogs:number}|null;
+  impact:{value:number;ratedLogs:number}|null;
+} {
+  const rating=(key:'sessionEnjoyment'|'sessionImpact')=>{
+    const values=logs.map(log=>log[key]).filter((v):v is number=>typeof v==='number' && v>=1 && v<=5);
+    return values.length?{value:Math.max(...values),ratedLogs:values.length}:null;
+  };
+  return {enjoyment:rating('sessionEnjoyment'),impact:rating('sessionImpact')};
 }
 
 export function lorebookDraftFromLog(log:ProgressLog):LorebookLogDraft {
