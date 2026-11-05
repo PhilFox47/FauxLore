@@ -9,6 +9,7 @@ type Props = {
   draft:LorebookLogDraft;
   onChange:(draft:LorebookLogDraft)=>void;
   onSave:()=>void;
+  onSaveNext?:()=>void;
   onCancel:()=>void;
   saving:boolean;
   dirty:boolean;
@@ -17,7 +18,7 @@ type Props = {
 };
 
 export function LorebookLogEditor({
-  log,draft,onChange,onSave,onCancel,saving,dirty,error,locations,
+  log,draft,onChange,onSave,onSaveNext,onCancel,saving,dirty,error,locations,
 }:Props) {
   const set=<K extends keyof LorebookLogDraft>(key:K,value:LorebookLogDraft[K])=>
     onChange({...draft,[key]:value});
@@ -105,6 +106,10 @@ export function LorebookLogEditor({
         <div className="flex items-center gap-2">
           <button type="button" disabled={saving} onClick={onCancel}
             className="px-4 py-2.5 rounded-xl border border-white/10 text-zinc-300 hover:bg-white/10 disabled:opacity-50 text-sm font-medium">Cancel</button>
+          {onSaveNext && <button type="button" onClick={onSaveNext} disabled={!dirty||saving}
+            className="px-4 py-2.5 rounded-xl border border-violet-400/40 text-violet-200 bg-violet-500/10 font-bold text-sm hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed">
+            Save &amp; next
+          </button>}
           <button type="submit" disabled={!dirty||saving}
             className="px-4 py-2.5 rounded-xl bg-violet-500 text-white font-bold text-sm hover:bg-violet-400 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2">
             <Save size={15}/>{saving?'Saving…':'Save log'}
