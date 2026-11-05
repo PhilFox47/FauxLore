@@ -13,6 +13,7 @@ on:
       - 'src/lib/wrappedSceneArt.ts'
       - 'src/services/wrappedVisualDirector.ts'
       - 'src/lib/wrappedEvidence*'
+      - 'src/lib/wrappedResearchContext*'
       - 'src/lib/wrappedEditorial*'
       - 'src/services/wrappedAi.ts'
       - 'src/lib/storyDiscovery.ts'
