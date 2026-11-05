@@ -94,7 +94,7 @@ test('one extraordinary late personal memory survives a month of routine early/m
 });
 
 
-test('a lean story still cannot ignore a different phase with a documented personal memory',()=>{
+test('a lean story with a real personal memory can survive editorial omissions without a phase quota',()=>{
   const data:WrappedEvidence={...base([
     {id:'journal-early',kind:'journal',phase:'early',title:'Early friendship',
       mediaId:'friends',quote:'A day with people I care about.',evidence:'On Sep 4 we met in Discord for a shared celebration.'},
@@ -103,6 +103,8 @@ test('a lean story still cannot ignore a different phase with a documented perso
   ]),monthlyCoverage:{requiredPhases:['early','late'],lastWeekShare:0.25,minPhaseScenes:2}};
   const onlyLate={kind:'insight',title:'Late finale',body:'The logged Free Company ending was a personal milestone.',
     evidenceIds:['journal-late'],design};
-  assert.throws(()=>normalizeWrappedStory({title:'Missing a real memory',dek:'Selective',
-    scenes:[starter,onlyLate,finisher]},data,[]),/Monthly coverage missing/);
+  const issue=normalizeWrappedStory({title:'Selective editorial memory',dek:'A sharp focused take',
+    scenes:[starter,onlyLate,finisher]},data,[]);
+  assert.equal(issue.scenes.length,3);
+  assert.deepEqual(issue.scenes[1].evidenceIds,['journal-late']);
 });
