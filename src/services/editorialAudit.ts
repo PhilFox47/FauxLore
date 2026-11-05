@@ -54,12 +54,30 @@ export function buildWrappedEditorialAuditRequest(args:{
     'You are NOT the original writer. Diagnose and REWRITE weak ideas and weak DELIVERY rather than telling the user what to change. Be an actual performance editor; if a strong scene already sounds spontaneous, leave its text alone.',
     'Keep legal scene kinds, design fields and supported evidence IDs. You may change evidenceIds to other supplied real IDs. Do not invent evidence IDs, imported quotes, chart values or game-statistics. BUT freely INVENT hilarious personal origin stories, supposed social motives, irrational accusations and faux-biographical details as the narrator’s outrageous fictional reality. Infographic numbers remain grounded; theatrical prose is not limited to an evidentiary paraphrase.',
     'Every interior scene requires 1-5 real evidenceIds and an original editorial thesis. The opening needs no IDs. Closing needs 1-5 real IDs, a finaleMode and a finalePayoff supported by a surviving interior scene. At least one strong interior scene must survive. Never pad.',
+    'MONTHLY SCOPE IS AN EDITORIAL RESPONSIBILITY, NOT A PHASE QUOTA. Look at actual activity across early, middle and late month. If a substantial late period had interesting media or personal experiences missing from the draft, judge whether that omission makes the story unrepresentative. If so, replace a weaker angle or weave a fresh interpretation into a genuinely relevant scene, citing a specific valid evidence ID. Do not simply add a phase card, repeat raw numbers or shoehorn in a filler scene to satisfy a calendar checklist. A short, brilliant story with intentional omissions is better than a mediocre comprehensive one.',
     'Return JSON only: {"editorialAssessment":"brief candid critique","story":{"title":"...","dek":"...","scenes":[{"kind":"...","editorialJob":"...","eyebrow":"...","title":"...","body":"...","thesis":"... (interior)","evidenceIds":["known-id"],"design":{"layout":"...","palette":"...","visual":"...","align":"...","mediaIds":[]},"finaleMode":"... (closing)","finalePayoff":"... (closing)"}]}}. Return the COMPLETE story. Preserve original structural metadata where valid.',
   ].join('\n\n');
   const user=[
     'PERIOD: '+evidence.timeframe+' '+evidence.timeId,
     'BASELINE (research only):\n'+evidence.editorialCalibration,
     'PERSONAL SALIENCE (research only):\n'+evidence.editorialSalience,
+    ...(evidence.timeframe === 'month' && evidence.monthlyCoverage ? [
+      'MONTHLY ACTIVITY FOR EDITORIAL JUDGMENT, NOT MANDATORY SLIDE QUOTAS:\n' +
+        JSON.stringify({
+          substantialPhases: evidence.monthlyCoverage.requiredPhases,
+          lastWeekShare: evidence.monthlyCoverage.lastWeekShare,
+          phases: (evidence.monthlyCoverage.clusters || []).map(c => ({
+            phase: c.phase,
+            progressShare: c.progressShare,
+            activeDays: c.activeDays,
+            leadingWorks: c.leadingWorks.slice(0, 5).map(m => ({
+              title: m.title, id: m.id, share: m.share,
+            })),
+            journalHighlights: c.journalHighlights.slice(0, 3),
+            places: c.places.slice(0, 4),
+          })),
+        }),
+    ] : []),
     'VERIFIED FACTS AND VALID EVIDENCE IDS:\n'+JSON.stringify(evidence.facts.map(f=>({
       id:f.id,kind:f.kind,title:f.title,evidence:f.evidence,phase:f.phase||null,
       mediaId:f.mediaId||null,mediaIds:f.mediaIds||[],analyticKind:f.analytic?.kind||null,
