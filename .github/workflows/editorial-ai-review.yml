@@ -9,6 +9,7 @@ on:
       - 'src/services/recapAi.ts'
       - 'src/services/wrappedAi.ts'
       - 'src/lib/personas.ts'
+      - 'src/lib/editorialSpeech*'
       - 'src/lib/wrappedThesisGate*'
       - 'src/lib/wrappedFinale*'
       - '.github/workflows/editorial-ai-review.yml'
