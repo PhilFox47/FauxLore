@@ -26,6 +26,20 @@ Editorial invention and mechanical data are deliberately separate. Exact chart v
 
 Only **Recap and Wrapped editorial prompts** receive this fictional license. Logging questions, item ownership, combat state and other operational mechanics continue to use normal grounded definitions.
 
+## Spoken character voice (Dungeon persona only)
+
+A powerful opinion does not automatically make a passage sound like a character. The November 5 diagnostics showed the AI rewrite repeatedly producing similarly sized two-paragraph arguments that followed an immaculate setup / metaphor / contrast / explanation / punchline rhythm. The invented childhood accusations were funny, but the delivery was *too carefully polished*.
+
+The **writer** now receives a dedicated `DUNGEON_SPEECH_DIRECTION` brief and the **separate AI editor** receives `DUNGEON_EDITORIAL_LINE_EDIT` from `src/lib/editorialSpeech.ts`. Both are qualitative performance instructions, **not rigid text filters**.
+
+- Treat each scene as spoken character dialogue. Sudden anger, interrupted thoughts, strange petty obsessions, plain insults, awkward silences, long excited rants, and sharp one-line exits are all possible.
+- Trust the joke instead of translating it into a tidy general lesson. Stop after the actual laugh.
+- Watch for rote balanced opposites, neat "not X but Y" rhetoric, equal paragraph sizes, grandiose metaphor stacking and every scene ending in a polished contrast. These are editorial concerns, **not banned constructions**.
+- Let narrative coherence emerge without forcing every work into one umbrella metaphor. The artificiality of over-curation is worse than a well-placed digression.
+- Never fake human speech with random typos, arbitrary profanity or a forced "chaotic" quota. Be precise when it is funny and allow an unusually quiet moment to stand.
+
+The Dungeon narrator keeps complete freedom to invent absurd childhood stories and unhinged personal motives without disclaimers; spoken naturalness should not mean caution. Structural source ID, actual metric and JSON validation are unchanged.
+
 ## Tests and limits
 
 - `src/services/editorialAudit.test.ts` verifies editor instructions, evidence access and independent model-call behavior without spending live tokens.
